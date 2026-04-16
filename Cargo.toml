@@ -1,0 +1,59 @@
+[workspace]
+resolver = "3"
+members = [
+    "crates/vibe-cli",
+    "crates/vibe-core",
+    "crates/vibe-graph",
+    "crates/vibe-registry",
+    "crates/vibe-install",
+    "crates/vibe-llm",
+    "crates/vibe-check",
+]
+
+[workspace.package]
+version = "0.1.0-dev"
+edition = "2024"
+rust-version = "1.93"
+authors = ["Oleg Chirukhin"]
+license-file = "LICENSE.md"
+publish = false
+repository = "https://gitverse.ru/anarchic/vibevm"
+homepage = "https://gitverse.ru/anarchic/vibevm"
+description = "The disciplined runtime for spec-driven vibecoding"
+keywords = ["spec-driven", "ai", "cli", "package-manager"]
+categories = ["command-line-utilities", "development-tools"]
+
+[workspace.dependencies]
+# Local crates
+vibe-core = { path = "crates/vibe-core", version = "0.1.0-dev" }
+vibe-graph = { path = "crates/vibe-graph", version = "0.1.0-dev" }
+vibe-registry = { path = "crates/vibe-registry", version = "0.1.0-dev" }
+vibe-install = { path = "crates/vibe-install", version = "0.1.0-dev" }
+vibe-llm = { path = "crates/vibe-llm", version = "0.1.0-dev" }
+vibe-check = { path = "crates/vibe-check", version = "0.1.0-dev" }
+
+# Third-party (all permissive licenses — PROP-000 §3)
+anyhow = "1"
+thiserror = "2"
+serde = { version = "1", features = ["derive"] }
+toml = "0.9"
+clap = { version = "4", features = ["derive"] }
+dialoguer = "0.12"
+console = "0.16"
+tracing = "0.1"
+tracing-subscriber = { version = "0.3", features = ["env-filter"] }
+sha2 = "0.10"
+semver = { version = "1", features = ["serde"] }
+indexmap = { version = "2", features = ["serde"] }
+serde_json = "1"
+walkdir = "2"
+
+# Dev / test
+assert_cmd = "2"
+predicates = "3"
+tempfile = "3"
+
+[profile.release]
+lto = "thin"
+codegen-units = 1
+strip = "symbols"

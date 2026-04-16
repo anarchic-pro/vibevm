@@ -1,0 +1,15 @@
+[package]
+name = "vibe-llm"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+authors.workspace = true
+license-file.workspace = true
+publish.workspace = true
+repository.workspace = true
+homepage.workspace = true
+description = "LLM provider abstraction for vibevm (M1.5+); stub in M0"
+
+[dependencies]
+anyhow.workspace = true
+thiserror.workspace = true

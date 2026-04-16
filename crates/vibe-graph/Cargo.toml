@@ -1,0 +1,18 @@
+[package]
+name = "vibe-graph"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+authors.workspace = true
+license-file.workspace = true
+publish.workspace = true
+repository.workspace = true
+homepage.workspace = true
+description = "Task-graph builder and runner for vibevm workflows"
+
+[dependencies]
+vibe-core.workspace = true
+anyhow.workspace = true
+thiserror.workspace = true
+tracing.workspace = true
+indexmap.workspace = true
