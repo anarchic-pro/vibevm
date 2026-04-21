@@ -3,27 +3,36 @@ _Updated: 2026-04-22_
 
 ## Current phase
 
-**Milestone M1.1 — git-backed registry: code-complete.** `vibe-registry`
-now speaks git. The `Registry` trait is implemented by both
-`LocalRegistry` (M0 code path, still used for `--registry <path>` and
-`file://` URLs) and `GitRegistry` (new, clones into
-`~/.vibe/registries/<hash>/clone/` and persists freshness metadata in
-`meta.toml`). A new subcommand `vibe registry sync` force-refreshes
-the configured git registry. All design decisions — shell-out vs
-libgit2, the narrow two-method `GitBackend` trait (`bootstrap` /
-`update`), cache layout, the `git+<transport>://host/path#kind/name/vN`
-lockfile scheme, and the Windows `CREATE_NO_WINDOW` posture — are
-pinned in [spec://vibevm/modules/vibe-registry/PROP-001](modules/vibe-registry/PROP-001-git-backend.md).
+**Milestone M1.1 — git-backed registry: shipped, live.** Three things
+landed on 2026-04-22:
 
-End-to-end integration test (`install_from_git_registry`) spins up a
-bare git repo with the canonical `flow:wal@0.1.0` fixture, points a
-project's `vibe.toml` at it via `git+file://…`, runs `vibe install
-flow:wal`, and asserts the lockfile carries a `git+…#flow/wal/v0.1.0`
-source URI, that `~/.vibe/registries/<hash>/` was populated with
-`clone/.git` + `meta.toml`, and that `vibe registry sync` succeeds on
-top. 77 tests green across the workspace, 0 warnings, clippy clean.
+1. **Code.** `vibe-registry` speaks git. The `Registry` trait is
+   implemented by both `LocalRegistry` (M0 code path, still used for
+   `--registry <path>` and `file://` URLs) and `GitRegistry` (new,
+   clones into `~/.vibe/registries/<hash>/clone/` and persists
+   freshness metadata in `meta.toml`). `vibe registry sync`
+   force-refreshes. Design pinned in
+   [spec://vibevm/modules/vibe-registry/PROP-001](modules/vibe-registry/PROP-001-git-backend.md).
+2. **Publish.** The canonical `flow:wal@0.1.0` is live on
+   `git@gitverse.ru:anarchic/vibespecs.git` at `flow/wal/v0.1.0/`,
+   commit [`98e51fc`](#) — the first entry in the registry.
+   Registry-level `README.md` explains the layout (§8.2) and the
+   PR-based contribution flow until `vibe publish` ships in v2+.
+3. **Verified.** [`manual-tests/M1.1-git-registry-smoke.md`](../manual-tests/M1.1-git-registry-smoke.md)
+   walked end-to-end against the real GitVerse registry on
+   Windows / Git Bash: `vibe install flow:wal` produced a lockfile
+   `source = "git+ssh://git@gitverse.ru/anarchic/vibespecs.git#flow/wal/v0.1.0"`,
+   cache laid out as `~/.vibe/registries/46c4a3dfee00a78d/{clone,meta.toml}`,
+   freshness TTL skipped a re-pull inside the 1h window, `vibe
+   registry sync` bumped `last_pulled_at`, `vibe uninstall` removed
+   the 4 package files and left `spec/boot/00-core.md` /
+   `spec/boot/90-user.md` byte-identical (verified via `cmp`).
 
-**Next active work:** M1.1 acceptance items remaining, then M1.2.
+77 tests green across the workspace, 0 warnings, clippy clean.
+
+**Next active work:** publish the remaining M1.5-gate demo packages
+(`flow:sync-from-code`, `flow:atomic-commits`), then move to M1.2
+(`vibe update`).
 
 ## Constraints (do not violate without discussion)
 
@@ -47,7 +56,7 @@ top. 77 tests green across the workspace, 0 warnings, clippy clean.
 ## Remotes
 
 - **vibevm source (this repo):** `git@gitverse.ru:anarchic/vibevm.git` (SSH) / `https://gitverse.ru/anarchic/vibevm` (web).
-- **Package registry:** `git@gitverse.ru:anarchic/vibespecs.git` (SSH). Seeded with the hand-written `flow:wal@0.1.0`; two more demo packages (`flow:sync-from-code`, `flow:atomic-commits`) planned as the M1.5-gate content.
+- **Package registry:** `git@gitverse.ru:anarchic/vibespecs.git` (SSH). Seeded 2026-04-22 with the canonical `flow:wal@0.1.0` at `flow/wal/v0.1.0/` (commit `98e51fc`). The local `packages/` tree in this repo (used by the M0-era `cli_e2e.rs` tests as a `--registry <path>` fixture) is now a deliberate **frozen snapshot** of what's on the registry — it exists because the fixture must be hermetic (no network, no SSH) and must stay on `v0.1.0`. When the registry gains new versions, the fixture does NOT follow.
 
 ## Done
 
@@ -76,17 +85,37 @@ top. 77 tests green across the workspace, 0 warnings, clippy clean.
 - [x] [`vibe registry sync [--path]`](../crates/vibe-cli/src/commands/registry.rs): forces a pull on the configured git registry; no-ops with a note on a `file://` registry.
 - [x] `VIBE_REGISTRY_CACHE` env-var override on `default_cache_root` so tests and non-standard setups don't touch `~/.vibe/`.
 - [x] End-to-end test `install_from_git_registry` covers the full install + sync loop against a bare `git+file://…` registry seeded with the canonical fixture.
+- [x] `flow:wal@0.1.0` published to `git@gitverse.ru:anarchic/vibespecs.git` at `flow/wal/v0.1.0/` (commit `98e51fc`). Registry top-level `README.md` explains layout + PR-based contribution until v2+.
+- [x] Live [M1.1 smoke-test](../manual-tests/M1.1-git-registry-smoke.md) walked against the real registry — all 10 steps green, outputs recorded at the top of that file as the 2026-04-22 pass.
 - [x] 77 tests green, 0 warnings, clippy clean.
 
 ## In progress
 
-Nothing active — M1.1 code-complete as of the 2026-04-22 commit burst.
+Nothing active — M1.1 is shipped. Remaining M1 milestones (M1.2 /
+1.3 / 1.4 / 1.5-gate) are open but not started.
 
 ## Next
 
-**M1.1 acceptance — remaining items before tagging M1.1:**
-1. Walk [`manual-tests/M1.1-git-registry-smoke.md`](../manual-tests/M1.1-git-registry-smoke.md) on this machine. That script is the canonical procedure — follow it top-to-bottom, do not improvise. If any step surfaces a difference from the expected output, file it per the "What to file if it fails" section and stop before proceeding.
-2. Publish two more demo packages to the registry (`flow:sync-from-code` + `flow:atomic-commits`), which will double as regression fixtures for boot-snippet numeric-prefix collision and for multi-package lockfile content.
+**Immediate (next 1-2 sessions).** Publish the other two M1.5-gate
+demo packages to the registry:
+
+1. `flow:sync-from-code@0.1.0` — derived from book chapter 3's
+   Sync-from-Code protocol.
+2. `flow:atomic-commits@0.1.0` — derived from book chapter 2.
+
+Both are hand-written; both exercise different boot-snippet numeric
+prefixes (pick `20-` and `30-`) so collectively the three-package
+registry doubles as a regression fixture for boot-snippet collision
+detection and multi-package lockfile rendering.
+
+**After that.** M1.2 — `vibe update <pkgref>` / `vibe update --all`
+— re-fetch, show a per-file diff against the current install,
+confirm, apply. Three-way guard if the user edited a
+previously-installed file.
+
+**Later in M1.** M1.3 — `vibe check` (the 10 §12 checks); M1.4 —
+`vibe show effective` / `graph` / `config`. Pure inspection, no
+registry work beyond what M1.1 shipped.
 
 **M1.2 (after M1.1 sign-off):** `vibe update <pkgref>` / `vibe update --all` — re-fetch, show a per-file diff against the current install, confirm, apply. Three-way guard if the user edited a previously-installed file.
 

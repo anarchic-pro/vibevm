@@ -1,15 +1,19 @@
 # vibevm — roadmap
 
 > **Status snapshot (2026-04-22):** M0 is complete and published. M1.1
-> — the git-backed registry — is code-complete. `vibe install` now
-> reads `[registry]` from `vibe.toml`, clones the remote into
-> `~/.vibe/registries/<hash>/clone/`, and stamps the lockfile with
-> `git+…#<kind>/<name>/vN` source URIs; `vibe registry sync` forces a
-> refresh. 77 tests green, 0 warnings, clippy clean. Design pinned in
-> [PROP-001](spec/modules/vibe-registry/PROP-001-git-backend.md).
-> Remaining M1.1 acceptance: manual smoke-test against the real
-> `gitverse.ru` registry and two more demo packages in the published
-> registry.
+> — the git-backed registry — is **shipped and live**. Three things
+> landed on 2026-04-22: the `Registry` / `GitBackend` / `GitRegistry`
+> code in `vibe-registry`; `flow:wal@0.1.0` published to
+> `git@gitverse.ru:anarchic/vibespecs.git` at `flow/wal/v0.1.0/`
+> (commit `98e51fc`, the registry's first entry); and an end-to-end
+> walk of
+> [`manual-tests/M1.1-git-registry-smoke.md`](manual-tests/M1.1-git-registry-smoke.md)
+> against the real registry, confirming the
+> `git+ssh://git@gitverse.ru/anarchic/vibespecs.git#flow/wal/v0.1.0`
+> lockfile shape and the `~/.vibe/registries/<hash>/{clone,meta.toml}`
+> layout. 77 tests green, 0 warnings, clippy clean. Design pinned in
+> [PROP-001](spec/modules/vibe-registry/PROP-001-git-backend.md). The
+> remaining M1.5-gate content — two more demo packages — is open.
 
 This document is the long-form version of `VIBEVM-SPEC.md` §11 (staging
 plan). It keeps the "why" and "nuance" that a compressed staging table
@@ -78,10 +82,13 @@ a local dir, `vibe registry sync` is a no-op, and `vibe check`
 works fine without a remote. Adding git first means every subsequent
 M1 feature ships against a realistic remote from day one.
 
-### M1.1 — Git-backed registry ✅ CODE-COMPLETE (2026-04-22)
+### M1.1 — Git-backed registry ✅ SHIPPED (2026-04-22)
 
-**Shipped.** All items below landed; design decisions pinned in
-[PROP-001](spec/modules/vibe-registry/PROP-001-git-backend.md).
+**Shipped — code, publish, live smoke.** All items below landed;
+design decisions pinned in
+[PROP-001](spec/modules/vibe-registry/PROP-001-git-backend.md);
+procedure for the live validation lives in
+[`manual-tests/M1.1-git-registry-smoke.md`](manual-tests/M1.1-git-registry-smoke.md).
 
 - `vibe-registry` gained a `Registry` trait implemented by both
   `LocalRegistry` (M0 code path, kept for tests and `--registry
@@ -122,18 +129,9 @@ M1 feature ships against a realistic remote from day one.
 - **Auth for M1.** SSH-agent (delegated to the user's git). Token /
   credential-helper HTTPS is M2.
 
-**Remaining before tagging M1.1.**
-
-- Walk [`manual-tests/M1.1-git-registry-smoke.md`](manual-tests/M1.1-git-registry-smoke.md)
-  top-to-bottom on a fresh machine / scratch directory. That script
-  covers install + lockfile inspection + `vibe registry sync` +
-  freshness + uninstall against the real
-  `git@gitverse.ru:anarchic/vibespecs.git`; walking it is the
-  milestone sign-off, not just a sanity check.
-- Publish two more demo packages — `flow:sync-from-code` and
-  `flow:atomic-commits` — which double as regression fixtures for
-  boot-snippet prefix collisions and multi-package lockfiles (see
-  "M1.5-gate" below).
+**Done. Nothing remaining to tag M1.1.** The two more demo packages
+(`flow:sync-from-code`, `flow:atomic-commits`) are on the path to
+M1.5-gate, not to M1.1 — see the M1.5-gate subsection below.
 
 ### M1.2 — `vibe update`
 
@@ -198,7 +196,7 @@ Before cutting the M1 tag:
 
 ### M1 acceptance (from §16 of the spec)
 
-- [x] `vibe install` resolves packages from git per `vibe.toml`. ✅ M1.1
+- [x] `vibe install` resolves packages from git per `vibe.toml`. ✅ M1.1 (smoke-verified 2026-04-22 against real `vibespecs.git`)
 - [x] Registry cache lives at `~/.vibe/registries/<hash>/`. ✅ M1.1
 - [x] `vibe registry sync` refreshes. ✅ M1.1
 - [ ] `vibe update <pkgref>` and `--all` work with diff display. *(M1.2)*

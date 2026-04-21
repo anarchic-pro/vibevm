@@ -308,8 +308,8 @@ binary". If we ever want zero runtime dependencies, the answer is
 
 ## 5. Acceptance (for M1.1 implementation) {#acceptance}
 
-Code-complete on 2026-04-22. The remaining `[ ]` item is a manual
-smoke-test that cannot run in the unit / integration harness.
+Code-complete and live on 2026-04-22. Every box below ticks; the
+milestone is shippable.
 
 - [x] `vibe-registry` exposes a `Registry` trait and two
       implementations (`LocalRegistry`, `GitRegistry`).
@@ -329,10 +329,13 @@ smoke-test that cannot run in the unit / integration harness.
 - [x] End-to-end install against a `git+file://…` registry seeded
       with the canonical `flow:wal@0.1.0` fixture succeeds; the
       lockfile records a `git+…#flow/wal/v0.1.0` source URI.
-- [ ] **Manual** smoke-test against the real
-      `git@gitverse.ru:anarchic/vibespecs.git` configured in
-      `vibe.toml` still to be run — no automated CI against GitVerse
-      yet.
+- [x] Manual smoke-test against the real
+      `git@gitverse.ru:anarchic/vibespecs.git` (commit `98e51fc`)
+      ran 2026-04-22 on Windows / Git Bash; every step matched the
+      expected output, including the
+      `git+ssh://git@gitverse.ru/anarchic/vibespecs.git#flow/wal/v0.1.0`
+      lockfile source URI. Procedure and last-pass metadata live in
+      [`manual-tests/M1.1-git-registry-smoke.md`](../../../manual-tests/M1.1-git-registry-smoke.md).
 - [x] `vibe registry sync` (no args) force-pulls the configured
       registry.
 - [x] Windows: every spawned git carries `CREATE_NO_WINDOW`; no
