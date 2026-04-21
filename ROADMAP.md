@@ -124,11 +124,12 @@ M1 feature ships against a realistic remote from day one.
 
 **Remaining before tagging M1.1.**
 
-- Manual smoke-test against the real
-  `git@gitverse.ru:anarchic/vibespecs.git` — running
-  `vibe install flow:wal` on a fresh project with the real
-  `[registry]` URL and confirming the lockfile shape. Record the
-  command in `spec/boot/90-user.md`.
+- Walk [`manual-tests/M1.1-git-registry-smoke.md`](manual-tests/M1.1-git-registry-smoke.md)
+  top-to-bottom on a fresh machine / scratch directory. That script
+  covers install + lockfile inspection + `vibe registry sync` +
+  freshness + uninstall against the real
+  `git@gitverse.ru:anarchic/vibespecs.git`; walking it is the
+  milestone sign-off, not just a sanity check.
 - Publish two more demo packages — `flow:sync-from-code` and
   `flow:atomic-commits` — which double as regression fixtures for
   boot-snippet prefix collisions and multi-package lockfiles (see

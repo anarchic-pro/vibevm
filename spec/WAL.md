@@ -39,6 +39,7 @@ top. 77 tests green across the workspace, 0 warnings, clippy clean.
   4. **Autonomy on routine changes only** — commit and push routine work; stop for history rewrites, force-push, large blobs, CI/signing changes, anything whose reversal costs work.
 - **Git backend:** shell-out to the system `git`, behind the `GitBackend` trait so a future `libgit2` swap costs one new impl block. Full rationale in [spec://vibevm/modules/vibe-registry/PROP-001](modules/vibe-registry/PROP-001-git-backend.md). Method name is `bootstrap` (not `clone` / `clone_into`) to dodge std `Clone` / `ToOwned` blanket impls when the backend is held as `Arc<dyn GitBackend>`.
 - **Cache root:** `~/.vibe/registries/` by default. `VIBE_REGISTRY_CACHE` env-var overrides (used by tests and users with non-standard home layouts).
+- **Manual-test protocol:** human-runnable smoke-tests live in [`manual-tests/`](../manual-tests/) at the repo root. One file per scenario, named `<milestone>-<slug>.md`, each self-contained with a clean-slate setup (`mktemp -d` + `VIBE_REGISTRY_CACHE`) and a teardown block. Policy pinned in [PROP-000 §14](common/PROP-000.md#manual-tests); authoring rules and index in [`manual-tests/README.md`](../manual-tests/README.md). Run these before tagging a milestone, after touching an integration surface, and as reproducers for user-reported bugs.
 - **Work in staging order.** M0 (done), M1 (active), M1.5. No jumping ahead.
 - **REVIEW marker discipline:** when the spec is silent, pick the conservative interpretation, mark with `<!-- REVIEW: … -->`, surface in the session report.
 - **`refs/` is not committed.** Contents are upstream reference material (book + cloned study repos); kept out of the vibevm distribution both to respect upstream copyright and to keep the repo lean.
@@ -84,7 +85,7 @@ Nothing active — M1.1 code-complete as of the 2026-04-22 commit burst.
 ## Next
 
 **M1.1 acceptance — remaining items before tagging M1.1:**
-1. Smoke-test against the real `git@gitverse.ru:anarchic/vibespecs.git` from a fresh project: `vibe init`, `vibe.toml` with the real `[registry]`, `vibe install flow:wal`. This is manual — no automated CI runs against GitVerse yet (M2 scope). Record the exact steps in `spec/boot/90-user.md` once proven.
+1. Walk [`manual-tests/M1.1-git-registry-smoke.md`](../manual-tests/M1.1-git-registry-smoke.md) on this machine. That script is the canonical procedure — follow it top-to-bottom, do not improvise. If any step surfaces a difference from the expected output, file it per the "What to file if it fails" section and stop before proceeding.
 2. Publish two more demo packages to the registry (`flow:sync-from-code` + `flow:atomic-commits`), which will double as regression fixtures for boot-snippet numeric-prefix collision and for multi-package lockfile content.
 
 **M1.2 (after M1.1 sign-off):** `vibe update <pkgref>` / `vibe update --all` — re-fetch, show a per-file diff against the current install, confirm, apply. Three-way guard if the user edited a previously-installed file.
