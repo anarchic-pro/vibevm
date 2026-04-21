@@ -1,12 +1,20 @@
 //! Registry access: resolve, fetch, cache.
 //!
-//! In M0 the registry is a local directory laid out per `VIBEVM-SPEC.md` §8.2:
+//! M0 shipped a local-directory registry laid out per
+//! `VIBEVM-SPEC.md` §8.2:
+//!
 //! ```text
 //! <registry>/<kind>/<name>/v<major>.<minor>.<patch>/vibe-package.toml
 //! ```
-//! M1 adds git support.
+//!
+//! M1 adds git support via the same on-disk layout cloned under
+//! `~/.vibe/registries/<hash>/clone/`. All git I/O goes through
+//! [`git_backend::GitBackend`] — see
+//! [`spec/modules/vibe-registry/PROP-001-git-backend.md`][prop].
 //!
 //! Spec: `VIBEVM-SPEC.md` §8.
+//!
+//! [prop]: ../../../spec/modules/vibe-registry/PROP-001-git-backend.md
 
 #![forbid(unsafe_code)]
 
@@ -18,6 +26,10 @@ use thiserror::Error;
 use vibe_core::manifest::PackageManifest;
 use vibe_core::{PackageKind, PackageRef, VersionSpec};
 use walkdir::WalkDir;
+
+pub mod git_backend;
+
+pub use git_backend::{GitBackend, GitError, ShellGit};
 
 #[derive(Debug, Error)]
 pub enum RegistryError {
