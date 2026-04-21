@@ -3,12 +3,15 @@ _Updated: 2026-04-17_
 
 ## Current phase
 
-**Milestone M0 — walking skeleton: COMPLETE.**
-**Project rules adopted.** Repository wired to gitverse remote and the initial history (10 commits) published to `git@gitverse.ru:anarchic/vibevm.git` on 2026-04-17.
+**Milestone M0 — walking skeleton: COMPLETE and published.** Spec reconciled with shipped code; roadmap documented; ready to start M1.
 
-All M0 acceptance checklist items (`VIBEVM-SPEC.md` §16) pass. The `vibe` binary performs the full `init → install → list → uninstall` loop against a local-directory registry. The canonical `flow:wal` package is hand-written under `packages/flow/wal/v0.1.0/` and the end-to-end cycle is covered by integration tests. The four non-negotiable project rules (attribution, Conventional Commits, grouping by meaning, autonomy on routine changes) are recorded verbatim in `CLAUDE.md` / `AGENTS.md` / `GEMINI.md` and are reproduced authoritatively in [spec://vibevm/common/PROP-000#commits](common/PROP-000.md#commits).
+The initial repository history is on `git@gitverse.ru:anarchic/vibevm.git`. All M0 acceptance checklist items (`VIBEVM-SPEC.md` §16) pass — the `vibe` binary performs the full `init → install → list → uninstall` loop against a local-directory registry, the canonical `flow:wal@0.1.0` package is hand-written under `packages/flow/wal/v0.1.0/`, and 64 tests cover the cycle. The four non-negotiable project rules (attribution, Conventional Commits, grouping by meaning, autonomy on routine changes) live in [`CLAUDE.md`](../CLAUDE.md) / `AGENTS.md` / `GEMINI.md` (verbatim) and in [spec://vibevm/common/PROP-000#commits](common/PROP-000.md#commits) (authoritative).
 
-Next milestone: M1 — git registry, `vibe update`, `vibe check`, `vibe show`, and publishing the registry to `git@gitverse.ru:anarchic/vibespecs.git`.
+`VIBEVM-SPEC.md` §13.1 now pins the **mirror package layout** (every path in `writes.files` is both the source inside the package and the target inside the installed project). §6.3 documents both exact-filename and numeric-prefix boot-snippet conflict detection. §5.6 notes the M0 procedural implementation of the install subgraph. §9.1 and §11.1 reflect the actual shipped CLI flags.
+
+[`ROADMAP.md`](../ROADMAP.md) is the long-form milestone plan — M1 (package manager with git registry), M1.5 (generation), M2 (production-readiness), M3+ (speculation). Side-quests (`.gitattributes`, `gc.auto`, workspace README, CI matrix) are listed there too.
+
+**Next:** M1 — start with the git backend in `vibe-registry`.
 
 ## Constraints (do not violate without discussion)
 
@@ -65,11 +68,11 @@ Start of M1:
 
 ## Known issues
 
-- **Package layout convention is a REVIEW item.** `VIBEVM-SPEC.md` §13.1 shows a `content/` directory but `writes.files` lists `spec/flows/wal/…` paths. M0 adopts a **mirror layout** (package puts each file at the same relative path it will install to, with `boot_snippet.source` as a separate escape hatch). Reconciled in code via REVIEW markers; may firm up in the spec later.
 - **Spec §5.6 `install:update-lockfile` ordering.** If apply partially fails mid-write, the current M0 rolls back already-written files best-effort and does NOT touch the lockfile. Documented behavior; matches "one commit = one logical unit."
 - **tessl-mcp** clone was effectively empty. Not blocking; Tessl ideas are covered by its public docs and the book.
 - **M0 boot snippet validator** rejects `NN` prefixes outside `10..90` as "reserved range". Matches §6.2, but the error message is terse — could be friendlier in M2 when general error-message polish happens.
 - **Path display on Windows** strips `\\?\` UNC prefixes for human-readable output; lockfile stores forward-slash relative paths, so lockfiles are portable across OSes.
+- **Line-ending warnings** on every commit — `.gitattributes` with `* text=auto eol=lf` would shut them up. Side-quest in ROADMAP.
 
 ## Session context
 
