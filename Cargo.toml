@@ -47,6 +47,7 @@ semver = { version = "1", features = ["serde"] }
 indexmap = { version = "2", features = ["serde"] }
 serde_json = "1"
 walkdir = "2"
+dirs = "5"
 
 # Dev / test
 assert_cmd = "2"

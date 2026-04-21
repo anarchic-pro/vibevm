@@ -28,8 +28,10 @@ use vibe_core::{PackageKind, PackageRef, VersionSpec};
 use walkdir::WalkDir;
 
 pub mod git_backend;
+pub mod git_registry;
 
 pub use git_backend::{GitBackend, GitError, ShellGit};
+pub use git_registry::{GitRegistry, RegistryMeta, default_cache_root};
 
 #[derive(Debug, Error)]
 pub enum RegistryError {
@@ -55,12 +57,43 @@ pub enum RegistryError {
     #[error(transparent)]
     Core(#[from] vibe_core::Error),
 
+    #[error("git operation failed: {0}")]
+    Git(#[from] GitError),
+
+    #[error(
+        "could not determine the user home directory; set HOME (or USERPROFILE on Windows), or pass an explicit cache root"
+    )]
+    NoHomeDir,
+
+    #[error("registry meta file at `{path}` is malformed: {reason}")]
+    MalformedMeta { path: PathBuf, reason: String },
+
     #[error("I/O error on `{path}`")]
     Io {
         path: PathBuf,
         #[source]
         source: std::io::Error,
     },
+}
+
+/// Uniform surface over all registry backends — [`LocalRegistry`] and
+/// [`GitRegistry`] both implement this trait. `vibe-install` and
+/// `vibe-cli` consume registries exclusively through the trait so the
+/// concrete backend can be chosen at CLI-argument-parse time.
+pub trait Registry {
+    fn list_versions(
+        &self,
+        kind: PackageKind,
+        name: &str,
+    ) -> Result<Vec<semver::Version>, RegistryError>;
+
+    fn resolve(&self, pkgref: &PackageRef) -> Result<ResolvedPackage, RegistryError>;
+
+    fn fetch(
+        &self,
+        resolved: &ResolvedPackage,
+        cache_root: &Path,
+    ) -> Result<CachedPackage, RegistryError>;
 }
 
 /// A package pinned to a concrete version, located in the registry on disk.
@@ -227,6 +260,26 @@ impl LocalRegistry {
     }
 }
 
+impl Registry for LocalRegistry {
+    fn list_versions(
+        &self,
+        kind: PackageKind,
+        name: &str,
+    ) -> Result<Vec<semver::Version>, RegistryError> {
+        LocalRegistry::list_versions(self, kind, name)
+    }
+    fn resolve(&self, pkgref: &PackageRef) -> Result<ResolvedPackage, RegistryError> {
+        LocalRegistry::resolve(self, pkgref)
+    }
+    fn fetch(
+        &self,
+        resolved: &ResolvedPackage,
+        cache_root: &Path,
+    ) -> Result<CachedPackage, RegistryError> {
+        LocalRegistry::fetch(self, resolved, cache_root)
+    }
+}
+
 fn source_uri_for_local(path: &Path) -> String {
     let mut s = path.to_string_lossy().replace('\\', "/");
     // Ensure a leading `/` on Windows paths like `C:/Users/…` so the URI has
@@ -237,7 +290,7 @@ fn source_uri_for_local(path: &Path) -> String {
     format!("file://{s}")
 }
 
-fn copy_dir_recursive(src: &Path, dst: &Path) -> Result<(), RegistryError> {
+pub(crate) fn copy_dir_recursive(src: &Path, dst: &Path) -> Result<(), RegistryError> {
     fs::create_dir_all(dst).map_err(|source| RegistryError::Io {
         path: dst.to_path_buf(),
         source,

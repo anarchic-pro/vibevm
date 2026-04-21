@@ -109,13 +109,23 @@ the operations we use:
 pub trait GitBackend: Send + Sync {
     /// Clone `url` (checked out at `refname`) into `dest`.
     /// Caller guarantees `dest` is either empty or absent.
-    fn clone(&self, url: &str, refname: &str, dest: &Path) -> Result<(), GitError>;
+    fn bootstrap(&self, url: &str, refname: &str, dest: &Path) -> Result<(), GitError>;
 
     /// Fast-forward `dest` to the tip of `refname` on origin.
     /// No-op if already up to date.
     fn update(&self, dest: &Path, refname: &str) -> Result<(), GitError>;
 }
 ```
+
+**Method-name note.** The "make a fresh clone" operation is called
+`bootstrap` rather than the obvious `clone` or `clone_into` because
+the backend is held as `Arc<dyn GitBackend>` at its call sites and
+both of those names collide with blanket-impl methods from the
+standard library (`std::clone::Clone::clone`,
+`std::borrow::ToOwned::clone_into`), forcing ugly `<T as
+GitBackend>::…` disambiguations at every call. `bootstrap` is
+semantically accurate — it's how we initialise the registry cache
+from empty state — and has no std-library namesake.
 
 **Why narrow.** The narrower the trait, the cheaper the backend swap.
 If we need `ls_remote` or `fetch_ref` later, we add a method — that

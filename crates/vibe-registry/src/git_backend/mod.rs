@@ -63,15 +63,20 @@ pub enum GitError {
 /// `checkout` — version discovery is done by reading the working tree
 /// after a clone or update. Widening the interface is a deliberate
 /// design decision, not something that happens by accident.
+///
+/// **Method names.** `bootstrap` (not `clone`) avoids collision with
+/// `std::clone::Clone::clone` when the backend is held behind
+/// `Arc<dyn GitBackend>`, where `Arc::clone` would otherwise be
+/// ambiguous at the call site.
 pub trait GitBackend: Send + Sync {
     /// Clone `url` (checked out at `refname`) into `dest`.
     ///
     /// The caller guarantees `dest` is either empty or absent. On error,
     /// the backend makes no guarantee about the partial state of `dest`
     /// — the caller cleans up.
-    fn clone(&self, url: &str, refname: &str, dest: &Path) -> Result<(), GitError>;
+    fn bootstrap(&self, url: &str, refname: &str, dest: &Path) -> Result<(), GitError>;
 
     /// Fast-forward `dest` to `origin/<refname>`. Assumes `dest` is a git
-    /// repository previously populated by `clone`.
+    /// repository previously populated by `bootstrap`.
     fn update(&self, dest: &Path, refname: &str) -> Result<(), GitError>;
 }

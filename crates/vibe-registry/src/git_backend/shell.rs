@@ -94,7 +94,7 @@ impl ShellGit {
 }
 
 impl GitBackend for ShellGit {
-    fn clone(&self, url: &str, refname: &str, dest: &Path) -> Result<(), GitError> {
+    fn bootstrap(&self, url: &str, refname: &str, dest: &Path) -> Result<(), GitError> {
         self.preflight()?;
         let dest_s = dest.to_string_lossy();
         let args = [
@@ -298,7 +298,7 @@ mod tests {
         let dest = tmp.path().join("clone");
 
         let g = ShellGit::new();
-        g.clone(&bare.to_string_lossy(), "main", &dest)
+        g.bootstrap(&bare.to_string_lossy(), "main", &dest)
             .expect("initial clone should succeed");
         assert!(dest.join("README.md").exists());
 
@@ -326,7 +326,7 @@ mod tests {
         let dest = tmp.path().join("clone");
 
         let g = ShellGit::new();
-        let err = g.clone(&bogus.to_string_lossy(), "main", &dest).unwrap_err();
+        let err = g.bootstrap(&bogus.to_string_lossy(), "main", &dest).unwrap_err();
         // The exact message varies by git version; classification should
         // land on either RepoNotFound or a generic CommandFailed with
         // the raw stderr — both are acceptable for this test.
@@ -344,7 +344,7 @@ mod tests {
         let dest = tmp.path().join("clone");
 
         let g = ShellGit::new();
-        let err = g.clone(&bare.to_string_lossy(), "no-such-branch", &dest).unwrap_err();
+        let err = g.bootstrap(&bare.to_string_lossy(), "no-such-branch", &dest).unwrap_err();
         match err {
             GitError::RefNotFound { .. } | GitError::CommandFailed { .. } => {}
             other => panic!("unexpected classification: {other:?}"),
