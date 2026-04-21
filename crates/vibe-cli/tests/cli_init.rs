@@ -183,3 +183,93 @@ fn init_version() {
     vibe().arg("version").assert().success();
     vibe().arg("--version").assert().success();
 }
+
+#[test]
+fn init_writes_default_registry() {
+    let dir = tempfile::tempdir().unwrap();
+    let path = dir.path();
+
+    vibe().arg("init").arg("--path").arg(path).assert().success();
+
+    let manifest_text = fs::read_to_string(path.join("vibe.toml")).unwrap();
+    let parsed: vibe_core::manifest::ProjectManifest =
+        toml::from_str(&manifest_text).unwrap();
+    let reg = parsed
+        .registry
+        .as_ref()
+        .expect("[registry] should be written by default");
+    assert_eq!(reg.url, vibe_core::manifest::DEFAULT_REGISTRY_URL);
+    assert_eq!(reg.r#ref, vibe_core::manifest::DEFAULT_REGISTRY_REF);
+    // The default ref should be skipped-on-serialize, so the raw TOML
+    // carries the URL but not the ref.
+    assert!(
+        manifest_text.contains("[registry]"),
+        "manifest must contain [registry]: {manifest_text}"
+    );
+    assert!(manifest_text.contains(vibe_core::manifest::DEFAULT_REGISTRY_URL));
+}
+
+#[test]
+fn init_no_registry_flag_omits_section() {
+    let dir = tempfile::tempdir().unwrap();
+    let path = dir.path();
+
+    vibe()
+        .arg("init")
+        .arg("--path")
+        .arg(path)
+        .arg("--no-registry")
+        .assert()
+        .success();
+
+    let manifest_text = fs::read_to_string(path.join("vibe.toml")).unwrap();
+    let parsed: vibe_core::manifest::ProjectManifest =
+        toml::from_str(&manifest_text).unwrap();
+    assert!(
+        parsed.registry.is_none(),
+        "[registry] must be absent after --no-registry: {manifest_text}"
+    );
+    assert!(!manifest_text.contains("[registry]"));
+}
+
+#[test]
+fn init_registry_url_override() {
+    let dir = tempfile::tempdir().unwrap();
+    let path = dir.path();
+
+    vibe()
+        .arg("init")
+        .arg("--path")
+        .arg(path)
+        .arg("--registry-url")
+        .arg("git+https://example.test/registry.git")
+        .arg("--registry-ref")
+        .arg("develop")
+        .assert()
+        .success();
+
+    let manifest_text = fs::read_to_string(path.join("vibe.toml")).unwrap();
+    let parsed: vibe_core::manifest::ProjectManifest =
+        toml::from_str(&manifest_text).unwrap();
+    let reg = parsed.registry.as_ref().expect("[registry] should exist");
+    assert_eq!(reg.url, "git+https://example.test/registry.git");
+    assert_eq!(reg.r#ref, "develop");
+    // Non-default ref must be serialized.
+    assert!(manifest_text.contains("develop"));
+}
+
+#[test]
+fn init_registry_url_and_no_registry_conflict() {
+    let dir = tempfile::tempdir().unwrap();
+    let path = dir.path();
+
+    vibe()
+        .arg("init")
+        .arg("--path")
+        .arg(path)
+        .arg("--registry-url")
+        .arg("git+file:///whatever")
+        .arg("--no-registry")
+        .assert()
+        .failure();
+}

@@ -60,12 +60,20 @@ pub struct RegistrySection {
     pub r#ref: String,
 }
 
+/// Default registry URL written into every new project's `vibe.toml` unless
+/// the operator overrides it. Matches `VIBEVM-SPEC.md` §7.5 example and the
+/// publication target pinned in `PROP-000` §7.
+pub const DEFAULT_REGISTRY_URL: &str = "git@gitverse.ru:anarchic/vibespecs.git";
+
+/// Default ref on the registry repo.
+pub const DEFAULT_REGISTRY_REF: &str = "main";
+
 fn default_ref() -> String {
-    "main".into()
+    DEFAULT_REGISTRY_REF.to_string()
 }
 
 fn is_default_ref(r: &String) -> bool {
-    r == "main"
+    r == DEFAULT_REGISTRY_REF
 }
 
 impl ProjectManifest {

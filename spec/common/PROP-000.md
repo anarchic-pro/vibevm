@@ -84,9 +84,11 @@ Constraint forms in CLI:
 - **M0:** local-directory registry only. No git. Registry is a path on disk with the layout from `VIBEVM-SPEC.md` §8.2.
 - **M1:** git registry added per `VIBEVM-SPEC.md` §8. Configured in `vibe.toml`'s `[registry]` section. Default public registry URL = `git@gitverse.ru:anarchic/vibespecs.git` (SSH, see `spec/boot/90-user.md`). `VIBEVM-SPEC.md` §7.5 now carries this URL directly (was a `github.com/anarchic-org/...` placeholder earlier). **Backend choice, trait design, cache layout, and Windows UX for M1** are pinned in [spec://vibevm/modules/vibe-registry/PROP-001](../modules/vibe-registry/PROP-001-git-backend.md) — in brief: shell-out to the system `git` (not `libgit2`), behind a `GitBackend` trait that leaves the door open for a future `libgit2` swap.
 
+**Default in new projects.** `vibe init` writes the default registry URL (`DEFAULT_REGISTRY_URL` in [`vibe_core::manifest`](../../crates/vibe-core/src/manifest/project.rs)) into every new `vibe.toml`'s `[registry]` section unless the operator passes `--no-registry` or overrides with `--registry-url <URL>` / `--registry-ref <REF>`. The default exists so that a plain `vibe init` → `vibe install flow:wal` flow works out of the box against the public registry; overrides are there for forks, staging registries, and offline / air-gapped setups. The single source of truth for the URL is the constant in `vibe-core` — manual-tests, smoke scripts, and docs all reference it from there.
+
 **Source repositories:**
 - The vibevm tool itself: `git@gitverse.ru:anarchic/vibevm.git` (SSH) / `https://gitverse.ru/anarchic/vibevm` (web).
-- The package registry: `git@gitverse.ru:anarchic/vibespecs.git` (SSH). Empty until M1 publish.
+- The package registry: `git@gitverse.ru:anarchic/vibespecs.git` (SSH). Seeded 2026-04-22 with `flow:wal@0.1.0` (commit `98e51fc`).
 
 **Cache location:** `~/.vibe/registries/<hash>/` for cloned registries; `<project>/.vibe/cache/<kind>/<name>/<version>/` for per-package cache. See `VIBEVM-SPEC.md` §8.3.
 

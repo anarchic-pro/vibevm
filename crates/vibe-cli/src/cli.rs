@@ -81,6 +81,24 @@ pub struct InitArgs {
     /// Project name; defaults to the basename of the target directory.
     #[arg(long)]
     pub name: Option<String>,
+
+    /// Override the default registry URL written into `vibe.toml`.
+    /// When unset, `vibe init` writes the public GitVerse registry
+    /// (`git@gitverse.ru:anarchic/vibespecs.git`). Conflicts with
+    /// `--no-registry`.
+    #[arg(long = "registry-url", conflicts_with = "no_registry")]
+    pub registry_url: Option<String>,
+
+    /// Override the default ref (`main`) recorded under `[registry]`.
+    /// Conflicts with `--no-registry`.
+    #[arg(long = "registry-ref", conflicts_with = "no_registry")]
+    pub registry_ref: Option<String>,
+
+    /// Do not write a `[registry]` section into `vibe.toml`. The
+    /// project will then require `--registry <path>` on every
+    /// `vibe install`, or a manual edit to `vibe.toml` later.
+    #[arg(long = "no-registry")]
+    pub no_registry: bool,
 }
 
 #[derive(Debug, clap::Args)]

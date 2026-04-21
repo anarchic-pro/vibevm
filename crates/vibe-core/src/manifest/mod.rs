@@ -16,7 +16,10 @@ pub use lockfile::{Lockfile, LockfileMeta, LockedPackage};
 pub use package::{
     BootSnippet, Compatibility, PackageDependencies, PackageManifest, PackageMeta, WritesSection,
 };
-pub use project::{ActiveSection, LlmSection, ProjectManifest, ProjectSection, RegistrySection};
+pub use project::{
+    ActiveSection, DEFAULT_REGISTRY_REF, DEFAULT_REGISTRY_URL, LlmSection, ProjectManifest,
+    ProjectSection, RegistrySection,
+};
 
 use std::fs;
 use std::path::Path;

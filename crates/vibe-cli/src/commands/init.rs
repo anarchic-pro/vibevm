@@ -10,7 +10,8 @@ use std::path::Path;
 use anyhow::{Context, Result, bail};
 use serde::Serialize;
 use vibe_core::manifest::{
-    ActiveSection, Lockfile, ProjectManifest, ProjectSection,
+    ActiveSection, DEFAULT_REGISTRY_REF, DEFAULT_REGISTRY_URL, Lockfile, ProjectManifest,
+    ProjectSection, RegistrySection,
 };
 
 use crate::cli::InitArgs;
@@ -79,11 +80,13 @@ pub fn run(ctx: &output::Context, args: InitArgs) -> Result<()> {
     )?);
 
     // 5. Project manifest and empty lockfile.
+    let registry = resolve_registry_section(&args);
     outcomes.push(ensure_project_manifest(
         ctx,
         &path,
         &project_name,
         args.stack.as_deref(),
+        registry,
     )?);
     outcomes.push(ensure_empty_lockfile(ctx, &path)?);
 
@@ -161,6 +164,7 @@ fn ensure_project_manifest(
     root: &Path,
     name: &str,
     stack: Option<&str>,
+    registry: Option<RegistrySection>,
 ) -> Result<Outcome> {
     let path = root.join(ProjectManifest::FILENAME);
     let rel = relative_to_root(root, &path);
@@ -183,7 +187,7 @@ fn ensure_project_manifest(
             stack: Some(s.to_string()),
         }),
         llm: None,
-        registry: None,
+        registry,
     };
 
     manifest.write(&path)?;
@@ -192,6 +196,27 @@ fn ensure_project_manifest(
         path: rel,
         action: Action::Created,
         reason: "project manifest",
+    })
+}
+
+/// Build the `[registry]` section to write into a fresh `vibe.toml`.
+///
+/// - `--no-registry` → return `None` (vibe.toml has no `[registry]`).
+/// - otherwise → url = `--registry-url` if set else the public default,
+///   ref = `--registry-ref` if set else `main`.
+fn resolve_registry_section(args: &InitArgs) -> Option<RegistrySection> {
+    if args.no_registry {
+        return None;
+    }
+    Some(RegistrySection {
+        url: args
+            .registry_url
+            .clone()
+            .unwrap_or_else(|| DEFAULT_REGISTRY_URL.to_string()),
+        r#ref: args
+            .registry_ref
+            .clone()
+            .unwrap_or_else(|| DEFAULT_REGISTRY_REF.to_string()),
     })
 }
 
