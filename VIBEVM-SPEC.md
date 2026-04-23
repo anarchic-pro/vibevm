@@ -586,11 +586,37 @@ files = [
 filename = "10-flow-wal.md"         # target path: spec/boot/10-flow-wal.md
 source = "boot/10-flow-wal.md"      # source path within package
 
-[dependencies]
-# Other packages this package requires (by kind:name@constraint)
-# v1 supports declaration but does not auto-install dependencies.
-required = []                       # e.g., ["flow:atomic-commits@^0.1"]
-conflicts = []                      # e.g., ["flow:legacy-wal"]
+# What this package provides beyond its own identity — abstract capability names
+# other packages can `require` without naming this package directly.
+# Syntax: "<namespace>:<name>[@<semver>]" (e.g. "ui:landing-page@0.3").
+[provides]
+capabilities = []                   # e.g., ["ui:landing-page@0.3", "auth:oauth-callback"]
+
+# What this package needs. Resolved transitively at install time by the depsolver
+# (see §8.6). `packages` pins concrete pkgrefs; `capabilities` match any provider.
+[requires]
+packages     = []                   # e.g., ["flow:atomic-commits@^0.1", "stack:rust-cli@^0.1"]
+capabilities = []                   # e.g., ["db:any@>=1.0"] — satisfied by any package `provides`ing that
+
+# Disjunctive requirement: exactly one of `one_of` must be satisfied.
+# Repeat the table to express multiple independent disjunctions.
+# [[requires_any]]
+# one_of = ["stack:rust-cli@^0.1", "stack:rust-axum@^0.2"]
+
+# Packages this package supersedes — the depsolver treats an installed `obsoletes`
+# target as evidence to remove it on upgrade.
+[obsoletes]
+packages = []                       # e.g., ["feat:welcome-page-legacy"]
+
+# Direct exclusion — these cannot coexist with this package in a project.
+[conflicts]
+packages = []                       # e.g., ["flow:legacy-wal"]
+
+# Legacy compact form (still parsed; auto-migrated to `[requires].packages`
+# with a deprecation warning):
+# [dependencies]
+# required  = ["flow:atomic-commits@^0.1"]
+# conflicts = ["flow:legacy-wal"]
 ```
 
 ### 7.4 Lockfile schema
@@ -599,28 +625,40 @@ conflicts = []                      # e.g., ["flow:legacy-wal"]
 # vibe.lock at project root
 
 [meta]
-generated_by = "vibe 0.1.0"
-generated_at = "2026-04-16T12:00:00Z"
+generated_by      = "vibe 0.2.0"
+generated_at      = "2026-04-24T12:00:00Z"
+schema_version    = 2
+solver            = "resolvo-0.x"                   # depsolver identity (see §8.6)
+root_dependencies = ["flow:wal", "stack:rust-cli"]  # what the user directly asked for
 
 [[package]]
-kind = "flow"
-name = "wal"
-version = "0.3.0"
-source = "git+ssh://git@gitverse.ru/anarchic/vibespecs.git#flow/wal/v0.3.0"
-content_hash = "sha256:..."
-boot_snippet = "10-flow-wal.md"
-files_written = [
+kind            = "flow"
+name            = "wal"
+version         = "0.3.0"
+registry        = "vibespecs"                                   # name from vibe.toml [[registry]]
+source_url      = "git@gitverse.ru:vibespecs/flow-wal.git"     # WHERE it was fetched this time
+source_ref      = "v0.3.0"                                      # git ref (typically the tag)
+resolved_commit = "abc123…def"                                  # commit the ref pointed at
+content_hash    = "sha256:…"                                    # hash over the package tree — the IDENTITY
+boot_snippet    = "10-flow-wal.md"
+files_written   = [
     "spec/flows/wal/WAL-PROTOCOL.md",
     "spec/flows/wal/session-end-hook.md",
     "spec/boot/10-flow-wal.md",
 ]
+dependencies    = []                                            # transitively resolved deps (kind:name@=version)
+overridden      = false                                         # true iff resolved through [[override]]
 
 [[package]]
-kind = "stack"
-name = "rust-cli"
+kind    = "stack"
+name    = "rust-cli"
 version = "0.1.0"
 # ... etc
 ```
+
+**Identity is `(kind, name, version, content_hash)`**, not the URL. `source_url` is informational — which URL answered the fetch on this particular install. A reinstall through a mirror with a different URL but the same `content_hash` is a no-op; a mismatched `content_hash` is a fatal error (integrity violation). This makes mirror-switching and host-migration invisible to the lockfile — the exact property whose absence turned Nix into a hostage of a single hosting provider.
+
+**Schema versioning.** `schema_version = 2` is introduced with the decentralized per-package registry refactor. `schema_version = 1` (the M0 / M1.1-initial form with a single `source = "git+…#<kind>/<name>/v<ver>"` field) is accepted read-only and migrated to v2 on the next `vibe install` / `vibe update`, with a user-visible notice.
 
 The lockfile is the source of truth for what is installed. `vibe list` reads it. `vibe uninstall` reads it to know what files to remove. It is committed to git.
 
@@ -654,69 +692,134 @@ api_key_env = "ANTHROPIC_API_KEY"
 # model = "meta-llama/llama-3.3-70b"
 # api_key_env = "OPENROUTER_API_KEY"
 
-[registry]
-# The registry to use. v1: a git URL. v2+: may include hosted registries.
-url = "git@gitverse.ru:anarchic/vibespecs.git"
-ref = "main"
+# Registries are a priority-ordered list. Resolving `flow:foo` tries each registry
+# in the order written; the first one that has the package wins. `vibe init`
+# scaffolds a single entry pointing at the default public vibespecs organization.
+[[registry]]
+name   = "vibespecs"
+url    = "git@gitverse.ru:vibespecs"     # ORG root (not a package repo)
+ref    = "main"                           # registry-level metadata ref (reserved; not used today)
+naming = "kind-name"                      # convention: package repo name = "<kind>-<name>" under this org
+
+# Mirrors are transparent fallbacks for a specific registry (or `*` = any).
+# `source_url` in the lockfile always records the canonical URL, not the mirror URL,
+# so switching / removing a mirror does not churn the lockfile.
+# [[mirror]]
+# of       = "vibespecs"                  # or "*" for any registry
+# url      = "https://mirror.internal/vibespecs"
+# priority = 1                            # lower = tried first
+
+# Overrides bypass the registry layer entirely for a specific pkgref. Content is
+# fetched directly from the given URL at the given ref. Integrity (content_hash)
+# is still pinned in the lockfile and verified on every install.
+# [[override]]
+# pkgref     = "flow:wal"
+# source_url = "git@mycompany:forks/wal"
+# ref        = "my-fix-branch"            # optional — tag, branch, or commit
+# reason     = "awaiting upstream PR #42" # optional — surfaces in `vibe list --overrides`
 ```
 
 ---
 
 ## Section 8. The registry
 
-### 8.1 Registry model: a git repository
+### 8.1 Registry model: decentralized, per-package repos
 
-The registry is a git repository with a defined directory structure. v1 supports exactly one registry, configured per-project in `vibe.toml`.
+A registry is a **git-hosted organization** (GitVerse org / GitHub org / Gitea org / Forgejo group) in which every package is its own repository. A project references one or more registries via the `[[registry]]` array in `vibe.toml`; additional `[[mirror]]` and `[[override]]` entries control fallback and local-pin behaviour (§7.5).
+
+Key properties:
+- **No central monorepo-as-registry.** Each package (`<kind>:<name>`) is a standalone git repository, tagged with its semver releases (`v0.1.0`, `v0.2.0`, …). Repo naming is a property of the registry (default convention: `<kind>-<name>`), not a hard-coded rule in the CLI.
+- **Multi-registry is first-class.** The `[[registry]]` array is ordered — first registry with the requested pkgref wins; mirrors of each registry try first before the next registry is consulted.
+- **Identity is content-addressed.** A package is identified by `(kind, name, version, content_hash)`; the URL that served the content is informational. Mirror-switching and host-migration do not rewrite anyone's lockfile.
+- **URLs are generic git URLs.** No `github:` / `gitverse:` / `gitlab:` short-form schemes — the CLI does not hard-code host semantics. Any URL `git` accepts is usable. Onboarding a new host requires only that git speaks to it.
+
+The decentralized shape exists deliberately to avoid the single-host lock-in pattern that, for example, ties Nix to GitHub through hardcoded URL schemes, a global index hosted on GitHub, and lockfiles that pin absolute GitHub URLs. In vibevm, every load-bearing surface (resolve, fetch, lockfile) is host-agnostic.
 
 ### 8.2 Registry layout
 
+A registry is a **hosting organization URL**. Each package under it is a **separate git repository** with a flat layout — the package's content lives at the repository root, versions are git tags:
+
 ```
-vibevm-registry/
-├── flow/
-│   ├── wal/
-│   │   ├── v0.1.0/
-│   │   │   ├── vibe-package.toml
-│   │   │   ├── README.md
-│   │   │   └── ...
-│   │   ├── v0.2.0/
-│   │   │   └── ...
-│   │   ├── v0.3.0/
-│   │   │   └── ...
-│   │   └── latest                 # File or symlink containing version string
-│   └── sync-from-code/
-│       └── ...
-├── feat/
-│   └── welcome-page/
-│       └── v0.1.0/
-│           └── ...
-├── stack/
-│   └── rust-cli/
-│       └── v0.1.0/
-│           └── ...
-└── tool/                          # Reserved
+git@host:<org>/<kind>-<name>.git       (default naming; per-registry convention)
+├── vibe-package.toml                  # required
+├── README.md
+├── boot/
+│   └── <prefix>-<kind>-<name>.md      # optional — only if this package ships a boot snippet
+├── spec/
+│   └── ...                            # content mirrored into consumer projects
+└── ...
+
+tags: v0.1.0, v0.2.0, v1.3.0-rc.1, ...
 ```
+
+A tag is immutable by convention; any observed tag rewrite is caught by the integrity check (content_hash mismatch against lockfile) and halts the install.
 
 Resolution: `vibe install flow:wal@^0.3` →
-1. Fetch (or use cached) registry repo.
-2. List `flow/wal/v*/` directories.
-3. Find latest version matching `^0.3`.
-4. Use contents of `flow/wal/v0.3.x/` as the package.
+1. For each `[[registry]]` in order, and each of its `[[mirror]]`-s before the canonical URL: compute the package repo URL via the registry's `naming` convention (e.g. `git@gitverse.ru:vibespecs/flow-wal.git`).
+2. `git ls-remote --tags` against that URL — cheap, no clone needed to enumerate versions.
+3. Find the highest version matching `^0.3`; break on first registry that has a satisfying match.
+4. Fetch that tag's worktree into the per-package clone cache (§8.3) — shallow / sparse where beneficial.
+5. Compute `content_hash`; cross-check against the lockfile pin if one exists; fail hard on mismatch.
+6. Drive transitive dependencies through the depsolver (§8.6).
 
-### 8.3 Fetching strategy
+### 8.3 Fetching strategy and cache layout
 
-The CLI clones the registry repo into `~/.vibe/registries/<hash>/` on first use. Subsequent fetches do `git pull`. Use sparse-checkout if the registry is large; v1 may skip optimization and just clone everything.
+The per-user registry cache is organized by **canonical registry URL**, not by mirror URL — a transparent mirror therefore does not invalidate the cache:
 
-For each package install, copy the relevant version directory into `.vibe/cache/<kind>/<name>/<version>/`. Compute and store the content hash. The cache is reusable across projects on the same machine.
+```
+~/.vibe/registries/
+└── <canonical-url-hash>/
+    ├── meta.toml                          # { canonical_url, last_mirror_used?, last_synced_at }
+    └── packages/
+        └── <kind>-<name>/
+            ├── clone/                     # per-package git working tree
+            └── meta.toml                  # { source_url_last_used, last_synced_at, last_known_tags[] }
+```
+
+- `<canonical-url-hash>` = lowercase hex of the first 16 bytes of `sha256(normalize(canonical_registry_url))`. Full hash in the outer `meta.toml` for audit.
+- A given installation fetches **only the package repos it actually needs** — never a whole organization. Fetching is lazy and per-pkgref.
+- Freshness TTL per package repo is 1 hour by default (matches [PROP-001 §2.5](spec/modules/vibe-registry/PROP-001-git-backend.md#freshness)); `vibe registry sync` force-refreshes every clone referenced by the current lockfile.
+- Per-project package cache (`<project>/.vibe/cache/<kind>/<name>/<version>/`) is unchanged from M0.
+
+Transport-level optimisations used where they reduce work:
+- `git ls-remote --tags <url>` — enumerate versions without cloning.
+- `git archive --format=tar --remote=<url> <tag> vibe-package.toml | tar -xO` — pull a single manifest at a specific tag without a working tree. Used by the depsolver (§8.6) when it needs to read the `[requires]` of a candidate version without committing to it.
+
+A resolver pass that only needs to consider N candidate versions of a package should never clone all N — it enumerates via `ls-remote`, reads manifests via `git archive`, and only clones the one version it commits to installing.
 
 ### 8.4 Publishing
 
-`vibe publish` is reserved for v2+. v1 users contribute packages by submitting PRs to the registry repo. Document this in the package authoring guide (when written).
+**v1 ships `vibe registry publish <path>`** — a maintainer-facing command that creates a new package repository under the configured registry organization, pushes the package contents, and creates the version tag. It is mechanical: no semantic review, no LLM-backed safety analysis. The full *reviewed publish* surface (LLM censor per §8.5, signed attestations, policy gates) remains v2+.
+
+Auth uses a registry-specific public-API token stored in the user's vibevm config directory (`~/.vibevm/git.publish.token` or `VIBEVM_PUBLISH_TOKEN` env-var overriding). Publishing goes through a host adapter behind a `RepoCreator` trait, with concrete impls per host (GitVerse in v1; GitHub / Gitea / Forgejo added as adopters request them). The adapter pattern keeps consuming code host-agnostic: `vibe install` / `vibe update` never know which host served the content.
+
+Error surface (called out because non-admin maintainers will hit these routinely):
+- **401 / 403 from the host API** → "token lacks `repo:create` permission in `<org>`; contact the org owner or use a different token".
+- **Push denied** → "no write access to `<repo>`; ask a maintainer of that package repo to grant push".
+- **Tag collision** (publishing `v0.1.0` when that tag already exists) → refused; never force-pushed automatically. The operator must explicitly pick a new version.
+- **Org does not exist / unreachable** → differentiated from auth errors so the operator can distinguish a typo from a permission issue.
 
 ### 8.5 Future: LLM-based censoring
 
 A v2 feature: before applying writes, the CLI invokes an LLM to review the package contents and emit a safety analysis. The user sees both the plan (mechanical: which files will be written) and the analysis (semantic: does this look like it's trying to do something malicious or surprising).
 
 v1 architectural hook: the `install:review` node exists in the install subgraph and is a no-op in v1. v2 replaces its implementation.
+
+### 8.6 Dependency resolver
+
+`vibe install` and `vibe update` drive **transitive** resolution through a depsolver layer. v1 primary solver is `resolvo` (Rust-native SAT-backed, used by Pixi / Rattler in the conda ecosystem). An explicit fallback slot for `libsolv` (C, RPM-world, battle-tested at millions-of-packages scale) exists behind a `DepSolver` trait — analogous to the `GitBackend` pattern pinned in [PROP-001 §2.2](spec/modules/vibe-registry/PROP-001-git-backend.md#backend-trait). Swap cost is a single new impl and one factory line.
+
+The solver consumes:
+- Concrete package pkgrefs from `[requires].packages`.
+- Capability requirements from `[requires].capabilities` — any package whose `[provides].capabilities` contains a satisfying entry is a valid candidate.
+- Disjunctive requirements from `[[requires_any]].one_of`.
+- Obsoletes declarations driving auto-removal on upgrade.
+- Conflicts forcing mutually-exclusive installs.
+- The existing lockfile (as preferred-resolution seed for incremental updates).
+
+What the solver does NOT do: semantic review (that is §8.5 / v2), file-conflict detection at the apply stage (already handled by the §6.2 boot-snippet guard and §5.6's `install:resolve-writes` node). The solver resolves *the dependency graph*; the existing install pipeline resolves *writes and conflicts on disk*.
+
+Complexity expectation (pinned in [PROP-000 §18](spec/common/PROP-000.md#complexity)): at least matching RPM-class — virtual packages, provides/requires/obsoletes, disjunctions, boolean rich-deps, capability-based resolve, multi-kind cross-deps — and in the semantic-review dimension, greater. Solver choice calibrated to that ceiling, not to the v1 package count.
 
 ---
 
@@ -925,11 +1028,13 @@ vibevm ships in staged milestones. Each milestone is *useful on its own* — if 
 - `vibe show config` — prints effective configuration with provenance.
 - `vibe help`, `vibe version` — standard.
 
-**Plus.** The hand-written `flow:wal`, plus at least two more demo packages, are published to the registry. The registry is a real git repo on GitHub.
+**Plus.** The hand-written `flow:wal`, plus at least two more demo packages, are published to the registry. The registry is a real git-hosted organization (GitVerse: `vibespecs`), with per-package repos per §8.2.
 
 **Verification.** A user with no prior vibevm exposure can install vibevm, run `vibe init`, install three packages, see the effective spec, run `vibe check` and get a clean report. They never edit any vibevm-managed file by hand.
 
 **Estimated effort.** Two to four weekends.
+
+**Revision (M1.1-revision, amended post-M1.1 shipping).** After three packages went live against a monorepo-shaped registry, the registry model was redesigned around decentralized per-package repos, a `[[registry]]`-array + `[[mirror]]` + `[[override]]` schema in `vibe.toml`, content-addressed identity, a transitive depsolver (`resolvo`), and a `vibe registry publish` maintainer utility — see [PROP-002](spec/modules/vibe-registry/PROP-002-decentralized-registry.md). The monorepo layout example previously shown in §8.2 was replaced by the per-package layout now described there. Applies to M1.1+ code; live migration of the three demo packages to the new `vibespecs/<kind>-<name>` shape is part of that revision slice.
 
 ### 11.3 Milestone M1.5: Generation
 
@@ -1247,17 +1352,23 @@ Before declaring any milestone complete, verify every item in its section.
 
 ### M1 acceptance (additive over M0)
 
-- [ ] `vibe install` resolves packages from a git registry per `vibe.toml`'s configuration.
-- [ ] Registry cache lives at `~/.vibe/registries/<hash>/`.
-- [ ] `vibe registry sync` refreshes the cache.
-- [ ] `vibe update <pkgref>` re-fetches and applies changes with diff display.
+- [ ] `vibe install` resolves packages from a git registry per `vibe.toml`'s `[[registry]]` configuration (priority-ordered).
+- [ ] Registry cache lives at `~/.vibe/registries/<canonical-url-hash>/packages/<kind>-<name>/` — per-package, not per-monorepo.
+- [ ] `vibe registry sync` refreshes every package clone referenced by the current lockfile.
+- [ ] `vibe update <pkgref>` re-fetches and applies changes with diff display; integrity check rejects content_hash drift.
 - [ ] `vibe update --all` updates every installed package.
+- [ ] `vibe install` drives **transitive** dependency resolution through the `resolvo` depsolver; capability-based `[requires]`, `[[requires_any]]`, `[obsoletes]`, `[conflicts]` are honoured.
+- [ ] Conflict / unsatisfiable-constraint errors render as a human-readable chain (solver's native conflict-explanation surface), not a raw stack trace.
+- [ ] `[[mirror]]` fallback works: a reachable mirror answers fetches, content_hash matches across sources; a mismatched mirror fails hard without corrupting the cache.
+- [ ] `[[override]]` short-circuits registry resolution for the named pkgref; content_hash still pins in the lockfile.
 - [ ] `vibe check` performs all checks listed in Section 12.
 - [ ] `vibe check --fix` autofixes only safe issues.
 - [ ] `vibe show effective` prints a complete effective spec for the project.
 - [ ] `vibe show graph <workflow>` prints the task graph for that workflow.
 - [ ] `vibe show config` prints all configuration with provenance.
-- [ ] A public git registry is set up on GitHub with at least three packages: `flow:wal`, plus two more.
+- [ ] `vibe registry publish <path>` creates a new per-package repository in the configured registry organization, pushes contents, and tags the version; non-admin / permission errors render actionably per §8.4.
+- [ ] A public git registry is set up on GitVerse (`vibespecs` organization) with at least three packages, each in its own per-package repository: `flow:wal`, plus two more.
+- [ ] Lockfile schema v1 (monorepo-era) is accepted read-only and auto-migrated to schema v2 on next write.
 - [ ] Documentation in `docs/` covers all commands and includes an authoring guide for each kind.
 
 ### M1.5 acceptance (additive over M1)
