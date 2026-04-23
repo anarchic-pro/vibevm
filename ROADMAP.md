@@ -1,17 +1,22 @@
 # vibevm — roadmap
 
-> **Status snapshot (2026-04-23):** M0 is complete. M1.1 (git-backed
-> registry) shipped 2026-04-22. The M1.5-gate **content** slice
-> shipped on 2026-04-23: all three demo flows are live on
-> `git@gitverse.ru:anarchic/vibespecs.git` — `flow:wal@0.1.0`
-> (commit `98e51fc`), `flow:sync-from-code@0.1.0` (commit `47582af`),
-> `flow:atomic-commits@0.1.0` (commit `2203239`). Distinct
-> boot-snippet prefixes (`10-`/`20-`/`30-`) install together in one
-> project; end-to-end verified in
-> [`manual-tests/M1.5-gate-multi-package-smoke.md`](manual-tests/M1.5-gate-multi-package-smoke.md).
-> 81 tests green across the workspace, 0 warnings, clippy clean.
-> Remaining M1.5-gate item: docs (`docs/commands/*.md`,
-> `docs/authoring-{flow,feat,stack}.md`). M1.2 / M1.3 / M1.4 open.
+> **Status snapshot (2026-04-24):** M0 is complete. M1.1 (git-backed
+> registry) shipped 2026-04-22 against a monorepo-shaped registry at
+> `git@gitverse.ru:anarchic/vibespecs.git`. The M1.5-gate **content**
+> slice shipped on 2026-04-23: three demo flows live there —
+> `flow:wal@0.1.0`, `flow:sync-from-code@0.1.0`,
+> `flow:atomic-commits@0.1.0`. 81 tests green, clippy clean.
+>
+> **Active slice (started 2026-04-24): M1.1-revision** — redesign of
+> the registry model around decentralized per-package repos,
+> `[[registry]]` array + `[[mirror]]` + `[[override]]` in `vibe.toml`,
+> content-addressed identity, transitive depsolver (`resolvo`), and a
+> `vibe registry publish` maintainer utility. Design lock: [PROP-002](spec/modules/vibe-registry/PROP-002-decentralized-registry.md).
+> Live migration of the three demo packages into the new
+> `vibespecs/<kind>-<name>` per-package shape is part of this slice.
+> M1.5-gate docs still open. M1.2 / M1.3 / M1.4 open. M1.6 queued
+> (polished multi-registry / mirror UX, `vibe vendor`, richer publish
+> adapters).
 
 This document is the long-form version of `VIBEVM-SPEC.md` §11 (staging
 plan). It keeps the "why" and "nuance" that a compressed staging table
@@ -131,6 +136,30 @@ procedure for the live validation lives in
 (`flow:sync-from-code`, `flow:atomic-commits`) are on the path to
 M1.5-gate, not to M1.1 — see the M1.5-gate subsection below.
 
+### M1.1-revision — Decentralized per-package registry (active, started 2026-04-24)
+
+**Why.** The original M1.1 shape (monorepo-as-registry, `[registry]`
+singleton, `#fragment` paths in lockfile `source_uri`) was fine for
+three hand-written demo packages but would become a hostage-taking
+architecture at scale — same failure mode that ties Nix to GitHub.
+Before anyone downstream pins anything to the v1 shape, it is
+cheapest to redesign once, properly.
+
+**Scope.** Full design lock in [PROP-002](spec/modules/vibe-registry/PROP-002-decentralized-registry.md) (supersedes PROP-001 §2.3 / §2.4 / §2.6). Phase A of that PROP is this slice's shippable surface:
+
+- **Decentralized registry** — each package is its own git repository under a hosting organization (`vibespecs/flow-wal`, `vibespecs/flow-sync-from-code`, …). Versions are git tags. Repo-naming convention is a property of the registry, not the CLI.
+- **Multi-registry schema** — `vibe.toml` carries `[[registry]]` as an array (priority-ordered), with `[[mirror]]` and `[[override]]` entries. Even with one registry in practice today, the schema and code path support the full shape from day one.
+- **Content-addressed identity** — lockfile `source_url` is informational; identity is `(kind, name, version, content_hash)`. Mirror-switching and host-migration never churn the lockfile. Integrity verified on every install.
+- **Transitive depsolver** — `resolvo` crate, wrapped behind a `DepSolver` trait so `libsolv` remains a documented fallback. Capability-based `[provides]` / `[requires]` / `[[requires_any]]` / `[obsoletes]` / `[conflicts]` become semantic, not advisory.
+- **`vibe registry publish <path>`** — maintainer utility creating a new package repo via GitVerse public API, pushing content, tagging version. Error surface tuned for non-admin contributors (clear 401/403/push-denied messaging).
+- **Live migration** — three demo packages (`flow:wal@0.1.0`, `flow:sync-from-code@0.1.0`, `flow:atomic-commits@0.1.0`) move from `anarchic/vibespecs` monorepo into `vibespecs/<kind>-<name>` per-package repos via the new publish utility.
+- **JTD wire-contract foundation** — GitVerse API and `vibe --json` event shapes are schema-first (JTD), with `jtd-codegen` producing Rust types. Future LLM provider wrappers land on the same pattern.
+- **Local fixtures relocate** from `packages/` to `fixtures/registry/` to separate test fixtures from the project's own future dogfooded `packages/`.
+
+**Task breakdown** lives in [`TASKS.md`](TASKS.md) at repo root.
+
+**Acceptance.** See §M1 acceptance (additive) in `VIBEVM-SPEC.md` §16 — the list there grew to cover per-package resolution, mirror fallback, override pin, publish error surface, lockfile schema v1→v2 migration.
+
 ### M1.2 — `vibe update`
 
 - `vibe update <pkgref>` and `vibe update --all`: re-fetch the
@@ -220,6 +249,44 @@ Content landed 2026-04-22 / 2026-04-23; docs remain.
 
 **Estimated effort.** 2–4 weekends. The git backend is the biggest
 lift; the rest is straightforward with `vibe-core` already in place.
+
+### M1.6 — Multi-registry, mirror, and vendoring polish
+
+**Thesis.** M1.1-revision laid the schema and code paths for
+multi-registry, mirrors, and overrides — but the v1 release reasonably
+exercises only a single `[[registry]]`. M1.6 brings the remaining
+multi-source story to production quality.
+
+**Scope.**
+
+- **Real multi-registry** — `[[registry]]` array with >1 entry, each a
+  separate hosting organization. Priority-ordered resolution exercised
+  end-to-end against a second live registry.
+- **Mirror fallback chain** — `[[mirror]]` tried before canonical per
+  registry; integrity-checked against the lockfile; hard-fail on
+  content drift, escape-hatch `--trust-mirror` for deliberate
+  mirror-vs-upstream divergence during an upstream outage.
+- **`vibe vendor [--out <dir>]`** — generate a local mirror directory
+  containing every package referenced by the current lockfile, shaped
+  so it can be used as a `file://`-scheme `[[mirror]]`. Enables
+  air-gapped / offline installs without code changes elsewhere.
+- **CLI surface for registry management** — `vibe registry add <name>
+  <url>`, `vibe registry list`, `vibe registry set-mirror <of> <url>`,
+  `vibe registry remove <name>`, `vibe registry status` (which
+  registry answered which package last).
+- **Publish adapters beyond GitVerse** — GitHub, Gitea, Forgejo on
+  adopter demand. Adding each is one new `RepoCreator` impl; no
+  consumer-side change.
+- **Resolver performance** — full dep-graph cache keyed by content
+  hash of inputs, parallel `git ls-remote` via rayon, `git archive`
+  single-file manifest prefetch landed in M1.1-revision stays, gains
+  concurrency.
+- **Supply-chain attestation (optional, ambitious)** — signed tags or
+  sigstore-style attestations per release; consumer verifies on
+  install. This is the kind of thing a principal-engineer lens
+  (PROP-000 §17) prompts us to design early even if we don't ship v1.
+
+**Estimated effort.** 2–3 weekends on top of M1.1-revision.
 
 ---
 
