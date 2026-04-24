@@ -41,9 +41,9 @@ fn run_sync(ctx: &output::Context, args: RegistrySyncArgs) -> Result<()> {
     let manifest = ProjectManifest::read(&manifest_path)
         .with_context(|| format!("reading `{}`", manifest_path.display()))?;
 
-    let Some(reg) = manifest.registry else {
+    let Some(reg) = manifest.primary_registry().cloned() else {
         bail!(
-            "no `[registry]` section in `{}`. `vibe registry sync` only refreshes configured git registries.",
+            "no `[[registry]]` entry in `{}`. `vibe registry sync` only refreshes configured git registries.",
             manifest_path.display()
         );
     };

@@ -18,8 +18,9 @@ pub use package::{
     PackageMeta, Provides, Requires, RequiresAny, WritesSection,
 };
 pub use project::{
-    ActiveSection, DEFAULT_REGISTRY_REF, DEFAULT_REGISTRY_URL, LlmSection, ProjectManifest,
-    ProjectSection, RegistrySection,
+    ActiveSection, DEFAULT_REGISTRY_NAME, DEFAULT_REGISTRY_REF, DEFAULT_REGISTRY_URL, LlmSection,
+    MirrorSection, NamingConvention, OverrideSection, ProjectManifest, ProjectSection,
+    RegistrySection,
 };
 
 use std::fs;

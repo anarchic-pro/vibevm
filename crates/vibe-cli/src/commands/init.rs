@@ -10,8 +10,8 @@ use std::path::Path;
 use anyhow::{Context, Result, bail};
 use serde::Serialize;
 use vibe_core::manifest::{
-    ActiveSection, DEFAULT_REGISTRY_REF, DEFAULT_REGISTRY_URL, Lockfile, ProjectManifest,
-    ProjectSection, RegistrySection,
+    ActiveSection, DEFAULT_REGISTRY_NAME, DEFAULT_REGISTRY_REF, DEFAULT_REGISTRY_URL, Lockfile,
+    NamingConvention, ProjectManifest, ProjectSection, RegistrySection,
 };
 
 use crate::cli::InitArgs;
@@ -187,7 +187,9 @@ fn ensure_project_manifest(
             stack: Some(s.to_string()),
         }),
         llm: None,
-        registry,
+        registries: registry.into_iter().collect(),
+        mirrors: Vec::new(),
+        overrides: Vec::new(),
     };
 
     manifest.write(&path)?;
@@ -199,16 +201,18 @@ fn ensure_project_manifest(
     })
 }
 
-/// Build the `[registry]` section to write into a fresh `vibe.toml`.
+/// Build the `[[registry]]` entry to write into a fresh `vibe.toml`.
 ///
-/// - `--no-registry` → return `None` (vibe.toml has no `[registry]`).
-/// - otherwise → url = `--registry-url` if set else the public default,
-///   ref = `--registry-ref` if set else `main`.
+/// - `--no-registry` → `None` (vibe.toml has no `[[registry]]`).
+/// - otherwise → a single entry named `"default"` with the organization-root
+///   URL and default kind-name naming convention. `--registry-url` /
+///   `--registry-ref` override url / ref respectively.
 fn resolve_registry_section(args: &InitArgs) -> Option<RegistrySection> {
     if args.no_registry {
         return None;
     }
     Some(RegistrySection {
+        name: DEFAULT_REGISTRY_NAME.to_string(),
         url: args
             .registry_url
             .clone()
@@ -217,6 +221,7 @@ fn resolve_registry_section(args: &InitArgs) -> Option<RegistrySection> {
             .registry_ref
             .clone()
             .unwrap_or_else(|| DEFAULT_REGISTRY_REF.to_string()),
+        naming: NamingConvention::KindName,
     })
 }
 

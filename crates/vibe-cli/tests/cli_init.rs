@@ -195,16 +195,20 @@ fn init_writes_default_registry() {
     let parsed: vibe_core::manifest::ProjectManifest =
         toml::from_str(&manifest_text).unwrap();
     let reg = parsed
-        .registry
-        .as_ref()
-        .expect("[registry] should be written by default");
+        .primary_registry()
+        .expect("[[registry]] should be written by default");
+    assert_eq!(reg.name, vibe_core::manifest::DEFAULT_REGISTRY_NAME);
     assert_eq!(reg.url, vibe_core::manifest::DEFAULT_REGISTRY_URL);
     assert_eq!(reg.r#ref, vibe_core::manifest::DEFAULT_REGISTRY_REF);
-    // The default ref should be skipped-on-serialize, so the raw TOML
-    // carries the URL but not the ref.
+    assert_eq!(
+        reg.naming,
+        vibe_core::manifest::NamingConvention::KindName
+    );
+    // The default ref and default naming should be skipped-on-serialize,
+    // so the raw TOML carries the URL but not ref / naming.
     assert!(
-        manifest_text.contains("[registry]"),
-        "manifest must contain [registry]: {manifest_text}"
+        manifest_text.contains("[[registry]]"),
+        "manifest must contain [[registry]]: {manifest_text}"
     );
     assert!(manifest_text.contains(vibe_core::manifest::DEFAULT_REGISTRY_URL));
 }
@@ -226,9 +230,10 @@ fn init_no_registry_flag_omits_section() {
     let parsed: vibe_core::manifest::ProjectManifest =
         toml::from_str(&manifest_text).unwrap();
     assert!(
-        parsed.registry.is_none(),
-        "[registry] must be absent after --no-registry: {manifest_text}"
+        parsed.registries.is_empty(),
+        "[[registry]] must be absent after --no-registry: {manifest_text}"
     );
+    assert!(!manifest_text.contains("[[registry]]"));
     assert!(!manifest_text.contains("[registry]"));
 }
 
@@ -251,7 +256,9 @@ fn init_registry_url_override() {
     let manifest_text = fs::read_to_string(path.join("vibe.toml")).unwrap();
     let parsed: vibe_core::manifest::ProjectManifest =
         toml::from_str(&manifest_text).unwrap();
-    let reg = parsed.registry.as_ref().expect("[registry] should exist");
+    let reg = parsed
+        .primary_registry()
+        .expect("[[registry]] should exist");
     assert_eq!(reg.url, "git+https://example.test/registry.git");
     assert_eq!(reg.r#ref, "develop");
     // Non-default ref must be serialized.

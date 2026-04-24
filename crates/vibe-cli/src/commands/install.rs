@@ -170,9 +170,9 @@ pub(crate) fn resolve_registry(
                 .map_err(|e| anyhow!("failed to open registry at `{}`: {e}", p.display()))?,
         ));
     }
-    let Some(reg) = &manifest.registry else {
+    let Some(reg) = manifest.primary_registry() else {
         bail!(
-            "no registry configured. Pass `--registry <path>` or add a `[registry]` section to `vibe.toml`."
+            "no registry configured. Pass `--registry <path>` or add a `[[registry]]` entry to `vibe.toml`."
         );
     };
     if let Some(path) = parse_file_uri(&reg.url) {
