@@ -1,0 +1,21 @@
+# Canonical line endings for every text file: LF in the repo, LF in every
+# checkout. Git's auto-detection ("text=auto") decides what is binary; for
+# anything text, we store LF and hand out LF regardless of OS. This keeps
+# content hashes stable across Windows / macOS / Linux — which matters
+# because our package content_hash (see PROP-002 §2.1) is computed over
+# raw file bytes.
+* text=auto eol=lf
+
+# Keep real binaries byte-exact (insurance; rg's auto-detection is good,
+# but pinning the common cases removes any ambiguity).
+*.png  binary
+*.jpg  binary
+*.jpeg binary
+*.gif  binary
+*.ico  binary
+*.pdf  binary
+*.zip  binary
+*.gz   binary
+*.tgz  binary
+*.xz   binary
+*.wasm binary
