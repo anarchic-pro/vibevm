@@ -249,6 +249,42 @@ impl GitPackageRegistry {
         Ok(manifest)
     }
 
+    /// Refresh the per-package clone for `(kind, name)` against `refname`
+    /// without touching the per-project cache. If the clone exists, runs
+    /// `update`; otherwise bootstraps a fresh clone.
+    ///
+    /// Used by `vibe registry sync` to walk lockfile entries and pull
+    /// upstream changes for everything currently installed, without
+    /// re-applying writes (that's `vibe update`'s job, not sync's).
+    pub fn refresh_package(
+        &self,
+        kind: PackageKind,
+        name: &str,
+        refname: &str,
+    ) -> Result<(), RegistryError> {
+        let url = self.package_repo_url(kind, name);
+        let clone_dir = self.package_clone_dir(kind, name);
+        if clone_dir.join(".git").exists() {
+            self.backend.update(&clone_dir, refname)?;
+        } else {
+            if clone_dir.exists() {
+                fs::remove_dir_all(&clone_dir).map_err(|source| RegistryError::Io {
+                    path: clone_dir.clone(),
+                    source,
+                })?;
+            }
+            if let Some(parent) = clone_dir.parent() {
+                fs::create_dir_all(parent).map_err(|source| RegistryError::Io {
+                    path: parent.to_path_buf(),
+                    source,
+                })?;
+            }
+            self.backend
+                .bootstrap(strip_git_plus_prefix(&url), refname, &clone_dir)?;
+        }
+        Ok(())
+    }
+
     /// Materialise the resolved package into the per-project cache. Clones
     /// (or updates) the per-package repo at the requested tag, then copies
     /// the worktree into `<cache_root>/<kind>/<name>/v<version>/`,
