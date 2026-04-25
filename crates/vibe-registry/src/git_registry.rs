@@ -427,6 +427,24 @@ mod tests {
             *self.update_calls.lock().unwrap() += 1;
             Ok(())
         }
+        fn list_tags(&self, _url: &str) -> Result<Vec<String>, GitError> {
+            // Tests using FakeGit pre-seed a working tree directly; they
+            // do not exercise the resolver's tag-listing path. Default to
+            // empty so a stray call does not panic.
+            Ok(Vec::new())
+        }
+        fn fetch_file_at_ref(
+            &self,
+            url: &str,
+            refname: &str,
+            path: &str,
+        ) -> Result<Vec<u8>, GitError> {
+            Err(GitError::FileNotFoundInRef {
+                url: url.to_string(),
+                refname: refname.to_string(),
+                path: path.to_string(),
+            })
+        }
     }
 
     fn copy_tree(src: &Path, dst: &Path) {

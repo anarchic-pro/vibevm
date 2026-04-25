@@ -38,7 +38,7 @@ Full design locked in [PROP-002](spec/modules/vibe-registry/PROP-002-decentraliz
 ### Resolver and registry layer
 
 - [ ] `feat(vibe-resolver)`: new crate wrapping `resolvo`; `DepSolver` trait with `ResolvoSolver` impl (and door left open for a future `LibsolvSolver` fallback).
-- [ ] `feat(registry)`: `ShellGit::list_tags` and `ShellGit::fetch_file_at_ref` — cheap ls-remote and shallow file fetch without full clone.
+- [x] `feat(registry)`: `ShellGit::list_tags` (via `git ls-remote --tags`, dedupes annotated-tag peeled-form) and `ShellGit::fetch_file_at_ref` (via `git archive --remote=<url> --format=tar`, in-process tar extraction, no `tar` crate); `GitBackend` trait widened with both methods plus `FileNotFoundInRef` and `ArchiveUnsupported` error variants.
 - [ ] `feat(registry)`: `GitPackageRegistry` (per-package repo, tag-based versions, flat layout) replacing the monorepo `GitRegistry`.
 - [ ] `feat(registry)`: `MultiRegistryResolver` — priority-ordered list of `[[registry]]`, mirror fallback chain per registry, `[[override]]` short-circuit, content-hash cross-source integrity verification.
 - [ ] `feat(install)`: transitive install through the resolver; plan-rendering shows the full resolved subgraph with provenance tags (`(dep of flow:foo)`); `--dry-run` full.

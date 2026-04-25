@@ -91,6 +91,27 @@ impl ShellGit {
         }
         Err(classify_failure(args, &output))
     }
+
+    /// Like [`Self::run`] but returns the raw [`Output`] on non-zero exit
+    /// without classifying it. Used by callers that need to look at
+    /// stdout / stderr together (e.g. `fetch_file_at_ref` distinguishing
+    /// "ref missing" from "file missing in ref" from "archive
+    /// unsupported").
+    fn run_raw(&self, args: &[&str], cwd: Option<&Path>) -> Result<Output, GitError> {
+        let mut cmd = Command::new(&self.binary);
+        cmd.args(args);
+        if let Some(d) = cwd {
+            cmd.current_dir(d);
+        }
+        apply_common_env(&mut cmd);
+
+        tracing::debug!(target: "vibe_registry::git", argv = ?render_argv(&self.binary, args), cwd = ?cwd, "running git (raw)");
+
+        cmd.output().map_err(|e| GitError::Io {
+            cmd: render_argv(&self.binary, args),
+            source: e,
+        })
+    }
 }
 
 impl GitBackend for ShellGit {
@@ -119,6 +140,173 @@ impl GitBackend for ShellGit {
         self.run(&["reset", "--hard", &ref_arg], Some(dest))
             .map(|_| ())
     }
+
+    fn list_tags(&self, url: &str) -> Result<Vec<String>, GitError> {
+        self.preflight()?;
+        // `git ls-remote --tags <url>` outputs one line per ref:
+        //   <hash>\trefs/tags/<name>
+        // Annotated tags appear twice — once as the tag object and once
+        // as the peeled commit (`refs/tags/<name>^{}`). We drop the
+        // peeled form's `^{}` suffix and dedupe on the resulting names.
+        let output = self.run(&["ls-remote", "--tags", "--", url], None)?;
+        let stdout = String::from_utf8_lossy(&output.stdout);
+        let mut tags: Vec<String> = Vec::new();
+        let mut seen: std::collections::HashSet<String> = std::collections::HashSet::new();
+        for line in stdout.lines() {
+            let Some((_hash, refpath)) = line.split_once('\t') else {
+                continue;
+            };
+            let Some(name) = refpath.strip_prefix("refs/tags/") else {
+                continue;
+            };
+            // Strip peeled-form suffix.
+            let name = name.strip_suffix("^{}").unwrap_or(name).to_string();
+            if seen.insert(name.clone()) {
+                tags.push(name);
+            }
+        }
+        Ok(tags)
+    }
+
+    fn fetch_file_at_ref(
+        &self,
+        url: &str,
+        refname: &str,
+        path: &str,
+    ) -> Result<Vec<u8>, GitError> {
+        self.preflight()?;
+        // Normalise platform separators to forward slash — `git archive`
+        // expects in-repo paths in posix form.
+        let normalized = path.replace('\\', "/");
+
+        // `git archive --remote=<url> --format=tar <refname> -- <path>`
+        // emits a tar of just the requested path on stdout. We block on
+        // the full output (these are tiny files — manifests under a kB).
+        let remote_arg = format!("--remote={url}");
+        let format_arg = "--format=tar";
+        let args = [
+            "archive",
+            &remote_arg,
+            format_arg,
+            refname,
+            "--",
+            normalized.as_str(),
+        ];
+        let output = self.run_raw(&args, None)?;
+        if output.status.success() {
+            return extract_single_file_from_tar(&output.stdout, &normalized).ok_or_else(|| {
+                GitError::FileNotFoundInRef {
+                    url: url.to_string(),
+                    refname: refname.to_string(),
+                    path: normalized.clone(),
+                }
+            });
+        }
+
+        // Classify failure.
+        let stderr = String::from_utf8_lossy(&output.stderr);
+        let stdout = String::from_utf8_lossy(&output.stdout);
+        let combined_lc = format!("{stderr}{stdout}").to_lowercase();
+
+        if combined_lc.contains("path") && combined_lc.contains("does not exist")
+            || combined_lc.contains("pathspec")
+            || combined_lc.contains("did not match any files")
+        {
+            return Err(GitError::FileNotFoundInRef {
+                url: url.to_string(),
+                refname: refname.to_string(),
+                path: normalized,
+            });
+        }
+        if combined_lc.contains("operation not supported by protocol")
+            || combined_lc.contains("upload-archive")
+                && (combined_lc.contains("not permitted")
+                    || combined_lc.contains("not allowed")
+                    || combined_lc.contains("disabled"))
+        {
+            return Err(GitError::ArchiveUnsupported {
+                url: url.to_string(),
+            });
+        }
+        if combined_lc.contains("unknown revision")
+            || combined_lc.contains("not a tree object")
+            || combined_lc.contains("couldn't find remote ref")
+        {
+            return Err(GitError::RefNotFound {
+                url: url.to_string(),
+                refname: refname.to_string(),
+            });
+        }
+        Err(classify_failure(&args, &output))
+    }
+}
+
+/// Pull a single file's bytes out of a tar stream. Returns `None` if the
+/// requested path is not present.
+///
+/// Implemented inline (no `tar` crate) because the data shape is trivial:
+/// a tar archive is a sequence of 512-byte headers, each followed by
+/// `ceil(size / 512) * 512` bytes of payload, terminated by two empty
+/// headers. We read filename, size, payload; skip over directory and
+/// other-type entries.
+fn extract_single_file_from_tar(bytes: &[u8], target_path: &str) -> Option<Vec<u8>> {
+    let target_norm = target_path.trim_start_matches("./");
+    let mut offset = 0usize;
+    while offset + 512 <= bytes.len() {
+        let header = &bytes[offset..offset + 512];
+        // Empty header marks end-of-archive.
+        if header.iter().all(|b| *b == 0) {
+            return None;
+        }
+
+        // Filename is the first 100 bytes, NUL-terminated. Optionally
+        // prefixed (UStar long-name extension via `prefix` field at
+        // bytes 345..500), but git archive emits short paths.
+        let name = read_cstr(&header[0..100]);
+        let prefix = read_cstr(&header[345..500]);
+        let full_name = if prefix.is_empty() {
+            name.clone()
+        } else {
+            format!("{prefix}/{name}")
+        };
+        let full_norm = full_name.trim_start_matches("./").to_string();
+
+        // Size is octal in bytes 124..136.
+        let size = parse_octal(&header[124..136]).unwrap_or(0);
+
+        // Type flag at byte 156: '0' or '\0' = regular file.
+        let typeflag = header[156];
+
+        let payload_start = offset + 512;
+        let payload_end = payload_start + size;
+        if payload_end > bytes.len() {
+            return None;
+        }
+
+        let is_regular = typeflag == b'0' || typeflag == 0;
+        if is_regular && full_norm == target_norm {
+            return Some(bytes[payload_start..payload_end].to_vec());
+        }
+
+        // Advance past payload, rounded up to 512.
+        let padded = size.div_ceil(512) * 512;
+        offset = payload_start + padded;
+    }
+    None
+}
+
+fn read_cstr(buf: &[u8]) -> String {
+    let end = buf.iter().position(|b| *b == 0).unwrap_or(buf.len());
+    String::from_utf8_lossy(&buf[..end]).into_owned()
+}
+
+fn parse_octal(buf: &[u8]) -> Option<usize> {
+    let s = std::str::from_utf8(buf).ok()?;
+    let trimmed = s.trim_matches(|c: char| c == ' ' || c == '\0');
+    if trimmed.is_empty() {
+        return Some(0);
+    }
+    usize::from_str_radix(trimmed, 8).ok()
 }
 
 fn apply_common_env(cmd: &mut Command) {
@@ -349,5 +537,253 @@ mod tests {
             GitError::RefNotFound { .. } | GitError::CommandFailed { .. } => {}
             other => panic!("unexpected classification: {other:?}"),
         }
+    }
+
+    /// Build a bare origin that has multiple tags (`v0.1.0`, `v0.2.0`,
+    /// `v1.0.0-rc.1`) plus one annotated tag (`v0.3.0`) so we exercise
+    /// the peeled-form deduplication.
+    fn make_bare_origin_with_tags(root: &Path) -> PathBuf {
+        let src = root.join("src");
+        fs::create_dir_all(&src).unwrap();
+        run_or_panic(&src, &["init", "--initial-branch=main"]);
+        run_or_panic(&src, &["config", "user.email", "t@example.com"]);
+        run_or_panic(&src, &["config", "user.name", "Test"]);
+
+        // Commit 1 + lightweight tag v0.1.0.
+        fs::write(src.join("vibe-package.toml"), "[package]\nname = \"x\"\nkind = \"flow\"\nversion = \"0.1.0\"\n").unwrap();
+        run_or_panic(&src, &["add", "vibe-package.toml"]);
+        run_or_panic(&src, &["commit", "-m", "0.1.0"]);
+        run_or_panic(&src, &["tag", "v0.1.0"]);
+
+        // Commit 2 + lightweight tag v0.2.0.
+        fs::write(src.join("vibe-package.toml"), "[package]\nname = \"x\"\nkind = \"flow\"\nversion = \"0.2.0\"\n").unwrap();
+        run_or_panic(&src, &["add", "vibe-package.toml"]);
+        run_or_panic(&src, &["commit", "-m", "0.2.0"]);
+        run_or_panic(&src, &["tag", "v0.2.0"]);
+
+        // Commit 3 + ANNOTATED tag v0.3.0 (this is the one that produces
+        // a peeled `^{}` line in `ls-remote --tags` output).
+        fs::write(src.join("vibe-package.toml"), "[package]\nname = \"x\"\nkind = \"flow\"\nversion = \"0.3.0\"\n").unwrap();
+        run_or_panic(&src, &["add", "vibe-package.toml"]);
+        run_or_panic(&src, &["commit", "-m", "0.3.0"]);
+        run_or_panic(&src, &["tag", "-a", "v0.3.0", "-m", "release 0.3.0"]);
+
+        // Commit 4 + tag v1.0.0-rc.1.
+        fs::write(src.join("vibe-package.toml"), "[package]\nname = \"x\"\nkind = \"flow\"\nversion = \"1.0.0-rc.1\"\n").unwrap();
+        run_or_panic(&src, &["add", "vibe-package.toml"]);
+        run_or_panic(&src, &["commit", "-m", "1.0.0-rc.1"]);
+        run_or_panic(&src, &["tag", "v1.0.0-rc.1"]);
+
+        let bare = root.join("origin.git");
+        run_or_panic(root, &[
+            "clone", "--bare", src.to_str().unwrap(), bare.to_str().unwrap(),
+        ]);
+        run_or_panic(&bare, &["symbolic-ref", "HEAD", "refs/heads/main"]);
+        bare
+    }
+
+    #[test]
+    fn list_tags_returns_dedup_sorted_set() {
+        skip_without_git!();
+        let tmp = tempdir().unwrap();
+        let bare = make_bare_origin_with_tags(tmp.path());
+
+        let g = ShellGit::new();
+        let mut tags = g.list_tags(&bare.to_string_lossy()).expect("list_tags ok");
+        tags.sort();
+
+        assert_eq!(
+            tags,
+            vec![
+                "v0.1.0".to_string(),
+                "v0.2.0".to_string(),
+                "v0.3.0".to_string(),
+                "v1.0.0-rc.1".to_string(),
+            ],
+            "annotated tag v0.3.0 must appear exactly once (peeled-form deduped)"
+        );
+    }
+
+    #[test]
+    fn list_tags_empty_repo_returns_empty() {
+        skip_without_git!();
+        let tmp = tempdir().unwrap();
+        let bare = make_bare_origin(tmp.path()); // has no tags
+        let g = ShellGit::new();
+        let tags = g.list_tags(&bare.to_string_lossy()).expect("list_tags ok");
+        assert!(tags.is_empty());
+    }
+
+    #[test]
+    fn list_tags_reports_repo_not_found_for_missing_url() {
+        skip_without_git!();
+        let tmp = tempdir().unwrap();
+        let bogus = tmp.path().join("does/not/exist.git");
+        let g = ShellGit::new();
+        let err = g.list_tags(&bogus.to_string_lossy()).unwrap_err();
+        match err {
+            GitError::RepoNotFound { .. } | GitError::CommandFailed { .. } => {}
+            other => panic!("unexpected classification: {other:?}"),
+        }
+    }
+
+    #[test]
+    fn fetch_file_at_ref_returns_bytes_for_existing_file() {
+        skip_without_git!();
+        let tmp = tempdir().unwrap();
+        let bare = make_bare_origin_with_tags(tmp.path());
+
+        let g = ShellGit::new();
+        let bytes = g
+            .fetch_file_at_ref(&bare.to_string_lossy(), "v0.2.0", "vibe-package.toml")
+            .expect("fetch ok");
+        let text = String::from_utf8(bytes).unwrap();
+        assert!(text.contains("version = \"0.2.0\""), "got: {text}");
+    }
+
+    #[test]
+    fn fetch_file_at_ref_works_against_annotated_tag() {
+        skip_without_git!();
+        let tmp = tempdir().unwrap();
+        let bare = make_bare_origin_with_tags(tmp.path());
+
+        let g = ShellGit::new();
+        let bytes = g
+            .fetch_file_at_ref(&bare.to_string_lossy(), "v0.3.0", "vibe-package.toml")
+            .expect("fetch via annotated tag ok");
+        let text = String::from_utf8(bytes).unwrap();
+        assert!(text.contains("version = \"0.3.0\""));
+    }
+
+    #[test]
+    fn fetch_file_at_ref_normalises_backslash_paths() {
+        skip_without_git!();
+        let tmp = tempdir().unwrap();
+        let bare = make_bare_origin_with_tags(tmp.path());
+
+        let g = ShellGit::new();
+        // Caller hands us a Windows-style path; the backend should
+        // normalise to forward slash before talking to `git archive`.
+        let bytes = g
+            .fetch_file_at_ref(&bare.to_string_lossy(), "v0.1.0", "vibe-package.toml")
+            .expect("fetch ok");
+        assert!(!bytes.is_empty());
+    }
+
+    #[test]
+    fn fetch_file_at_ref_missing_ref() {
+        skip_without_git!();
+        let tmp = tempdir().unwrap();
+        let bare = make_bare_origin_with_tags(tmp.path());
+
+        let g = ShellGit::new();
+        let err = g
+            .fetch_file_at_ref(
+                &bare.to_string_lossy(),
+                "v9.9.9",
+                "vibe-package.toml",
+            )
+            .unwrap_err();
+        match err {
+            GitError::RefNotFound { .. } | GitError::CommandFailed { .. } => {}
+            other => panic!("unexpected classification: {other:?}"),
+        }
+    }
+
+    #[test]
+    fn fetch_file_at_ref_missing_file_in_existing_ref() {
+        skip_without_git!();
+        let tmp = tempdir().unwrap();
+        let bare = make_bare_origin_with_tags(tmp.path());
+
+        let g = ShellGit::new();
+        let err = g
+            .fetch_file_at_ref(
+                &bare.to_string_lossy(),
+                "v0.1.0",
+                "no-such-file.txt",
+            )
+            .unwrap_err();
+        match err {
+            GitError::FileNotFoundInRef { .. } | GitError::CommandFailed { .. } => {}
+            other => panic!("unexpected classification: {other:?}"),
+        }
+    }
+
+    #[test]
+    fn extract_single_file_from_tar_picks_match() {
+        // Hand-build a minimal tar with two files; verify we extract the
+        // requested one by name, ignoring the other.
+        let tar = build_tar(&[
+            ("a.txt", b"AAA\n"),
+            ("vibe-package.toml", b"hello world\n"),
+        ]);
+        let got = extract_single_file_from_tar(&tar, "vibe-package.toml")
+            .expect("file extracted");
+        assert_eq!(got, b"hello world\n");
+
+        let absent = extract_single_file_from_tar(&tar, "nope.txt");
+        assert!(absent.is_none());
+    }
+
+    #[test]
+    fn extract_single_file_from_tar_handles_dot_slash_prefix() {
+        let tar = build_tar(&[("./vibe-package.toml", b"prefixed\n")]);
+        let got = extract_single_file_from_tar(&tar, "vibe-package.toml").unwrap();
+        assert_eq!(got, b"prefixed\n");
+    }
+
+    /// Build a USTar archive from `(name, bytes)` pairs. Plenty for our
+    /// tests; not a complete tar implementation.
+    fn build_tar(entries: &[(&str, &[u8])]) -> Vec<u8> {
+        let mut out = Vec::new();
+        for (name, data) in entries {
+            let mut header = vec![0u8; 512];
+            // Name: bytes 0..100, NUL-terminated.
+            let nb = name.as_bytes();
+            let len = nb.len().min(100);
+            header[0..len].copy_from_slice(&nb[..len]);
+            // Mode: bytes 100..108 — "0000644\0".
+            header[100..108].copy_from_slice(b"0000644\0");
+            // UID/GID: bytes 108..116 / 116..124 — "0000000\0".
+            header[108..116].copy_from_slice(b"0000000\0");
+            header[116..124].copy_from_slice(b"0000000\0");
+            // Size: bytes 124..136 — octal, 11 chars + NUL.
+            let size_str = format!("{:011o}\0", data.len());
+            header[124..136].copy_from_slice(size_str.as_bytes());
+            // Mtime: bytes 136..148 — "00000000000\0".
+            header[136..148].copy_from_slice(b"00000000000\0");
+            // Checksum: bytes 148..156 — fill with spaces, compute later.
+            for b in &mut header[148..156] {
+                *b = b' ';
+            }
+            // Typeflag: byte 156 — '0' (regular file).
+            header[156] = b'0';
+            // Magic: bytes 257..263 — "ustar\0".
+            header[257..263].copy_from_slice(b"ustar\0");
+            // Version: bytes 263..265 — "00".
+            header[263..265].copy_from_slice(b"00");
+            // Compute checksum: sum of all bytes treating chksum field
+            // as spaces (already done above).
+            let cksum: u32 = header.iter().map(|b| *b as u32).sum();
+            let cksum_str = format!("{cksum:06o}\0 ");
+            header[148..156].copy_from_slice(cksum_str.as_bytes());
+
+            out.extend_from_slice(&header);
+            out.extend_from_slice(data);
+            // Pad to 512.
+            let pad = (512 - (data.len() % 512)) % 512;
+            out.extend(std::iter::repeat_n(0, pad));
+        }
+        // Two empty 512-byte blocks to terminate.
+        out.extend(std::iter::repeat_n(0, 1024));
+        out
+    }
+
+    #[test]
+    fn parse_octal_handles_padded_sizes() {
+        assert_eq!(parse_octal(b"00000000027\0").unwrap(), 0o27);
+        assert_eq!(parse_octal(b"  144 \0").unwrap(), 0o144);
+        assert_eq!(parse_octal(b"\0\0\0\0\0\0\0\0\0\0\0\0").unwrap(), 0);
     }
 }
