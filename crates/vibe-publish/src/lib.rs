@@ -169,7 +169,12 @@ impl<'c, C: RepoCreator + ?Sized> Publisher<'c, C> {
             }
         } else if config.dry_run {
             // Synthesise a plausible RepoInfo for the rendered plan.
+            // `created_repo = true` here advertises *what would happen* —
+            // the repo does not exist, so a non-dry-run would create it.
+            // The CLI renders this as "Would create repository …" which
+            // is the correct user expectation for the dry-run case.
             tracing::info!(target: "vibe_publish", "dry-run: would create repo");
+            created_repo = true;
             RepoInfo {
                 html_url: format!("{}/{}", config.org_url.trim_end_matches('/'), repo_name),
                 clone_url: format!("{}/{}.git", config.org_url.trim_end_matches('/'), repo_name),

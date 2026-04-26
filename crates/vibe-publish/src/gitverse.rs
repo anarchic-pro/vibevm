@@ -1,26 +1,33 @@
 //! GitVerse public-API [`RepoCreator`] impl.
 //!
-//! GitVerse exposes a Gitea-compatible REST API at
-//! `https://gitverse.ru/api/v1`. The two endpoints we use:
+//! GitVerse exposes a Gitea-shape REST API at `https://api.gitverse.ru`
+//! (no `/v1/` prefix — versioning is carried in the `Accept` header
+//! per [the public API docs](https://gitverse.ru/docs/public-api/)).
+//! The two endpoints we use:
 //!
-//! - `GET /api/v1/repos/{org}/{repo}` — repo presence check.
+//! - `GET /repos/{org}/{repo}` — repo presence check.
 //!   - 200 → exists.
-//!   - 404 → does not exist (or org missing — distinguished via the
-//!     org-presence check on first failure).
+//!   - 404 → does not exist.
 //!   - 401 / 403 → auth issue.
-//! - `POST /api/v1/orgs/{org}/repos` — create repo in an org.
+//! - `POST /orgs/{org}/repos` — create repo in an org.
 //!   - 201 → created.
 //!   - 409 → already exists (race condition).
 //!   - 401 / 403 / 404 mapped per PROP-002 §2.10.
 //!
-//! Auth uses the Gitea-style `Authorization: token <value>` header.
-//! Token loading lives in [`crate::token`].
+//! Authentication: `Authorization: Bearer <token>` per the GitVerse
+//! docs. The `Accept` header MUST be
+//! `application/vnd.gitverse.object+json;version=1` — without the
+//! versioning suffix the API returns 400 Bad Request with an empty
+//! body and the response header `gitverse-api-latest-version: 1`
+//! (informing the client which version to ask for). Token loading
+//! lives in [`crate::token`].
 //!
-//! Implementation note: the exact GitVerse response shapes will be
-//! verified against the live API on first run. The shapes assumed
-//! below are the Gitea-compatible defaults; if GitVerse diverges, this
-//! module is the only place that needs adjustment — `RepoCreator`
-//! consumers stay host-agnostic.
+//! Endpoint discovery (2026-04-26): `gitverse.ru/api/v1/...` and
+//! Gitea-style `Authorization: token <value>` both 404/401 against
+//! the live host; the correct shape was found by curl-probing
+//! `https://api.gitverse.ru` and reading the docs' "How to authenticate"
+//! section. Recorded here for posterity — if GitVerse moves to a new
+//! major API version, this is the file to update first.
 
 use std::time::Duration;
 
@@ -30,10 +37,14 @@ use crate::token::Token;
 use crate::{CreateOpts, PublishError, RepoCreator, RepoInfo};
 
 /// Default base URL for the GitVerse REST API.
-pub const DEFAULT_GITVERSE_API_BASE: &str = "https://gitverse.ru/api/v1";
+pub const DEFAULT_GITVERSE_API_BASE: &str = "https://api.gitverse.ru";
 
 /// Default human-readable host name for error messages.
 pub const DEFAULT_GITVERSE_HOST_NAME: &str = "gitverse.ru";
+
+/// Required Accept header carrying the API version. Without the
+/// `;version=1` suffix the API returns 400 Bad Request.
+const GITVERSE_ACCEPT: &str = "application/vnd.gitverse.object+json;version=1";
 
 pub struct GitVerseCreator {
     api_base: String,
@@ -68,7 +79,7 @@ impl GitVerseCreator {
     }
 
     fn auth_header(&self) -> String {
-        format!("token {}", self.token.value())
+        format!("Bearer {}", self.token.value())
     }
 }
 
@@ -108,7 +119,7 @@ impl RepoCreator for GitVerseCreator {
             .client
             .get(&url)
             .header(reqwest::header::AUTHORIZATION, self.auth_header())
-            .header(reqwest::header::ACCEPT, "application/json")
+            .header(reqwest::header::ACCEPT, GITVERSE_ACCEPT)
             .send()
             .map_err(|e| classify_send_error(e, &self.host_name))?;
         let status = res.status();
@@ -153,7 +164,7 @@ impl RepoCreator for GitVerseCreator {
             .client
             .post(&url)
             .header(reqwest::header::AUTHORIZATION, self.auth_header())
-            .header(reqwest::header::ACCEPT, "application/json")
+            .header(reqwest::header::ACCEPT, GITVERSE_ACCEPT)
             .json(&body)
             .send()
             .map_err(|e| classify_send_error(e, &self.host_name))?;

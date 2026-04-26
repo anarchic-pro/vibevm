@@ -307,17 +307,21 @@ fn run_publish(ctx: &output::Context, args: RegistryPublishArgs) -> Result<()> {
         return Ok(());
     }
 
-    if outcome.created_repo {
-        ctx.step(&format!(
-            "Created repository `{}` on `{}`",
-            outcome.repo_name, outcome.host
-        ));
+    let action_verb = if outcome.dry_run {
+        if outcome.created_repo {
+            "Would create"
+        } else {
+            "Would reuse existing"
+        }
+    } else if outcome.created_repo {
+        "Created"
     } else {
-        ctx.step(&format!(
-            "Reusing existing repository `{}` on `{}`",
-            outcome.repo_name, outcome.host
-        ));
-    }
+        "Reusing existing"
+    };
+    ctx.step(&format!(
+        "{} repository `{}` on `{}`",
+        action_verb, outcome.repo_name, outcome.host
+    ));
     if outcome.dry_run {
         ctx.summary(&format!(
             "\nvibe registry publish [dry-run]: would push to `{}` and tag `{}`. \
