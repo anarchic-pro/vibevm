@@ -16,6 +16,10 @@ The `vibe` binary is the single entry point for every operation. Global flags `-
 | [`vibe registry publish`](commands/registry-publish.md) | Maintainer-side: publish a package directory as a tagged release. |
 | [`vibe version`](commands/version.md) | Print the binary's version. |
 
+## Architecture overview
+
+[`architecture.md`](architecture.md) — contributor-facing tour of the workspace: how the crates fit together, what each abstraction trait does (`GitBackend`, `Registry`, `MultiRegistryResolver`, `DepProvider` / `DepSolver`, `RepoCreator`), how the install / publish / sync pipelines walk, where to look in the source for what.
+
 ## Authoring a package
 
 Three of the four package kinds in vibevm have their own authoring guide. The fourth (`tool`) is reserved for v2+ and not yet documented.
