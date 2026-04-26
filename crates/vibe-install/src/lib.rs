@@ -56,6 +56,20 @@ pub enum InstallError {
     #[error("package `{package}` is already installed at version {version} — use `vibe update` instead")]
     AlreadyInstalled { package: String, version: String },
 
+    #[error(
+        "content drift on `{package}@{version}`: lockfile pins `{expected}` but the source served `{actual}` from `{source_url}`. \
+         Refusing to install — content_hash is the identity per PROP-002 §2.1. \
+         Likely cause: an upstream tag was force-pushed, or a mirror is serving different bytes than canonical. \
+         Investigate before proceeding; `--trust-mirror` is reserved for the deliberate-divergence case (M1.6)."
+    )]
+    ContentDrift {
+        package: String,
+        version: String,
+        expected: String,
+        actual: String,
+        source_url: String,
+    },
+
     #[error("package `{package}` is not installed")]
     NotInstalled { package: String },
 
@@ -142,8 +156,26 @@ pub fn plan_install(
     lockfile: &Lockfile,
     cached: CachedPackage,
 ) -> Result<InstallPlan, InstallError> {
-    // 1. Refuse if already installed.
+    // 1. Lockfile-vs-fetched integrity check first, *before* the
+    // already-installed guard. If the lockfile pins a content_hash
+    // for this (kind, name) and the freshly-fetched content_hash
+    // disagrees, that's a content_drift event — one of:
+    //   - upstream force-pushed the version tag,
+    //   - a mirror is serving different bytes than canonical,
+    //   - `[[override]]` was added pointing somewhere different.
+    // Per PROP-002 §2.1 identity = (kind, name, version, content_hash);
+    // mismatched content_hash means identity changed, and silent
+    // "already installed" would mask the drift. Refuse loud.
     if let Some(existing) = lockfile.find(cached.resolved.kind, &cached.resolved.name) {
+        if existing.content_hash != cached.content_hash {
+            return Err(InstallError::ContentDrift {
+                package: format!("{}:{}", existing.kind, existing.name),
+                version: existing.version.to_string(),
+                expected: existing.content_hash.clone(),
+                actual: cached.content_hash.clone(),
+                source_url: cached.source_uri.clone(),
+            });
+        }
         return Err(InstallError::AlreadyInstalled {
             package: format!("{}:{}", existing.kind, existing.name),
             version: existing.version.to_string(),
@@ -673,9 +705,62 @@ source = "boot/10-flow-wal.md"
         let written = apply_install(&plan).unwrap();
         register_installed(&mut lockfile, &plan, written, "t1".into(), Vec::new());
 
-        // Plan again: should error.
+        // Plan again: should error — same content_hash, so AlreadyInstalled
+        // not ContentDrift.
         let err = plan_install(project.path(), &lockfile, cached).unwrap_err();
         assert!(matches!(err, InstallError::AlreadyInstalled { .. }));
+    }
+
+    #[test]
+    fn content_drift_errors_when_lockfile_hash_mismatches_fetched() {
+        // Prove PROP-002 §2.1: a re-resolve that produces a different
+        // content_hash for the same (kind, name, version) refuses to
+        // proceed — masks neither as AlreadyInstalled nor as success.
+        let reg_dir = tempdir().unwrap();
+        seed_registry(reg_dir.path(), FIXTURE_MANIFEST, &fixture_content());
+        let cache_dir = tempdir().unwrap();
+        let cached = cached_for_test(reg_dir.path(), cache_dir.path());
+
+        // Pre-populate the lockfile with an entry that pins a *different*
+        // content_hash than what `cached` carries — simulates the case
+        // where the registry's `flow:wal@0.3.0` tag was force-pushed
+        // since the lockfile was written, OR a mirror is serving
+        // different bytes than canonical.
+        let mut lockfile = Lockfile::empty("vibe-test", "t0");
+        lockfile.packages.push(LockedPackage {
+            kind: cached.resolved.kind,
+            name: cached.resolved.name.clone(),
+            version: cached.resolved.version.clone(),
+            registry: Some("vibespecs".into()),
+            source_url: "git@gitverse.ru:vibespecs/flow-wal.git".into(),
+            source_ref: Some("v0.3.0".into()),
+            resolved_commit: None,
+            content_hash: "sha256:deadbeefdeadbeefdeadbeefdeadbeefdeadbeefdeadbeefdeadbeefdeadbeef"
+                .into(),
+            boot_snippet: Some("10-flow-wal.md".into()),
+            files_written: vec![],
+            dependencies: Vec::new(),
+            overridden: false,
+        });
+
+        let project = empty_project();
+        let err = plan_install(project.path(), &lockfile, cached).unwrap_err();
+        match err {
+            InstallError::ContentDrift {
+                package,
+                version,
+                expected,
+                actual,
+                ..
+            } => {
+                assert_eq!(package, "flow:wal");
+                assert_eq!(version, "0.3.0");
+                assert_eq!(expected, "sha256:deadbeefdeadbeefdeadbeefdeadbeefdeadbeefdeadbeefdeadbeefdeadbeef");
+                assert!(actual.starts_with("sha256:"));
+                assert_ne!(expected, actual);
+            }
+            other => panic!("expected ContentDrift, got: {other:?}"),
+        }
     }
 
     #[test]
