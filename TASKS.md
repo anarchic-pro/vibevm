@@ -62,6 +62,13 @@ Full design locked in [PROP-002](spec/modules/vibe-registry/PROP-002-decentraliz
 
 ---
 
+## M1.5-gate docs (parallel; first slice landed)
+
+- [x] `docs(commands)`: `docs/commands/{init,install,list,uninstall,registry-sync,registry-publish,version}.md` — one reference file per shipped CLI subcommand, with usage, flags, exit codes, schema links.
+- [x] `docs(authoring)`: `docs/authoring-{flow,feat,stack}.md` — per-kind authoring guides; package layout, manifest schema, capability contract design, versioning, publish procedure.
+- [x] `docs(README)`: `docs/README.md` — index across commands and authoring guides.
+- [ ] `docs(commands)`: `vibe build` / `vibe sync` / `vibe show` / `vibe check` reference docs land alongside the M1.2-M1.5 commands when they ship.
+
 ## Backlog (post-Phase-A; not active)
 
 - M1.6 polish: second live `[[registry]]`, full mirror fallback exercised in e2e, `vibe vendor` generator, `vibe registry add/list/set-mirror` CLI surface, GitHub / Gitea / Forgejo publish adapters on demand.
