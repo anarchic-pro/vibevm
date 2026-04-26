@@ -19,3 +19,33 @@
 *.tgz  binary
 *.xz   binary
 *.wasm binary
+
+# Linguist overrides for the GitVerse / GitHub language-stats display.
+#
+# JTD schema files are JSON underneath — without an override they're
+# detected as a generic "JSON Type Definition" obscure language and
+# either uncounted or mis-bucketed. Force them into the JSON bucket
+# so the per-language pie chart on the repo page reflects what's
+# actually in the tree.
+*.jtd.json    linguist-language=JSON
+*.jtd.json    linguist-detectable=true
+
+# Hermetic test fixtures are *content* (markdown specs, TOML manifests)
+# that shouldn't dominate the repo's "what language is this written in"
+# stats. Mark them vendored so they're excluded from language detection
+# while still being browsable on the repo page.
+fixtures/registry/**    linguist-vendored=true
+
+# Reference / study sources cloned into refs/src/ are external code we
+# read, not author. They're not part of the vibevm distribution and
+# must not skew language stats.
+refs/src/**             linguist-vendored=true
+
+# Generated code from JTD schemas is, well, generated — show it on the
+# repo page but exclude from language stats.
+crates/vibe-wire/src/generated/**    linguist-generated=true
+
+# Lockfile is structurally interesting but isn't human-authored
+# language. Keep it out of stats; tooling can still read it.
+vibe.lock        linguist-generated=true
+Cargo.lock       linguist-generated=true
