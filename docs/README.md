@@ -20,6 +20,10 @@ The `vibe` binary is the single entry point for every operation. Global flags `-
 
 [`architecture.md`](architecture.md) — contributor-facing tour of the workspace: how the crates fit together, what each abstraction trait does (`GitBackend`, `Registry`, `MultiRegistryResolver`, `DepProvider` / `DepSolver`, `RepoCreator`), how the install / publish / sync pipelines walk, where to look in the source for what.
 
+## Lockfile reference
+
+[`lockfile-format.md`](lockfile-format.md) — exhaustive reference for `vibe.lock` v2. Field-by-field semantics, identity model, v1 → v2 migration, tooling examples (jq snippets), worked example.
+
 ## Authoring a package
 
 Three of the four package kinds in vibevm have their own authoring guide. The fourth (`tool`) is reserved for v2+ and not yet documented.
