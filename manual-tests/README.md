@@ -78,8 +78,9 @@ really two tests — split them.
 
 | File | Milestone | Feature |
 | --- | --- | --- |
-| [`M1.1-git-registry-smoke.md`](M1.1-git-registry-smoke.md) | M1.1 | Install from the real GitVerse registry, `vibe registry sync`, lockfile `source_uri` shape. |
-| [`M1.5-gate-multi-package-smoke.md`](M1.5-gate-multi-package-smoke.md) | M1.5-gate | Install three flows from the same registry in one project; distinct boot-snippet prefixes; one shared clone; symmetric uninstall. |
+| [`M1.1-git-registry-smoke.md`](M1.1-git-registry-smoke.md) | M1.1 | Install from the real GitVerse registry (legacy monorepo shape), `vibe registry sync`, lockfile `source_uri` shape. |
+| [`M1.5-gate-multi-package-smoke.md`](M1.5-gate-multi-package-smoke.md) | M1.5-gate | Install three flows from the legacy monorepo registry; distinct boot-snippet prefixes; one shared clone; symmetric uninstall. |
+| [`M1.5-gate-v2-per-package-smoke.md`](M1.5-gate-v2-per-package-smoke.md) | M1.1-revision | Install three flows from the new per-package `vibespecs/` org; lockfile v2 provenance; per-package cache layout; `vibe registry sync` walks; symmetric uninstall with root_dependencies tracking. |
 
 Add a row to this table when you add a test. Keep the table sorted by
 milestone.
