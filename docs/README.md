@@ -28,6 +28,10 @@ The `vibe` binary is the single entry point for every operation. Global flags `-
 
 [`troubleshooting.md`](troubleshooting.md) — first-aid for every error `vibe` surfaces. Each entry: what you see, what it means, what to do. Covers install / registry / git-backend / publish / resolver / CLI error variants.
 
+## Glossary
+
+[`glossary.md`](glossary.md) — vocabulary reference for the project. Every term that has a specific meaning in vibevm — `kind`, `pkgref`, `capability`, `mirror`, `override`, `content_hash`, `transitive`, `user-owned`, etc. — defined in one place. Includes an "anti-vocabulary" of adjacent-ecosystem terms we deliberately don't use.
+
 ## Authoring a package
 
 Three of the four package kinds in vibevm have their own authoring guide. The fourth (`tool`) is reserved for v2+ and not yet documented.
