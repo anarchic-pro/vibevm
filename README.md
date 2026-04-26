@@ -55,6 +55,7 @@ Full command reference: [`docs/commands/`](docs/commands/). Authoring guides for
 | [`manual-tests/`](manual-tests/) | maintainers | Human-runnable smoke-tests; one file per scenario, walked before tagging a milestone. |
 | [`TASKS.md`](TASKS.md) | active contributors | Live checklist for the current work-slice. |
 | [`spec/WAL.md`](spec/WAL.md) | active contributors | Project-state checkpoint; rewritten each session, not appended. |
+| [`CHANGELOG.md`](CHANGELOG.md) | everyone | Curated milestone-by-milestone history of what landed when. |
 
 ## The four kinds
 
