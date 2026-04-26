@@ -1,0 +1,69 @@
+{
+    "metadata": {
+        "description": "Wire format for `vibe registry sync --json` — what was refreshed, what was skipped, and why. Source of truth for `crates/vibe-wire/src/generated/registry_sync_report.rs`.",
+        "rustOptions": {
+            "package": "vibe_wire::registry_sync_report"
+        }
+    },
+    "properties": {
+        "ok": {
+            "type": "boolean"
+        },
+        "command": {
+            "type": "string",
+            "metadata": {
+                "description": "Always `\"registry:sync\"` for this report."
+            }
+        },
+        "refreshed": {
+            "elements": {
+                "ref": "refreshed_entry"
+            }
+        },
+        "skipped": {
+            "elements": {
+                "ref": "skipped_entry"
+            }
+        }
+    },
+    "definitions": {
+        "package_kind": {
+            "enum": ["flow", "feat", "stack", "tool"]
+        },
+        "refreshed_entry": {
+            "properties": {
+                "kind": {
+                    "ref": "package_kind"
+                },
+                "name": {
+                    "type": "string"
+                },
+                "via": {
+                    "type": "string",
+                    "metadata": {
+                        "description": "Either `registry:<name>` or `override`."
+                    }
+                },
+                "ref": {
+                    "type": "string",
+                    "metadata": {
+                        "description": "Git ref the clone was refreshed against — typically `v<version>` or a branch name for overrides."
+                    }
+                }
+            }
+        },
+        "skipped_entry": {
+            "properties": {
+                "kind": {
+                    "ref": "package_kind"
+                },
+                "name": {
+                    "type": "string"
+                },
+                "reason": {
+                    "type": "string"
+                }
+            }
+        }
+    }
+}

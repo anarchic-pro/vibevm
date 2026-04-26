@@ -1,0 +1,10 @@
+# tools/ holds project-local toolchain binaries that we vendor rather
+# than rely on the developer's PATH for. Per PROP-000 §16, JTD codegen
+# lives here. The binaries themselves are NOT committed — each
+# subdirectory carries a README.md pinning the upstream version and
+# install procedure. New machines run the install command from the
+# README to populate this directory.
+*
+!.gitignore
+!*/
+!*/README.md

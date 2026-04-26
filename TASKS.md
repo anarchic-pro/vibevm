@@ -25,9 +25,9 @@ Full design locked in [PROP-002](spec/modules/vibe-registry/PROP-002-decentraliz
 
 ### Schemas and codegen foundation
 
-- [ ] `build(tools)`: vendor `jtd-codegen` binary under `tools/jtd-codegen/`; add `cargo xtask codegen` with zero-drift CI check.
-- [ ] `feat(schemas)`: first JTD schemas — GitVerse publish-API request/response shapes, `vibe --json` event schema, LLM provider wire shapes (forward-compat stubs for M1.5).
-- [ ] `feat(vibe-wire)`: new `crates/vibe-wire` with generated Rust types; re-exports curated for downstream crates.
+- [x] `build(tools)`: scaffolding for the JTD toolchain — `tools/jtd-codegen/README.md` pins version 0.4.1 with per-platform install commands; `tools/.gitignore` keeps binaries out of git; `xtask` crate carries `cargo xtask codegen` and `cargo xtask check-codegen`; `.cargo/config.toml` aliases `xtask = "run --quiet --package xtask --"`. Binary itself is not committed — first run after install populates generated code under `crates/vibe-wire/src/generated/`.
+- [~] `feat(schemas)`: first schema landed — `schemas/registry_sync_report.jtd.json` describes the `vibe registry sync --json` wire shape. Migration of existing hand-rolled JSON outputs (install plan, list, publish report, GitVerse API client) to JTD-driven types lands incrementally; each migration is one schema added + one struct swap in the consuming crate.
+- [x] `feat(vibe-wire)`: new `crates/vibe-wire` crate with `pub mod generated` placeholder, `[default-members]` excludes `xtask` from the published-as-`vibe` dependency tree.
 
 ### Core types (Rust)
 

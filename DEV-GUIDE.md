@@ -42,9 +42,25 @@ GitVerse public-API token at:
 
 Or export `VIBEVM_PUBLISH_TOKEN` (env wins over the file). Needed only for the publish subcommand — ordinary install/update never touches it.
 
-### 2.5 Schema codegen (JTD — planned)
+### 2.5 Schema codegen (JTD)
 
-JTD (JSON Type Definition, RFC 8927) is the wire-contract source of truth; `jtd-codegen` generates Rust types (and, in the future, other-language client types) from schemas under `schemas/` at repo root. This section will pin the `jtd-codegen` version, install location, and regenerate command once the toolchain lands.
+JTD (JSON Type Definition, RFC 8927) is the source of truth for every wire contract in the project ([PROP-000 §16](spec/common/PROP-000.md#jtd)). `jtd-codegen` generates Rust types (and, eventually, other-language client types) from the `*.jtd.json` schemas at the repo root under [`schemas/`](schemas/) into [`crates/vibe-wire/src/generated/`](crates/vibe-wire/src/generated/).
+
+**Install** the generator binary into the project-local `tools/jtd-codegen/` per the procedure in [`tools/jtd-codegen/README.md`](tools/jtd-codegen/README.md). The binary itself is gitignored; only the README travels with the repo.
+
+**Regenerate** types after editing schemas:
+
+```sh
+cargo xtask codegen
+```
+
+**Drift check** (CI runs this):
+
+```sh
+cargo xtask check-codegen
+```
+
+The xtask reports an actionable error if `jtd-codegen` is not on PATH or in `tools/jtd-codegen/`.
 
 ## 3. Build / test / lint
 

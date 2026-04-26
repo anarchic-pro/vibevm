@@ -1,0 +1,7 @@
+# `cargo xtask <cmd>` runs the project's xtask binary. The xtask crate
+# carries the `codegen`, `check-codegen`, and any future build-time
+# helpers we add. Keeping these inside the workspace (instead of
+# free-standing scripts) means cargo build, cargo test, and clippy all
+# see the same code path the developer drives.
+[alias]
+xtask = "run --quiet --package xtask --"
