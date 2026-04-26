@@ -1,9 +1,9 @@
 # WAL — Project Continuation State
-_Updated: 2026-04-25_
+_Updated: 2026-04-26_
 
 ## Current phase
 
-**M1.1-revision — decentralized per-package registry refactor. Phase A code slice complete; live migration of the three demo packages into the `vibespecs` org is the only remaining step.**
+**M1.1-revision — decentralized per-package registry refactor. Phase A code slice complete; live migration of the three demo packages into the `vibespecs` org is the only remaining step. Migration is currently blocked on a single human action — manual repo creation via the GitVerse web UI (see "Live migration blocker" below).**
 
 The M1.1 monorepo-shaped registry (one `anarchic/vibespecs` repo, `<kind>/<name>/v<ver>/` directories, `[registry]` singleton in `vibe.toml`) was replaced — at the design level — with a decentralized per-package model before any downstream consumer is at risk of being locked into it. Full design lock lives in [PROP-002](modules/vibe-registry/PROP-002-decentralized-registry.md).
 
@@ -30,6 +30,10 @@ The three live v0.1.0 flows (`flow:wal`, `flow:sync-from-code`, `flow:atomic-com
 - Project facts stay in the project; no project-level state in tool-specific global user-memory.
 
 **Immediate next work:** the only outstanding Phase A item is the **live migration** of the three v0.1.0 demo flows into per-package repos under `vibespecs/<kind>-<name>` via `vibe registry publish`. This is **non-routine** per CLAUDE.md Rule 4 (creates real artefacts in a public org and exercises the GitVerse API for the first time), so it requires explicit owner sign-off before push. Once those three repos exist on GitVerse and the smoke-test [`M1.5-gate-v2-per-package-smoke.md`](../manual-tests/M1.5-gate-v2-per-package-smoke.md) passes, `DEFAULT_REGISTRY_URL` rotates to the new org root and Phase A closes.
+
+**Live migration blocker (2026-04-26).** GitVerse's public REST API does not expose an org-scoped repo creation endpoint. The Gitea-canonical shape `POST /orgs/{org}/repos` returns 404 / WAF 403 against `https://api.gitverse.ru` even with the correct auth and Accept headers; the documentation index lists only `POST /user/repos`, which would create the repo in the calling user's namespace rather than the `vibespecs` org. **Workaround:** the owner manually creates the three empty repos via the GitVerse web UI (no auto-init), after which `vibe registry publish`'s `repo_exists()` check returns 200, the create-leg is skipped, and push + tag proceed. Procedure documented in [`CONTINUE.md`](../CONTINUE.md) and [`docs/troubleshooting.md`](../docs/troubleshooting.md). When GitVerse adds an org-scoped POST in the future, the only file to update is `crates/vibe-publish/src/gitverse.rs::create_repo` — request shape there is already Gitea-canonical and will start working transparently.
+
+**GitVerse API surface (live-verified 2026-04-26).** Base URL `https://api.gitverse.ru` (NOT `gitverse.ru/api/v1` — that path serves the Next.js frontend SPA). Auth: `Authorization: Bearer <T>` (NOT Gitea's legacy `token <T>`). Accept header MUST carry the version: `application/vnd.gitverse.object+json;version=1` — without `;version=1` the server returns 400 with empty body and a `gitverse-api-latest-version: 1` response header as a hint. Endpoints used today: `GET /repos/{owner}/{repo}` works (presence check, with org as `{owner}`); `POST /orgs/{org}/repos` does not (see blocker). Findings baked into `crates/vibe-publish/src/gitverse.rs` doc-comment in commit `36cbf08`; if a future GitVerse major version revises any of these, that file is the first place to update.
 
 **JTD toolchain.** Scaffolding is in place (`tools/jtd-codegen/`, `xtask`, `schemas/`, `crates/vibe-wire/`); the `jtd-codegen` binary itself needs a one-time install per `tools/jtd-codegen/README.md` before the first `cargo xtask codegen` run. Migration of existing hand-rolled `Serialize` structs to JTD-driven types is incremental and lands as the consumers are touched.
 
@@ -121,18 +125,24 @@ since the documentation checkpoint:
 - **`build(tools): JTD codegen scaffolding`** — `xtask` crate, `tools/jtd-codegen/` README + gitignore, first JTD schema, `crates/vibe-wire/` placeholder, `.cargo/config.toml` alias.
 - **`chore(fixtures): relocate packages/ → fixtures/registry/`** — `git mv`, history preserved; `packages/` reserved for future dogfooding.
 - **`test(manual): M1.5-gate-v2-per-package-smoke.md`** — protocol for the live three-package smoke against the new `vibespecs` org. Fill in "Last known pass" on first successful run.
+- **`feat(vibe-publish): correct GitVerse API surface from live probing`** (commit `36cbf08`, 2026-04-26) — base URL `api.gitverse.ru`, Bearer auth, versioned Accept header, dry-run UX fix on the publisher. Live API discovery findings documented inline in `gitverse.rs` doc-comment so future readers don't re-walk the rabbit hole.
+- **`docs(claude,agents,gemini): session-end checkpoint command spec`** (2026-04-26) — `ЗАВЕРШИ СЕССИЮ` / `END SESSION` and variants now drive a defined wind-down: overwrite `CONTINUE.md`, update this WAL, commit + push, emit TL;DR. Section lives at the bottom of all three boot files (kept byte-identical).
+- **`docs(continue): cold-resume checkpoint at root`** (2026-04-26) — comprehensive `CONTINUE.md` written so any next session can pick up Phase A from cold without re-deriving GitVerse API findings, repo map, or decision history.
 
 ## Next
 
 **Live migration of the three v0.1.0 demo flows into `vibespecs/<kind>-<name>` via `vibe registry publish`.** Non-routine (creates real public artefacts, first GitVerse-API exercise). Procedure once approved:
 
-1. Build release: `cargo build --release --workspace`.
-2. Confirm the publish token at `~/.vibevm/git.publish.token` (or `VIBEVM_PUBLISH_TOKEN` env) has `repo:create` scope in the `vibespecs` org.
-3. Dry-run each: `vibe registry publish fixtures/registry/flow/<name>/v0.1.0 --dry-run` for `wal`, `sync-from-code`, `atomic-commits`.
-4. Apply: drop `--dry-run`, run for each in turn.
-5. Walk [`manual-tests/M1.5-gate-v2-per-package-smoke.md`](../manual-tests/M1.5-gate-v2-per-package-smoke.md) end to end.
-6. If smoke passes: rotate `DEFAULT_REGISTRY_URL` in `vibe-core::manifest::project` to `git@gitverse.ru:vibespecs`, update tests, ship the rotation as its own commit.
-7. WAL / ROADMAP checkpoint Phase A complete; M1.6 becomes the next active milestone.
+1. **Pre-create the three repos manually via the GitVerse web UI** (workaround for the missing org-scoped POST endpoint described above): `flow-wal`, `flow-sync-from-code`, `flow-atomic-commits` in the `vibespecs` org. **Empty.** No auto-init, no README, no .gitignore — pre-populated content conflicts with the publisher's first push. Default branch `main`. Public visibility.
+2. Build release: `cargo build --release --workspace`.
+3. Confirm the publish token at `~/.vibevm/git.publish.token` (or `VIBEVM_PUBLISH_TOKEN` env) has the rights to push into `vibespecs/*`.
+4. Dry-run each: `vibe registry publish fixtures/registry/flow/<name>/v0.1.0 --dry-run` for `wal`, `sync-from-code`, `atomic-commits`. Each should report "Would reuse existing repository" (because the human pre-created it) and "would push to <ssh-url> and tag v0.1.0".
+5. Apply: drop `--dry-run`, run for each in turn.
+6. Walk [`manual-tests/M1.5-gate-v2-per-package-smoke.md`](../manual-tests/M1.5-gate-v2-per-package-smoke.md) end to end.
+7. If smoke passes: rotate `DEFAULT_REGISTRY_URL` in `vibe-core::manifest::project` (line ~284) to `git@gitverse.ru:vibespecs` (org root, not a per-package URL — per-package URLs are derived at fetch time via `NamingConvention`); update tests; ship the rotation as its own commit.
+8. WAL / ROADMAP / TASKS checkpoint Phase A complete; M1.6 becomes the next active milestone.
+
+Comprehensive cold-resume document (long form, with repo map, decision history, exact recipes) lives at [`CONTINUE.md`](../CONTINUE.md). It is written by the session-end checkpoint command (`ЗАВЕРШИ СЕССИЮ` / `END SESSION`) and supersedes itself wholesale on each invocation; if it disagrees with this WAL, trust the WAL.
 
 **Beyond Phase A.** M1.6 polishes multi-registry / mirror dispatch / `vibe vendor` per [PROP-002](modules/vibe-registry/PROP-002-decentralized-registry.md#phase-b). M1.5-gate docs (`docs/commands/*.md`, `docs/authoring-{flow,feat,stack}.md`) are still open and parallelisable.
 
