@@ -24,6 +24,10 @@ The `vibe` binary is the single entry point for every operation. Global flags `-
 
 [`lockfile-format.md`](lockfile-format.md) — exhaustive reference for `vibe.lock` v2. Field-by-field semantics, identity model, v1 → v2 migration, tooling examples (jq snippets), worked example.
 
+## Troubleshooting
+
+[`troubleshooting.md`](troubleshooting.md) — first-aid for every error `vibe` surfaces. Each entry: what you see, what it means, what to do. Covers install / registry / git-backend / publish / resolver / CLI error variants.
+
 ## Authoring a package
 
 Three of the four package kinds in vibevm have their own authoring guide. The fourth (`tool`) is reserved for v2+ and not yet documented.
