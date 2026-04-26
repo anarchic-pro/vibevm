@@ -9,6 +9,7 @@ members = [
     "crates/vibe-install",
     "crates/vibe-llm",
     "crates/vibe-check",
+    "crates/vibe-publish",
 ]
 
 [workspace.package]
@@ -33,6 +34,7 @@ vibe-resolver = { path = "crates/vibe-resolver", version = "0.1.0-dev" }
 vibe-install = { path = "crates/vibe-install", version = "0.1.0-dev" }
 vibe-llm = { path = "crates/vibe-llm", version = "0.1.0-dev" }
 vibe-check = { path = "crates/vibe-check", version = "0.1.0-dev" }
+vibe-publish = { path = "crates/vibe-publish", version = "0.1.0-dev" }
 
 # Third-party (all permissive licenses — PROP-000 §3)
 anyhow = "1"
@@ -50,6 +52,7 @@ indexmap = { version = "2", features = ["serde"] }
 serde_json = "1"
 walkdir = "2"
 dirs = "5"
+reqwest = { version = "0.12", default-features = false, features = ["blocking", "json", "rustls-tls"] }
 
 # Dev / test
 assert_cmd = "2"

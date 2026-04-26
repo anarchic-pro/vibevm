@@ -1,0 +1,365 @@
+//! `vibe registry publish <path>` — maintainer-side per-package publishing.
+//!
+//! Layered design per [PROP-002 §2.10](../../../spec/modules/vibe-registry/PROP-002-decentralized-registry.md#publish):
+//!
+//! - [`RepoCreator`] — host-specific trait for "create a repo in this
+//!   org, check whether one exists". One impl per supported host
+//!   (today: [`GitVerseCreator`]; GitHub / Gitea / Forgejo land as
+//!   adopters arrive).
+//! - [`Publisher`] — host-agnostic orchestrator. Reads manifest,
+//!   coordinates with [`RepoCreator`] for repo presence + creation,
+//!   shells out to `git` for the working-tree → push → tag flow,
+//!   classifies errors per the surface in PROP-002.
+//! - [`Token`] — token loading from `~/.vibevm/git.publish.token` /
+//!   `VIBEVM_PUBLISH_TOKEN` / explicit value.
+//!
+//! Consuming code (the CLI command) instantiates a `RepoCreator`,
+//! constructs a `Publisher`, calls `Publisher::publish`, and renders
+//! the [`PublishOutcome`] to the user. Tests use a mock `RepoCreator`
+//! to drive every branch without hitting the network.
+
+#![forbid(unsafe_code)]
+
+use std::path::PathBuf;
+
+use thiserror::Error;
+use vibe_core::PackageKind;
+use vibe_core::manifest::{NamingConvention, PackageManifest};
+
+pub mod git_publish;
+pub mod gitverse;
+pub mod token;
+
+pub use gitverse::GitVerseCreator;
+pub use token::{Token, TokenSource, load_token};
+
+/// Information about a package repository on a host.
+#[derive(Debug, Clone)]
+pub struct RepoInfo {
+    pub html_url: String,
+    pub clone_url: String,
+}
+
+/// Options carried into [`RepoCreator::create_repo`].
+#[derive(Debug, Clone, Default)]
+pub struct CreateOpts {
+    pub description: Option<String>,
+    /// Default branch name on the freshly-created repo. `None` lets the
+    /// host pick its server-side default.
+    pub default_branch: Option<String>,
+    /// Optional homepage URL — propagated to the host so adopters can
+    /// click through from the repo listing.
+    pub homepage: Option<String>,
+}
+
+/// Host-specific operations for the publish flow. One impl per
+/// supported git host. Today: [`GitVerseCreator`]. Adapter pattern
+/// matches PROP-002 §2.10 — adding GitHub / Gitea / Forgejo is one new
+/// `impl RepoCreator`, no consumer-side changes.
+pub trait RepoCreator {
+    /// Human-readable host name for error messages.
+    fn host_name(&self) -> &str;
+
+    /// Whether the org's repo with `name` already exists. Implementations
+    /// should distinguish missing-token / missing-org / forbidden errors
+    /// from a clean "no, it doesn't" answer.
+    fn repo_exists(&self, org: &str, name: &str) -> Result<bool, PublishError>;
+
+    /// Create the repository in the org. Returns the host's metadata
+    /// (clone URL, HTML URL) for downstream `git remote add` + push.
+    fn create_repo(
+        &self,
+        org: &str,
+        name: &str,
+        opts: &CreateOpts,
+    ) -> Result<RepoInfo, PublishError>;
+}
+
+/// Inputs to a single publish run.
+#[derive(Debug, Clone)]
+pub struct PublishConfig {
+    /// Filesystem directory containing `vibe-package.toml` and the rest
+    /// of the package content. The publisher copies this into a fresh
+    /// staging clone before pushing.
+    pub source_dir: PathBuf,
+    /// Org URL (the `[[registry]].url` from `vibe.toml`). The publisher
+    /// extracts the org segment for the host API and combines it with
+    /// the package repo name for the `git push` URL.
+    pub org_url: String,
+    /// Convention for mapping `<kind>:<name>` to a repo name under the
+    /// org. Defaults to the registry's recorded `naming` field.
+    pub naming: NamingConvention,
+    /// Tag prefix — `v` is the convention. Surfaces in the tag name as
+    /// `<prefix><semver>` (e.g. `v0.1.0`). Customisable for hosts /
+    /// registries that pick a different prefix.
+    pub tag_prefix: String,
+    /// `true` → describe what would happen but make no changes (no API
+    /// calls, no pushes, no tags).
+    pub dry_run: bool,
+}
+
+impl PublishConfig {
+    pub fn with_defaults(source_dir: PathBuf, org_url: String) -> Self {
+        PublishConfig {
+            source_dir,
+            org_url,
+            naming: NamingConvention::KindName,
+            tag_prefix: "v".to_string(),
+            dry_run: false,
+        }
+    }
+}
+
+/// Outcome of a successful publish — what was done, on what host, with
+/// what URLs. CLI renders this for the operator.
+#[derive(Debug, Clone)]
+pub struct PublishOutcome {
+    pub kind: PackageKind,
+    pub name: String,
+    pub version: semver::Version,
+    pub repo_name: String,
+    pub repo_url: String,
+    pub tag: String,
+    pub created_repo: bool,
+    pub host: String,
+    pub dry_run: bool,
+}
+
+/// The publish orchestrator.
+pub struct Publisher<'c, C: RepoCreator + ?Sized> {
+    creator: &'c C,
+}
+
+impl<'c, C: RepoCreator + ?Sized> Publisher<'c, C> {
+    pub fn new(creator: &'c C) -> Self {
+        Publisher { creator }
+    }
+
+    /// Publish the package at `config.source_dir` under the org named in
+    /// `config.org_url`.
+    pub fn publish(&self, config: &PublishConfig) -> Result<PublishOutcome, PublishError> {
+        // Step 1: read the package manifest (and apply legacy-deps
+        // migration so the published manifest is in modern shape).
+        let manifest_path = config.source_dir.join(PackageManifest::FILENAME);
+        let manifest = PackageManifest::read(&manifest_path).map_err(|e| {
+            PublishError::SourceInvalid {
+                path: manifest_path.clone(),
+                reason: format!("could not read or parse manifest: {e}"),
+            }
+        })?;
+
+        let kind = manifest.package.kind;
+        let name = manifest.package.name.clone();
+        let version = manifest.package.version.clone();
+        let repo_name = config.naming.repo_name(kind, &name);
+        let tag = format!("{}{}", config.tag_prefix, version);
+
+        // Step 2: derive org segment from the configured org URL.
+        let org_segment = extract_org_segment(&config.org_url)?;
+
+        // Step 3: figure out repo presence.
+        let exists = self.creator.repo_exists(&org_segment, &repo_name)?;
+        let mut created_repo = false;
+
+        let repo_info = if exists {
+            tracing::info!(target: "vibe_publish", org = %org_segment, repo = %repo_name, "repo already exists; reusing");
+            RepoInfo {
+                html_url: format!("{}/{}", config.org_url.trim_end_matches('/'), repo_name),
+                clone_url: format!("{}/{}.git", config.org_url.trim_end_matches('/'), repo_name),
+            }
+        } else if config.dry_run {
+            // Synthesise a plausible RepoInfo for the rendered plan.
+            tracing::info!(target: "vibe_publish", "dry-run: would create repo");
+            RepoInfo {
+                html_url: format!("{}/{}", config.org_url.trim_end_matches('/'), repo_name),
+                clone_url: format!("{}/{}.git", config.org_url.trim_end_matches('/'), repo_name),
+            }
+        } else {
+            let opts = CreateOpts {
+                description: manifest.package.description.clone(),
+                default_branch: Some("main".to_string()),
+                homepage: manifest.package.homepage.clone(),
+            };
+            let info = self.creator.create_repo(&org_segment, &repo_name, &opts)?;
+            created_repo = true;
+            info
+        };
+
+        // Step 4: push contents and tag (skipped on dry-run).
+        if !config.dry_run {
+            git_publish::push_release(
+                &config.source_dir,
+                &repo_info.clone_url,
+                &tag,
+                &name,
+                &version,
+            )?;
+        }
+
+        Ok(PublishOutcome {
+            kind,
+            name,
+            version,
+            repo_name,
+            repo_url: repo_info.clone_url,
+            tag,
+            created_repo,
+            host: self.creator.host_name().to_string(),
+            dry_run: config.dry_run,
+        })
+    }
+}
+
+/// Pull the org segment out of an org URL.
+///
+/// - `git@gitverse.ru:vibespecs` → `vibespecs`
+/// - `git@gitverse.ru:vibespecs/` → `vibespecs`
+/// - `https://gitverse.ru/vibespecs` → `vibespecs`
+/// - `ssh://git@gitverse.ru/vibespecs` → `vibespecs`
+/// - `git+https://...` → strips the `git+` first
+fn extract_org_segment(org_url: &str) -> Result<String, PublishError> {
+    let url = org_url.trim().trim_end_matches('/');
+    let url = url.strip_prefix("git+").unwrap_or(url);
+    // ssh shorthand `user@host:path`
+    if let Some((_, rest)) = url.split_once(':')
+        && !url.contains("://")
+    {
+        return Ok(rest.trim_end_matches('/').to_string());
+    }
+    if let Some((_, rest)) = url.split_once("://") {
+        // schemes://host/<path...>
+        if let Some(slash) = rest.find('/') {
+            return Ok(rest[slash + 1..].trim_end_matches('/').to_string());
+        }
+    }
+    Err(PublishError::OrgUrlInvalid {
+        url: org_url.to_string(),
+    })
+}
+
+// ---------------------------------------------------------------------------
+// Errors — surface tuned for non-admin contributors per PROP-002 §2.10.
+// ---------------------------------------------------------------------------
+
+#[derive(Debug, Error)]
+pub enum PublishError {
+    #[error(
+        "publish refused: source directory `{path}` does not look like a vibevm package — \
+         {reason}"
+    )]
+    SourceInvalid { path: PathBuf, reason: String },
+
+    #[error(
+        "publish refused: cannot derive an organization segment from `{url}`. \
+         Configure `[[registry]].url` to a value `git` accepts (e.g. `git@gitverse.ru:vibespecs`)."
+    )]
+    OrgUrlInvalid { url: String },
+
+    #[error(
+        "publish refused: token lacks `repo:create` permission in organization `{org}` on `{host}`. \
+         Contact an org owner, or use a token whose scope includes repository creation."
+    )]
+    AuthForbidden { host: String, org: String },
+
+    #[error(
+        "publish refused: no token available for host `{host}`. \
+         Set `VIBEVM_PUBLISH_TOKEN` or write a token to `~/.vibevm/git.publish.token`."
+    )]
+    AuthMissing { host: String },
+
+    #[error(
+        "publish refused: organization `{org}` does not exist on `{host}` \
+         (or the token cannot see it). Check spelling — different from \
+         a permissions error."
+    )]
+    OrgNotFound { host: String, org: String },
+
+    #[error(
+        "publish refused: tag `{tag}` already exists on `{repo}`. \
+         Pick a new version — `vibe registry publish` does not force-push tags."
+    )]
+    TagCollision { repo: String, tag: String },
+
+    #[error(
+        "publish refused: no push access to `{repo}`. Ask a maintainer of \
+         that repo to grant you push, or use a different registry."
+    )]
+    PushDenied { repo: String },
+
+    #[error(
+        "publish refused: host `{host}` is unreachable (network or DNS error). \
+         Check connectivity and try again."
+    )]
+    HostUnreachable { host: String },
+
+    #[error("git operation failed during publish: {0}")]
+    Git(String),
+
+    #[error("HTTP request to `{host}` failed: {message}")]
+    HttpFailed { host: String, message: String },
+
+    #[error("unexpected response from `{host}` (status {status}): {body}")]
+    UnexpectedResponse {
+        host: String,
+        status: u16,
+        body: String,
+    },
+
+    #[error("filesystem error during publish at `{path}`: {message}")]
+    Io { path: PathBuf, message: String },
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn extract_org_segment_ssh_shorthand() {
+        assert_eq!(
+            extract_org_segment("git@gitverse.ru:vibespecs").unwrap(),
+            "vibespecs"
+        );
+        assert_eq!(
+            extract_org_segment("git@gitverse.ru:vibespecs/").unwrap(),
+            "vibespecs"
+        );
+    }
+
+    #[test]
+    fn extract_org_segment_https() {
+        assert_eq!(
+            extract_org_segment("https://gitverse.ru/vibespecs").unwrap(),
+            "vibespecs"
+        );
+        assert_eq!(
+            extract_org_segment("https://gitverse.ru/vibespecs/").unwrap(),
+            "vibespecs"
+        );
+    }
+
+    #[test]
+    fn extract_org_segment_ssh_scheme() {
+        assert_eq!(
+            extract_org_segment("ssh://git@gitverse.ru/vibespecs").unwrap(),
+            "vibespecs"
+        );
+    }
+
+    #[test]
+    fn extract_org_segment_strips_git_plus() {
+        assert_eq!(
+            extract_org_segment("git+https://gitverse.ru/vibespecs").unwrap(),
+            "vibespecs"
+        );
+        assert_eq!(
+            extract_org_segment("git+ssh://git@gitverse.ru/vibespecs").unwrap(),
+            "vibespecs"
+        );
+    }
+
+    #[test]
+    fn extract_org_segment_rejects_bare_host() {
+        assert!(extract_org_segment("git@gitverse.ru").is_err());
+        assert!(extract_org_segment("https://gitverse.ru").is_err());
+    }
+}

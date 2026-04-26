@@ -17,14 +17,20 @@ use std::path::{Path, PathBuf};
 use anyhow::{Context, Result, anyhow, bail};
 use serde::Serialize;
 use vibe_core::manifest::{Lockfile, ProjectManifest};
+use vibe_publish::{
+    GitVerseCreator, PublishConfig, Publisher, load_token,
+};
 use vibe_registry::{MultiRegistryResolver, RefreshedVia};
 
-use crate::cli::{RegistryArgs, RegistrySubcommand, RegistrySyncArgs};
+use crate::cli::{
+    RegistryArgs, RegistryPublishArgs, RegistrySubcommand, RegistrySyncArgs,
+};
 use crate::output;
 
 pub fn run(ctx: &output::Context, args: RegistryArgs) -> Result<()> {
     match args.command {
         RegistrySubcommand::Sync(sub) => run_sync(ctx, sub),
+        RegistrySubcommand::Publish(sub) => run_publish(ctx, sub),
     }
 }
 
@@ -196,4 +202,133 @@ fn resolve_project_root(path: &Path) -> Result<PathBuf> {
         .canonicalize()
         .map_err(|e| anyhow!("canonicalizing `{}`: {e}", path.display()))?;
     Ok(super::init::strip_unc_public(canonical))
+}
+
+#[derive(Debug, Serialize)]
+struct PublishReport {
+    ok: bool,
+    command: &'static str,
+    host: String,
+    org_url: String,
+    repo_name: String,
+    repo_url: String,
+    tag: String,
+    created_repo: bool,
+    dry_run: bool,
+}
+
+fn run_publish(ctx: &output::Context, args: RegistryPublishArgs) -> Result<()> {
+    let project_root = resolve_project_root(&args.path)?;
+    let manifest_path = project_root.join(ProjectManifest::FILENAME);
+    if !manifest_path.exists() {
+        bail!(
+            "no `vibe.toml` in `{}`; run `vibe init` first",
+            project_root.display()
+        );
+    }
+    let manifest = ProjectManifest::read(&manifest_path)
+        .with_context(|| format!("reading `{}`", manifest_path.display()))?;
+
+    if manifest.registries.is_empty() {
+        bail!(
+            "no `[[registry]]` entries in `{}`. `vibe registry publish` needs a target registry.",
+            manifest_path.display()
+        );
+    }
+
+    let registry_section = match &args.registry {
+        Some(name) => manifest
+            .registry_by_name(name)
+            .ok_or_else(|| anyhow!("no `[[registry]]` named `{name}` in `{}`", manifest_path.display()))?,
+        None => manifest
+            .primary_registry()
+            .ok_or_else(|| anyhow!("no `[[registry]]` configured"))?,
+    };
+
+    // Canonicalise the source dir.
+    let source_dir = args
+        .source
+        .canonicalize()
+        .with_context(|| format!("source path `{}`", args.source.display()))?;
+    let source_dir = super::init::strip_unc_public(source_dir);
+
+    // Phase A only ships a GitVerse adapter. When more hosts land
+    // (GitHub, Gitea, Forgejo per PROP-002 §2.10), pick the adapter
+    // by host. For now, blow up clearly if the org URL doesn't look
+    // like a GitVerse-shaped one — better to refuse than silently
+    // mis-target.
+    let host = "gitverse.ru";
+
+    ctx.heading(&format!(
+        "Publishing {} → registry `{}` (`{}`){}",
+        source_dir.display(),
+        registry_section.name,
+        registry_section.url,
+        if args.dry_run { " [dry-run]" } else { "" },
+    ));
+
+    let token = load_token(host).context("loading publish token")?;
+    if !args.dry_run {
+        ctx.step(&format!(
+            "Loaded publish token from {} (value redacted)",
+            match token.source() {
+                vibe_publish::TokenSource::Explicit => "explicit argument".to_string(),
+                vibe_publish::TokenSource::EnvVar(name) => format!("$ {name}"),
+                vibe_publish::TokenSource::File(p) => p.display().to_string(),
+            }
+        ));
+    }
+    let creator = GitVerseCreator::new(token).context("constructing GitVerse adapter")?;
+
+    let config = PublishConfig {
+        source_dir: source_dir.clone(),
+        org_url: registry_section.url.clone(),
+        naming: registry_section.naming,
+        tag_prefix: "v".to_string(),
+        dry_run: args.dry_run,
+    };
+
+    let outcome = Publisher::new(&creator)
+        .publish(&config)
+        .map_err(|e| anyhow!("{e}"))?;
+
+    if ctx.is_json() {
+        ctx.emit_json(&PublishReport {
+            ok: true,
+            command: "registry:publish",
+            host: outcome.host.clone(),
+            org_url: registry_section.url.clone(),
+            repo_name: outcome.repo_name.clone(),
+            repo_url: outcome.repo_url.clone(),
+            tag: outcome.tag.clone(),
+            created_repo: outcome.created_repo,
+            dry_run: outcome.dry_run,
+        })?;
+        return Ok(());
+    }
+
+    if outcome.created_repo {
+        ctx.step(&format!(
+            "Created repository `{}` on `{}`",
+            outcome.repo_name, outcome.host
+        ));
+    } else {
+        ctx.step(&format!(
+            "Reusing existing repository `{}` on `{}`",
+            outcome.repo_name, outcome.host
+        ));
+    }
+    if outcome.dry_run {
+        ctx.summary(&format!(
+            "\nvibe registry publish [dry-run]: would push to `{}` and tag `{}`. \
+             Re-run without `--dry-run` to apply.",
+            outcome.repo_url, outcome.tag
+        ));
+    } else {
+        ctx.summary(&format!(
+            "\nvibe registry publish: pushed `{}:{}` @ {} → `{}` (tag `{}`).",
+            outcome.kind, outcome.name, outcome.version, outcome.repo_url, outcome.tag
+        ));
+    }
+    Ok(())
 }

@@ -1,0 +1,28 @@
+[package]
+name = "vibe-publish"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+authors.workspace = true
+license-file.workspace = true
+publish.workspace = true
+repository.workspace = true
+homepage.workspace = true
+description = "Maintainer-side package publishing — create per-package repos and push tagged releases"
+
+[dependencies]
+anyhow.workspace = true
+thiserror.workspace = true
+serde.workspace = true
+serde_json.workspace = true
+tracing.workspace = true
+reqwest.workspace = true
+dirs.workspace = true
+semver.workspace = true
+tempfile.workspace = true
+vibe-core.workspace = true
+vibe-registry.workspace = true
+
+[dev-dependencies]
+tempfile.workspace = true
+walkdir.workspace = true

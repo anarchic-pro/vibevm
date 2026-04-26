@@ -59,6 +59,11 @@ pub struct RegistryArgs {
 pub enum RegistrySubcommand {
     /// Force a `git fetch` on the configured registry cache.
     Sync(RegistrySyncArgs),
+
+    /// Publish a package directory as a tagged release in the
+    /// configured registry organization. Maintainers only — needs a
+    /// publish token (see RUNTIME-GUIDE.md).
+    Publish(RegistryPublishArgs),
 }
 
 #[derive(Debug, clap::Args)]
@@ -66,6 +71,26 @@ pub struct RegistrySyncArgs {
     /// Directory of the project (defaults to current).
     #[arg(long, default_value = ".")]
     pub path: PathBuf,
+}
+
+#[derive(Debug, clap::Args)]
+pub struct RegistryPublishArgs {
+    /// Path to the package directory (containing `vibe-package.toml`).
+    #[arg(required = true)]
+    pub source: PathBuf,
+
+    /// Name of the `[[registry]]` to publish into. Defaults to the
+    /// first registry in `vibe.toml`.
+    #[arg(long = "registry")]
+    pub registry: Option<String>,
+
+    /// Project root with `vibe.toml`. Defaults to current directory.
+    #[arg(long, default_value = ".")]
+    pub path: PathBuf,
+
+    /// Describe what would happen but make no API calls or pushes.
+    #[arg(long = "dry-run")]
+    pub dry_run: bool,
 }
 
 #[derive(Debug, clap::Args)]

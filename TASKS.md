@@ -47,7 +47,7 @@ Full design locked in [PROP-002](spec/modules/vibe-registry/PROP-002-decentraliz
 
 ### Publish tooling
 
-- [ ] `feat(vibe-publish)`: new `crates/vibe-publish` crate with `RepoCreator` trait and `GitVerseCreator` impl; `vibe registry publish <path>` subcommand; graceful non-admin error UX (HTTP 401/403 → actionable message, push-denied detection, tag-collision detection).
+- [x] `feat(vibe-publish)`: new `crates/vibe-publish` crate with `RepoCreator` trait, `GitVerseCreator` (Gitea-compatible HTTP via reqwest blocking + rustls), `Publisher` orchestrator (manifest read → repo create/reuse → init+push+tag), `Token` with debug/display redaction, `vibe registry publish <path> [--registry <name>] [--dry-run]` subcommand. Error surface per PROP-002 §2.10 (auth-forbidden / org-not-found / push-denied / tag-collision / host-unreachable). Live API verification deferred to first real publish run; assumed Gitea-compatible request shapes documented inline.
 
 ### Fixture migration and live packages
 
