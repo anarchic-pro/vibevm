@@ -1,9 +1,9 @@
 # WAL — Project Continuation State
-_Updated: 2026-04-26_
+_Updated: 2026-04-29_
 
 ## Current phase
 
-**M1.1-revision — decentralized per-package registry refactor. Phase A code slice complete; live migration of the three demo packages into the `vibespecs` org is the only remaining step. Migration is currently blocked on a single human action — manual repo creation via the GitVerse web UI (see "Live migration blocker" below).**
+**M1.1-revision — decentralized per-package registry refactor. Phase A code slice complete; live migration of the three demo packages into the `vibespecs` org is in progress on the new host. Registry organization migrated from GitVerse to GitHub on 2026-04-29 due to a missing GitVerse REST API endpoint — see "Host migration to GitHub" below. The vibevm tool source itself stays on GitVerse; only the registry org moves.**
 
 The M1.1 monorepo-shaped registry (one `anarchic/vibespecs` repo, `<kind>/<name>/v<ver>/` directories, `[registry]` singleton in `vibe.toml`) was replaced — at the design level — with a decentralized per-package model before any downstream consumer is at risk of being locked into it. Full design lock lives in [PROP-002](modules/vibe-registry/PROP-002-decentralized-registry.md).
 
@@ -29,11 +29,15 @@ The three live v0.1.0 flows (`flow:wal`, `flow:sync-from-code`, `flow:atomic-com
 - Load-bearing setup docs at repo root: [`DEV-GUIDE.md`](../DEV-GUIDE.md), [`RUNTIME-GUIDE.md`](../RUNTIME-GUIDE.md).
 - Project facts stay in the project; no project-level state in tool-specific global user-memory.
 
-**Immediate next work:** the only outstanding Phase A item is the **live migration** of the three v0.1.0 demo flows into per-package repos under `vibespecs/<kind>-<name>` via `vibe registry publish`. This is **non-routine** per CLAUDE.md Rule 4 (creates real artefacts in a public org and exercises the GitVerse API for the first time), so it requires explicit owner sign-off before push. Once those three repos exist on GitVerse and the smoke-test [`M1.5-gate-v2-per-package-smoke.md`](../manual-tests/M1.5-gate-v2-per-package-smoke.md) passes, `DEFAULT_REGISTRY_URL` rotates to the new org root and Phase A closes.
+**Immediate next work (after this checkpoint).** Phase A code adjustments for the host migration land first: new `GitHubCreator` behind `RepoCreator`, host-aware adapter selection in the CLI, per-host token loader (`~/.vibevm/<host>.publish.token` precedence), `DEFAULT_REGISTRY_URL` rotated to `https://github.com/vibespecs`, manual-test rewritten for the GitHub-shape flow. After the workspace stays green (`cargo test --workspace`, `cargo clippy --workspace --all-targets -- -D warnings`), the live publish of `flow:wal@0.1.0` / `flow:sync-from-code@0.1.0` / `flow:atomic-commits@0.1.0` runs against `github.com/vibespecs`. **Non-routine** per CLAUDE.md Rule 4 (creates real public artefacts in the new org), so it requires explicit owner sign-off before push.
 
-**Live migration blocker (2026-04-26).** GitVerse's public REST API does not expose an org-scoped repo creation endpoint. The Gitea-canonical shape `POST /orgs/{org}/repos` returns 404 / WAF 403 against `https://api.gitverse.ru` even with the correct auth and Accept headers; the documentation index lists only `POST /user/repos`, which would create the repo in the calling user's namespace rather than the `vibespecs` org. **Workaround:** the owner manually creates the three empty repos via the GitVerse web UI (no auto-init), after which `vibe registry publish`'s `repo_exists()` check returns 200, the create-leg is skipped, and push + tag proceed. Procedure documented in [`CONTINUE.md`](../CONTINUE.md) and [`docs/troubleshooting.md`](../docs/troubleshooting.md). When GitVerse adds an org-scoped POST in the future, the only file to update is `crates/vibe-publish/src/gitverse.rs::create_repo` — request shape there is already Gitea-canonical and will start working transparently.
+**Host migration to GitHub (2026-04-29).** GitVerse's public REST API does not expose an org-scoped repo creation endpoint — `POST /orgs/{org}/repos` returns 404 / WAF 403 against `https://api.gitverse.ru` even with correct auth and Accept headers; only `POST /user/repos` is documented, and there is no documented user-to-org transfer endpoint. Without org-scoped creation `vibe registry publish` cannot drive the publish loop end-to-end on GitVerse without manual web-UI pre-creation per release, which defeats the point of a publish utility. The owner's decision (2026-04-29): keep the **vibevm project repository** on GitVerse (`anarchic/vibevm` — unaffected) and migrate the **package registry organization** to GitHub — `https://github.com/vibespecs`. Identity remains content-hashed per [PROP-002 §2.1](modules/vibe-registry/PROP-002-decentralized-registry.md#identity); no `content_hash` is invalidated by the host change. Full architectural rationale: [PROP-000 §7](common/PROP-000.md#registry) and [PROP-002 §2.10](modules/vibe-registry/PROP-002-decentralized-registry.md#publish).
 
-**GitVerse API surface (live-verified 2026-04-26).** Base URL `https://api.gitverse.ru` (NOT `gitverse.ru/api/v1` — that path serves the Next.js frontend SPA). Auth: `Authorization: Bearer <T>` (NOT Gitea's legacy `token <T>`). Accept header MUST carry the version: `application/vnd.gitverse.object+json;version=1` — without `;version=1` the server returns 400 with empty body and a `gitverse-api-latest-version: 1` response header as a hint. Endpoints used today: `GET /repos/{owner}/{repo}` works (presence check, with org as `{owner}`); `POST /orgs/{org}/repos` does not (see blocker). Findings baked into `crates/vibe-publish/src/gitverse.rs` doc-comment in commit `36cbf08`; if a future GitVerse major version revises any of these, that file is the first place to update.
+**GitHub API surface (assumed; live-verified during this slice).** Base URL `https://api.github.com`. Auth: `Authorization: Bearer <T>`. Accept: `application/vnd.github+json`. Versioning header: `X-GitHub-Api-Version: 2022-11-28`. Endpoints used: `GET /repos/{owner}/{repo}` (presence check); `POST /orgs/{org}/repos` (repo creation — works natively, returns 201 with full repo metadata). Push auth: HTTPS via the publish token, embedded into the push URL as `https://x-access-token:<TOKEN>@github.com/vibespecs/<repo>.git` for the duration of `git remote add` / `git push`; modern git ≥ 2.31 redacts URL passwords in its own log output. Adapter source: `crates/vibe-publish/src/github.rs`.
+
+**GitVerse API surface (live-verified 2026-04-26, retained).** Base URL `https://api.gitverse.ru`. Auth: `Authorization: Bearer <T>`. Accept header MUST carry the version: `application/vnd.gitverse.object+json;version=1`. `GET /repos/{owner}/{repo}` works; `POST /orgs/{org}/repos` does not. Findings baked into `crates/vibe-publish/src/gitverse.rs` (commit `36cbf08`); the GitVerse adapter remains in tree for any future Gitea-shape host that fully supports the org-scoped POST.
+
+**Token convention (per PROP-000 §20).** Publish-token loader walks: `VIBEVM_PUBLISH_TOKEN` env → `~/.vibevm/<host-prefix>.publish.token` (`github.publish.token`, `gitverse.publish.token`) → legacy `~/.vibevm/git.publish.token`. CLI prints token *source* only; value never appears in any vibevm-produced output. Adapter scope: each `RepoCreator` impl refuses operations outside the org named in the project's `[[registry]].url`.
 
 **JTD toolchain.** Scaffolding is in place (`tools/jtd-codegen/`, `xtask`, `schemas/`, `crates/vibe-wire/`); the `jtd-codegen` binary itself needs a one-time install per `tools/jtd-codegen/README.md` before the first `cargo xtask codegen` run. Migration of existing hand-rolled `Serialize` structs to JTD-driven types is incremental and lands as the consumers are touched.
 
@@ -52,17 +56,17 @@ The three live v0.1.0 flows (`flow:wal`, `flow:sync-from-code`, `flow:atomic-com
 - **Complexity expectation ≥ RPM** ([PROP-000 §18](common/PROP-000.md#complexity)): capability-based, virtual-package-aware, disjunction-supporting dep model from day one.
 - **Git backend:** shell-out to system `git`, behind `GitBackend` trait (PROP-001 §2.1 — size argument pruned per PROP-000 §15; Windows SSH-auth and diagnostic clarity still carry the call).
 - **Cache root:** `~/.vibe/registries/<canonical-url-hash>/packages/<kind>-<name>/` per PROP-002 §2.6. `VIBE_REGISTRY_CACHE` env-var overrides.
-- **Registry default in `vibe init`.** New projects scaffold `[[registry]] name = "vibespecs" url = "git@gitverse.ru:vibespecs"` — ORG root (not a package repo). Single source of truth: `vibe_core::manifest::DEFAULT_REGISTRY_URL`. Override with `--registry-url <URL>` / `--registry-ref <REF>`; opt out with `--no-registry`.
+- **Registry default in `vibe init`.** New projects scaffold `[[registry]] name = "vibespecs" url = "https://github.com/vibespecs"` — ORG root on GitHub (not a package repo). Single source of truth: `vibe_core::manifest::DEFAULT_REGISTRY_URL`. Override with `--registry-url <URL>` / `--registry-ref <REF>`; opt out with `--no-registry`.
 - **Manual-test protocol:** runnable smoke-tests in [`manual-tests/`](../manual-tests/), one file per scenario, clean-slate setup + teardown. Policy in [PROP-000 §14](common/PROP-000.md#manual-tests).
 - **REVIEW marker discipline:** when the spec is silent, pick the conservative interpretation, mark with `<!-- REVIEW: … -->`, surface in the session report.
 - **`refs/` not committed.** Upstream reference material (book + cloned study repos).
 
 ## Remotes
 
-- **vibevm source (this repo):** `git@gitverse.ru:anarchic/vibevm.git` (SSH) / `https://gitverse.ru/anarchic/vibevm` (web).
-- **Package registry (target for M1.1-revision):** organization `vibespecs` on GitVerse — `git@gitverse.ru:vibespecs/<kind>-<name>.git` per package. Empty today; Phase A populates it via `vibe registry publish`.
-- **Legacy package registry (read-only transition):** `git@gitverse.ru:anarchic/vibespecs.git`. Holds three v0.1.0 flows in monorepo form (HEAD `2203239`, 2026-04-23). No new publishes here; migrated into per-package repos during Phase A; kept readable for existing projects with schema-v1 lockfiles until they migrate.
-- **Publish token (local):** `~/.vibevm/git.publish.token` or `VIBEVM_PUBLISH_TOKEN` env. Verified by the owner as having `repo:create` rights in the `vibespecs` organization.
+- **vibevm source (this repo):** `git@gitverse.ru:anarchic/vibevm.git` (SSH) / `https://gitverse.ru/anarchic/vibevm` (web). **Stays on GitVerse.**
+- **Package registry (target as of 2026-04-29):** organization `vibespecs` on **GitHub** — `https://github.com/vibespecs/<kind>-<name>` per package. Phase A populates it via `vibe registry publish` driving the new `GitHubCreator` adapter.
+- **Legacy package registry (read-only transition):** `git@gitverse.ru:anarchic/vibespecs.git`. Holds three v0.1.0 flows in monorepo form (HEAD `2203239`, 2026-04-23). No new publishes here; superseded by the GitHub-hosted per-package repos during Phase A; kept readable for existing projects with schema-v1 lockfiles until they migrate.
+- **Publish tokens (local).** Per-host file precedence: `~/.vibevm/<host>.publish.token` (e.g. `github.publish.token` for github.com, `gitverse.publish.token` for gitverse.ru) → legacy `~/.vibevm/git.publish.token`. Env-var `VIBEVM_PUBLISH_TOKEN` overrides everything. Token secrecy invariant per [PROP-000 §20](common/PROP-000.md#token-secrecy) — never displayed, never persisted outside `~/.vibevm/`, never committed. Verified by the owner as having `repo:create` (GitHub) / equivalent rights in the `vibespecs` organization.
 
 ## Done
 
@@ -131,16 +135,17 @@ since the documentation checkpoint:
 
 ## Next
 
-**Live migration of the three v0.1.0 demo flows into `vibespecs/<kind>-<name>` via `vibe registry publish`.** Non-routine (creates real public artefacts, first GitVerse-API exercise). Procedure once approved:
+**Live migration of the three v0.1.0 demo flows into `vibespecs/<kind>-<name>` on GitHub via `vibe registry publish`.** Non-routine (creates real public artefacts in a new org, first GitHub-API exercise). Procedure once the host-migration code slice merges:
 
-1. **Pre-create the three repos manually via the GitVerse web UI** (workaround for the missing org-scoped POST endpoint described above): `flow-wal`, `flow-sync-from-code`, `flow-atomic-commits` in the `vibespecs` org. **Empty.** No auto-init, no README, no .gitignore — pre-populated content conflicts with the publisher's first push. Default branch `main`. Public visibility.
-2. Build release: `cargo build --release --workspace`.
-3. Confirm the publish token at `~/.vibevm/git.publish.token` (or `VIBEVM_PUBLISH_TOKEN` env) has the rights to push into `vibespecs/*`.
-4. Dry-run each: `vibe registry publish fixtures/registry/flow/<name>/v0.1.0 --dry-run` for `wal`, `sync-from-code`, `atomic-commits`. Each should report "Would reuse existing repository" (because the human pre-created it) and "would push to <ssh-url> and tag v0.1.0".
-5. Apply: drop `--dry-run`, run for each in turn.
-6. Walk [`manual-tests/M1.5-gate-v2-per-package-smoke.md`](../manual-tests/M1.5-gate-v2-per-package-smoke.md) end to end.
-7. If smoke passes: rotate `DEFAULT_REGISTRY_URL` in `vibe-core::manifest::project` (line ~284) to `git@gitverse.ru:vibespecs` (org root, not a per-package URL — per-package URLs are derived at fetch time via `NamingConvention`); update tests; ship the rotation as its own commit.
-8. WAL / ROADMAP / TASKS checkpoint Phase A complete; M1.6 becomes the next active milestone.
+1. **Workspace stays green.** `cargo test --workspace`, `cargo clippy --workspace --all-targets -- -D warnings`. The new `GitHubCreator` has unit-test coverage parallel to `GitVerseCreator`; the token loader's per-host file precedence is unit-tested; redaction tests are present.
+2. **Confirm the publish token** is at `~/.vibevm/github.publish.token` (1-line file containing the GitHub PAT with `repo` scope on the `vibespecs` org). The token is **never** echoed at any step — neither by the operator nor by the publisher. CLI prints `Loaded publish token from <path> (value redacted)`.
+3. **Build release:** `cargo build --release --workspace`.
+4. **Dry-run each package:** `./target/release/vibe registry publish fixtures/registry/flow/<name>/v0.1.0 --dry-run` for `wal`, `sync-from-code`, `atomic-commits`. Each must report `Would create repository 'flow-<name>' on 'github.com'` (since the new org is empty) and the synthetic clone URL `https://github.com/vibespecs/flow-<name>.git`. Dry-run only exercises `GET /repos/...`; no writes happen.
+5. **Apply:** drop `--dry-run`, run for each in turn. The publisher hits `POST /orgs/vibespecs/repos`, receives the new repo metadata, then injects the token into the HTTPS push URL for one `git remote add` / `git push -u origin main` / `git push origin v0.1.0` sequence per package. Token never leaves the running process.
+6. Walk [`manual-tests/M1.5-gate-v2-per-package-smoke.md`](../manual-tests/M1.5-gate-v2-per-package-smoke.md) end to end against the GitHub-hosted org.
+7. WAL / ROADMAP / TASKS checkpoint Phase A complete; M1.6 becomes the next active milestone.
+
+**Migration scope discipline.** Every operation is bounded to `github.com/vibespecs/*`. The CLI must refuse to create or modify anything outside that org — `RepoCreator` impls perform an explicit org-equality check before issuing any write. Single video-recording session: any token leak (echo, log, paste, dry-run-output, error message) is a hard fail.
 
 Comprehensive cold-resume document (long form, with repo map, decision history, exact recipes) lives at [`CONTINUE.md`](../CONTINUE.md). It is written by the session-end checkpoint command (`ЗАВЕРШИ СЕССИЮ` / `END SESSION`) and supersedes itself wholesale on each invocation; if it disagrees with this WAL, trust the WAL.
 
@@ -164,5 +169,5 @@ Comprehensive cold-resume document (long form, with repo map, decision history, 
   - `cargo xtask check-codegen` — drift check; CI uses this once a schema is wired into a real consumer.
   - `cargo run -p vibe-cli -- init --path <dir>` — scaffold a project.
   - `cargo run -p vibe-cli -- install flow:wal --path <project>` — transitive resolve via `NaiveDepSolver`, populated lockfile v2 entry.
-  - `cargo run -p vibe-cli -- registry publish <path> [--registry <name>] [--dry-run]` — publish a package (maintainers; needs `~/.vibevm/git.publish.token`).
+  - `cargo run -p vibe-cli -- registry publish <path> [--registry <name>] [--dry-run]` — publish a package (maintainers; reads token from `~/.vibevm/<host>.publish.token`, value never echoed).
   - `cargo run -p vibe-cli -- registry sync --path <project>` — refresh per-package clones referenced by the lockfile.

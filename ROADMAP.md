@@ -1,21 +1,35 @@
 # vibevm — roadmap
 
-> **Status snapshot (2026-04-24):** M0 is complete. M1.1 (git-backed
+> **Status snapshot (2026-04-29):** M0 is complete. M1.1 (git-backed
 > registry) shipped 2026-04-22 against a monorepo-shaped registry at
 > `git@gitverse.ru:anarchic/vibespecs.git`. The M1.5-gate **content**
 > slice shipped on 2026-04-23: three demo flows live there —
 > `flow:wal@0.1.0`, `flow:sync-from-code@0.1.0`,
 > `flow:atomic-commits@0.1.0`. 81 tests green, clippy clean.
 >
-> **Active slice (started 2026-04-24): M1.1-revision** — redesign of
-> the registry model around decentralized per-package repos,
-> `[[registry]]` array + `[[mirror]]` + `[[override]]` in `vibe.toml`,
-> content-addressed identity, transitive depsolver (`resolvo`), and a
-> `vibe registry publish` maintainer utility. Design lock: [PROP-002](spec/modules/vibe-registry/PROP-002-decentralized-registry.md).
-> Live migration of the three demo packages into the new
-> `vibespecs/<kind>-<name>` per-package shape is part of this slice.
-> M1.5-gate docs still open. M1.2 / M1.3 / M1.4 open. M1.6 queued
-> (polished multi-registry / mirror UX, `vibe vendor`, richer publish
+> **Active slice (M1.1-revision):** redesign of the registry model
+> around decentralized per-package repos, `[[registry]]` array +
+> `[[mirror]]` + `[[override]]` in `vibe.toml`, content-addressed
+> identity, transitive depsolver (`resolvo`), and a `vibe registry
+> publish` maintainer utility. Design lock: [PROP-002](spec/modules/vibe-registry/PROP-002-decentralized-registry.md).
+>
+> **Host migration (2026-04-29).** The `vibespecs` registry
+> organization moved from GitVerse to GitHub
+> (<https://github.com/vibespecs>) because GitVerse's public REST API
+> does not expose org-scoped repo creation, blocking `vibe registry
+> publish`'s create-leg. The vibevm tool source itself stays on
+> GitVerse — only the registry org migrates. New `GitHubCreator`
+> adapter behind the existing `RepoCreator` trait drives the publish
+> flow; `GitVerseCreator` remains in tree for any future Gitea-shape
+> host that fully supports the org-scoped POST. Token path rotates
+> to `~/.vibevm/<host>.publish.token` (per-host); legacy
+> `~/.vibevm/git.publish.token` is the fallback. See
+> [PROP-000 §7](spec/common/PROP-000.md#registry) and
+> [PROP-002 §2.10](spec/modules/vibe-registry/PROP-002-decentralized-registry.md#publish).
+>
+> M1.5-gate docs landed (commands + authoring + glossary +
+> CHANGELOG). M1.2 / M1.3 / M1.4 open. M1.6 queued (polished
+> multi-registry / mirror UX, `vibe vendor`, richer publish
 > adapters).
 
 This document is the long-form version of `VIBEVM-SPEC.md` §11 (staging
@@ -136,7 +150,7 @@ procedure for the live validation lives in
 (`flow:sync-from-code`, `flow:atomic-commits`) are on the path to
 M1.5-gate, not to M1.1 — see the M1.5-gate subsection below.
 
-### M1.1-revision — Decentralized per-package registry (active, started 2026-04-24)
+### M1.1-revision — Decentralized per-package registry (active, started 2026-04-24; host migrated to GitHub 2026-04-29)
 
 **Why.** The original M1.1 shape (monorepo-as-registry, `[registry]`
 singleton, `#fragment` paths in lockfile `source_uri`) was fine for
@@ -149,11 +163,11 @@ cheapest to redesign once, properly.
 
 - **Decentralized registry** — each package is its own git repository under a hosting organization (`vibespecs/flow-wal`, `vibespecs/flow-sync-from-code`, …). Versions are git tags. Repo-naming convention is a property of the registry, not the CLI.
 - **Multi-registry schema** — `vibe.toml` carries `[[registry]]` as an array (priority-ordered), with `[[mirror]]` and `[[override]]` entries. Even with one registry in practice today, the schema and code path support the full shape from day one.
-- **Content-addressed identity** — lockfile `source_url` is informational; identity is `(kind, name, version, content_hash)`. Mirror-switching and host-migration never churn the lockfile. Integrity verified on every install.
+- **Content-addressed identity** — lockfile `source_url` is informational; identity is `(kind, name, version, content_hash)`. Mirror-switching and host-migration never churn the lockfile. Integrity verified on every install. (Tested in anger by the 2026-04-29 GitVerse → GitHub host migration.)
 - **Transitive depsolver** — `resolvo` crate, wrapped behind a `DepSolver` trait so `libsolv` remains a documented fallback. Capability-based `[provides]` / `[requires]` / `[[requires_any]]` / `[obsoletes]` / `[conflicts]` become semantic, not advisory.
-- **`vibe registry publish <path>`** — maintainer utility creating a new package repo via GitVerse public API, pushing content, tagging version. Error surface tuned for non-admin contributors (clear 401/403/push-denied messaging).
-- **Live migration** — three demo packages (`flow:wal@0.1.0`, `flow:sync-from-code@0.1.0`, `flow:atomic-commits@0.1.0`) move from `anarchic/vibespecs` monorepo into `vibespecs/<kind>-<name>` per-package repos via the new publish utility.
-- **JTD wire-contract foundation** — GitVerse API and `vibe --json` event shapes are schema-first (JTD), with `jtd-codegen` producing Rust types. Future LLM provider wrappers land on the same pattern.
+- **`vibe registry publish <path>`** — maintainer utility creating a new package repo via the host's public API, pushing content, tagging version. Error surface tuned for non-admin contributors (clear 401/403/push-denied messaging). Host adapters: `GitHubCreator` (primary, `vibespecs` org); `GitVerseCreator` (legacy, retained for Gitea-shape hosts).
+- **Live migration** — three demo packages (`flow:wal@0.1.0`, `flow:sync-from-code@0.1.0`, `flow:atomic-commits@0.1.0`) move from `anarchic/vibespecs` monorepo into `https://github.com/vibespecs/<kind>-<name>` per-package repos via the new publish utility. Original migration target was GitVerse's `vibespecs` org; the host changed mid-migration when GitVerse's missing org-scoped POST endpoint blocked end-to-end automation.
+- **JTD wire-contract foundation** — host-API and `vibe --json` event shapes are schema-first (JTD), with `jtd-codegen` producing Rust types. Future LLM provider wrappers land on the same pattern.
 - **Local fixtures relocate** from `packages/` to `fixtures/registry/` to separate test fixtures from the project's own future dogfooded `packages/`.
 
 **Task breakdown** lives in [`TASKS.md`](TASKS.md) at repo root.

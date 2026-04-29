@@ -82,13 +82,14 @@ Constraint forms in CLI:
 
 **Decision:**
 - **M0:** local-directory registry only. No git. Registry is a path on disk with the layout from `VIBEVM-SPEC.md` §8.2.
-- **M1:** git registry added per `VIBEVM-SPEC.md` §8. Configured in `vibe.toml`'s `[registry]` section. Default public registry URL = `git@gitverse.ru:anarchic/vibespecs.git` (SSH, see `spec/boot/90-user.md`). `VIBEVM-SPEC.md` §7.5 now carries this URL directly (was a `github.com/anarchic-org/...` placeholder earlier). **Backend choice, trait design, cache layout, and Windows UX for M1** are pinned in [spec://vibevm/modules/vibe-registry/PROP-001](../modules/vibe-registry/PROP-001-git-backend.md) — in brief: shell-out to the system `git` (not `libgit2`), behind a `GitBackend` trait that leaves the door open for a future `libgit2` swap.
+- **M1:** git registry added per `VIBEVM-SPEC.md` §8. Configured in `vibe.toml`'s `[[registry]]` array. Default public registry URL = `https://github.com/vibespecs` (HTTPS org root; per-package URLs are derived at fetch time via [`NamingConvention`](../../crates/vibe-core/src/manifest/project.rs)). **Backend choice, trait design, cache layout, and Windows UX for M1** are pinned in [spec://vibevm/modules/vibe-registry/PROP-001](../modules/vibe-registry/PROP-001-git-backend.md) — in brief: shell-out to the system `git` (not `libgit2`), behind a `GitBackend` trait that leaves the door open for a future `libgit2` swap.
 
-**Default in new projects.** `vibe init` writes the default registry URL (`DEFAULT_REGISTRY_URL` in [`vibe_core::manifest`](../../crates/vibe-core/src/manifest/project.rs)) into every new `vibe.toml`'s `[registry]` section unless the operator passes `--no-registry` or overrides with `--registry-url <URL>` / `--registry-ref <REF>`. The default exists so that a plain `vibe init` → `vibe install flow:wal` flow works out of the box against the public registry; overrides are there for forks, staging registries, and offline / air-gapped setups. The single source of truth for the URL is the constant in `vibe-core` — manual-tests, smoke scripts, and docs all reference it from there.
+**Default in new projects.** `vibe init` writes the default registry URL (`DEFAULT_REGISTRY_URL` in [`vibe_core::manifest`](../../crates/vibe-core/src/manifest/project.rs)) into every new `vibe.toml`'s `[[registry]]` entry unless the operator passes `--no-registry` or overrides with `--registry-url <URL>` / `--registry-ref <REF>`. The default exists so that a plain `vibe init` → `vibe install flow:wal` flow works out of the box against the public registry; overrides are there for forks, staging registries, and offline / air-gapped setups. The single source of truth for the URL is the constant in `vibe-core` — manual-tests, smoke scripts, and docs all reference it from there.
 
-**Source repositories:**
-- The vibevm tool itself: `git@gitverse.ru:anarchic/vibevm.git` (SSH) / `https://gitverse.ru/anarchic/vibevm` (web).
-- The package registry: `git@gitverse.ru:anarchic/vibespecs.git` (SSH). Seeded 2026-04-22 with `flow:wal@0.1.0` (commit `98e51fc`).
+**Source repositories — split-host posture.** The vibevm project and the package registry live on **separate hosts** by deliberate decision (2026-04-29). Each host is chosen on its own merits:
+- **vibevm tool source: GitVerse.** `git@gitverse.ru:anarchic/vibevm.git` (SSH) / `https://gitverse.ru/anarchic/vibevm` (web). Stays on GitVerse — the source-of-truth repository, contributor SSH keys, mirroring posture, and Russian-jurisdiction hosting are all already wired up here.
+- **Package registry: GitHub, organization `vibespecs`.** `https://github.com/vibespecs` (org root) — per-package repos are `https://github.com/vibespecs/<kind>-<name>` per [PROP-002](../modules/vibe-registry/PROP-002-decentralized-registry.md#registry-model) `NamingConvention::KindName`. The migration from `git@gitverse.ru:vibespecs/*` happened on 2026-04-29 because GitVerse's public REST API does not expose org-scoped repo creation (`POST /orgs/{org}/repos` returns 404 / WAF 403; documented exhaustively in [PROP-002 §2.10](../modules/vibe-registry/PROP-002-decentralized-registry.md#publish) and `crates/vibe-publish/src/gitverse.rs`). Without that endpoint `vibe registry publish` cannot fully drive the publish loop end to end. GitHub's equivalent endpoint works natively, so the registry organization moved while the vibevm project repository stays put. Identity is content-hashed (PROP-002 §2.1) — the lockfile's `source_url` rotates but no `content_hash` value is invalidated by the host change.
+- **Legacy registry, read-only.** `git@gitverse.ru:anarchic/vibespecs.git` (HEAD `2203239`, 2026-04-23, three v0.1.0 flows in monorepo form). Kept readable for any project still on schema-v1 lockfiles until they migrate; no new publishes happen there.
 
 **Cache location:** `~/.vibe/registries/<hash>/` for cloned registries; `<project>/.vibe/cache/<kind>/<name>/<version>/` for per-package cache. See `VIBEVM-SPEC.md` §8.3.
 
@@ -273,6 +274,21 @@ The obligation is pinned here (rather than only in the guides themselves) so tha
 
 ---
 
+## 20. Token secrecy and adapter scope {#token-secrecy}
+
+**Decision.** Publish tokens, registry-API tokens, and any LLM-provider keys handled by vibevm are surface secrets. They MUST NOT appear in any human- or machine-readable surface that vibevm produces. Concretely:
+
+- **Never printed.** Not to stdout, stderr, the CLI log, the `--json` event stream, error messages, panic traces, telemetry, or the lockfile. The CLI prints the *source* of a token (explicit / env-var name / file path) but never the value. The in-process wrapper type (`vibe_publish::Token`, future `vibe_llm::ApiKey`) MUST redact on `Display` and `Debug` — verified by unit tests.
+- **Never persisted.** Not committed to the repository, not written into the lockfile, not embedded in cache files, not landed in the `.vibe/` tree. The single sanctioned at-rest location is the operator's `~/.vibevm/<host>.publish.token` file (per-user, chmod-protected).
+- **Sanctioned process boundaries.** The token may cross a process boundary only via: (a) the host API's `Authorization: Bearer …` header, sent over TLS; (b) a single `git remote add` / `git push` invocation where the token is embedded in the URL as `https://x-access-token:<TOKEN>@host/…` (modern git ≥ 2.31 redacts URL passwords in its own log output to `***`). No other path is allowed.
+- **Adapter scope.** A `RepoCreator` impl MUST refuse to operate outside the organization specified in the project's `[[registry]].url`. A publish run targeting `github.com/vibespecs` may not create, modify, or even probe a repository under a different `github.com` org or under any user namespace. Adapter implementations carry an explicit org-prefix check and surface a `PublishError` on attempted scope escalation.
+
+**Why this is a §20-level invariant rather than module-local.** The blast radius of a leaked publish token is the entire organization the token has access to (cross-repo writes, branch deletes, CI secret read). The blast radius of an escalated adapter is the entire host account. Both failure modes are catastrophic in a way that hand-rolled module discipline cannot bound at the language level — the only safe posture is to make the rules global, audit every code path that touches a `Token` or a `RepoCreator`, and reject changes that introduce a new escape hatch.
+
+**Where pinned (operationally):** [PROP-002 §2.10](../modules/vibe-registry/PROP-002-decentralized-registry.md#publish) carries the publish-side mechanics; [`spec/boot/90-user.md`](../boot/90-user.md) carries the operator-facing rule for this machine. Both are subordinate to this PROP-000 entry.
+
+---
+
 ## Invariants
 
 (These restate the most load-bearing rules from the spec and the book. If anything below seems violated in practice, stop and reconcile before proceeding.)
@@ -283,3 +299,4 @@ The obligation is pinned here (rather than only in the guides themselves) so tha
 4. **One commit = one logical unit.** Commit messages follow Conventional Commits (see §12) and reference `spec://…` URIs where relevant.
 5. **Dogfood.** vibevm is being built using the same discipline it enforces. The `spec/` tree in this repo IS `vibe init`'s reference output.
 6. **Human authorship is the only attribution.** See §12.1. This is the only place in the project where AI tooling is discussed in the attribution sense.
+7. **Tokens never appear in vibevm output.** See §20. Audited in unit tests; any new code path touching a `Token` or `RepoCreator` is reviewed for redaction and scope-escalation safety.

@@ -29,18 +29,26 @@ System `git` must be in `PATH`. `vibe-registry` shells out to `git` for all regi
 
 Verify with `git --version`.
 
-### 2.3 SSH key for GitVerse (optional, required for publish)
+### 2.3 SSH key for GitVerse (required to push vibevm itself)
 
-Needed if you intend to push to `git@gitverse.ru:…`. Load the key into `ssh-agent`, verify with `ssh -T git@gitverse.ru` — it should confirm auth and exit without a shell.
+Needed to push to `git@gitverse.ru:anarchic/vibevm.git` — the project source-of-truth repo lives on GitVerse. Load the key into `ssh-agent`, verify with `ssh -T git@gitverse.ru` — it should confirm auth and exit without a shell.
 
-### 2.4 Publish token (optional, required for `vibe registry publish`)
+### 2.4 Publish token (required for `vibe registry publish`)
 
-GitVerse public-API token at:
+The package registry organization (`vibespecs`) lives on GitHub at <https://github.com/vibespecs>. Publish-side ops require a GitHub personal access token (PAT) with `repo` scope on the org, stored at:
 
-- POSIX: `~/.vibevm/git.publish.token`
-- Windows: `%USERPROFILE%\.vibevm\git.publish.token`
+- POSIX: `~/.vibevm/github.publish.token`
+- Windows: `%USERPROFILE%\.vibevm\github.publish.token`
 
-Or export `VIBEVM_PUBLISH_TOKEN` (env wins over the file). Needed only for the publish subcommand — ordinary install/update never touches it.
+The publish-token loader also accepts the legacy `~/.vibevm/git.publish.token` (host-agnostic fallback) and the env-var `VIBEVM_PUBLISH_TOKEN` (wins over both). Per-host file precedence — `~/.vibevm/<host-prefix>.publish.token` — exists so you can hold tokens for several hosts without juggling env vars.
+
+**Token files are surface secrets per [PROP-000 §20](spec/common/PROP-000.md#token-secrecy):**
+
+- chmod 600 / Windows ACL-restricted to your user.
+- Never committed to git, never pasted into chat, never echoed in shell snippets, never quoted in screenshots or recordings.
+- `vibe` itself redacts the token at every output surface — CLI step lines, `--json` events, error messages, debug logs. The CLI prints the *source* of the token (env-var name or file path) but never the value. Maintain that discipline at the operator level too.
+
+Needed only for the publish subcommand; ordinary install/update never touches a token.
 
 ### 2.5 Schema codegen (JTD)
 
@@ -79,9 +87,26 @@ cargo fmt --all
 
 Live integration scripts live under [`manual-tests/`](manual-tests/). One file per scenario, self-contained walkthrough with clean-slate setup and teardown. Read [`manual-tests/README.md`](manual-tests/README.md) for the authoring conventions. Run the relevant script before tagging any milestone and after any change to an integration surface (git backend, CLI args, lockfile schema).
 
-## 5. Publishing packages (maintainers only — planned)
+## 5. Publishing packages (maintainers only)
 
-`vibe registry publish <path>` is the maintainer tool for creating a package repo on GitVerse and pushing a tagged release. Procedure, auth requirements, and error-handling surface will be pinned here when the command lands.
+`vibe registry publish <path>` is the maintainer tool for creating a package repo in the configured registry's organization and pushing a tagged release. The CLI dispatches to a host-specific `RepoCreator` adapter chosen from the registry URL's hostname:
+
+- `github.com` (or any subdomain) → `GitHubCreator`. `POST /orgs/{org}/repos` works natively; HTTPS push uses the token embedded in the URL for one push (modern git ≥ 2.31 redacts URL passwords in its own logs).
+- `gitverse.ru` → `GitVerseCreator`. `GET /repos/{owner}/{repo}` works for presence; `POST /orgs/{org}/repos` is not exposed by the live host (verified 2026-04-26), so create-leg requires manual web-UI pre-creation. The adapter remains in tree for any future Gitea-shape host that fully supports the org-scoped POST.
+
+Full design: [PROP-002 §2.10](spec/modules/vibe-registry/PROP-002-decentralized-registry.md#publish). User-facing reference: [`docs/commands/registry-publish.md`](docs/commands/registry-publish.md).
+
+**Routine usage:**
+
+```sh
+# Dry-run first (read-only — only hits GET /repos/...).
+cargo run --release -p vibe-cli -- registry publish fixtures/registry/flow/wal/v0.1.0 --dry-run
+
+# Apply.
+cargo run --release -p vibe-cli -- registry publish fixtures/registry/flow/wal/v0.1.0
+```
+
+The dry-run output shows the synthetic clone URL, the action verb (`Would create` or `Would reuse existing`), and the tag that would be pushed. No token value appears anywhere in output — `vibe` reads the token in-process, redacts on `Display`/`Debug`, and never logs the value. The video-recording-safe defaults are baked in.
 
 ## 6. Troubleshooting
 

@@ -208,15 +208,29 @@ Semantic: the solver computes a satisfying assignment over the declared constrai
 Architecture:
 
 - New crate `vibe-publish` in the workspace.
-- Core trait `RepoCreator`:
-  ```rust
-  pub trait RepoCreator {
-      fn create(&self, org: &str, repo_name: &str, opts: &CreateOpts) -> Result<RepoInfo, PublishError>;
-      fn exists(&self, org: &str, repo_name: &str) -> Result<bool, PublishError>;
-  }
-  ```
-- First concrete impl: `GitVerseCreator`. Hits the GitVerse public API ([docs](https://gitverse.ru/docs/public-api/)). Auth: token from `~/.vibevm/git.publish.token` or `VIBEVM_PUBLISH_TOKEN` env-var.
-- Host adapters for GitHub / Gitea / Forgejo are Phase B additions; pattern is pinned now so adding each is a single impl block.
+- Core trait `RepoCreator` (host-specific operations) plus a Publisher orchestrator that drives the manifest read → repo presence/create → push → tag pipeline. Each supported host implements `RepoCreator` once; the rest is host-agnostic. The trait carries:
+  - `host_name(&self) -> &str` — for error messages.
+  - `repo_exists(org, name) -> Result<bool>` — distinguishes missing-token / missing-org / forbidden errors from a clean negative.
+  - `create_repo(org, name, opts) -> Result<RepoInfo>` — creates the repo in the org, returns metadata (HTML URL + clone URL).
+  - `push_url(org, name) -> String` — produces the URL `git push` should target. SSH-auth hosts return the bare SSH URL (e.g. `git@gitverse.ru:vibespecs/flow-wal.git`); HTTPS-token-auth hosts return the URL with credentials embedded for the duration of the push (e.g. `https://x-access-token:<TOKEN>@github.com/vibespecs/flow-wal.git`). Modern git (≥ 2.31) redacts URL passwords in its own log output to `***`.
+
+**Concrete impls.**
+
+- **`GitVerseCreator`** (legacy, retained): hits `https://api.gitverse.ru` with `Authorization: Bearer <T>` and `Accept: application/vnd.gitverse.object+json;version=1`. **Operationally degraded** — `POST /orgs/{org}/repos` is documented as Gitea-canonical but is not exposed by the live host (verified 2026-04-26 by curl-probing); only `GET /repos/{owner}/{repo}` works for presence checks. Repo creation requires manual web-UI pre-create. The code path remains in tree so Gitea-shape forks of GitVerse, or any future GitVerse release that exposes the org-scoped POST, work transparently with no change.
+- **`GitHubCreator`** (primary as of 2026-04-29): hits `https://api.github.com` with `Authorization: Bearer <T>`, `Accept: application/vnd.github+json`, `X-GitHub-Api-Version: 2022-11-28`. Both endpoints work natively — `POST /orgs/{org}/repos` returns 201 with the full repo metadata, no manual pre-create needed. SSH push is preferred when the operator has a configured GitHub SSH key; otherwise the publisher embeds the token into the HTTPS clone URL via `x-access-token:<TOKEN>@github.com/...` for that one push. The token never leaves the running process: not echoed to stdout/stderr, not logged at any level, redacted in `Token::Display`/`Debug`, and modern git redacts URL passwords in its own diagnostics.
+- Adapters for Gitea / Forgejo / GitLab are additive — one new `impl RepoCreator` per host, no consumer-side changes.
+
+**Adapter selection.** The CLI picks an adapter from the registry URL's host segment. `github.com` (or any subdomain) → `GitHubCreator`; `gitverse.ru` → `GitVerseCreator`; unknown hosts surface a clean error pointing at PROP-002 §2.10 rather than guessing a Gitea-compatible shape that may not match the host's actual API.
+
+**Token loading.** The publish token loader (`crate::token::load_token(host)`) iterates these sources in order, returning the first non-empty value:
+
+1. `VIBEVM_PUBLISH_TOKEN` environment variable (host-agnostic; useful for CI).
+2. `~/.vibevm/<host-prefix>.publish.token` — per-host file. The prefix is the first label of the host (`github` for `github.com`, `gitverse` for `gitverse.ru`, `gitlab` for `gitlab.com`).
+3. `~/.vibevm/git.publish.token` — legacy host-agnostic fallback.
+
+The per-host file lets the operator hold tokens for several hosts simultaneously without juggling env vars. The legacy fallback covers the GitVerse-only era and keeps existing setups working.
+
+**Token secrecy invariant.** The token is a surface secret. It is **never** displayed in CLI output, log lines, error messages, JSON event payloads, the lockfile, or any committed file. The only sanctioned paths through which the value crosses a process boundary are: (a) the GitHub / GitVerse `Authorization: Bearer …` HTTP header, sent over TLS to the hosting API; (b) the `x-access-token:<TOKEN>@…` embed in the URL passed to a single `git remote add` / `git push` invocation; (c) the in-memory `Token` struct, which redacts on `Display` and `Debug`. The CLI prints the *source* of the token (explicit / env-var / file path) but never the value. Implementations must verify token redaction in unit tests (cf. `vibe_publish::token::tests::debug_redacts_value`).
 
 **Error surface** (tuned for non-admin contributors — PROP-000 §18 acknowledges this will hit routinely):
 
@@ -224,8 +238,9 @@ Architecture:
 - `git push` denied → `Publish refused: no push access to <repo>. Ask a maintainer of <repo> to grant you push access.`
 - Tag already exists → `Publish refused: <repo> already has tag <tag>. Pick a new version — force-push is not automated.`
 - Org does not exist / network unreachable → differentiated from auth errors so operators can tell a typo from a permissions issue.
+- Unsupported host → `Publish refused: no RepoCreator adapter for host '<host>'. Add one in vibe-publish per PROP-002 §2.10.`
 
-Never force-push. Never overwrite an existing tag. Never create a repo in a different org than the configured one unless `--org <other>` is passed explicitly.
+Never force-push. Never overwrite an existing tag. Never create a repo in a different org than the configured one unless `--org <other>` is passed explicitly. Never escalate scope: a publish run targets exactly the org named in the project's `[[registry]]` URL — adapters MUST refuse to create or modify anything outside that org.
 
 ### 2.11 JTD + codegen for wire contracts {#jtd}
 
