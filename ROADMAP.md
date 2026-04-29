@@ -150,7 +150,7 @@ procedure for the live validation lives in
 (`flow:sync-from-code`, `flow:atomic-commits`) are on the path to
 M1.5-gate, not to M1.1 — see the M1.5-gate subsection below.
 
-### M1.1-revision — Decentralized per-package registry (active, started 2026-04-24; host migrated to GitHub 2026-04-29)
+### M1.1-revision — Decentralized per-package registry (Phase A DONE 2026-04-29 on GitHub `vibespecs`; host migrated from GitVerse mid-slice)
 
 **Why.** The original M1.1 shape (monorepo-as-registry, `[registry]`
 singleton, `#fragment` paths in lockfile `source_uri`) was fine for

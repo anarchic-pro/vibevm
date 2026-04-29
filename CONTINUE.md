@@ -1,218 +1,217 @@
 # CONTINUE — cold-resume checkpoint
 
-_Written: 2026-04-26. Owner-readable, self-contained, deliberately verbose. Pick this up with zero prior context and you should be able to continue without asking questions._
+_Written: 2026-04-29. Owner-readable, self-contained, deliberately verbose. Pick this up with zero prior context and you should be able to continue without asking questions._
 
 ---
 
 ## TL;DR (executive summary)
 
-We are mid-way through **M1.1-revision Phase A** — the decentralized per-package registry refactor. The full design (PROP-002) is locked, every code slice is shipped on `origin/main`, the workspace builds clean (`cargo test --workspace` ≈ 169 tests green, `cargo clippy --workspace --all-targets -- -D warnings` clean). The **only** outstanding Phase A item is the **live migration** of three v0.1.0 demo flows from the legacy monorepo `anarchic/vibespecs` into per-package repos `vibespecs/flow-wal`, `vibespecs/flow-sync-from-code`, `vibespecs/flow-atomic-commits` via the new `vibe registry publish` utility.
+**M1.1-revision Phase A is done.** Decentralized per-package registry shipped end-to-end on its production host. All three v0.1.0 demo flows live on GitHub:
 
-The migration is currently **blocked on a single human step**: GitVerse's public REST API does not expose an org-scoped repo creation endpoint (`POST /orgs/{org}/repos` returns 404 on the live host even though that is the Gitea-canonical shape). The workaround is to **manually create the three empty repos via the GitVerse web UI** (no auto-init), after which `vibe registry publish` will skip the create-leg via its `repo_exists()` check and proceed straight to push + tag.
+- <https://github.com/vibespecs/flow-wal>
+- <https://github.com/vibespecs/flow-sync-from-code>
+- <https://github.com/vibespecs/flow-atomic-commits>
 
-The most recent commit is `36cbf08 feat(vibe-publish): correct GitVerse API surface from live probing` — base URL → `api.gitverse.ru`, auth → Bearer, Accept → versioned `application/vnd.gitverse.object+json;version=1`, dry-run UX bug fixed. **That commit is one ahead of `origin/main` and needs pushing** (will be pushed together with this CONTINUE.md write-up).
+Each tagged `v0.1.0`. Anonymous `vibe init` → `vibe install flow:wal` / `flow:sync-from-code` / `flow:atomic-commits` resolves all three from `https://github.com/vibespecs`, populates `vibe.lock` v2 with `registry = "vibespecs"` / GitHub `source_url`s / `content_hash`s, and `vibe registry sync` refreshes per-package clones. Workspace `cargo test --workspace` ≈ 210+ tests green; `cargo clippy --workspace --all-targets -- -D warnings` clean.
 
-Once the three repos exist on GitVerse, the procedure to close Phase A is mechanical and is documented in detail in section "Live migration — exact steps" below.
+**Host posture (decided 2026-04-29).** vibevm tool source stays on **GitVerse** (`git@gitverse.ru:anarchic/vibevm`); package registry organization moved to **GitHub** (`https://github.com/vibespecs`). Reason: GitVerse's public REST API does not expose org-scoped repo creation (`POST /orgs/{org}/repos`), which `vibe registry publish` needs to drive end-to-end. The split is documented in [PROP-000 §7](spec/common/PROP-000.md#registry) and [PROP-002 §2.10](spec/modules/vibe-registry/PROP-002-decentralized-registry.md#publish).
+
+**Token discipline (PROP-000 §20).** Publish-token loader walks: `VIBEVM_PUBLISH_TOKEN` env → `~/.vibevm/<host-prefix>.publish.token` (e.g. `github.publish.token`) → legacy `~/.vibevm/git.publish.token`. Token is **never** displayed in any vibevm-produced output — CLI prints the *source* of the token (env-var name or file path) but never the value; modern git ≥ 2.31 redacts URL passwords in its own logs; `redact_credentials(s)` helper scrubs anything credential-shaped before it reaches a `PublishError` message. Adapter scope: each `RepoCreator` impl refuses operations outside the org named in the project's `[[registry]].url`.
+
+The most recent commit chain (newest first) covers the migration:
+
+```
+86dfae3 fix(vibe-registry): clone fallback and tag-aware update for GitHub
+6e1bb3a fix(vibe-publish): redact credentials from git error messages
+39a2152 feat(core,cli): rotate DEFAULT_REGISTRY_URL to GitHub vibespecs
+ab0a3d4 feat(vibe-publish,cli): GitHub host adapter and per-host token loader
+72dae08 docs(spec,guides,manual-tests): migrate registry org to GitHub
+```
+
+Plus the WAL/CONTINUE/TASKS/ROADMAP close-out commit landing alongside this file. After that lands, push the slice to `origin/main` (still GitVerse — the project repo doesn't move).
 
 ---
 
 ## Where we are right now
 
-- **Branch:** `main`, ahead of `origin/main` by 1 commit (`36cbf08`). Working tree clean.
-- **Latest checkpoint:** GitVerse API discovery + `gitverse.rs` correction landed (commit `36cbf08`). Phase A code complete.
-- **Workspace health:** 12 crates, ~169 tests green, clippy clean with `-D warnings`. Last full run before this checkpoint.
-- **Next operation:** **wait for owner to manually create three repos on GitVerse** (see blocker), then run `vibe registry publish` for each. Non-routine per CLAUDE.md Rule 4 — needs explicit sign-off before push.
+- **Branch:** `main`. Working tree is the close-out commits + this CONTINUE rewrite.
+- **Latest checkpoint:** `86dfae3 fix(vibe-registry): clone fallback and tag-aware update for GitHub` (the second of the bug-fixes that surfaced during the live-migration smoke).
+- **Workspace health:** 12 crates, ~210+ tests green, clippy clean with `-D warnings`. `vibe-publish` alone has 30 unit tests covering host adapter selection, token redaction (including `Token::Display` / `Debug` invariants and the new `redact_credentials` helper), scope-violation guards, and per-host token-file precedence.
+- **Live state:** three GitHub repos exist, populated, tagged. Smoke ran end-to-end against the live host inside the migration session; the markdown protocol in `manual-tests/M1.5-gate-v2-per-package-smoke.md` is the same shape, just not formally walked top-to-bottom this session — see "Optional follow-up" below.
 
 ---
 
-## The current blocker — manual repo creation on GitVerse
+## What changed in the migration slice
 
-**Symptom.** Calling `POST /orgs/vibespecs/repos` (Gitea-canonical org-scoped repo creation) against `https://api.gitverse.ru` returns either 404 (with no `gitverse-api-version` response header → not a real route) or a WAF 403, depending on the request shape. The GitVerse public-API documentation index lists only `POST /user/repos` for repo creation; org-scoped creation is not exposed.
+### 1. The split-host posture (PROP-000 §7)
 
-**Why we don't auto-fall-back to `/user/repos`.** Repos created via `/user/repos` belong to the authenticating *user*, not to the `vibespecs` org. There is no documented API to *transfer* a repo from a user namespace into an org namespace on GitVerse. Burning a user-namespace repo and re-creating in the org via web UI later is a worse UX than having the operator create the org repo directly on the web.
+The vibevm project source repository (`anarchic/vibevm`) and the package registry organization (`vibespecs`) live on **separate hosts** by deliberate decision. PROP-000 §7 carries the long-form rationale; the short version:
 
-**Workaround.** Manual pre-create on the GitVerse web UI:
+- vibevm tool source stays on **GitVerse** — contributor SSH keys, mirroring posture, Russian-jurisdiction hosting all already wired.
+- Package registry on **GitHub** — `POST /orgs/{org}/repos` works, `git clone` over public HTTPS works, `git ls-remote --tags` works, the API surface is well-documented and stable.
 
-1. Log in to GitVerse as a member of the `vibespecs` org.
-2. Navigate to `https://gitverse.ru/vibespecs` (or whatever the org page URL is).
-3. Click "New repository". Create three repos, **all empty** (no auto-init, no README, no .gitignore — anything pre-populated will conflict with the publish utility's first push):
-   - `flow-wal`
-   - `flow-sync-from-code`
-   - `flow-atomic-commits`
-4. Visibility: public (the org is the public package registry).
-5. Default branch: `main`.
+`spec/boot/90-user.md` carries the operator-facing version of the rule for this machine.
 
-After step 4 finishes, `vibe registry publish` will work end-to-end: its `repo_exists()` call hits `GET /repos/vibespecs/<repo>` and returns 200, the publisher skips the create-leg, and proceeds to `git init` (in a temp dir) → `git add .` → `git commit` → `git remote add origin <ssh-url>` → `git push -u origin main` → `git tag v0.1.0` → `git push origin v0.1.0`.
+### 2. The token-secrecy invariant (PROP-000 §20)
 
-**If a future GitVerse release exposes org-scoped repo creation:** the place to fix is `crates/vibe-publish/src/gitverse.rs::create_repo` — the request shape there is already Gitea-canonical (`POST /orgs/{org}/repos` with a `CreateRepoBody` JSON body). When GitVerse adds the route, this code starts working transparently with no change.
+Publish tokens / API tokens / future LLM keys are surface secrets. They MUST NOT appear in any human- or machine-readable surface vibevm produces — stdout, stderr, JSON event stream, error messages, panic traces, telemetry, lockfile, committed files, the `.vibe/` cache. The single sanctioned at-rest location is `~/.vibevm/<host>.publish.token` (per-user, chmod-protected). The single sanctioned process-boundary crossing is the host API's `Authorization: Bearer …` header (over TLS) or the `https://x-access-token:<TOKEN>@host/…` URL embed handed to one `git push` invocation (modern git ≥ 2.31 redacts URL passwords in its own log output to `***`).
 
----
+**Operator discipline:** never `cat` / `head` / `tail` / `echo` / `grep` the token file, never paste it into chat / log / shell snippet / video overlay / bug report. The CLI prints `Loaded publish token from <path> (value redacted)` so the operator sees auth provenance without seeing the value.
 
-## Live migration — exact steps (after blocker clears)
+**Adapter scope:** each `RepoCreator` impl is constructed with an `expected_org` and refuses operations targeting any other org. Belt-and-suspenders on top of the CLI boundary that derives the org from the registry URL.
 
-Run these from the repo root after the three GitVerse repos exist.
+PROP-000 Invariant #7 in the bottom-of-document list pins this as a global rule, not a module-local one.
 
-```bash
-# 1. Confirm token.
-test -f ~/.vibevm/git.publish.token && echo "token present"
+### 3. The host adapter pattern (PROP-002 §2.10)
 
-# 2. Build a fresh release binary.
-cargo build --release --workspace
+`RepoCreator` trait gained two methods:
 
-# 3. Dry-run all three.
-./target/release/vibe registry publish fixtures/registry/flow/wal/v0.1.0 --dry-run
-./target/release/vibe registry publish fixtures/registry/flow/sync-from-code/v0.1.0 --dry-run
-./target/release/vibe registry publish fixtures/registry/flow/atomic-commits/v0.1.0 --dry-run
+- `push_url(org, name) -> String` — returns the URL `git push` should target. SSH-auth hosts (GitVerse) return the bare SSH URL; HTTPS-token-auth hosts (GitHub) return the URL with credentials embedded for the duration of the push.
+- `expected_org() -> Option<&str>` — drives the default `validate_scope(org)` guard.
 
-# Expected per dry-run: "Would reuse existing repository `flow-<name>` on `gitverse.ru`"
-# (because the human pre-created them). Then "would push to <ssh-url> and tag v0.1.0".
+Two concrete impls today:
 
-# 4. Apply (drops --dry-run).
-./target/release/vibe registry publish fixtures/registry/flow/wal/v0.1.0
-./target/release/vibe registry publish fixtures/registry/flow/sync-from-code/v0.1.0
-./target/release/vibe registry publish fixtures/registry/flow/atomic-commits/v0.1.0
+- **`GitHubCreator`** (`crates/vibe-publish/src/github.rs`, ~330 lines including tests). `https://api.github.com`, `Authorization: Bearer <T>`, `Accept: application/vnd.github+json`, `X-GitHub-Api-Version: 2022-11-28`, User-Agent `vibe-publish/<crate-version>`. `repo_exists` via `GET /repos/{owner}/{repo}`, `create_repo` via `POST /orgs/{org}/repos` with `auto_init = false`.
+- **`GitVerseCreator`** (`crates/vibe-publish/src/gitverse.rs`, retained). Constructor signature widened to take `expected_org` so the legacy adapter participates in the scope-guard discipline. SSH push URL behaviour preserved (`git@gitverse.ru:<org>/<repo>.git`).
 
-# 5. Walk the per-package smoke.
-$EDITOR manual-tests/M1.5-gate-v2-per-package-smoke.md
-# Follow the protocol; fill in "Last known pass" line on success.
+Adapter selection at the CLI layer: `creator_for_url(org_url, expected_org, token)` factory pulls the host segment from the URL and dispatches. Unknown host → `PublishError::UnsupportedHost` with a clean error message.
 
-# 6. Rotate DEFAULT_REGISTRY_URL.
-$EDITOR crates/vibe-core/src/manifest/project.rs
-# Change line ~284:
-#   pub const DEFAULT_REGISTRY_URL: &str = "git@gitverse.ru:anarchic/vibespecs.git";
-# to:
-#   pub const DEFAULT_REGISTRY_URL: &str = "git@gitverse.ru:vibespecs";
-# (ORG ROOT, not a package repo URL — the per-package URL is derived
-# at fetch time via NamingConvention.)
+### 4. The two latent bugs GitHub flushed out
 
-# 7. Update tests that hard-code the old default and re-run.
-cargo test --workspace
-cargo clippy --workspace --all-targets -- -D warnings
+**Bug 1 — `git archive --remote` is not exposed by GitHub.** GitHub's smart-HTTPS protocol responds with `HTTP 422` and the local git reports `expected ACK/NAK, got a flush packet`. The existing `fetch_file_at_ref` classifier did not match this shape, so the failure landed as `CommandFailed` and the resolver mis-classified the package as missing. Fixed in `git_backend/shell.rs::fetch_file_at_ref`: two new substring matchers (`http 422` + `git archive`, and `git archive` + `expected ack/nak` + `flush packet`) surface `ArchiveUnsupported`. `GitPackageRegistry::fetch_dep_manifest` now catches `ArchiveUnsupported` and falls back to a per-package shallow clone at the requested tag, reading the manifest from the working tree. The clone lands in the same per-package cache directory the install path would use anyway, so the fallback also pre-warms the cache.
 
-# 8. Commit the rotation as ONE commit (Rule 3 — one logical unit).
-#    feat(core): rotate DEFAULT_REGISTRY_URL to vibespecs org root
-#
-# 9. Checkpoint Phase A complete:
-#    - update spec/WAL.md (Phase A done section)
-#    - update ROADMAP.md (M1.1-revision → done; M1.6 active)
-#    - update TASKS.md (close out the live-packages line)
-#    - one commit: docs(wal,roadmap,tasks): Phase A complete
-#
-# 10. git push.
-```
+**Bug 2 — `update()` couldn't reset to a tag ref.** The previous implementation ran `git fetch --prune origin` (no `--tags`) then `git reset --hard origin/<refname>`. That works for branches but not for tags (tags don't get an `origin/` prefix). Per PROP-002 §2.5 every per-package version is a git tag, so the M1.1-revision world is *almost entirely* tag refs. M1.1-monorepo masked the bug because the registry was a single repo with `main` as its only ref of interest. Fix: `update()` now runs `git fetch --prune --tags origin` and tries `refs/tags/<refname>` first, falling back to `origin/<refname>`.
 
-If any step fails, **do not auto-rollback** — `vibe registry publish` is idempotent on its presence check (re-running picks up an existing repo and re-pushes), but a partial migration where one repo is published and two are not is a safe state to investigate from.
+### 5. Per-host token-file precedence
 
----
+`vibe-publish::token::load_token_for_host(host)` walks:
 
-## GitVerse API discovery — findings recorded for posterity
+1. `VIBEVM_PUBLISH_TOKEN` env (highest, useful for CI).
+2. `~/.vibevm/<host-prefix>.publish.token` — per-host file. Prefix is the first label of the host (`github` for `github.com`, `gitverse` for `gitverse.ru`).
+3. `~/.vibevm/git.publish.token` — legacy host-agnostic fallback. Kept so existing GitVerse-only setups keep working without rename.
 
-These findings are baked into `crates/vibe-publish/src/gitverse.rs` (commit `36cbf08`). Reproducing them here so the next session doesn't re-walk the rabbit hole.
+`load_token(host)` is retained as a back-compat alias.
 
-| Field | Wrong (initial guess) | Correct (live-verified) |
-| --- | --- | --- |
-| **Base URL** | `https://gitverse.ru/api/v1` | `https://api.gitverse.ru` |
-| **Auth scheme** | `Authorization: token <T>` (Gitea legacy) | `Authorization: Bearer <T>` |
-| **Accept header** | `application/json` | `application/vnd.gitverse.object+json;version=1` |
-| **Versioning** | URL path (`/v1/`) | Accept header `;version=1` suffix |
-| **Org-scoped repo creation** | `POST /orgs/{org}/repos` (Gitea-canonical) | **Not exposed.** Only `POST /user/repos` documented. |
+### 6. Default registry URL rotation
 
-**Probed shapes that returned WAF 403 / HTML 404 / no version header:**
-
-- `POST gitverse.ru/api/v1/orgs/{org}/repos` — 404 from Next.js frontend (the `gitverse.ru` hostname is a SPA; the API lives on `api.gitverse.ru`).
-- `POST api.gitverse.ru/orgs/{org}/repos` with `Authorization: token <T>` — 401 universally.
-- `POST api.gitverse.ru/orgs/{org}/repos` with `Bearer` and `Accept: application/json` — 400 with empty body, response header `gitverse-api-latest-version: 1` (server hint to ask for `;version=1` in Accept).
-- `POST api.gitverse.ru/orgs/{org}/repos` with correct headers — 404 with WAF response, no `gitverse-api-version` header in response → endpoint not present, not just unauthorized.
-
-**Endpoints that DO work** (and are used by `gitverse.rs` today):
-
-- `GET /repos/{owner}/{repo}` — repo presence check. 200 = exists, 404 = absent, 401/403 = auth issue. Works against an org as `{owner}` (i.e. `GET /repos/vibespecs/flow-wal`).
-
-**Authoritative source of these findings:** the GitVerse public-API docs page at `https://gitverse.ru/docs/public-api/` (read 2026-04-26) and live curl probing of `https://api.gitverse.ru` from this machine.
+`vibe_core::manifest::project::DEFAULT_REGISTRY_URL` rotated from `git@gitverse.ru:anarchic/vibespecs.git` to `https://github.com/vibespecs`. Per-package URLs are derived at fetch time via the `naming` convention (default `kind-name` produces `<org>/<kind>-<name>`). `DEFAULT_REGISTRY_NAME` rotated from generic `default` to descriptive `vibespecs` so fresh `vibe init` projects visibly say which org they target.
 
 ---
 
 ## Repository map
 
 ```
-vibevm/                                 (this repo)
-├── CLAUDE.md / AGENTS.md / GEMINI.md   ← byte-identical, 4 rules + Memory discipline (kept in lockstep)
+vibevm/                                 (this repo — stays on GitVerse)
+├── CLAUDE.md / AGENTS.md / GEMINI.md   ← byte-identical, 4 rules + Memory discipline
 ├── CONTINUE.md                         ← THIS FILE
 ├── CHANGELOG.md
-├── DEV-GUIDE.md / RUNTIME-GUIDE.md     ← contributor / end-user setup docs
+├── DEV-GUIDE.md / RUNTIME-GUIDE.md     ← contributor / end-user setup docs (token paths updated)
 ├── LICENSE.md                          ← proprietary placeholder, target UPL 1.0
 ├── MEMORY.md                           ← pointer to spec/boot/90-user.md
 ├── README.md
 ├── ROADMAP.md
-├── TASKS.md                            ← active work checklist for current slice
+├── TASKS.md
 ├── VIBEVM-SPEC.md                      ← owner-frozen v1.0 spec (do not edit without sign-off)
 │
 ├── crates/                             ← Rust workspace (12 crates)
-│   ├── vibe-core/                      ← manifest types, lockfile, content_hash, capability refs, errors
-│   │   └── src/manifest/project.rs::DEFAULT_REGISTRY_URL  ← line ~284, rotates after smoke passes
+│   ├── vibe-core/
+│   │   └── src/manifest/project.rs::DEFAULT_REGISTRY_URL  ← `https://github.com/vibespecs`
 │   ├── vibe-cli/                       ← `vibe` binary; `commands/{init,install,list,uninstall,registry,version}.rs`
-│   ├── vibe-registry/                  ← Registry trait, ShellGit/GitBackend, GitPackageRegistry, MultiRegistryResolver
-│   ├── vibe-resolver/                  ← DepSolver / DepProvider traits, NaiveDepSolver (DFS), Multi/LocalRegistryProvider adapters
-│   ├── vibe-install/                   ← install plan/apply/register
-│   ├── vibe-publish/                   ← RepoCreator trait, GitVerseCreator, Publisher, Token (redacted)
-│   │   └── src/gitverse.rs             ← API constants documented inline; first-touch file when GitVerse changes
-│   ├── vibe-wire/                      ← JTD-codegen target; src/generated/ populated by `cargo xtask codegen`
+│   │   └── src/commands/registry.rs    ← host-aware adapter selection via creator_for_url()
+│   ├── vibe-registry/
+│   │   ├── src/git_backend/shell.rs    ← classifier recognises GitHub-shape archive failure; update() fetches with --tags
+│   │   └── src/git_package_registry.rs ← fetch_dep_manifest falls back to clone on ArchiveUnsupported
+│   ├── vibe-resolver/
+│   ├── vibe-install/
+│   ├── vibe-publish/
+│   │   ├── src/lib.rs                  ← RepoCreator trait + push_url() + expected_org() + creator_for_url() factory
+│   │   ├── src/github.rs               ← NEW — GitHubCreator
+│   │   ├── src/gitverse.rs             ← retained; constructor takes expected_org
+│   │   ├── src/git_publish.rs          ← redact_credentials() scrubs URLs in error messages
+│   │   └── src/token.rs                ← load_token_for_host() with per-host file precedence
+│   ├── vibe-wire/
 │   ├── vibe-graph/                     ← (M0 placeholder; not active)
 │   ├── vibe-llm/                       ← (M0 placeholder; not active)
 │   └── vibe-check/                     ← (M0 placeholder; not active)
 │
-├── docs/                               ← user / contributor documentation
-│   ├── README.md                       ← index over commands/ + authoring guides
-│   ├── architecture.md                 ← contributor tour (which crate does what, traits, pipelines)
-│   ├── lockfile-format.md              ← exhaustive vibe.lock v2 reference
-│   ├── troubleshooting.md              ← first-aid for every error variant
-│   ├── glossary.md                     ← term lookup + anti-vocabulary
-│   ├── authoring-flow.md               ← per-kind authoring guides (flow / feat / stack)
-│   ├── authoring-feat.md
-│   ├── authoring-stack.md
-│   └── commands/                       ← one reference per shipped subcommand
+├── docs/
+│   ├── README.md
+│   ├── architecture.md
+│   ├── lockfile-format.md
+│   ├── troubleshooting.md
+│   ├── glossary.md
+│   ├── authoring-flow.md / authoring-feat.md / authoring-stack.md
+│   └── commands/
 │       ├── init.md / install.md / list.md / uninstall.md / version.md
-│       └── registry-sync.md / registry-publish.md
+│       ├── registry-sync.md
+│       └── registry-publish.md         ← host-adapter table, per-host token precedence, dry-run scope
 │
-├── manual-tests/                       ← runnable smoke protocols, one .md per scenario
+├── manual-tests/
 │   ├── M1.1-git-registry-smoke.md
 │   ├── M1.5-gate-multi-package-smoke.md
-│   └── M1.5-gate-v2-per-package-smoke.md   ← THE smoke that closes Phase A
+│   └── M1.5-gate-v2-per-package-smoke.md   ← REWRITTEN for the GitHub host
 │
-├── fixtures/                           ← test fixtures
-│   └── registry/                       ← package fixtures (relocated from packages/ — that path now reserved for dogfooding)
-│       └── flow/{wal,sync-from-code,atomic-commits}/v0.1.0/   ← migration source content
+├── fixtures/
+│   └── registry/
+│       └── flow/{wal,sync-from-code,atomic-commits}/v0.1.0/   ← migration source content (still here)
 │
-├── schemas/                            ← JTD wire-contract schemas (7 files)
-│   ├── init_report.jtd.json
-│   ├── install_plan.jtd.json
-│   ├── install_report.jtd.json
-│   ├── list_report.jtd.json
-│   ├── registry_publish_report.jtd.json
-│   ├── registry_sync_report.jtd.json
-│   └── uninstall_report.jtd.json
+├── schemas/                            ← JTD wire-contract schemas
 │
-├── spec/                               ← project specification (PROP / FEAT documents)
-│   ├── WAL.md                          ← project continuation state
-│   ├── boot/                           ← session-boot snippets, read in filename order
-│   │   ├── 00-core.md (user-owned) … 90-user.md (user-owned)
+├── spec/
+│   ├── WAL.md                          ← Phase A close-out checkpoint
+│   ├── boot/
+│   │   ├── 00-core.md (user-owned) … 90-user.md (user-owned, GitHub-aware)
 │   ├── common/
-│   │   └── PROP-000-foundation.md      ← project rules, conventions, §15-§19 = guiding principles
+│   │   └── PROP-000.md                 ← §7 split-host posture, §20 token-secrecy
 │   └── modules/
-│       ├── vibe-registry/
-│       │   ├── PROP-001-git-backend.md  ← partially superseded; ShellGit/GitBackend authoritative
-│       │   └── PROP-002-decentralized-registry.md  ← THE design lock for current refactor
-│       └── …
+│       └── vibe-registry/
+│           ├── PROP-001-git-backend.md
+│           └── PROP-002-decentralized-registry.md  ← §2.10 GitHubCreator alongside GitVerseCreator
 │
 ├── tools/
-│   └── jtd-codegen/                    ← README pins jtd-codegen 0.4.1 install procedure (binary not committed)
+│   └── jtd-codegen/                    ← README pins jtd-codegen install procedure
 │
 ├── refs/                               ← .gitignore'd; reference reading material
-│   └── book/ + cloned reference repos
-│
 ├── xtask/                              ← `cargo xtask codegen` / `check-codegen`
-└── .cargo/config.toml                  ← `xtask` alias
+└── .cargo/config.toml
 ```
+
+---
+
+## The live registry on GitHub
+
+Public read access — no auth needed for `vibe install`. Three repos with `v0.1.0` tags:
+
+```
+$ git ls-remote --tags https://github.com/vibespecs/flow-wal
+8cd45d900275d130425b5733f9845e5612da0fab	refs/tags/v0.1.0
+1c3a1355f023c6dfd610dc73c909012bc83f9784	refs/tags/v0.1.0^{}
+
+$ git ls-remote --tags https://github.com/vibespecs/flow-sync-from-code
+e1f8f7a187ac6124542ac05d3dce909e9b989c5f	refs/tags/v0.1.0
+a620157d628187f7f72bf3a5dc8ba1617e700067	refs/tags/v0.1.0^{}
+
+$ git ls-remote --tags https://github.com/vibespecs/flow-atomic-commits
+141ec8fd4a3ff9901c2fb601a1f5955b5f82fdd9	refs/tags/v0.1.0
+d7651203497eb1e5f3fea5fe16c15a4906d361d7	refs/tags/v0.1.0^{}
+```
+
+Peeled commit SHAs (`^{}` suffix) are what the consumer-side install ends up at. If these change without a corresponding new release commit, that's a force-push and `content_hash` will mismatch on the next install — by design, the integrity check fails hard rather than silently substitute content.
+
+**Lockfile shape after install (verified end-to-end on 2026-04-29):**
+
+```toml
+[[package]]
+kind = "flow"
+name = "wal"
+version = "0.1.0"
+registry = "vibespecs"
+source_url = "https://github.com/vibespecs/flow-wal.git"
+source_ref = "v0.1.0"
+content_hash = "sha256:8136ecdbc25d4555cbab6e9574f153b252a05c62b55b5e0255def645458c9544"
+```
+
+Same shape for `flow-sync-from-code` (`content_hash = sha256:6b02b4dd…`) and `flow-atomic-commits` (`content_hash = sha256:60354a7e…`).
 
 ---
 
@@ -220,57 +219,69 @@ vibevm/                                 (this repo)
 
 These are the load-bearing architectural and policy decisions made or restated during this conversation. Each is "settled" — don't unpick without owner discussion.
 
-1. **Decentralized per-package registry** (PROP-002). One git repo per package, default naming `<kind>-<name>` under an org, versions are git tags. No monorepo registry. Avoids Nix-style host vendor lock-in (Nix → GitHub) at the design layer.
+1. **Decentralized per-package registry** (PROP-002). One git repo per package, default naming `<kind>-<name>` under an org, versions are git tags. Avoids Nix-style host vendor lock-in at the design layer.
 
-2. **Identity is content-hashed, URLs are informational.** A package's identity tuple is `(kind, name, version, content_hash)`. The `source_url` recorded in the lockfile is for human debuggability and tooling, not for resolution. Content hash is verified on every fetch. Mirror-switching, host-migration, repo-rename never churn the lockfile.
+2. **Identity is content-hashed, URLs are informational.** A package's identity is `(kind, name, version, content_hash)`. The migration from GitVerse to GitHub mid-Phase-A tested this in anger — `source_url` rotates, `content_hash` does not.
 
-3. **`[[registry]]` array in `vibe.toml`** — never a singleton. Backed by serde alias on the v1 form. Priority-ordered. `[[mirror]]` and `[[override]]` are siblings, not nested. Schema is fully shipped in Phase A; runtime mirror dispatch lands in Phase B (M1.6).
+3. **Split-host posture** (PROP-000 §7, decided 2026-04-29). vibevm source on GitVerse, registry org on GitHub. Each host chosen on its own merits. The vibevm project itself is **not** moving.
 
-4. **Lockfile schema v2** carries full provenance: `registry`, `source_url`, `source_ref`, `resolved_commit`, `content_hash`, `dependencies`, `overridden` per package; `[meta]` carries `schema_version`, `solver`, `root_dependencies`. v1 lockfiles auto-migrate on next write via serde aliases + defaulted fields. No flag day.
+4. **`[[registry]]` array in `vibe.toml`** — never a singleton. Backed by serde alias on the v1 form. Priority-ordered. `[[mirror]]` and `[[override]]` are siblings, not nested. Schema is fully shipped in Phase A; runtime mirror dispatch lands in Phase B (M1.6).
 
-5. **Capability-based deps from day one**, not shoehorned in later. Manifests use `[provides]` / `[requires]` / `[[requires_any]]` / `[obsoletes]` / `[conflicts]` — all *semantic*, all *enforced* by the resolver. Legacy `[dependencies]` compact form migrates transparently. PROP-000 §18 sets the bar at "complexity ≥ RPM".
+5. **Lockfile schema v2** carries full provenance: `registry`, `source_url`, `source_ref`, `resolved_commit`, `content_hash`, `dependencies`, `overridden` per package; `[meta]` carries `schema_version`, `solver`, `root_dependencies`. v1 lockfiles auto-migrate on next write.
 
-6. **Three guiding principles** landed in PROP-000 §15-§19:
-   - §15 **Dependency weight is not a decision factor** — pick best-in-class library, reject only on license / abandonment / security / bad API.
-   - §16 **JTD + codegen by default** for wire contracts (CLI `--json` events, API clients, future LLM provider wrappers).
-   - §17 **Production architecture in the prototype phase** — Google-principal-engineer lens. Load-bearing surfaces ship production-quality (lockfile, registry protocol, dep-resolver, wire formats).
-   - §18 **Complexity ≥ RPM** for the dep model from day one (capability-based, virtual-package-aware, disjunctions).
-   - §19 **Load-bearing setup docs** (`DEV-GUIDE.md` / `RUNTIME-GUIDE.md`) at repo root; any toolchain / prereqs / env / paths change updates them in the same commit.
+6. **Capability-based deps from day one.** PROP-000 §18 sets the bar at "complexity ≥ RPM".
 
-7. **Memory discipline** (CLAUDE.md / AGENTS.md / GEMINI.md "Memory discipline" section). Project facts (design, conventions, decisions, milestones, owner preferences governing technology choices) live **inside this repository**. Tool-specific global per-user auto-memory holds **only machine-local facts** (shell quirks, SSH-agent setup on this box). Default when uncertain: write to repo, not to global.
+7. **Six guiding principles** in PROP-000:
+   - §15 Dependency weight is not a decision factor.
+   - §16 JTD + codegen by default for wire contracts.
+   - §17 Production architecture in the prototype phase.
+   - §18 Complexity ≥ RPM.
+   - §19 Load-bearing setup docs.
+   - §20 Token secrecy and adapter scope (NEW 2026-04-29).
 
-8. **`DepSolver` trait + first impl `NaiveDepSolver`.** DFS, no backtracking — covers today's all-empty-deps fixtures and any first-cut realistic graph. `resolvo` (BSD-3-Clause, Pixi/Rattler-scale) and `libsolv` slots reserved behind the same trait. Switching solvers is a one-impl change, not a rewrite.
+8. **Memory discipline** (CLAUDE.md / AGENTS.md / GEMINI.md). Project facts in repo, machine-local in user-memory.
 
-9. **`RepoCreator` trait + first impl `GitVerseCreator`.** Future GitHub / Gitea / Forgejo adapters land behind the same trait. `Publisher` orchestrator does the version-aware push + tag work and is host-agnostic.
+9. **`DepSolver` trait + first impl `NaiveDepSolver`** (DFS, no backtracking). `resolvo` and `libsolv` slots reserved.
 
-10. **`GitBackend` trait + `ShellGit` shell-out.** No in-process libgit2 / gitoxide dependency for now (PROP-001 §2.1 — size argument pruned per PROP-000 §15; Windows SSH-auth and diagnostic clarity still carry the call).
+10. **`RepoCreator` trait + two impls** (`GitHubCreator`, `GitVerseCreator`). Adapter pattern; new hosts land as one new impl.
 
-11. **Token redaction.** `vibe_publish::Token::Display` / `Debug` print `<redacted>`; bare `value()` accessor is the single de-redacted path. CLI prints token *source* (explicit / env / file path) but never the value.
+11. **`GitBackend` trait + `ShellGit` shell-out.** No in-process libgit2 / gitoxide.
 
-12. **GitVerse public-API surface, live-verified.** Base `https://api.gitverse.ru`, `Authorization: Bearer <T>`, `Accept: application/vnd.gitverse.object+json;version=1`. Endpoints: `GET /repos/{org}/{repo}` works; `POST /orgs/{org}/repos` documented at Gitea but not exposed by GitVerse (workaround: manual web-UI create). Documented inline in `gitverse.rs` and in this CONTINUE.md.
+12. **Token redaction** (PROP-000 §20). `Token::Display` / `Debug` print `***`; `redact_credentials(s)` scrubs URLs in error messages; CLI prints token *source* only.
 
-13. **Cache layout** per PROP-002 §2.6: `~/.vibe/registries/<canonical-url-hash>/packages/<kind>-<name>/clone/` for registry-served entries, `<hash>/__overrides__/<kind>-<name>/clone/` for override-served. `VIBE_REGISTRY_CACHE` env-var overrides root.
+13. **GitVerse public-API surface, live-verified 2026-04-26.** Base `https://api.gitverse.ru`, Bearer auth, versioned Accept header. `GET /repos/{org}/{repo}` works; `POST /orgs/{org}/repos` does not — the trigger for the host migration.
 
-14. **Manual-test protocol.** Runnable smoke-tests in `manual-tests/`, one file per scenario, clean-slate setup + teardown. PROP-000 §14. The Phase A close-out is gated by `M1.5-gate-v2-per-package-smoke.md` passing.
+14. **GitHub public-API surface, live-verified 2026-04-29.** Base `https://api.github.com`, Bearer auth, `Accept: application/vnd.github+json`, `X-GitHub-Api-Version: 2022-11-28`. Both endpoints work; `git archive --remote` is *not* exposed (HTTP 422), handled by clone fallback.
 
-15. **Conventional Commits + group by meaning + human-only attribution + autonomy on routine only.** Rules 1-4 in CLAUDE.md / AGENTS.md / GEMINI.md, authoritative in PROP-000 §12.
+15. **Cache layout** per PROP-002 §2.6: `~/.vibe/registries/<canonical-url-hash>/packages/<kind>-<name>/clone/`. Bucket-hash now keys off `https://github.com/vibespecs` after the rotation.
 
-16. **Default registry URL** lives at `vibe_core::manifest::project::DEFAULT_REGISTRY_URL` — single source of truth. Currently `git@gitverse.ru:anarchic/vibespecs.git` (legacy monorepo). Rotates to `git@gitverse.ru:vibespecs` (org root) after Phase A smoke passes. **NB:** the rotation target is the *org root*, not a per-package URL — per-package URLs are derived at fetch time via `NamingConvention`.
+16. **Manual-test protocol** (PROP-000 §14). Runnable smoke-tests in `manual-tests/`, one file per scenario.
 
-17. **JTD toolchain is scaffolded but not yet driving any consumer.** Schemas land documentation-quality first; structs migrate to JTD-derived types incrementally as consumers are touched. Manual install of `jtd-codegen` 0.4.1 per `tools/jtd-codegen/README.md` before `cargo xtask codegen` is run.
+17. **Conventional Commits + group by meaning + human-only attribution + autonomy on routine only.** Rules 1-4 in CLAUDE.md.
 
-18. **Linguistic vocabulary lock.** Only `flow`, `feat`, `stack`, `tool` for package kinds. Never `lifecycle`, `phase`, `goal`, `plugin` (except as passing synonym for `package`). Anti-vocabulary catalogued in `docs/glossary.md`.
+18. **Default registry URL** lives at `vibe_core::manifest::project::DEFAULT_REGISTRY_URL` — single source of truth. Now `https://github.com/vibespecs`.
 
-19. **Live migration is non-routine** per CLAUDE.md Rule 4 — it creates real public artefacts in a public org and was the first GitVerse-API exercise. Owner sign-off required before any push.
+19. **JTD toolchain** is scaffolded but not yet driving any consumer. Manual install of `jtd-codegen` per `tools/jtd-codegen/README.md` before `cargo xtask codegen` is run.
 
-20. **Legacy registry stays read-only.** `git@gitverse.ru:anarchic/vibespecs.git` (HEAD `2203239`, 2026-04-23, three v0.1.0 flows) keeps existing for projects still on schema-v1 lockfiles. No new publishes there.
+20. **Linguistic vocabulary lock.** Only `flow`, `feat`, `stack`, `tool` for package kinds. Anti-vocabulary catalogued in `docs/glossary.md`.
+
+21. **Live migration is non-routine** per CLAUDE.md Rule 4 — owner sign-off was given for the GitHub publish run on 2026-04-29.
+
+22. **Legacy registries kept readable.** `git@gitverse.ru:anarchic/vibespecs.git` (HEAD `2203239`) for projects still on schema-v1 lockfiles.
 
 ---
 
-## Recent commit chain (last 25, most-recent first)
+## Recent commit chain (last ~20, most-recent first)
 
 ```
-36cbf08 feat(vibe-publish): correct GitVerse API surface from live probing  ← unpushed at checkpoint
+86dfae3 fix(vibe-registry): clone fallback and tag-aware update for GitHub
+6e1bb3a fix(vibe-publish): redact credentials from git error messages
+39a2152 feat(core,cli): rotate DEFAULT_REGISTRY_URL to GitHub vibespecs
+ab0a3d4 feat(vibe-publish,cli): GitHub host adapter and per-host token loader
+72dae08 docs(spec,guides,manual-tests): migrate registry org to GitHub
+e874f97 docs(continue,wal): cold-resume checkpoint, GitVerse API findings
+7573455 docs(claude,agents,gemini): session-end checkpoint command spec
+36cbf08 feat(vibe-publish): correct GitVerse API surface from live probing
 3e6e071 docs(glossary): vocabulary reference + anti-vocabulary
 1ef9806 chore(git): linguist overrides for repo-page language stats
 5731b2a test(cli): help-text smoke and version-flag parity
@@ -283,50 +294,35 @@ db0d754 feat(install): content_hash integrity check on plan, ContentDrift error
 439e601 docs(authoring): per-kind authoring guides for flow / feat / stack
 4b7eb09 docs(commands): reference pages for every shipped CLI subcommand
 ee02bc0 feat(schemas): JTD schemas for every CLI --json wire format
-10c8511 docs(wal,tasks): checkpoint Phase A code slice complete
-d803d1f test(manual): M1.5-gate v2 per-package registry smoke protocol
-bdb1e93 chore(fixtures): relocate packages/ → fixtures/registry/
-028b61b build(tools): JTD codegen scaffolding — xtask, schemas/, vibe-wire crate
-6ce2ed2 feat(vibe-publish): RepoCreator trait + GitVerseCreator + vibe registry publish
-3798088 feat(install): transitive install via NaiveDepSolver, populate lockfile deps
-e044058 feat(vibe-resolver): DepSolver trait + NaiveDepSolver + provider adapter
-4742885 docs(tasks): mark per-package registry sync done
-766a949 feat(registry): per-package vibe registry sync
-88df86c feat(install): switch CLI to MultiRegistryResolver, populate lockfile v2
-b512ea2 refactor(registry): thread lockfile-v2 provenance through CachedPackage
-05ae222 feat(registry): MultiRegistryResolver — priority + override + mirror schema
 ```
 
-Together, this chain delivers the entirety of Phase A: schema migration (vibe.toml v2, vibe.lock v2, capability deps), depsolver layer, multi-registry resolver, per-package registry runtime, publish utility, JTD scaffolding, fixture relocation, manual-test protocol, all user/contributor docs, plus the GitVerse API correction. Total workspace state: 169+ tests green, clippy clean.
+The top five commits are the entire migration slice — spec amendments, code, default rotation, two security/correctness fixes, and (this commit) the close-out.
 
 ---
 
 ## Quick-start commands
 
 ```bash
-# Workspace health check.
+# Workspace health.
 cargo test --workspace
 cargo clippy --workspace --all-targets -- -D warnings
 
-# Scaffold a project.
+# Scaffold a project against the GitHub-hosted vibespecs registry.
 cargo run -p vibe-cli -- init --path /tmp/demo
 
-# Install a package (transitive resolve via NaiveDepSolver, lockfile v2).
+# Install a package (resolves from https://github.com/vibespecs/flow-wal).
 cargo run -p vibe-cli -- install flow:wal --path /tmp/demo
 
 # List installed packages.
 cargo run -p vibe-cli -- list --path /tmp/demo
 
-# Refresh per-package clones (registry sync).
+# Refresh per-package clones.
 cargo run -p vibe-cli -- registry sync --path /tmp/demo
 
-# Publish a package (maintainers; needs ~/.vibevm/git.publish.token).
+# Publish a package (maintainers; reads token from
+# ~/.vibevm/github.publish.token without echoing the value).
 cargo run -p vibe-cli -- registry publish fixtures/registry/flow/wal/v0.1.0 --dry-run
 cargo run -p vibe-cli -- registry publish fixtures/registry/flow/wal/v0.1.0
-
-# JTD codegen (after one-time install per tools/jtd-codegen/README.md).
-cargo xtask codegen
-cargo xtask check-codegen
 ```
 
 ---
@@ -338,43 +334,48 @@ cargo xtask check-codegen
 - **Memory discipline:** project facts in repo, machine-local in user-memory.
 - **Setup-docs obligation** (PROP-000 §19): toolchain / prereqs / env / paths changes → `DEV-GUIDE.md` or `RUNTIME-GUIDE.md` in same commit.
 - **Vocabulary lock:** `flow` / `feat` / `stack` / `tool`; never `lifecycle` / `phase` / `goal` / `plugin`.
+- **Token secrecy** (PROP-000 §20): never display, never persist, never commit.
+- **Adapter scope:** RepoCreators refuse operations outside the configured org.
 - **User-owned files** (`vibe install` / `uninstall` never modifies): `spec/boot/00-core.md`, `spec/boot/90-user.md`, `spec/WAL.md`, `VIBEVM-SPEC.md`, `refs/book/**`, any 00-09 or 90-99 boot file.
 - **License hygiene:** permissive only (MIT / Apache-2.0 / BSD / Unlicense; MPL-2.0 case-by-case; GPL/AGPL/LGPL forbidden).
-- **Manifest format:** TOML for human-edited (`vibe.toml`, `vibe.lock`, `vibe-package.toml`); JTD+codegen for wire contracts.
-- **REVIEW marker discipline:** when the spec is silent, pick the conservative interpretation, mark with `<!-- REVIEW: … -->`, surface in the session report.
-- **`refs/` is gitignored** — book + cloned reference repos.
+- **Manifest format:** TOML for human-edited; JTD+codegen for wire contracts.
 
 ---
 
 ## Beyond Phase A — what comes next
 
-Once Phase A closes (live migration done, smoke passes, `DEFAULT_REGISTRY_URL` rotated, WAL/ROADMAP/TASKS checkpointed):
+- **M1.2 — `vibe update`.** Lock-aware version bumping, respecting capability/conflict constraints.
+- **M1.3 — `vibe check`.** Constraint validation against the current lockfile + manifest.
+- **M1.4 — `vibe show`.** Inspector for installed packages.
+- **M1.5 — `vibe build`.** Compose a flow set into a runnable target.
+- **M1.6 — multi-registry polish (Phase B of decentralized-registry refactor).** Live mirror dispatch, `vibe vendor` generator, `vibe registry add/list/set-mirror`, GitHub/Gitea/Forgejo publish adapters on demand.
+- **JTD struct migration sweep.** Hand-rolled `Serialize` structs in `vibe-cli` swap to `vibe-wire::generated::*` types.
+- **Supply-chain attestation.** Out of M1 scope.
 
-- **M1.2 — `vibe update`.** Lock-aware version bumping, respecting capability/conflict constraints. Depsolver drives it.
-- **M1.3 — `vibe check`.** Constraint validation against the current lockfile + manifest; reports missing capabilities, conflict detections, dirty pkgrefs.
-- **M1.4 — `vibe show`.** Inspector for installed packages — manifest, dependency tree, source provenance, content_hash trail.
-- **M1.5 — `vibe build`.** Compose a flow set into a runnable target (depends on `stack` semantics; gates on a working stack package).
-- **M1.6 — multi-registry polish (Phase B of decentralized-registry refactor).** Live mirror dispatch, `vibe vendor` generator for offline mirrors, `vibe registry add/list/set-mirror` CLI surface, GitHub/Gitea/Forgejo publish adapters on demand. Parts of this depend on a second live registry being available, which depends on the v0.1.0 flows being on the new org first.
-- **JTD struct migration sweep.** Hand-rolled `Serialize` structs in `vibe-cli` swap to `vibe-wire::generated::*` types one consumer at a time. Triggered by anyone touching the consumer.
-- **Supply-chain attestation (sigstore or equivalent).** Out of M1 scope, noted as architectural-allowance-now.
+## Optional follow-ups (left for next session)
+
+- Walk `manual-tests/M1.5-gate-v2-per-package-smoke.md` top-to-bottom against the live GitHub host and fill in the "Last known pass" line at the top of the file.
+- Schedule a recurring background agent to verify the `vibespecs` org on GitHub stays reachable and the v0.1.0 tags don't drift (peeled SHAs as of 2026-04-29 recorded above and in WAL).
+- Migrate hand-rolled `Serialize` structs to `vibe-wire::generated::*` once `cargo xtask codegen` is exercised against the JTD schemas in `schemas/`.
 
 ---
 
 ## Things to be careful about (not blockers, but easy to slip on)
 
 - **Don't `git push --force` to `main`.** Rule 4. If you need to rewrite published history, ask the owner first.
-- **Don't auto-attribute commits to AI.** Rule 1. No `Co-Authored-By` trailers, no model-name in commit bodies, branches, or code comments. Single project-wide exception: this paragraph and its copy in PROP-000 §12.1 (the rule itself) are allowed to *discuss* AI tooling.
-- **Don't edit `VIBEVM-SPEC.md`** without owner sign-off — owner-frozen.
-- **Don't commit `refs/`** content — it's reference reading.
-- **Don't put project-scoped facts in user-memory.** Memory discipline. Project facts go to the repo.
-- **Don't pre-populate the GitVerse repos** before manual creation (no auto-init, no README, no .gitignore). The publisher's first push will conflict.
-- **Don't skip the smoke before rotating `DEFAULT_REGISTRY_URL`.** That value steers every new project's `vibe init`. Rotating before the new registry actually works strands users.
+- **Don't auto-attribute commits to AI.** Rule 1.
+- **Don't edit `VIBEVM-SPEC.md`** without owner sign-off.
+- **Don't commit `refs/`** content.
+- **Don't put project-scoped facts in user-memory.**
+- **Don't ever print, paste, or screenshot the publish token.** PROP-000 §20.
+- **Don't construct a `RepoCreator` without `expected_org`** — the scope guard is the second line of defence; bypassing it would be a regression.
+- **Don't widen the API surface of `RepoCreator`** without checking how `Token` flows through every method — the trait is intentionally narrow so review can audit token paths exhaustively.
 
 ---
 
 ## If something has changed since this checkpoint
 
-This file is frozen at 2026-04-26. Before acting on it:
+This file is frozen at 2026-04-29 (Phase A close-out). Before acting on it:
 
 - Re-read `spec/WAL.md` (it gets updated more often than this file does — and at session-end it gets updated at the same time).
 - `git log origin/main..HEAD --oneline` to see what's local.

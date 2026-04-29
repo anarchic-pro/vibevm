@@ -3,7 +3,15 @@ _Updated: 2026-04-29_
 
 ## Current phase
 
-**M1.1-revision — decentralized per-package registry refactor. Phase A code slice complete; live migration of the three demo packages into the `vibespecs` org is in progress on the new host. Registry organization migrated from GitVerse to GitHub on 2026-04-29 due to a missing GitVerse REST API endpoint — see "Host migration to GitHub" below. The vibevm tool source itself stays on GitVerse; only the registry org moves.**
+**M1.1-revision Phase A — DONE (2026-04-29).** Decentralized per-package registry shipped end-to-end on its production host. All three v0.1.0 demo flows (`flow:wal`, `flow:sync-from-code`, `flow:atomic-commits`) live at `https://github.com/vibespecs/flow-<name>` with `v0.1.0` tags; a fresh `vibe init` → `vibe install flow:wal` / `flow:sync-from-code` / `flow:atomic-commits` resolves all three, populates lockfile v2, refreshes per-package clones via `vibe registry sync`. Registry org migrated from GitVerse to GitHub on 2026-04-29 because GitVerse's public REST API does not expose org-scoped repo creation; `GitHubCreator` adapter behind the existing `RepoCreator` trait drives the publish flow against `POST /orgs/{org}/repos`. The vibevm tool source itself stays on GitVerse — only the registry org moves.
+
+**Phase A close-out summary:**
+
+- 6 commits since the prior checkpoint: `docs(spec,guides,manual-tests)` migration policy → `feat(vibe-publish,cli)` GitHub adapter + per-host token loader → `feat(core,cli)` `DEFAULT_REGISTRY_URL` rotation → `fix(vibe-publish)` credential redaction in error messages → `fix(vibe-registry)` clone-fallback + tag-aware update → this WAL checkpoint.
+- 3 live publishes performed (`https://github.com/vibespecs/flow-wal`, `flow-sync-from-code`, `flow-atomic-commits`), each tagged `v0.1.0`. Token never displayed in any output, log line, error message, or commit body during the run.
+- Cargo workspace stays green: `cargo test --workspace` (~210 tests across the workspace, 30 in `vibe-publish` alone covering host adapter selection, token redaction, scope-violation guards), `cargo clippy --workspace --all-targets -- -D warnings` clean.
+
+**Next milestone:** M1.6 (multi-registry polish — Phase B of the decentralized-registry refactor). M1.5-gate docs landed; M1.2 / M1.3 / M1.4 still open.
 
 The M1.1 monorepo-shaped registry (one `anarchic/vibespecs` repo, `<kind>/<name>/v<ver>/` directories, `[registry]` singleton in `vibe.toml`) was replaced — at the design level — with a decentralized per-package model before any downstream consumer is at risk of being locked into it. Full design lock lives in [PROP-002](modules/vibe-registry/PROP-002-decentralized-registry.md).
 
@@ -133,23 +141,27 @@ since the documentation checkpoint:
 - **`docs(claude,agents,gemini): session-end checkpoint command spec`** (2026-04-26) — `ЗАВЕРШИ СЕССИЮ` / `END SESSION` and variants now drive a defined wind-down: overwrite `CONTINUE.md`, update this WAL, commit + push, emit TL;DR. Section lives at the bottom of all three boot files (kept byte-identical).
 - **`docs(continue): cold-resume checkpoint at root`** (2026-04-26) — comprehensive `CONTINUE.md` written so any next session can pick up Phase A from cold without re-deriving GitVerse API findings, repo map, or decision history.
 
+### Phase A close-out — live migration to GitHub (2026-04-29)
+
+- **`docs(spec,guides,manual-tests): migrate registry org to GitHub`** (`72dae08`) — PROP-000 §7 split-host posture (vibevm source on GitVerse, registry org on GitHub), PROP-000 §20 token-secrecy invariant, PROP-002 §2.10 host-adapter selection + `RepoCreator::push_url` + per-host token loader, WAL/boot 90-user/ROADMAP/RUNTIME-GUIDE/DEV-GUIDE/docs/commands updates, manual-test rewritten for the GitHub host.
+- **`feat(vibe-publish,cli): GitHub host adapter and per-host token loader`** (`ab0a3d4`) — `GitHubCreator` against `https://api.github.com` with the canonical `Accept: application/vnd.github+json` and `X-GitHub-Api-Version: 2022-11-28` headers, scope-guarded `RepoCreator::expected_org` / `validate_scope`, `creator_for_url(...)` factory, per-host token-file precedence (`~/.vibevm/github.publish.token` first, legacy `git.publish.token` last), CLI host-aware adapter selection.
+- **`feat(core,cli): rotate DEFAULT_REGISTRY_URL to GitHub vibespecs`** (`39a2152`) — single-source-of-truth constant moves to `https://github.com/vibespecs`; default registry name from `default` to `vibespecs`.
+- **`fix(vibe-publish): redact credentials from git error messages`** (`6e1bb3a`) — `redact_credentials(s)` helper closes a leak vector where `args.join(" ")` and `clone_url.to_string()` baked credentialed push URLs into `PublishError::Git` / `PushDenied` / `HostUnreachable` / `TagCollision` variants. Six unit tests pin the redaction.
+- **`fix(vibe-registry): clone fallback and tag-aware update for GitHub`** (`86dfae3`) — two latent M1.1-revision bugs surfaced by GitHub: `git archive --remote` is not exposed by GitHub (returns HTTP 422 + flush-packet), so `fetch_dep_manifest` now falls back to a per-package shallow clone on `ArchiveUnsupported`; `update()` couldn't reset to a tag because `origin/<tag>` doesn't exist as a remote-tracking branch, so it now fetches with `--tags` and tries `refs/tags/<ref>` before `origin/<ref>`.
+- **Live migration applied (3 publishes):** `https://github.com/vibespecs/flow-wal`, `flow-sync-from-code`, `flow-atomic-commits` each tagged `v0.1.0`. Token loaded from `~/.vibevm/github.publish.token`, never displayed. End-to-end smoke verified: anonymous `vibe init` → install all three → lockfile v2 with `registry = "vibespecs"` / GitHub `source_url`s / `content_hash`s populated; `vibe registry sync` refreshes 3, skips 0; `vibe list` shows three packages.
+
 ## Next
 
-**Live migration of the three v0.1.0 demo flows into `vibespecs/<kind>-<name>` on GitHub via `vibe registry publish`.** Non-routine (creates real public artefacts in a new org, first GitHub-API exercise). Procedure once the host-migration code slice merges:
+**Phase A is closed.** M1.6 (Phase B of the decentralized-registry refactor — polished multi-registry / mirror dispatch, `vibe vendor` for offline mirrors, richer publish adapters) becomes the next active milestone. M1.2 (`vibe update`), M1.3 (`vibe check`), M1.4 (`vibe show …`) are open in their original positions in the roadmap. M1.5-gate docs landed.
 
-1. **Workspace stays green.** `cargo test --workspace`, `cargo clippy --workspace --all-targets -- -D warnings`. The new `GitHubCreator` has unit-test coverage parallel to `GitVerseCreator`; the token loader's per-host file precedence is unit-tested; redaction tests are present.
-2. **Confirm the publish token** is at `~/.vibevm/github.publish.token` (1-line file containing the GitHub PAT with `repo` scope on the `vibespecs` org). The token is **never** echoed at any step — neither by the operator nor by the publisher. CLI prints `Loaded publish token from <path> (value redacted)`.
-3. **Build release:** `cargo build --release --workspace`.
-4. **Dry-run each package:** `./target/release/vibe registry publish fixtures/registry/flow/<name>/v0.1.0 --dry-run` for `wal`, `sync-from-code`, `atomic-commits`. Each must report `Would create repository 'flow-<name>' on 'github.com'` (since the new org is empty) and the synthetic clone URL `https://github.com/vibespecs/flow-<name>.git`. Dry-run only exercises `GET /repos/...`; no writes happen.
-5. **Apply:** drop `--dry-run`, run for each in turn. The publisher hits `POST /orgs/vibespecs/repos`, receives the new repo metadata, then injects the token into the HTTPS push URL for one `git remote add` / `git push -u origin main` / `git push origin v0.1.0` sequence per package. Token never leaves the running process.
-6. Walk [`manual-tests/M1.5-gate-v2-per-package-smoke.md`](../manual-tests/M1.5-gate-v2-per-package-smoke.md) end to end against the GitHub-hosted org.
-7. WAL / ROADMAP / TASKS checkpoint Phase A complete; M1.6 becomes the next active milestone.
+**Optional follow-up tasks.** Useful but not required to declare Phase A complete:
 
-**Migration scope discipline.** Every operation is bounded to `github.com/vibespecs/*`. The CLI must refuse to create or modify anything outside that org — `RepoCreator` impls perform an explicit org-equality check before issuing any write. Single video-recording session: any token leak (echo, log, paste, dry-run-output, error message) is a hard fail.
+- Smoke-test Last-known-pass line in [`manual-tests/M1.5-gate-v2-per-package-smoke.md`](../manual-tests/M1.5-gate-v2-per-package-smoke.md) — the manual protocol still says "TBD" since the in-session smoke ran an automated bash equivalent, not the full markdown protocol.
+- Schedule a recurring agent to verify the `vibespecs` org on GitHub stays reachable and `v0.1.0` tags don't drift (peeled SHAs as of 2026-04-29: `flow-wal` `1c3a1355`, `flow-sync-from-code` `a620157d`, `flow-atomic-commits` `d76512034`).
 
 Comprehensive cold-resume document (long form, with repo map, decision history, exact recipes) lives at [`CONTINUE.md`](../CONTINUE.md). It is written by the session-end checkpoint command (`ЗАВЕРШИ СЕССИЮ` / `END SESSION`) and supersedes itself wholesale on each invocation; if it disagrees with this WAL, trust the WAL.
 
-**Beyond Phase A.** M1.6 polishes multi-registry / mirror dispatch / `vibe vendor` per [PROP-002](modules/vibe-registry/PROP-002-decentralized-registry.md#phase-b). M1.5-gate docs (`docs/commands/*.md`, `docs/authoring-{flow,feat,stack}.md`) are still open and parallelisable.
+**Beyond Phase A.** M1.6 polishes multi-registry / mirror dispatch / `vibe vendor` per [PROP-002](modules/vibe-registry/PROP-002-decentralized-registry.md#phase-b). M1.5-gate docs (`docs/commands/*.md`, `docs/authoring-{flow,feat,stack}.md`) all landed.
 
 ## Known issues
 

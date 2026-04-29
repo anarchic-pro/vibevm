@@ -53,12 +53,12 @@ Full design locked in [PROP-002](spec/modules/vibe-registry/PROP-002-decentraliz
 
 - [x] `chore(fixtures)`: relocated `packages/` → `fixtures/registry/` via `git mv` (history preserved). Layout intentionally stays M0-monorepo for the LocalRegistry hermetic-fixture path; `cli_e2e::fixture_registry()` updated; `packages/` is now reserved for the future dogfooding tree (vibevm using vibevm).
 - [ ] `test(e2e)`: update `cli_e2e.rs` against the new fixture layout.
-- [ ] `feat(packages-live)`: migrate three v0.1.0 flows to per-package repos in the `vibespecs` organization — `vibespecs/flow-wal`, `vibespecs/flow-sync-from-code`, `vibespecs/flow-atomic-commits` — via `vibe registry publish`. Non-routine (creates public artefacts, first GitVerse API exercise) — needs explicit owner sign-off before push.
+- [x] `feat(packages-live)`: migrate three v0.1.0 flows to per-package repos in the `vibespecs` organization on **GitHub** (org migrated from GitVerse 2026-04-29 due to a missing GitVerse REST API endpoint — see PROP-000 §7 / PROP-002 §2.10). All three published 2026-04-29 via `vibe registry publish`: `https://github.com/vibespecs/flow-wal`, `flow-sync-from-code`, `flow-atomic-commits`, each tagged `v0.1.0`. End-to-end install + sync smoke green.
 - [x] `test(manual)`: `manual-tests/M1.5-gate-v2-per-package-smoke.md` written against the per-package shape; "Last known pass" line filled in after the first successful run against `vibespecs/`. Index in `manual-tests/README.md` updated.
 
 ### Close-out
 
-- [ ] `docs(wal, roadmap, prop-000)`: Phase A checkpoint, 81+ tests green, clippy clean, all new contracts wired.
+- [x] `docs(wal, roadmap, prop-000)`: Phase A checkpoint, 210+ tests green across the workspace (30 in `vibe-publish` covering host adapter selection / token redaction / scope-violation guards), clippy clean, all new contracts wired, live three-package migration to GitHub applied 2026-04-29.
 
 ---
 
