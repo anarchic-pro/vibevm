@@ -229,11 +229,33 @@ impl GitPackageRegistry {
     ) -> Result<PackageManifest, RegistryError> {
         let url = self.package_repo_url(kind, name);
         let tag = format!("v{version}");
-        let bytes = self.backend.fetch_file_at_ref(
+        let bytes = match self.backend.fetch_file_at_ref(
             strip_git_plus_prefix(&url),
             &tag,
             PackageManifest::FILENAME,
-        )?;
+        ) {
+            Ok(bytes) => bytes,
+            Err(GitError::ArchiveUnsupported { .. }) => {
+                // GitHub (and a few other hosts) disable
+                // `upload-archive` server-side, so `git archive --remote`
+                // can't pull a single file without cloning. Fall back to
+                // a per-package shallow clone at the requested tag and
+                // read the manifest from the working tree. Slower than
+                // the archive path but works on every git host that
+                // accepts `git clone`. The clone lands in the same
+                // per-package cache directory the install path would
+                // use anyway, so this is also pre-warming the cache for
+                // the imminent install.
+                self.refresh_package(kind, name, &tag)?;
+                let clone_dir = self.package_clone_dir(kind, name);
+                let manifest_path = clone_dir.join(PackageManifest::FILENAME);
+                fs::read(&manifest_path).map_err(|source| RegistryError::Io {
+                    path: manifest_path.clone(),
+                    source,
+                })?
+            }
+            Err(other) => return Err(other.into()),
+        };
         let text = String::from_utf8(bytes).map_err(|e| RegistryError::MalformedMeta {
             path: PathBuf::from(format!("{url}@{tag}:{}", PackageManifest::FILENAME)),
             reason: format!("invalid UTF-8: {e}"),

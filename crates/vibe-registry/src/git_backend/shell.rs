@@ -131,13 +131,28 @@ impl GitBackend for ShellGit {
 
     fn update(&self, dest: &Path, refname: &str) -> Result<(), GitError> {
         self.preflight()?;
-        // Fetch from origin, then hard-reset the working tree to the
-        // fetched tip. `--hard` is intentional: the registry cache is a
-        // read-only mirror and we want it to match upstream exactly,
-        // never a surprise merge commit.
-        self.run(&["fetch", "--prune", "origin"], Some(dest))?;
-        let ref_arg = format!("origin/{refname}");
-        self.run(&["reset", "--hard", &ref_arg], Some(dest))
+        // Fetch from origin, including tags, then hard-reset the working
+        // tree to the fetched tip. `--hard` is intentional: the registry
+        // cache is a read-only mirror and we want it to match upstream
+        // exactly, never a surprise merge commit. `--tags` is required
+        // because the per-package registry shape (PROP-002 §2.5) uses
+        // tags as versions — without it, freshly-published versions are
+        // invisible to a previously-bootstrapped clone.
+        self.run(&["fetch", "--prune", "--tags", "origin"], Some(dest))?;
+        // Try the tag-form first (PROP-002 §2.5: versions are git tags),
+        // then fall back to the branch-form (legacy GitRegistry path,
+        // and registry-level metadata refs). `refs/tags/<name>` and
+        // `origin/<name>` are both unambiguous fully-qualified refs;
+        // git resolves them without the heuristic-driven ambiguity of a
+        // bare `<name>`. The fallback chain MUST stay in this order
+        // because a `vN.M.K`-shaped tag is what every per-package repo
+        // ships under M1.1-revision.
+        let tag_ref = format!("refs/tags/{refname}");
+        if self.run(&["reset", "--hard", &tag_ref], Some(dest)).is_ok() {
+            return Ok(());
+        }
+        let branch_ref = format!("origin/{refname}");
+        self.run(&["reset", "--hard", &branch_ref], Some(dest))
             .map(|_| ())
     }
 
@@ -223,6 +238,27 @@ impl GitBackend for ShellGit {
                 && (combined_lc.contains("not permitted")
                     || combined_lc.contains("not allowed")
                     || combined_lc.contains("disabled"))
+        {
+            return Err(GitError::ArchiveUnsupported {
+                url: url.to_string(),
+            });
+        }
+        // GitHub disables `upload-archive` server-side. The HTTPS smart
+        // protocol response is `HTTP 422` with the local git complaining
+        // `expected ACK/NAK, got a flush packet` (verified 2026-04-29).
+        // Treat that pattern as ArchiveUnsupported so callers fall back
+        // to a clone — the same path other Gitea-clones / Forgejo /
+        // SourceHut take when they don't expose `upload-archive` either.
+        if (combined_lc.contains("http 422") || combined_lc.contains("error: 422"))
+            && combined_lc.contains("git archive")
+        {
+            return Err(GitError::ArchiveUnsupported {
+                url: url.to_string(),
+            });
+        }
+        if combined_lc.contains("git archive")
+            && combined_lc.contains("expected ack/nak")
+            && combined_lc.contains("flush packet")
         {
             return Err(GitError::ArchiveUnsupported {
                 url: url.to_string(),
