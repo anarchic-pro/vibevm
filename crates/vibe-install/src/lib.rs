@@ -414,6 +414,16 @@ pub fn unregister_installed(
         .ok_or_else(|| InstallError::NotInstalled {
             package: format!("{}:{}", pkgref.kind, pkgref.name),
         })?;
+    // A user-typed root recorded in `[meta].root_dependencies` is the
+    // mirror of what they passed to `vibe install`. Uninstalling that
+    // package drops it from the root list — symmetric with the merge
+    // on the install side. Transitives never appear here, so this is
+    // a no-op for solver-pulled deps. See manual-tests/M1.5-gate-v2-
+    // per-package-smoke.md step 8 for the contract.
+    lockfile
+        .meta
+        .root_dependencies
+        .retain(|r| !(r.kind == pkgref.kind && r.name == pkgref.name));
     lockfile.meta.generated_at = generated_at;
     Ok(removed)
 }
@@ -894,6 +904,39 @@ files = ["../escape.md"]
         let gone = unregister_installed(&mut lockfile, &pkgref, "t2".into()).unwrap();
         assert_eq!(gone.name, "wal");
         assert!(lockfile.packages.is_empty());
+    }
+
+    #[test]
+    fn unregister_drops_root_dependency_entry() {
+        // Roots are recorded by `register_installed` (or by the install
+        // CLI's `merge_root_dependencies`); unregistering must remove
+        // them — the contract `manual-tests/M1.5-gate-v2-per-package-
+        // smoke.md` step 8 depends on.
+        let mut lockfile = Lockfile::empty("vibe-test", "t0");
+        let pkgref = PackageRef::parse("flow:wal").unwrap();
+        let other = PackageRef::parse("flow:atomic-commits").unwrap();
+        lockfile.meta.root_dependencies =
+            vec![pkgref.clone(), other.clone()];
+        lockfile.packages.push(LockedPackage {
+            kind: PackageKind::Flow,
+            name: "wal".into(),
+            version: semver::Version::parse("0.1.0").unwrap(),
+            registry: None,
+            source_url: "file:///fake".into(),
+            source_ref: None,
+            resolved_commit: None,
+            content_hash: "sha256:whatever".into(),
+            boot_snippet: None,
+            files_written: Vec::new(),
+            dependencies: Vec::new(),
+            overridden: false,
+        });
+
+        let _ = unregister_installed(&mut lockfile, &pkgref, "t1".into()).unwrap();
+
+        // `flow:wal` is gone from roots; the unrelated root survives.
+        assert_eq!(lockfile.meta.root_dependencies.len(), 1);
+        assert_eq!(lockfile.meta.root_dependencies[0].name, "atomic-commits");
     }
 
     #[test]
