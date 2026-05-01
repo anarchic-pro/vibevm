@@ -69,6 +69,9 @@ pub enum RegistrySubcommand {
     /// `[[override]]` entries and the host adapter each registry will
     /// dispatch to.
     List(RegistryListArgs),
+
+    /// Add a new `[[registry]]` block to `vibe.toml`.
+    Add(RegistryAddArgs),
 }
 
 #[derive(Debug, clap::Args)]
@@ -80,6 +83,38 @@ pub struct RegistrySyncArgs {
 
 #[derive(Debug, clap::Args)]
 pub struct RegistryListArgs {
+    /// Project root with `vibe.toml`. Defaults to current directory.
+    #[arg(long, default_value = ".")]
+    pub path: PathBuf,
+}
+
+#[derive(Debug, clap::Args)]
+pub struct RegistryAddArgs {
+    /// Local alias for the new registry. Used in lockfile `registry`
+    /// fields and to target `[[mirror]]` / `[[override]]` entries.
+    pub name: String,
+
+    /// Organization-root URL — any git URL `git` accepts
+    /// (`git@host:org`, `ssh://...`, `https://...`).
+    pub url: String,
+
+    /// Registry-level ref (reserved for a future registry-metadata
+    /// branch). Defaults to `main`.
+    #[arg(long = "ref")]
+    pub registry_ref: Option<String>,
+
+    /// Naming convention mapping `<kind>:<name>` to a repo name under
+    /// the org. One of `kind-name` (default), `name`, `kind/name`.
+    #[arg(long = "naming")]
+    pub naming: Option<String>,
+
+    /// Where to insert the new registry in the priority list.
+    /// `primary` makes it the first registry (the new default for
+    /// publish + the first stop on resolve fallback). `append` adds
+    /// it at the end. Defaults to `append`.
+    #[arg(long = "position", default_value = "append")]
+    pub position: String,
+
     /// Project root with `vibe.toml`. Defaults to current directory.
     #[arg(long, default_value = ".")]
     pub path: PathBuf,

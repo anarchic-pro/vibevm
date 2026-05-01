@@ -16,7 +16,7 @@ use std::path::{Path, PathBuf};
 
 use anyhow::{Context, Result, anyhow, bail};
 use serde::Serialize;
-use vibe_core::manifest::{Lockfile, ProjectManifest};
+use vibe_core::manifest::{Lockfile, NamingConvention, ProjectManifest, RegistrySection};
 use vibe_publish::{
     PublishConfig, Publisher, creator_for_url, extract_host_segment, extract_org_segment,
     load_token_for_host,
@@ -24,7 +24,8 @@ use vibe_publish::{
 use vibe_registry::{MultiRegistryResolver, RefreshedVia};
 
 use crate::cli::{
-    RegistryArgs, RegistryListArgs, RegistryPublishArgs, RegistrySubcommand, RegistrySyncArgs,
+    RegistryAddArgs, RegistryArgs, RegistryListArgs, RegistryPublishArgs, RegistrySubcommand,
+    RegistrySyncArgs,
 };
 use crate::output;
 
@@ -33,6 +34,7 @@ pub fn run(ctx: &output::Context, args: RegistryArgs) -> Result<()> {
         RegistrySubcommand::Sync(sub) => run_sync(ctx, sub),
         RegistrySubcommand::Publish(sub) => run_publish(ctx, sub),
         RegistrySubcommand::List(sub) => run_list(ctx, sub),
+        RegistrySubcommand::Add(sub) => run_add(ctx, sub),
     }
 }
 
@@ -414,6 +416,157 @@ fn run_list(ctx: &output::Context, args: RegistryListArgs) -> Result<()> {
     Ok(())
 }
 
+#[derive(Debug, Serialize)]
+struct AddReport {
+    ok: bool,
+    command: &'static str,
+    registry: ListReportRegistry,
+    /// `"primary"` if inserted at index 0, `"append"` if at the tail.
+    /// Mirrors `--position` from the CLI.
+    position: String,
+    /// Total number of `[[registry]]` blocks after the add.
+    total_registries: usize,
+}
+
+/// Parse the `--naming` CLI argument. Mirrors the serde `rename`s on
+/// `NamingConvention` so what users type matches the `vibe.toml`
+/// spelling exactly.
+fn parse_naming(s: &str) -> Result<NamingConvention> {
+    match s {
+        "kind-name" => Ok(NamingConvention::KindName),
+        "name" => Ok(NamingConvention::Name),
+        "kind/name" => Ok(NamingConvention::KindSlashName),
+        other => Err(anyhow!(
+            "unknown naming convention `{other}` — must be one of `kind-name`, `name`, `kind/name`"
+        )),
+    }
+}
+
+fn run_add(ctx: &output::Context, args: RegistryAddArgs) -> Result<()> {
+    let project_root = resolve_project_root(&args.path)?;
+    let manifest_path = project_root.join(ProjectManifest::FILENAME);
+    if !manifest_path.exists() {
+        bail!(
+            "no `vibe.toml` in `{}`; run `vibe init` first",
+            project_root.display()
+        );
+    }
+    let mut manifest = ProjectManifest::read(&manifest_path)
+        .with_context(|| format!("reading `{}`", manifest_path.display()))?;
+
+    // Validation: name must not collide with an existing registry.
+    if manifest.registry_by_name(&args.name).is_some() {
+        bail!(
+            "a `[[registry]]` named `{}` already exists in `{}`. Pick a different name or remove the existing entry first.",
+            args.name,
+            manifest_path.display()
+        );
+    }
+    if args.name.trim().is_empty() {
+        bail!("registry name must be non-empty");
+    }
+
+    // Validation: URL must shape-parse for both org and host
+    // segmentation. If either fails, the URL is unusable as a
+    // `[[registry]].url` regardless of host adapter availability.
+    let host = extract_host_segment(&args.url)
+        .map_err(|e| anyhow!("registry URL `{}`: {e}", args.url))?;
+    let org = extract_org_segment(&args.url)
+        .map_err(|e| anyhow!("registry URL `{}`: {e}", args.url))?;
+
+    let naming = match args.naming.as_deref() {
+        Some(s) => parse_naming(s)?,
+        None => NamingConvention::default(),
+    };
+
+    let position_label = match args.position.as_str() {
+        "primary" | "append" => args.position.as_str(),
+        other => bail!(
+            "unknown --position `{other}` — must be `primary` or `append`"
+        ),
+    };
+
+    let new = RegistrySection {
+        name: args.name.clone(),
+        url: args.url.clone(),
+        r#ref: args.registry_ref.unwrap_or_else(|| "main".to_string()),
+        naming,
+    };
+
+    match position_label {
+        "primary" => manifest.registries.insert(0, new.clone()),
+        "append" => manifest.registries.push(new.clone()),
+        _ => unreachable!("validated above"),
+    }
+
+    manifest
+        .write(&manifest_path)
+        .with_context(|| format!("writing `{}`", manifest_path.display()))?;
+
+    let naming_label = match new.naming {
+        NamingConvention::KindName => "kind-name",
+        NamingConvention::Name => "name",
+        NamingConvention::KindSlashName => "kind/name",
+    }
+    .to_string();
+    let adapter = adapter_for_host(&host).map(String::from);
+
+    let registry_view = ListReportRegistry {
+        name: new.name.clone(),
+        url: new.url.clone(),
+        refname: new.r#ref.clone(),
+        naming: naming_label.clone(),
+        host: host.clone(),
+        org: org.clone(),
+        adapter: adapter.clone(),
+        mirrors: manifest
+            .mirrors_for(&new.name)
+            .into_iter()
+            .map(|m| ListReportMirror {
+                of: m.of.clone(),
+                url: m.url.clone(),
+                priority: m.priority,
+            })
+            .collect(),
+    };
+
+    if ctx.is_json() {
+        ctx.emit_json(&AddReport {
+            ok: true,
+            command: "registry:add",
+            registry: registry_view,
+            position: position_label.to_string(),
+            total_registries: manifest.registries.len(),
+        })?;
+        return Ok(());
+    }
+
+    let position_text = if position_label == "primary" {
+        " as primary"
+    } else {
+        ""
+    };
+    let adapter_text = adapter
+        .as_deref()
+        .map(|a| format!(" (adapter: {a})"))
+        .unwrap_or_else(|| " (adapter: none — `vibe registry publish` won't dispatch here)".to_string());
+    ctx.step(&format!(
+        "Added `[[registry]]` `{}`{} → {} on host {}{}",
+        new.name, position_text, new.url, host, adapter_text
+    ));
+    ctx.summary(&format!(
+        "\nvibe registry add: `{}` registered ({} total registr{}).",
+        new.name,
+        manifest.registries.len(),
+        if manifest.registries.len() == 1 {
+            "y"
+        } else {
+            "ies"
+        },
+    ));
+    Ok(())
+}
+
 fn resolve_project_root(path: &Path) -> Result<PathBuf> {
     let canonical = path
         .canonicalize()
@@ -562,7 +715,8 @@ fn run_publish(ctx: &output::Context, args: RegistryPublishArgs) -> Result<()> {
 
 #[cfg(test)]
 mod tests {
-    use super::adapter_for_host;
+    use super::{adapter_for_host, parse_naming};
+    use vibe_core::manifest::NamingConvention;
 
     #[test]
     fn adapter_for_host_picks_github() {
@@ -581,5 +735,28 @@ mod tests {
     fn adapter_for_host_returns_none_for_unknown_host() {
         assert_eq!(adapter_for_host("example.invalid"), None);
         assert_eq!(adapter_for_host(""), None);
+    }
+
+    #[test]
+    fn parse_naming_accepts_canonical_spellings() {
+        assert!(matches!(
+            parse_naming("kind-name").unwrap(),
+            NamingConvention::KindName
+        ));
+        assert!(matches!(
+            parse_naming("name").unwrap(),
+            NamingConvention::Name
+        ));
+        assert!(matches!(
+            parse_naming("kind/name").unwrap(),
+            NamingConvention::KindSlashName
+        ));
+    }
+
+    #[test]
+    fn parse_naming_rejects_unknown_value() {
+        let err = parse_naming("KindName").unwrap_err();
+        // Spelling mismatch — must match the serde rename exactly.
+        assert!(err.to_string().contains("unknown naming convention"));
     }
 }
