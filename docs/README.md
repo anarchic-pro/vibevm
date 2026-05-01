@@ -14,6 +14,7 @@ The `vibe` binary is the single entry point for every operation. Global flags `-
 | [`vibe uninstall`](commands/uninstall.md) | Remove a package and its files (user-owned files preserved). |
 | [`vibe registry list`](commands/registry-list.md) | Show the project's configured `[[registry]]` / `[[mirror]]` / `[[override]]` blocks and the host adapter each registry dispatches to. |
 | [`vibe registry add`](commands/registry-add.md) | Mutate `vibe.toml` to register a new `[[registry]]`. |
+| [`vibe registry set-mirror`](commands/registry-set-mirror.md) | Mutate `vibe.toml` to add a `[[mirror]]` block targeting a registry (or `*` for any). |
 | [`vibe registry sync`](commands/registry-sync.md) | Refresh per-package registry clones referenced by the lockfile. |
 | [`vibe registry publish`](commands/registry-publish.md) | Maintainer-side: publish a package directory as a tagged release. |
 | [`vibe version`](commands/version.md) | Print the binary's version. |
