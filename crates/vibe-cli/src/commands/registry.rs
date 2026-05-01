@@ -24,7 +24,7 @@ use vibe_publish::{
 use vibe_registry::{MultiRegistryResolver, RefreshedVia};
 
 use crate::cli::{
-    RegistryArgs, RegistryPublishArgs, RegistrySubcommand, RegistrySyncArgs,
+    RegistryArgs, RegistryListArgs, RegistryPublishArgs, RegistrySubcommand, RegistrySyncArgs,
 };
 use crate::output;
 
@@ -32,6 +32,7 @@ pub fn run(ctx: &output::Context, args: RegistryArgs) -> Result<()> {
     match args.command {
         RegistrySubcommand::Sync(sub) => run_sync(ctx, sub),
         RegistrySubcommand::Publish(sub) => run_publish(ctx, sub),
+        RegistrySubcommand::List(sub) => run_list(ctx, sub),
     }
 }
 
@@ -198,6 +199,221 @@ fn run_sync(ctx: &output::Context, args: RegistrySyncArgs) -> Result<()> {
     Ok(())
 }
 
+#[derive(Debug, Serialize)]
+struct ListReport {
+    ok: bool,
+    command: &'static str,
+    registries: Vec<ListReportRegistry>,
+    mirrors: Vec<ListReportMirror>,
+    overrides: Vec<ListReportOverride>,
+}
+
+#[derive(Debug, Serialize)]
+struct ListReportRegistry {
+    name: String,
+    url: String,
+    #[serde(rename = "ref")]
+    refname: String,
+    naming: String,
+    host: String,
+    org: String,
+    /// Adapter that `vibe registry publish` would dispatch to for this
+    /// registry's host. `null` if the host has no adapter today.
+    adapter: Option<String>,
+    /// Mirrors that fall through to this registry, in priority order.
+    mirrors: Vec<ListReportMirror>,
+}
+
+#[derive(Debug, Serialize)]
+struct ListReportMirror {
+    of: String,
+    url: String,
+    priority: i32,
+}
+
+#[derive(Debug, Serialize)]
+struct ListReportOverride {
+    pkgref: String,
+    source_url: String,
+    #[serde(rename = "ref", skip_serializing_if = "Option::is_none")]
+    refname: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    reason: Option<String>,
+}
+
+/// Map a host segment to the `RepoCreator` adapter `creator_for_url`
+/// would pick. `None` means there is no adapter and `vibe registry
+/// publish` would fail with `UnsupportedHost`. Pure read of the
+/// dispatch rule in `vibe-publish::creator_for_url`; kept in sync by
+/// hand because the rule is short and keeping it in code-as-data
+/// would defer the user-facing label here from the rule there for no
+/// real win.
+fn adapter_for_host(host: &str) -> Option<&'static str> {
+    let h = host.to_ascii_lowercase();
+    if h == "github.com" || h.ends_with(".github.com") {
+        return Some("github");
+    }
+    if h == "gitverse.ru" || h.ends_with(".gitverse.ru") {
+        return Some("gitverse");
+    }
+    None
+}
+
+fn run_list(ctx: &output::Context, args: RegistryListArgs) -> Result<()> {
+    let project_root = resolve_project_root(&args.path)?;
+    let manifest_path = project_root.join(ProjectManifest::FILENAME);
+    if !manifest_path.exists() {
+        bail!(
+            "no `vibe.toml` in `{}`; run `vibe init` first",
+            project_root.display()
+        );
+    }
+    let manifest = ProjectManifest::read(&manifest_path)
+        .with_context(|| format!("reading `{}`", manifest_path.display()))?;
+
+    let mut registries: Vec<ListReportRegistry> = Vec::with_capacity(manifest.registries.len());
+    for reg in &manifest.registries {
+        let host = extract_host_segment(&reg.url).unwrap_or_else(|_| String::from("?"));
+        let org = extract_org_segment(&reg.url).unwrap_or_else(|_| String::from("?"));
+        let adapter = adapter_for_host(&host).map(String::from);
+        let naming_label = match reg.naming {
+            vibe_core::manifest::NamingConvention::KindName => "kind-name",
+            vibe_core::manifest::NamingConvention::Name => "name",
+            vibe_core::manifest::NamingConvention::KindSlashName => "kind/name",
+        }
+        .to_string();
+        // Mirrors targeted at this registry by name, plus the wildcard
+        // `*` mirrors that apply to any registry. `mirrors_for` already
+        // returns them sorted by priority ascending.
+        let mirrors: Vec<ListReportMirror> = manifest
+            .mirrors_for(&reg.name)
+            .into_iter()
+            .map(|m| ListReportMirror {
+                of: m.of.clone(),
+                url: m.url.clone(),
+                priority: m.priority,
+            })
+            .collect();
+        registries.push(ListReportRegistry {
+            name: reg.name.clone(),
+            url: reg.url.clone(),
+            refname: reg.r#ref.clone(),
+            naming: naming_label,
+            host,
+            org,
+            adapter,
+            mirrors,
+        });
+    }
+
+    let all_mirrors: Vec<ListReportMirror> = manifest
+        .mirrors
+        .iter()
+        .map(|m| ListReportMirror {
+            of: m.of.clone(),
+            url: m.url.clone(),
+            priority: m.priority,
+        })
+        .collect();
+    let overrides: Vec<ListReportOverride> = manifest
+        .overrides
+        .iter()
+        .map(|o| ListReportOverride {
+            pkgref: o.pkgref.clone(),
+            source_url: o.source_url.clone(),
+            refname: o.r#ref.clone(),
+            reason: o.reason.clone(),
+        })
+        .collect();
+
+    if ctx.is_json() {
+        ctx.emit_json(&ListReport {
+            ok: true,
+            command: "registry:list",
+            registries,
+            mirrors: all_mirrors,
+            overrides,
+        })?;
+        return Ok(());
+    }
+
+    if registries.is_empty() {
+        ctx.summary(
+            "No `[[registry]]` entries in `vibe.toml`. Use `--registry <path>` on \
+             `vibe install` for a local-directory source, or add a `[[registry]]` block.",
+        );
+        return Ok(());
+    }
+
+    ctx.heading(&format!(
+        "Registries ({}; primary listed first)",
+        registries.len()
+    ));
+    for (i, reg) in registries.iter().enumerate() {
+        let primary_marker = if i == 0 { " (primary)" } else { "" };
+        let adapter_label = reg
+            .adapter
+            .as_deref()
+            .map(|a| format!("adapter: {a}"))
+            .unwrap_or_else(|| "adapter: none (publish unsupported)".to_string());
+        println!(
+            "  {}. {}{}\n     url:     {}\n     org:     {}\n     host:    {} ({})\n     naming:  {}\n     ref:     {}",
+            i + 1,
+            reg.name,
+            primary_marker,
+            reg.url,
+            reg.org,
+            reg.host,
+            adapter_label,
+            reg.naming,
+            reg.refname,
+        );
+        if reg.mirrors.is_empty() {
+            println!("     mirrors: (none)");
+        } else {
+            println!("     mirrors:");
+            for m in &reg.mirrors {
+                println!(
+                    "       - of=`{}` priority={} url={}",
+                    m.of, m.priority, m.url
+                );
+            }
+        }
+    }
+
+    if !overrides.is_empty() {
+        println!();
+        ctx.heading(&format!("Overrides ({})", overrides.len()));
+        for o in &overrides {
+            let ref_part = o
+                .refname
+                .as_deref()
+                .map(|r| format!("@{r}"))
+                .unwrap_or_default();
+            let reason_part = o
+                .reason
+                .as_deref()
+                .map(|r| format!(" — {r}"))
+                .unwrap_or_default();
+            println!(
+                "  {} → {}{}{}",
+                o.pkgref, o.source_url, ref_part, reason_part
+            );
+        }
+    }
+
+    let mirror_total = registries.iter().map(|r| r.mirrors.len()).sum::<usize>();
+    ctx.summary(&format!(
+        "\nvibe registry list: {} registries, {} mirror{}, {} override{}.",
+        registries.len(),
+        mirror_total,
+        if mirror_total == 1 { "" } else { "s" },
+        overrides.len(),
+        if overrides.len() == 1 { "" } else { "s" },
+    ));
+    Ok(())
+}
+
 fn resolve_project_root(path: &Path) -> Result<PathBuf> {
     let canonical = path
         .canonicalize()
@@ -342,4 +558,28 @@ fn run_publish(ctx: &output::Context, args: RegistryPublishArgs) -> Result<()> {
         ));
     }
     Ok(())
+}
+
+#[cfg(test)]
+mod tests {
+    use super::adapter_for_host;
+
+    #[test]
+    fn adapter_for_host_picks_github() {
+        assert_eq!(adapter_for_host("github.com"), Some("github"));
+        assert_eq!(adapter_for_host("api.github.com"), Some("github"));
+        assert_eq!(adapter_for_host("GITHUB.com"), Some("github"));
+    }
+
+    #[test]
+    fn adapter_for_host_picks_gitverse() {
+        assert_eq!(adapter_for_host("gitverse.ru"), Some("gitverse"));
+        assert_eq!(adapter_for_host("api.gitverse.ru"), Some("gitverse"));
+    }
+
+    #[test]
+    fn adapter_for_host_returns_none_for_unknown_host() {
+        assert_eq!(adapter_for_host("example.invalid"), None);
+        assert_eq!(adapter_for_host(""), None);
+    }
 }

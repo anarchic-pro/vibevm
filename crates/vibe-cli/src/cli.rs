@@ -64,11 +64,23 @@ pub enum RegistrySubcommand {
     /// configured registry organization. Maintainers only — needs a
     /// publish token (see RUNTIME-GUIDE.md).
     Publish(RegistryPublishArgs),
+
+    /// Print the project's configured `[[registry]]` / `[[mirror]]` /
+    /// `[[override]]` entries and the host adapter each registry will
+    /// dispatch to.
+    List(RegistryListArgs),
 }
 
 #[derive(Debug, clap::Args)]
 pub struct RegistrySyncArgs {
     /// Directory of the project (defaults to current).
+    #[arg(long, default_value = ".")]
+    pub path: PathBuf,
+}
+
+#[derive(Debug, clap::Args)]
+pub struct RegistryListArgs {
+    /// Project root with `vibe.toml`. Defaults to current directory.
     #[arg(long, default_value = ".")]
     pub path: PathBuf,
 }
