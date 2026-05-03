@@ -421,6 +421,320 @@ fn install_from_git_registry() {
     // walks the lockfile to refresh per-package clones.
 }
 
+/// Build a per-package git registry where `flow-wal` carries TWO
+/// tagged versions: `v0.1.0` (from the in-tree fixture, content
+/// rewritten so the project file the test asserts on lives at a
+/// stable known path) and `v0.2.0` (one file modified, one new file
+/// added, one file removed, boot snippet unchanged). Used by the
+/// `vibe update` end-to-end tests.
+fn make_two_version_registry(root: &Path) -> PathBuf {
+    let src = root.join("src-flow-wal");
+    fs::create_dir_all(&src).unwrap();
+    run_git(&src, &["init", "--initial-branch=main"]);
+    run_git(&src, &["config", "user.email", "t@example.com"]);
+    run_git(&src, &["config", "user.name", "Test"]);
+
+    // v0.1.0 layout: A.md + B.md + boot snippet, capabilities empty.
+    let manifest_v1 = r#"[package]
+name = "wal"
+kind = "flow"
+version = "0.1.0"
+
+[writes]
+files = [
+    "spec/flows/wal/A.md",
+    "spec/flows/wal/B.md",
+]
+
+[boot_snippet]
+filename = "10-flow-wal.md"
+source = "boot/10-flow-wal.md"
+"#;
+    // Pin LF endings in the fixture repo — otherwise on Windows
+    // git's `core.autocrlf` will rewrite text on checkout and the
+    // bytes the test asserts on (`"v1 A\n"`) won't match what
+    // ends up in the cache (`"v1 A\r\n"`).
+    fs::write(src.join(".gitattributes"), "* text=auto eol=lf\n").unwrap();
+    fs::write(src.join("vibe-package.toml"), manifest_v1).unwrap();
+    fs::create_dir_all(src.join("spec/flows/wal")).unwrap();
+    fs::create_dir_all(src.join("boot")).unwrap();
+    fs::write(src.join("spec/flows/wal/A.md"), "v1 A\n").unwrap();
+    fs::write(src.join("spec/flows/wal/B.md"), "v1 B\n").unwrap();
+    fs::write(src.join("boot/10-flow-wal.md"), "v1 boot\n").unwrap();
+    run_git(&src, &["add", "-A"]);
+    run_git(&src, &["commit", "-m", "flow:wal@0.1.0"]);
+    run_git(&src, &["tag", "v0.1.0"]);
+
+    // v0.2.0: A modified, B removed, C added, boot unchanged.
+    let manifest_v2 = r#"[package]
+name = "wal"
+kind = "flow"
+version = "0.2.0"
+
+[writes]
+files = [
+    "spec/flows/wal/A.md",
+    "spec/flows/wal/C.md",
+]
+
+[boot_snippet]
+filename = "10-flow-wal.md"
+source = "boot/10-flow-wal.md"
+"#;
+    fs::write(src.join("vibe-package.toml"), manifest_v2).unwrap();
+    fs::write(src.join("spec/flows/wal/A.md"), "v2 A — changed!\n").unwrap();
+    fs::write(src.join("spec/flows/wal/C.md"), "v2 C\n").unwrap();
+    fs::remove_file(src.join("spec/flows/wal/B.md")).unwrap();
+    run_git(&src, &["add", "-A"]);
+    run_git(&src, &["commit", "-m", "flow:wal@0.2.0"]);
+    run_git(&src, &["tag", "v0.2.0"]);
+
+    let bare = root.join("flow-wal.git");
+    run_git(
+        root,
+        &[
+            "clone",
+            "--bare",
+            src.to_str().unwrap(),
+            bare.to_str().unwrap(),
+        ],
+    );
+    run_git(&bare, &["symbolic-ref", "HEAD", "refs/heads/main"]);
+    root.to_path_buf()
+}
+
+#[test]
+fn update_bumps_to_new_version_and_diffs_files() {
+    if !git_available() {
+        eprintln!("skipping update_bumps_to_new_version_and_diffs_files: git not on PATH");
+        return;
+    }
+
+    let outer = tempfile::tempdir().unwrap();
+    let org_root = make_two_version_registry(outer.path());
+    let cache = outer.path().join("cache");
+    fs::create_dir_all(&cache).unwrap();
+
+    let project = tempfile::tempdir().unwrap();
+    init_project(project.path());
+    let url = format!(
+        "git+file://{}",
+        org_root.to_string_lossy().replace('\\', "/")
+    );
+    write_project_with_per_package_registry(project.path(), &url);
+
+    // Install v0.1.0 — pin to ^0.1 so update would otherwise pick v0.2.0.
+    vibe()
+        .env("VIBE_REGISTRY_CACHE", &cache)
+        .arg("install")
+        .arg("flow:wal@^0.1")
+        .arg("--path")
+        .arg(project.path())
+        .arg("--assume-yes")
+        .assert()
+        .success();
+
+    let lock_text = fs::read_to_string(project.path().join("vibe.lock")).unwrap();
+    let lock: vibe_core::manifest::Lockfile = toml::from_str(&lock_text).unwrap();
+    assert_eq!(lock.packages[0].version.to_string(), "0.1.0");
+
+    // Verify v0.1.0 content is on disk.
+    assert_eq!(
+        fs::read_to_string(project.path().join("spec/flows/wal/A.md")).unwrap(),
+        "v1 A\n"
+    );
+    assert!(project.path().join("spec/flows/wal/B.md").exists());
+    assert!(!project.path().join("spec/flows/wal/C.md").exists());
+
+    // The original constraint was `^0.1`, which excludes v0.2.0 — `vibe
+    // update` must respect the user's pinned constraint and report
+    // up-to-date. Verify the constraint surfaces in the lockfile root.
+    assert_eq!(lock.meta.root_dependencies.len(), 1);
+
+    // Manually rewrite the root constraint to `*` so the update would
+    // pick v0.2.0. Easier than re-installing; matches the case where
+    // the user originally typed `flow:wal` (Latest) and now wants the
+    // bump.
+    let mut lock_owned = lock;
+    lock_owned.meta.root_dependencies[0] = vibe_core::PackageRef::parse("flow:wal").unwrap();
+    fs::write(
+        project.path().join("vibe.lock"),
+        toml::to_string(&lock_owned).unwrap(),
+    )
+    .unwrap();
+
+    // Now run `vibe update flow:wal` — should bump to v0.2.0, apply diff.
+    vibe()
+        .env("VIBE_REGISTRY_CACHE", &cache)
+        .arg("update")
+        .arg("flow:wal")
+        .arg("--path")
+        .arg(project.path())
+        .arg("--assume-yes")
+        .assert()
+        .success();
+
+    // Lockfile entry now records v0.2.0 + new content_hash.
+    let lock_text = fs::read_to_string(project.path().join("vibe.lock")).unwrap();
+    let lock: vibe_core::manifest::Lockfile = toml::from_str(&lock_text).unwrap();
+    assert_eq!(lock.packages.len(), 1);
+    let entry = &lock.packages[0];
+    assert_eq!(entry.version.to_string(), "0.2.0");
+    assert_eq!(entry.source_ref.as_deref(), Some("v0.2.0"));
+    assert!(entry.content_hash.starts_with("sha256:"));
+
+    // On-disk: A overwritten, B removed, C added, boot snippet unchanged.
+    assert_eq!(
+        fs::read_to_string(project.path().join("spec/flows/wal/A.md")).unwrap(),
+        "v2 A — changed!\n"
+    );
+    assert!(!project.path().join("spec/flows/wal/B.md").exists());
+    assert_eq!(
+        fs::read_to_string(project.path().join("spec/flows/wal/C.md")).unwrap(),
+        "v2 C\n"
+    );
+    assert_eq!(
+        fs::read_to_string(project.path().join("spec/boot/10-flow-wal.md")).unwrap(),
+        "v1 boot\n"
+    );
+
+    // files_written reflects the new shape.
+    let written: Vec<String> = entry
+        .files_written
+        .iter()
+        .map(|p| p.to_string_lossy().replace('\\', "/"))
+        .collect();
+    assert!(written.contains(&"spec/flows/wal/A.md".to_string()));
+    assert!(written.contains(&"spec/flows/wal/C.md".to_string()));
+    assert!(written.contains(&"spec/boot/10-flow-wal.md".to_string()));
+    assert!(!written.contains(&"spec/flows/wal/B.md".to_string()));
+}
+
+#[test]
+fn update_refuses_when_user_edited_file() {
+    if !git_available() {
+        eprintln!("skipping update_refuses_when_user_edited_file: git not on PATH");
+        return;
+    }
+
+    let outer = tempfile::tempdir().unwrap();
+    let org_root = make_two_version_registry(outer.path());
+    let cache = outer.path().join("cache");
+    fs::create_dir_all(&cache).unwrap();
+
+    let project = tempfile::tempdir().unwrap();
+    init_project(project.path());
+    let url = format!(
+        "git+file://{}",
+        org_root.to_string_lossy().replace('\\', "/")
+    );
+    write_project_with_per_package_registry(project.path(), &url);
+
+    vibe()
+        .env("VIBE_REGISTRY_CACHE", &cache)
+        .arg("install")
+        .arg("flow:wal@^0.1")
+        .arg("--path")
+        .arg(project.path())
+        .arg("--assume-yes")
+        .assert()
+        .success();
+
+    // User edits A.md after install.
+    fs::write(
+        project.path().join("spec/flows/wal/A.md"),
+        "user-edited bytes\n",
+    )
+    .unwrap();
+
+    // Rewrite root constraint to allow the bump.
+    let lock_text = fs::read_to_string(project.path().join("vibe.lock")).unwrap();
+    let mut lock: vibe_core::manifest::Lockfile = toml::from_str(&lock_text).unwrap();
+    lock.meta.root_dependencies[0] = vibe_core::PackageRef::parse("flow:wal").unwrap();
+    fs::write(
+        project.path().join("vibe.lock"),
+        toml::to_string(&lock).unwrap(),
+    )
+    .unwrap();
+
+    let assertion = vibe()
+        .env("VIBE_REGISTRY_CACHE", &cache)
+        .arg("update")
+        .arg("flow:wal")
+        .arg("--path")
+        .arg(project.path())
+        .arg("--assume-yes")
+        .assert()
+        .failure();
+    let stderr = String::from_utf8_lossy(&assertion.get_output().stderr).to_string();
+    assert!(
+        stderr.contains("user-edited") || stderr.contains("UserEditedFile") || stderr.contains("user edited"),
+        "expected user-edit refusal in stderr; got:\n{stderr}"
+    );
+
+    // User's edit survives.
+    assert_eq!(
+        fs::read_to_string(project.path().join("spec/flows/wal/A.md")).unwrap(),
+        "user-edited bytes\n"
+    );
+}
+
+#[test]
+fn update_when_constraint_pins_old_version_reports_up_to_date() {
+    if !git_available() {
+        eprintln!("skipping update_when_constraint_pins_old_version_reports_up_to_date: git not on PATH");
+        return;
+    }
+
+    let outer = tempfile::tempdir().unwrap();
+    let org_root = make_two_version_registry(outer.path());
+    let cache = outer.path().join("cache");
+    fs::create_dir_all(&cache).unwrap();
+
+    let project = tempfile::tempdir().unwrap();
+    init_project(project.path());
+    let url = format!(
+        "git+file://{}",
+        org_root.to_string_lossy().replace('\\', "/")
+    );
+    write_project_with_per_package_registry(project.path(), &url);
+
+    // Install v0.1.0 with constraint `^0.1`. v0.2.0 exists upstream
+    // but is excluded by the constraint — `vibe update` must respect
+    // the original pin and report up-to-date instead of jumping to
+    // v0.2.0.
+    vibe()
+        .env("VIBE_REGISTRY_CACHE", &cache)
+        .arg("install")
+        .arg("flow:wal@^0.1")
+        .arg("--path")
+        .arg(project.path())
+        .arg("--assume-yes")
+        .assert()
+        .success();
+
+    let assertion = vibe()
+        .env("VIBE_REGISTRY_CACHE", &cache)
+        .arg("update")
+        .arg("flow:wal")
+        .arg("--path")
+        .arg(project.path())
+        .arg("--assume-yes")
+        .assert()
+        .success();
+    let out = assertion.get_output();
+    let stdout = String::from_utf8_lossy(&out.stdout).to_string();
+    assert!(
+        stdout.contains("up-to-date"),
+        "expected `up-to-date` summary; got:\n{stdout}"
+    );
+
+    // Lockfile entry stays at v0.1.0.
+    let lock_text = fs::read_to_string(project.path().join("vibe.lock")).unwrap();
+    let lock: vibe_core::manifest::Lockfile = toml::from_str(&lock_text).unwrap();
+    assert_eq!(lock.packages[0].version.to_string(), "0.1.0");
+}
+
 #[test]
 fn vendor_produces_bare_repo_per_lockfile_entry() {
     // End-to-end: install from a per-package git registry, then run
@@ -633,6 +947,7 @@ fn every_subcommand_renders_help() {
         &["install"],
         &["list"],
         &["uninstall"],
+        &["update"],
         &["registry"],                  // shows the registry subcommand enum
         &["registry", "sync"],
         &["registry", "publish"],

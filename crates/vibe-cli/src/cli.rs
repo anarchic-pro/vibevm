@@ -42,6 +42,9 @@ pub enum Command {
     /// Remove an installed package from the current project.
     Uninstall(UninstallArgs),
 
+    /// Re-fetch and apply changes for one or more installed packages.
+    Update(UpdateArgs),
+
     /// Manage the registry cache (clone, sync).
     Registry(RegistryArgs),
 
@@ -293,6 +296,26 @@ pub struct InstallArgs {
     pub registry: Option<PathBuf>,
 
     /// Skip the interactive confirmation prompt (non-interactive envs).
+    #[arg(long, alias = "yes")]
+    pub assume_yes: bool,
+}
+
+#[derive(Debug, clap::Args)]
+pub struct UpdateArgs {
+    /// Package references `<kind>:<name>` to update. Each must be
+    /// currently installed. Mutually exclusive with `--all`.
+    pub packages: Vec<String>,
+
+    /// Update every package in the lockfile. Mutually exclusive with
+    /// `<packages>`.
+    #[arg(long, conflicts_with = "packages")]
+    pub all: bool,
+
+    /// Directory of the project (defaults to current).
+    #[arg(long, default_value = ".")]
+    pub path: PathBuf,
+
+    /// Skip the interactive confirmation prompt.
     #[arg(long, alias = "yes")]
     pub assume_yes: bool,
 }

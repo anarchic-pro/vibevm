@@ -5,3 +5,4 @@ pub mod install;
 pub mod list;
 pub mod registry;
 pub mod uninstall;
+pub mod update;
