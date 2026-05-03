@@ -174,17 +174,26 @@ cheapest to redesign once, properly.
 
 **Acceptance.** See §M1 acceptance (additive) in `VIBEVM-SPEC.md` §16 — the list there grew to cover per-package resolution, mirror fallback, override pin, publish error surface, lockfile schema v1→v2 migration.
 
-### M1.2 — `vibe update`
+### M1.2 — `vibe update` ✅ SHIPPED v0 (2026-05-04)
 
-- `vibe update <pkgref>` and `vibe update --all`: re-fetch the
-  registry (if stale), re-resolve the package, if a newer version
-  satisfies the original constraint show a diff (file list adds /
-  removes / modifies), confirm, apply.
-- File-modification case: if a file already exists in the project and
-  its content is identical to the previous cached version, overwrite.
-  If the user has edited it locally, refuse and show a 3-way diff
-  guidance message.
-- Lockfile updated per usual.
+- `vibe update <pkgref>...` and `vibe update --all`: re-fetch the
+  registry (if stale), re-resolve the package against its original
+  root constraint, if a newer version satisfies the constraint show
+  a diff (Added / Removed / Modified / Identical per file), confirm,
+  apply. Reference docs at
+  [`docs/commands/update.md`](docs/commands/update.md).
+- File-modification case: if the project file matches the
+  install-time cache (pristine), overwrite from the new cache.
+  Otherwise refuse with `UserEditedFile` and a 3-way-diff hint
+  pointing the operator at `vibe uninstall && vibe install` to
+  consciously discard or back up the edit.
+- Lockfile entry rewritten in v2 shape — `version`, `content_hash`,
+  `source_url`, `source_ref`, `resolved_commit`, `boot_snippet`,
+  `files_written`. `dependencies` and `overridden` preserved.
+- v0 limits (queued for follow-up): refuses dep-graph evolution
+  (`DependencyShapeChanged` when `[requires]` shape changes between
+  versions); non-root transitives re-resolve at their exact locked
+  version (only move on a force-push).
 
 ### M1.3 — `vibe check` (spec linter)
 

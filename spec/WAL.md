@@ -1,9 +1,17 @@
 # WAL — Project Continuation State
-_Updated: 2026-05-03_
+_Updated: 2026-05-04_
 
 ## Current phase
 
-**M1.6 Phase B v0 — IN PROGRESS (2026-05-03).** Phase A is closed; the registry-management CLI surface, the read-only mirror-dispatch runtime, and now the cache-mutating mirror dispatch with cross-source `content_hash` verification are in. Active commits since the Phase A checkpoint (`9646de9`):
+**M1.2 `vibe update` v0 — SHIPPED (2026-05-04).** Phase B v0 of the registry refactor closed the multi-source surface; today's slice opens M1.2 by landing the lock-aware version-bump pipeline. `vibe update <pkgref>...` and `vibe update --all` re-resolve installed packages against their original root constraints (carried under `[meta].root_dependencies`), fetch new content via the same `MultiRegistryResolver` (mirror dispatch + cross-source `content_hash` gate inherited transparently from install), and emit a per-file diff — Added / Removed / Modified / Identical — before applying. User-edit detection is byte-for-byte against the install-time cache (`.vibe/cache/<kind>/<name>/v<old-version>/`); a divergent on-disk file refuses the update with `UserEditedFile` and a 3-way-diff hint. Dep-graph evolution is refused at this layer (`DependencyShapeChanged` when `[requires]` shape changes); narrow v0 holds the line for the version-bump-only contract. Lockfile entry rewritten in place: `version`, `content_hash`, `source_url`, `source_ref`, `resolved_commit`, `boot_snippet`, `files_written`. `dependencies` and `overridden` preserved.
+
+Workspace state: ~239 tests across the workspace (6 new in `vibe-install::tests` covering classify-Added/Removed/Modified/Identical, refuse-on-UserEdit, refuse-on-OldCacheMissing, refuse-on-DependencyShapeChanged, refuse-on-NotInstalled, full apply_update + register_updated round-trip; 3 new in `cli_e2e.rs` — `update_bumps_to_new_version_and_diffs_files` (per-package git registry with both v0.1.0 and v0.2.0 tags, install at `^0.1`, rewrite root constraint to `*`, run `vibe update`, verify on-disk diff applied + lockfile bumped), `update_refuses_when_user_edited_file` (CLI-level UserEditedFile gate; user's edit survives), `update_when_constraint_pins_old_version_reports_up_to_date` (constraint `^0.1` keeps install pinned at v0.1.0 even when v0.2.0 is upstream)). `every_subcommand_renders_help` smoke now covers `update`. `cargo clippy --workspace --all-targets -- -D warnings` clean.
+
+Reference docs at [`docs/commands/update.md`](../docs/commands/update.md). Index in `docs/README.md` updated. ROADMAP §M1.2 flipped from queued to shipped (v0).
+
+The earlier M1.6 surface stays in force:
+
+**M1.6 Phase B v0 — SHIPPED (2026-05-03).** Phase A is closed; the registry-management CLI surface, the read-only mirror-dispatch runtime, and now the cache-mutating mirror dispatch with cross-source `content_hash` verification are in. Active commits since the Phase A checkpoint (`9646de9`):
 
 - `1089417 fix(vibe-install): drop uninstalled package from root_dependencies` — regression surfaced by walking `manual-tests/M1.5-gate-v2-per-package-smoke.md` top-to-bottom against the live GitHub host. `unregister_installed` now retains roots whose `(kind, name)` doesn't match the uninstalled package, symmetric with the install merge.
 - `152c607 test(manual): record M1.5-gate-v2 smoke pass on GitHub host` — first formal walk of the smoke filled in. Date 2026-05-01, vibevm `1089417`, peeled SHAs `1c3a1355` / `a620157d` / `d76512034`, Windows 11 / git 2.52.
