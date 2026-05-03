@@ -195,7 +195,10 @@ cheapest to redesign once, properly.
   versions); non-root transitives re-resolve at their exact locked
   version (only move on a force-push).
 
-### M1.3 — `vibe check` (spec linter)
+### M1.3 — `vibe check` (spec linter) ✅ SHIPPED v0 (2026-05-04)
+
+v0 covers six of the ten checks listed below; reference docs at
+[`docs/commands/check.md`](docs/commands/check.md).
 
 Implements the full `VIBEVM-SPEC.md` §12 check list:
 1. Manifest validity (`vibe.toml`, `vibe.lock` parse and match schema).
@@ -212,8 +215,13 @@ Implements the full `VIBEVM-SPEC.md` §12 check list:
     meaningful only after M1.5 ships — in M1 it can be a warning-only
     noop.
 
+**v0 implements:** 1, 5, 6, 7, 8, 9. **v1+ defers:** 2, 3, 4, 10
+(require markdown-anchor parsing or `vibe build` provenance).
+
 `vibe check --fix` is a narrow subset: remove dead anchor references
-we can identify safely, nothing that loses information.
+we can identify safely, nothing that loses information. **Not
+shipped in v0** — fix candidates only land once the deferred
+checks (#2 / #3 / #4) come online.
 
 ### M1.4 — `vibe show …`
 
