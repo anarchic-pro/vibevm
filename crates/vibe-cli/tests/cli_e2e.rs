@@ -774,6 +774,73 @@ fn show_effective_attributes_installed_package_files() {
 }
 
 #[test]
+fn user_config_promotes_vibe_registry_cache_into_runtime() {
+    // Smoke: a user-config file that defaults VIBE_REGISTRY_CACHE
+    // must actually take effect at install time — not just surface
+    // in `vibe show config`. Without the live env override, the
+    // install's per-package clone must land in the user-config-
+    // pointed cache.
+    if !git_available() {
+        eprintln!("skipping user_config_promotes_vibe_registry_cache_into_runtime: git not on PATH");
+        return;
+    }
+
+    let outer = tempfile::tempdir().unwrap();
+    let org_root = make_per_package_registry(outer.path());
+    let user_cfg_dir = tempfile::tempdir().unwrap();
+    let user_cfg_path = user_cfg_dir.path().join("config.toml");
+    let cache = outer.path().join("user-config-cache");
+    fs::create_dir_all(&cache).unwrap();
+    fs::write(
+        &user_cfg_path,
+        format!(
+            "[env]\nVIBE_REGISTRY_CACHE = \"{}\"\n",
+            cache.to_string_lossy().replace('\\', "/")
+        ),
+    )
+    .unwrap();
+
+    let project = tempfile::tempdir().unwrap();
+    init_project(project.path());
+    let url = format!(
+        "git+file://{}",
+        org_root.to_string_lossy().replace('\\', "/")
+    );
+    write_project_with_per_package_registry(project.path(), &url);
+
+    vibe()
+        .env("VIBEVM_USER_CONFIG", &user_cfg_path)
+        .env_remove("VIBE_REGISTRY_CACHE")
+        .arg("install")
+        .arg("flow:wal")
+        .arg("--path")
+        .arg(project.path())
+        .arg("--assume-yes")
+        .assert()
+        .success();
+
+    // The user-config-pointed cache must be populated with the
+    // per-package clone — proves the promotion ran end-to-end.
+    let bucket_count = fs::read_dir(&cache).unwrap().count();
+    assert!(
+        bucket_count >= 1,
+        "expected user-config-pointed cache to have at least one bucket, got {bucket_count}"
+    );
+    let bucket = fs::read_dir(&cache)
+        .unwrap()
+        .filter_map(|e| e.ok())
+        .next()
+        .expect("bucket")
+        .path();
+    let pkg_clone = bucket.join("packages/flow-wal/clone");
+    assert!(
+        pkg_clone.join(".git").exists(),
+        "per-package clone must land in user-config cache: {}",
+        pkg_clone.display()
+    );
+}
+
+#[test]
 fn show_config_user_layer_provides_default_for_unset_env() {
     // User-level config defaults VIBE_REGISTRY_CACHE; live env is
     // unset. Provenance must surface as `user-config`, value is the

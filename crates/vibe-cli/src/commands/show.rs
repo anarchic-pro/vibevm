@@ -429,23 +429,30 @@ fn run_config(ctx: &output::Context, args: ShowConfigArgs) -> Result<()> {
         ),
     };
 
+    // After startup promotion, the live env contains both
+    // operator-set and user-config-defaulted values. To keep
+    // provenance honest, we cross-reference the names that
+    // `main::promote_user_config_env` actually wrote — anything in
+    // that set is sourced from user-config; anything else with a
+    // live value is operator-set.
+    let promoted = crate::promoted_env_names();
     let env: Vec<ConfigEnvEntry> = CONFIG_ENV_VARS
         .iter()
         .map(|(name, desc, sensitive)| {
             let live = std::env::var(*name).ok();
-            let user_default = user_config.env.get(*name).cloned();
-            let (rendered, provenance) = match (&live, &user_default, sensitive) {
-                (Some(_), _, true) => (
+            let from_user_config = promoted.contains(*name);
+            let (rendered, provenance) = match (&live, from_user_config, sensitive) {
+                (Some(_), false, true) => (
                     Some("(redacted; set in environment)".to_string()),
                     "redacted",
                 ),
-                (Some(v), _, false) => (Some(v.clone()), "env"),
-                (None, Some(_), true) => (
+                (Some(_), true, true) => (
                     Some("(redacted; defaulted in user config)".to_string()),
                     "redacted",
                 ),
-                (None, Some(v), false) => (Some(v.clone()), "user-config"),
-                (None, None, _) => (None, "default"),
+                (Some(v), false, false) => (Some(v.clone()), "env"),
+                (Some(v), true, false) => (Some(v.clone()), "user-config"),
+                (None, _, _) => (None, "default"),
             };
             ConfigEnvEntry {
                 name,
@@ -455,6 +462,12 @@ fn run_config(ctx: &output::Context, args: ShowConfigArgs) -> Result<()> {
             }
         })
         .collect();
+    // `user_config` (the parsed file) is no longer needed for env
+    // resolution — promotion at startup baked its values into the
+    // process env. We still load it for the summary block so the
+    // operator can see whether the file is loaded / where the
+    // loader looked.
+    let _ = user_config;
 
     if ctx.is_json() {
         let payload = ConfigReport {
