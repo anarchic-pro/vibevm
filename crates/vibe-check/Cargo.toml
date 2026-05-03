@@ -14,3 +14,6 @@ description = "Deterministic spec linter for vibevm projects (M1+)"
 vibe-core.workspace = true
 anyhow.workspace = true
 thiserror.workspace = true
+
+[dev-dependencies]
+tempfile.workspace = true

@@ -1722,6 +1722,7 @@ name = "vibe-check"
 version = "0.1.0-dev"
 dependencies = [
  "anyhow",
+ "tempfile",
  "thiserror 2.0.18",
  "vibe-core",
 ]
