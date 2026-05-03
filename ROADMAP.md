@@ -223,20 +223,26 @@ we can identify safely, nothing that loses information. **Not
 shipped in v0** — fix candidates only land once the deferred
 checks (#2 / #3 / #4) come online.
 
-### M1.4 — `vibe show …`
+### M1.4 — `vibe show …` ✅ SHIPPED v0 (2026-05-04)
+
+v0 ships `vibe show effective` and `vibe show config`. The
+runner-aware subcommands defer to M1.5 (they need the LLM-build
+pipeline's task-graph runner before they have anything meaningful to
+render). Reference docs at [`docs/commands/show.md`](docs/commands/show.md).
 
 Pure inspection, no mutation:
-- `vibe show effective` — materialize the full spec corpus as one
+- `vibe show effective` ✓ — materialize the full spec corpus as one
   stream, with provenance (which package contributed what). The
   `EffectiveSpec` typed value from §5.3 finally gets a consumer.
-- `vibe show graph [<workflow>]` — textual render of the task graph.
-  Helps debug the install subgraph and, later, build.
-- `vibe show node <name>` — details of a single node (inputs,
-  outputs, cacheability).
-- `vibe show config` — effective configuration with provenance (which
-  flag / env var / vibe.toml value won).
-- `vibe show plan <workflow> [args...]` — dry-run. Prints what would
-  happen without executing.
+- `vibe show graph [<workflow>]` *(deferred to M1.5)* — textual
+  render of the task graph. Helps debug the install subgraph and,
+  later, build.
+- `vibe show node <name>` *(deferred to M1.5)* — details of a
+  single node (inputs, outputs, cacheability).
+- `vibe show config` ✓ — effective configuration with provenance
+  (which flag / env var / vibe.toml value won).
+- `vibe show plan <workflow> [args...]` *(deferred to M1.5)* —
+  dry-run. Prints what would happen without executing.
 
 ### M1.5-gate — registry publish
 
