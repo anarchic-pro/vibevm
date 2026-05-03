@@ -680,6 +680,68 @@ fn update_refuses_when_user_edited_file() {
 }
 
 #[test]
+fn check_clean_project_exits_zero_with_no_findings() {
+    let project = tempfile::tempdir().unwrap();
+    init_project(project.path());
+    let assertion = vibe()
+        .arg("check")
+        .arg("--path")
+        .arg(project.path())
+        .assert()
+        .success();
+    let stdout = String::from_utf8_lossy(&assertion.get_output().stdout);
+    assert!(
+        stdout.contains("clean"),
+        "expected clean summary; got:\n{stdout}"
+    );
+}
+
+#[test]
+fn check_boot_prefix_collision_exits_nonzero() {
+    let project = tempfile::tempdir().unwrap();
+    init_project(project.path());
+    // Plant two `10-` boot snippets — collision.
+    fs::write(project.path().join("spec/boot/10-flow-wal.md"), "x").unwrap();
+    fs::write(project.path().join("spec/boot/10-flow-other.md"), "y").unwrap();
+    let assertion = vibe()
+        .arg("check")
+        .arg("--path")
+        .arg(project.path())
+        .assert()
+        .failure();
+    let stdout = String::from_utf8_lossy(&assertion.get_output().stdout);
+    assert!(
+        stdout.contains("[E]"),
+        "expected error sigil in stdout; got:\n{stdout}"
+    );
+    assert!(
+        stdout.contains("boot prefix"),
+        "expected boot prefix collision message; got:\n{stdout}"
+    );
+}
+
+#[test]
+fn check_emits_json_envelope() {
+    let project = tempfile::tempdir().unwrap();
+    init_project(project.path());
+    let out = vibe()
+        .arg("--json")
+        .arg("check")
+        .arg("--path")
+        .arg(project.path())
+        .output()
+        .unwrap();
+    assert!(out.status.success());
+    let stdout = String::from_utf8(out.stdout).unwrap();
+    let payload: serde_json::Value = serde_json::from_str(stdout.trim()).expect("valid JSON");
+    assert_eq!(payload["ok"], true);
+    assert_eq!(payload["command"], "check");
+    let summary = &payload["summary"];
+    assert_eq!(summary["error"], 0);
+    assert!(payload["findings"].is_array());
+}
+
+#[test]
 fn update_when_constraint_pins_old_version_reports_up_to_date() {
     if !git_available() {
         eprintln!("skipping update_when_constraint_pins_old_version_reports_up_to_date: git not on PATH");
@@ -948,6 +1010,7 @@ fn every_subcommand_renders_help() {
         &["list"],
         &["uninstall"],
         &["update"],
+        &["check"],
         &["registry"],                  // shows the registry subcommand enum
         &["registry", "sync"],
         &["registry", "publish"],

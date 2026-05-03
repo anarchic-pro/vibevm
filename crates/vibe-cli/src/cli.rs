@@ -45,6 +45,9 @@ pub enum Command {
     /// Re-fetch and apply changes for one or more installed packages.
     Update(UpdateArgs),
 
+    /// Run the spec-consistency linter against the project tree.
+    Check(CheckArgs),
+
     /// Manage the registry cache (clone, sync).
     Registry(RegistryArgs),
 
@@ -298,6 +301,23 @@ pub struct InstallArgs {
     /// Skip the interactive confirmation prompt (non-interactive envs).
     #[arg(long, alias = "yes")]
     pub assume_yes: bool,
+}
+
+#[derive(Debug, clap::Args)]
+pub struct CheckArgs {
+    /// Project root with `vibe.toml`. Defaults to current directory.
+    #[arg(long, default_value = ".")]
+    pub path: PathBuf,
+
+    /// WAL is "stale" past this age. Default 24h matches the boot
+    /// snippet's freshness rule.
+    #[arg(long = "wal-max-age-hours", default_value_t = 24)]
+    pub wal_max_age_hours: u64,
+
+    /// REVIEW marker age threshold in days (`<!-- REVIEW: YYYY-MM-DD ... -->`).
+    /// Default 14d per `VIBEVM-SPEC.md` §12.
+    #[arg(long = "review-max-age-days", default_value_t = 14)]
+    pub review_max_age_days: u64,
 }
 
 #[derive(Debug, clap::Args)]
