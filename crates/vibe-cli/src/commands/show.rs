@@ -24,6 +24,7 @@ use std::path::{Path, PathBuf};
 use anyhow::{Context, Result, bail};
 use serde::Serialize;
 use vibe_core::manifest::{Lockfile, ProjectManifest};
+use vibe_core::user_config::UserConfig;
 
 use crate::cli::{ShowArgs, ShowConfigArgs, ShowEffectiveArgs, ShowSubcommand};
 use crate::output;
@@ -269,6 +270,7 @@ struct ConfigReport {
     mirrors: Vec<ConfigMirror>,
     overrides: Vec<ConfigOverride>,
     env: Vec<ConfigEnvEntry>,
+    user_config: ConfigUserConfigSummary,
 }
 
 #[derive(Debug, Serialize)]
@@ -306,12 +308,29 @@ struct ConfigOverride {
 struct ConfigEnvEntry {
     name: &'static str,
     value: Option<String>,
-    /// `"env"` (set in environment), `"default"` (built-in fallback,
-    /// no env value), or `"redacted"` (set in environment but the
-    /// raw value is sensitive — token-shaped).
+    /// `"env"` — set in the live environment;
+    /// `"redacted"` — set in env, sensitive (token-shaped) — bytes never printed;
+    /// `"user-config"` — defaulted via `~/.config/vibe/config.toml [env]`;
+    /// `"default"` — unset, built-in fallback applies.
     provenance: &'static str,
     /// Short description of what the variable controls.
     description: &'static str,
+}
+
+#[derive(Debug, Serialize)]
+struct ConfigUserConfigSummary {
+    /// Path the loader consulted. `null` if no path could be resolved
+    /// (e.g. `HOME` unset on a misconfigured CI).
+    #[serde(skip_serializing_if = "Option::is_none")]
+    path: Option<String>,
+    /// `true` when the file exists and parses; `false` if missing
+    /// (the layer is optional and that is the common case).
+    loaded: bool,
+    /// When `loaded = false` and the file IS present but failed to
+    /// parse, the error is surfaced here so the operator sees that
+    /// their config layer is silently inert.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    error: Option<String>,
 }
 
 const CONFIG_ENV_VARS: &[(&str, &str, bool /* sensitive */)] = &[
@@ -372,17 +391,61 @@ fn run_config(ctx: &output::Context, args: ShowConfigArgs) -> Result<()> {
         })
         .collect();
 
+    // Read the user-level config layer (VIBEVM-SPEC §9.5 step 4).
+    // Errors here are surfaced via `user_config_summary` rather than
+    // failing the whole `vibe show config` invocation — the layer
+    // is optional, and even a malformed file should not block
+    // inspection of the other layers.
+    let user_config_path = UserConfig::default_path();
+    let (user_config, user_config_summary) = match &user_config_path {
+        Some(path) => match UserConfig::load_from(path) {
+            Ok(cfg) => {
+                let loaded = path.exists();
+                (
+                    cfg,
+                    ConfigUserConfigSummary {
+                        path: Some(forward_slash_display(path)),
+                        loaded,
+                        error: None,
+                    },
+                )
+            }
+            Err(e) => (
+                UserConfig::default(),
+                ConfigUserConfigSummary {
+                    path: Some(forward_slash_display(path)),
+                    loaded: false,
+                    error: Some(e.to_string()),
+                },
+            ),
+        },
+        None => (
+            UserConfig::default(),
+            ConfigUserConfigSummary {
+                path: None,
+                loaded: false,
+                error: None,
+            },
+        ),
+    };
+
     let env: Vec<ConfigEnvEntry> = CONFIG_ENV_VARS
         .iter()
         .map(|(name, desc, sensitive)| {
-            let value = std::env::var(*name).ok();
-            let (rendered, provenance) = match (&value, sensitive) {
-                (Some(_), true) => (
+            let live = std::env::var(*name).ok();
+            let user_default = user_config.env.get(*name).cloned();
+            let (rendered, provenance) = match (&live, &user_default, sensitive) {
+                (Some(_), _, true) => (
                     Some("(redacted; set in environment)".to_string()),
                     "redacted",
                 ),
-                (Some(v), false) => (Some(v.clone()), "env"),
-                (None, _) => (None, "default"),
+                (Some(v), _, false) => (Some(v.clone()), "env"),
+                (None, Some(_), true) => (
+                    Some("(redacted; defaulted in user config)".to_string()),
+                    "redacted",
+                ),
+                (None, Some(v), false) => (Some(v.clone()), "user-config"),
+                (None, None, _) => (None, "default"),
             };
             ConfigEnvEntry {
                 name,
@@ -404,6 +467,7 @@ fn run_config(ctx: &output::Context, args: ShowConfigArgs) -> Result<()> {
             mirrors,
             overrides,
             env,
+            user_config: user_config_summary,
         };
         ctx.emit_json(&payload)?;
         return Ok(());
@@ -484,6 +548,23 @@ fn run_config(ctx: &output::Context, args: ShowConfigArgs) -> Result<()> {
         }
     }
     println!();
+    match &user_config_summary {
+        ConfigUserConfigSummary { path: Some(p), loaded: true, .. } => {
+            println!("User config: {p}  (loaded)");
+        }
+        ConfigUserConfigSummary { path: Some(p), loaded: false, error: Some(err) } => {
+            println!("User config: {p}  (parse error — {err})");
+        }
+        ConfigUserConfigSummary { path: Some(p), loaded: false, error: None } => {
+            println!("User config: {p}  (not present)");
+        }
+        ConfigUserConfigSummary { path: None, .. } => {
+            println!(
+                "User config: (no path resolved — set HOME / XDG_CONFIG_HOME / VIBEVM_USER_CONFIG)"
+            );
+        }
+    }
+    println!();
     println!("Environment:");
     for e in &env {
         let value_part = match (&e.value, e.provenance) {
@@ -505,6 +586,14 @@ fn run_config(ctx: &output::Context, args: ShowConfigArgs) -> Result<()> {
         env.len()
     ));
     Ok(())
+}
+
+fn forward_slash_display(path: &Path) -> String {
+    let mut s = path.to_string_lossy().replace('\\', "/");
+    if let Some(stripped) = s.strip_prefix("//?/") {
+        s = stripped.to_string();
+    }
+    s
 }
 
 fn naming_label(naming: vibe_core::manifest::NamingConvention) -> String {

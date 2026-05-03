@@ -774,6 +774,145 @@ fn show_effective_attributes_installed_package_files() {
 }
 
 #[test]
+fn show_config_user_layer_provides_default_for_unset_env() {
+    // User-level config defaults VIBE_REGISTRY_CACHE; live env is
+    // unset. Provenance must surface as `user-config`, value is the
+    // user-config string.
+    let project = tempfile::tempdir().unwrap();
+    init_project(project.path());
+
+    let user_cfg_dir = tempfile::tempdir().unwrap();
+    let user_cfg_path = user_cfg_dir.path().join("config.toml");
+    fs::write(
+        &user_cfg_path,
+        r#"[env]
+VIBE_REGISTRY_CACHE = "/from-user-config"
+VIBE_LOG = "vibe_registry=info"
+"#,
+    )
+    .unwrap();
+
+    let out = vibe()
+        .env("VIBEVM_USER_CONFIG", &user_cfg_path)
+        .env_remove("VIBE_REGISTRY_CACHE")
+        .env_remove("VIBE_LOG")
+        .arg("--json")
+        .arg("show")
+        .arg("config")
+        .arg("--path")
+        .arg(project.path())
+        .output()
+        .unwrap();
+    assert!(
+        out.status.success(),
+        "stderr: {}",
+        String::from_utf8_lossy(&out.stderr)
+    );
+    let payload: serde_json::Value =
+        serde_json::from_slice(&out.stdout).expect("valid JSON");
+    let env_arr = payload["env"].as_array().unwrap();
+    let cache_entry = env_arr
+        .iter()
+        .find(|e| e["name"] == "VIBE_REGISTRY_CACHE")
+        .unwrap();
+    assert_eq!(cache_entry["provenance"], "user-config");
+    assert_eq!(cache_entry["value"], "/from-user-config");
+    let log_entry = env_arr
+        .iter()
+        .find(|e| e["name"] == "VIBE_LOG")
+        .unwrap();
+    assert_eq!(log_entry["provenance"], "user-config");
+    assert_eq!(log_entry["value"], "vibe_registry=info");
+    // The user_config block reports loaded = true and the resolved path.
+    assert_eq!(payload["user_config"]["loaded"], true);
+    assert!(payload["user_config"]["path"].is_string());
+}
+
+#[test]
+fn show_config_live_env_overrides_user_config() {
+    // Both layers set VIBE_REGISTRY_CACHE; the live env wins.
+    let project = tempfile::tempdir().unwrap();
+    init_project(project.path());
+
+    let user_cfg_dir = tempfile::tempdir().unwrap();
+    let user_cfg_path = user_cfg_dir.path().join("config.toml");
+    fs::write(
+        &user_cfg_path,
+        "[env]\nVIBE_REGISTRY_CACHE = \"/from-user-config\"\n",
+    )
+    .unwrap();
+
+    let out = vibe()
+        .env("VIBEVM_USER_CONFIG", &user_cfg_path)
+        .env("VIBE_REGISTRY_CACHE", "/from-live-env")
+        .arg("--json")
+        .arg("show")
+        .arg("config")
+        .arg("--path")
+        .arg(project.path())
+        .output()
+        .unwrap();
+    assert!(out.status.success());
+    let payload: serde_json::Value =
+        serde_json::from_slice(&out.stdout).expect("valid JSON");
+    let env_arr = payload["env"].as_array().unwrap();
+    let cache_entry = env_arr
+        .iter()
+        .find(|e| e["name"] == "VIBE_REGISTRY_CACHE")
+        .unwrap();
+    assert_eq!(cache_entry["provenance"], "env");
+    assert_eq!(cache_entry["value"], "/from-live-env");
+}
+
+#[test]
+fn show_config_user_token_default_redacts_value() {
+    // VIBEVM_PUBLISH_TOKEN is sensitive: even if defaulted via
+    // user-config (which would be a poor operator choice — token
+    // belongs in `~/.vibevm/<host>.publish.token` per PROP-000 §20
+    // — but we can't refuse to load) the value must NEVER appear in
+    // output.
+    let project = tempfile::tempdir().unwrap();
+    init_project(project.path());
+
+    let user_cfg_dir = tempfile::tempdir().unwrap();
+    let user_cfg_path = user_cfg_dir.path().join("config.toml");
+    fs::write(
+        &user_cfg_path,
+        "[env]\nVIBEVM_PUBLISH_TOKEN = \"secret-do-not-leak\"\n",
+    )
+    .unwrap();
+
+    let out = vibe()
+        .env("VIBEVM_USER_CONFIG", &user_cfg_path)
+        .env_remove("VIBEVM_PUBLISH_TOKEN")
+        .arg("--json")
+        .arg("show")
+        .arg("config")
+        .arg("--path")
+        .arg(project.path())
+        .output()
+        .unwrap();
+    assert!(out.status.success());
+    let stdout = String::from_utf8_lossy(&out.stdout);
+    assert!(
+        !stdout.contains("secret-do-not-leak"),
+        "token bytes leaked into stdout:\n{stdout}"
+    );
+    let payload: serde_json::Value =
+        serde_json::from_str(&stdout).expect("valid JSON");
+    let env_arr = payload["env"].as_array().unwrap();
+    let token = env_arr
+        .iter()
+        .find(|e| e["name"] == "VIBEVM_PUBLISH_TOKEN")
+        .unwrap();
+    assert_eq!(token["provenance"], "redacted");
+    assert!(token["value"]
+        .as_str()
+        .unwrap()
+        .contains("redacted"));
+}
+
+#[test]
 fn show_config_emits_registry_block_with_provenance() {
     let project = tempfile::tempdir().unwrap();
     init_project(project.path());
