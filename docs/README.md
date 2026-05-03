@@ -17,6 +17,7 @@ The `vibe` binary is the single entry point for every operation. Global flags `-
 | [`vibe registry set-mirror`](commands/registry-set-mirror.md) | Mutate `vibe.toml` to add a `[[mirror]]` block targeting a registry (or `*` for any). |
 | [`vibe registry remove`](commands/registry-remove.md) | Mutate `vibe.toml` to drop a `[[registry]]` or `[[mirror]]` block. |
 | [`vibe registry sync`](commands/registry-sync.md) | Refresh per-package registry clones referenced by the lockfile. |
+| [`vibe registry vendor`](commands/registry-vendor.md) | Generate a local mirror directory for offline / air-gapped installs. |
 | [`vibe registry publish`](commands/registry-publish.md) | Maintainer-side: publish a package directory as a tagged release. |
 | [`vibe version`](commands/version.md) | Print the binary's version. |
 

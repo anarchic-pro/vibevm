@@ -280,10 +280,12 @@ multi-source story to production quality.
   registry; integrity-checked against the lockfile; hard-fail on
   content drift, escape-hatch `--trust-mirror` for deliberate
   mirror-vs-upstream divergence during an upstream outage.
-- **`vibe vendor [--out <dir>]`** — generate a local mirror directory
-  containing every package referenced by the current lockfile, shaped
-  so it can be used as a `file://`-scheme `[[mirror]]`. Enables
-  air-gapped / offline installs without code changes elsewhere.
+- **`vibe registry vendor [--out <dir>] [--force]`** — generate a
+  local mirror directory containing every package referenced by the
+  current lockfile, shaped so it can be used as a `file://`-scheme
+  `[[mirror]]`. Enables air-gapped / offline installs without code
+  changes elsewhere. **Shipped (Phase B v0).** Reference docs at
+  [`docs/commands/registry-vendor.md`](docs/commands/registry-vendor.md).
 - **CLI surface for registry management** — `vibe registry add <name>
   <url>`, `vibe registry list`, `vibe registry set-mirror <of> <url>`,
   `vibe registry remove <name>`, `vibe registry status` (which
