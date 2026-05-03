@@ -81,6 +81,7 @@ really two tests — split them.
 | [`M1.1-git-registry-smoke.md`](M1.1-git-registry-smoke.md) | M1.1 | Install from the real GitVerse registry (legacy monorepo shape), `vibe registry sync`, lockfile `source_uri` shape. |
 | [`M1.5-gate-multi-package-smoke.md`](M1.5-gate-multi-package-smoke.md) | M1.5-gate | Install three flows from the legacy monorepo registry; distinct boot-snippet prefixes; one shared clone; symmetric uninstall. |
 | [`M1.5-gate-v2-per-package-smoke.md`](M1.5-gate-v2-per-package-smoke.md) | M1.1-revision | Install three flows from the new per-package `vibespecs/` org; lockfile v2 provenance; per-package cache layout; `vibe registry sync` walks; symmetric uninstall with root_dependencies tracking. |
+| [`M1.6-mirror-vendor-smoke.md`](M1.6-mirror-vendor-smoke.md) | M1.6 (Phase B v0) | `vibe registry vendor` → wire as `file://` `[[mirror]]` → install with the canonical primary deliberately broken (mirror fallback dispatch). Plus a multi-`[[registry]]` priority-walk scenario built on local fixture-backed bare repos. |
 
 Add a row to this table when you add a test. Keep the table sorted by
 milestone.
