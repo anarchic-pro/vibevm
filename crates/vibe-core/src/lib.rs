@@ -16,6 +16,7 @@ pub mod error;
 pub mod manifest;
 pub mod package_ref;
 pub mod timestamp;
+pub mod user_config;
 pub mod values;
 
 pub use capability_ref::CapabilityRef;
