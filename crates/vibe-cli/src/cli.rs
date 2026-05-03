@@ -48,6 +48,9 @@ pub enum Command {
     /// Run the spec-consistency linter against the project tree.
     Check(CheckArgs),
 
+    /// Inspect computed project state (effective spec, configuration).
+    Show(ShowArgs),
+
     /// Manage the registry cache (clone, sync).
     Registry(RegistryArgs),
 
@@ -301,6 +304,38 @@ pub struct InstallArgs {
     /// Skip the interactive confirmation prompt (non-interactive envs).
     #[arg(long, alias = "yes")]
     pub assume_yes: bool,
+}
+
+#[derive(Debug, clap::Args)]
+pub struct ShowArgs {
+    #[command(subcommand)]
+    pub command: ShowSubcommand,
+}
+
+#[derive(Debug, Subcommand)]
+pub enum ShowSubcommand {
+    /// Print the effective spec — every spec/boot file plus every
+    /// installed package's `files_written`, concatenated with
+    /// `spec://` provenance headers in stable order.
+    Effective(ShowEffectiveArgs),
+
+    /// Print the effective configuration with per-value provenance
+    /// (default / vibe.toml / env-var).
+    Config(ShowConfigArgs),
+}
+
+#[derive(Debug, clap::Args)]
+pub struct ShowEffectiveArgs {
+    /// Project root. Defaults to current directory.
+    #[arg(long, default_value = ".")]
+    pub path: PathBuf,
+}
+
+#[derive(Debug, clap::Args)]
+pub struct ShowConfigArgs {
+    /// Project root. Defaults to current directory.
+    #[arg(long, default_value = ".")]
+    pub path: PathBuf,
 }
 
 #[derive(Debug, clap::Args)]

@@ -680,6 +680,140 @@ fn update_refuses_when_user_edited_file() {
 }
 
 #[test]
+fn show_effective_emits_boot_files_and_wal_with_provenance() {
+    let project = tempfile::tempdir().unwrap();
+    init_project(project.path());
+
+    let assertion = vibe()
+        .arg("show")
+        .arg("effective")
+        .arg("--path")
+        .arg(project.path())
+        .assert()
+        .success();
+    let stdout = String::from_utf8_lossy(&assertion.get_output().stdout);
+    // 00-core and 90-user boot files, plus the WAL.
+    assert!(
+        stdout.contains("spec://project/boot/00-core.md"),
+        "expected 00-core spec URI; got:\n{stdout}"
+    );
+    assert!(
+        stdout.contains("spec://project/boot/90-user.md"),
+        "expected 90-user spec URI; got:\n{stdout}"
+    );
+    assert!(
+        stdout.contains("spec://project/WAL"),
+        "expected WAL spec URI; got:\n{stdout}"
+    );
+    // Provenance for foundation files.
+    assert!(
+        stdout.contains("(user)") || stdout.contains("(wal)"),
+        "expected user / wal provenance markers; got:\n{stdout}"
+    );
+}
+
+#[test]
+fn show_effective_attributes_installed_package_files() {
+    let project = tempfile::tempdir().unwrap();
+    init_project(project.path());
+
+    // Install flow:wal from the local fixture so the lockfile carries
+    // a real entry — show effective should attribute its files to
+    // the package.
+    vibe()
+        .arg("install")
+        .arg("flow:wal")
+        .arg("--path")
+        .arg(project.path())
+        .arg("--registry")
+        .arg(fixture_registry())
+        .arg("--assume-yes")
+        .assert()
+        .success();
+
+    let out = vibe()
+        .arg("--json")
+        .arg("show")
+        .arg("effective")
+        .arg("--path")
+        .arg(project.path())
+        .output()
+        .unwrap();
+    assert!(out.status.success());
+    let payload: serde_json::Value =
+        serde_json::from_slice(&out.stdout).expect("valid JSON");
+    assert_eq!(payload["ok"], true);
+    assert_eq!(payload["command"], "show:effective");
+    let sections = payload["sections"].as_array().unwrap();
+    // Boot snippet `10-flow-wal.md` should be attributed to the package.
+    let boot_section = sections
+        .iter()
+        .find(|s| s["path"] == "spec/boot/10-flow-wal.md")
+        .expect("expected 10-flow-wal.md section");
+    assert!(
+        boot_section["origin"]
+            .as_str()
+            .unwrap()
+            .starts_with("package:flow:wal"),
+        "got origin: {}",
+        boot_section["origin"]
+    );
+    // The package's spec/flows/wal/* files should each appear.
+    assert!(
+        sections
+            .iter()
+            .any(|s| s["path"]
+                .as_str()
+                .unwrap()
+                .starts_with("spec/flows/wal/")
+                && s["origin"]
+                    .as_str()
+                    .unwrap()
+                    .starts_with("package:flow:wal"))
+    );
+}
+
+#[test]
+fn show_config_emits_registry_block_with_provenance() {
+    let project = tempfile::tempdir().unwrap();
+    init_project(project.path());
+
+    let out = vibe()
+        .arg("--json")
+        .arg("show")
+        .arg("config")
+        .arg("--path")
+        .arg(project.path())
+        .output()
+        .unwrap();
+    assert!(out.status.success());
+    let payload: serde_json::Value =
+        serde_json::from_slice(&out.stdout).expect("valid JSON");
+    assert_eq!(payload["ok"], true);
+    assert_eq!(payload["command"], "show:config");
+    let registries = payload["registries"].as_array().unwrap();
+    assert!(!registries.is_empty(), "default `vibe init` configures a registry");
+    assert_eq!(registries[0]["provenance"], "vibe.toml");
+    let env = payload["env"].as_array().unwrap();
+    assert!(
+        env.iter()
+            .any(|e| e["name"] == "VIBEVM_PUBLISH_TOKEN"),
+        "VIBEVM_PUBLISH_TOKEN should appear in env block"
+    );
+    // Token entry must surface as either `default` (unset) or
+    // `redacted` (set in env). Never the raw value.
+    let token_entry = env
+        .iter()
+        .find(|e| e["name"] == "VIBEVM_PUBLISH_TOKEN")
+        .unwrap();
+    let prov = token_entry["provenance"].as_str().unwrap();
+    assert!(
+        prov == "default" || prov == "redacted",
+        "VIBEVM_PUBLISH_TOKEN provenance must be default/redacted; got `{prov}`"
+    );
+}
+
+#[test]
 fn check_clean_project_exits_zero_with_no_findings() {
     let project = tempfile::tempdir().unwrap();
     init_project(project.path());
@@ -1011,6 +1145,9 @@ fn every_subcommand_renders_help() {
         &["uninstall"],
         &["update"],
         &["check"],
+        &["show"],
+        &["show", "effective"],
+        &["show", "config"],
         &["registry"],                  // shows the registry subcommand enum
         &["registry", "sync"],
         &["registry", "publish"],

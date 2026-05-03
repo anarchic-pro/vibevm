@@ -36,6 +36,7 @@ fn main() -> ExitCode {
         Command::Uninstall(args) => commands::uninstall::run(&ctx, args),
         Command::Update(args) => commands::update::run(&ctx, args),
         Command::Check(args) => commands::check::run(&ctx, args),
+        Command::Show(args) => commands::show::run(&ctx, args),
         Command::Registry(args) => commands::registry::run(&ctx, args),
         Command::Version => {
             println!("vibe {}", env!("CARGO_PKG_VERSION"));

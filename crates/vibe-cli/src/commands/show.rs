@@ -1,0 +1,533 @@
+//! `vibe show <subcommand>` — inspect computed project state.
+//!
+//! v0 ships two pure-inspection subcommands; the M1.5+ runner-aware
+//! ones (`graph`, `node`, `plan`) land alongside the LLM-build
+//! pipeline.
+//!
+//! - `vibe show effective` — concatenate `spec/boot/*.md` (sorted by
+//!   the canonical `NN-` prefix) and every installed package's
+//!   `files_written` (in lockfile order), each preceded by a
+//!   `spec://` provenance header so a cold reader knows which
+//!   package contributed which content.
+//! - `vibe show config` — dump the effective configuration: every
+//!   `[[registry]]`, `[[mirror]]`, `[[override]]` from `vibe.toml`,
+//!   plus the runtime knobs read from environment variables, each
+//!   tagged with `provenance` so the operator sees where a value
+//!   actually came from.
+//!
+//! Spec: `VIBEVM-SPEC.md` §9.5 (configuration sources / provenance),
+//! §4.6 (effective spec), ROADMAP §M1.4.
+
+use std::fs;
+use std::path::{Path, PathBuf};
+
+use anyhow::{Context, Result, bail};
+use serde::Serialize;
+use vibe_core::manifest::{Lockfile, ProjectManifest};
+
+use crate::cli::{ShowArgs, ShowConfigArgs, ShowEffectiveArgs, ShowSubcommand};
+use crate::output;
+
+pub fn run(ctx: &output::Context, args: ShowArgs) -> Result<()> {
+    match args.command {
+        ShowSubcommand::Effective(sub) => run_effective(ctx, sub),
+        ShowSubcommand::Config(sub) => run_config(ctx, sub),
+    }
+}
+
+// ===================== show effective =====================
+
+#[derive(Debug, Serialize)]
+struct EffectiveReport {
+    ok: bool,
+    command: &'static str,
+    project: String,
+    sections: Vec<EffectiveSection>,
+}
+
+#[derive(Debug, Serialize)]
+struct EffectiveSection {
+    /// `spec://` URI for this section. Composed from the originating
+    /// package's `(kind, name)` plus the project-relative path.
+    /// User-owned files (the boot foundation, WAL) get
+    /// `spec://project/...`.
+    spec_uri: String,
+    /// Project-relative path of the file that produced this section.
+    path: String,
+    /// Origin of the section: `"package:<kind>:<name>@<version>"`,
+    /// `"user"`, or `"wal"`.
+    origin: String,
+    /// File content, verbatim.
+    body: String,
+}
+
+fn run_effective(ctx: &output::Context, args: ShowEffectiveArgs) -> Result<()> {
+    let project_root = resolve_project_root(&args.path)?;
+    let lockfile_path = project_root.join(Lockfile::FILENAME);
+    let lockfile = if lockfile_path.exists() {
+        Some(Lockfile::read(&lockfile_path).with_context(|| {
+            format!("reading `{}`", lockfile_path.display())
+        })?)
+    } else {
+        None
+    };
+
+    let mut sections: Vec<EffectiveSection> = Vec::new();
+
+    // 1. Boot dir — sorted by NN- prefix. Each file gets a
+    // user-or-package origin: the lockfile's `boot_snippet` field
+    // names which package contributed which `NN-…` file. Files not
+    // claimed by any lockfile entry (00-core / 90-user / hand-edited)
+    // surface as `user`.
+    let boot_dir = project_root.join("spec/boot");
+    if boot_dir.is_dir() {
+        let mut entries: Vec<PathBuf> = fs::read_dir(&boot_dir)
+            .with_context(|| format!("reading `{}`", boot_dir.display()))?
+            .filter_map(|e| e.ok())
+            .filter(|e| {
+                e.file_type()
+                    .map(|t| t.is_file())
+                    .unwrap_or(false)
+            })
+            .map(|e| e.path())
+            .filter(|p| {
+                p.extension()
+                    .map(|x| x == "md")
+                    .unwrap_or(false)
+            })
+            .collect();
+        entries.sort();
+        for path in entries {
+            let filename = path.file_name().unwrap().to_string_lossy().into_owned();
+            let rel = format!("spec/boot/{filename}");
+            let origin = boot_origin(&filename, lockfile.as_ref());
+            let spec_uri = format!("spec://project/boot/{filename}");
+            let body = fs::read_to_string(&path)
+                .with_context(|| format!("reading `{}`", path.display()))?;
+            sections.push(EffectiveSection {
+                spec_uri,
+                path: rel,
+                origin,
+                body,
+            });
+        }
+    }
+
+    // 2. WAL — always one section, distinct origin.
+    let wal = project_root.join("spec/WAL.md");
+    if wal.is_file() {
+        let body = fs::read_to_string(&wal)
+            .with_context(|| format!("reading `{}`", wal.display()))?;
+        sections.push(EffectiveSection {
+            spec_uri: "spec://project/WAL".to_string(),
+            path: "spec/WAL.md".to_string(),
+            origin: "wal".to_string(),
+            body,
+        });
+    }
+
+    // 3. Per package, in lockfile order: every file in `files_written`
+    // that we haven't already emitted (skip the boot snippet — it
+    // landed in step 1). Lockfile order is the install order, which
+    // is the same order the resolver pinned the graph in. Stable
+    // enough for cold-reader use.
+    if let Some(lockfile) = &lockfile {
+        for entry in &lockfile.packages {
+            let pkg_uri_root = format!(
+                "spec://{}/{}/{}",
+                entry.kind, entry.name, entry.version
+            );
+            let mut paths: Vec<PathBuf> = entry
+                .files_written
+                .iter()
+                .map(|p| normalize_rel_path(p))
+                .collect();
+            paths.sort();
+            for rel in paths {
+                let rel_str = rel.to_string_lossy().replace('\\', "/");
+                if rel_str.starts_with("spec/boot/") {
+                    // Already emitted under step 1.
+                    continue;
+                }
+                let abs = project_root.join(&rel);
+                if !abs.is_file() {
+                    // Missing file — surface as a section with empty
+                    // body and a warning header instead of crashing.
+                    // `vibe check` exists for the dedicated linter
+                    // path; `vibe show effective` is best-effort by
+                    // design.
+                    sections.push(EffectiveSection {
+                        spec_uri: format!(
+                            "{}/{}",
+                            pkg_uri_root,
+                            rel_str.trim_start_matches("spec/")
+                        ),
+                        path: rel_str.clone(),
+                        origin: format!(
+                            "package:{}:{}@{} (MISSING ON DISK)",
+                            entry.kind, entry.name, entry.version
+                        ),
+                        body: String::new(),
+                    });
+                    continue;
+                }
+                let body = fs::read_to_string(&abs)
+                    .with_context(|| format!("reading `{}`", abs.display()))?;
+                let suffix = rel_str.trim_start_matches("spec/");
+                sections.push(EffectiveSection {
+                    spec_uri: format!("{pkg_uri_root}/{suffix}"),
+                    path: rel_str,
+                    origin: format!(
+                        "package:{}:{}@{}",
+                        entry.kind, entry.name, entry.version
+                    ),
+                    body,
+                });
+            }
+        }
+    }
+
+    if ctx.is_json() {
+        let payload = EffectiveReport {
+            ok: true,
+            command: "show:effective",
+            project: project_root.display().to_string(),
+            sections,
+        };
+        ctx.emit_json(&payload)?;
+        return Ok(());
+    }
+    if ctx.is_quiet() {
+        ctx.summary(&format!(
+            "vibe show effective: {} section{} from `{}`",
+            sections.len(),
+            if sections.len() == 1 { "" } else { "s" },
+            project_root.display()
+        ));
+        return Ok(());
+    }
+    if sections.is_empty() {
+        ctx.summary(&format!(
+            "vibe show effective: nothing to materialise — `{}` has no spec/boot files, no WAL, and an empty lockfile",
+            project_root.display()
+        ));
+        return Ok(());
+    }
+    for section in &sections {
+        println!("--- {} ({})", section.spec_uri, section.origin);
+        println!("--- path: {}", section.path);
+        println!();
+        // Trim trailing newline so we don't double up before the next
+        // separator. The original file's content is preserved
+        // verbatim modulo that trailing trim.
+        if section.body.ends_with('\n') {
+            print!("{}", section.body);
+        } else {
+            println!("{}", section.body);
+        }
+        println!();
+    }
+    ctx.summary(&format!(
+        "vibe show effective: {} sections, project `{}`",
+        sections.len(),
+        project_root.display()
+    ));
+    Ok(())
+}
+
+fn boot_origin(filename: &str, lockfile: Option<&Lockfile>) -> String {
+    if filename == "00-core.md" || filename == "90-user.md" {
+        return "user".to_string();
+    }
+    let Some(lockfile) = lockfile else {
+        return "user".to_string();
+    };
+    if let Some(pkg) = lockfile
+        .packages
+        .iter()
+        .find(|p| p.boot_snippet.as_deref() == Some(filename))
+    {
+        return format!("package:{}:{}@{}", pkg.kind, pkg.name, pkg.version);
+    }
+    "user".to_string()
+}
+
+fn normalize_rel_path(p: &Path) -> PathBuf {
+    PathBuf::from(p.to_string_lossy().replace('\\', "/"))
+}
+
+// ===================== show config =====================
+
+#[derive(Debug, Serialize)]
+struct ConfigReport {
+    ok: bool,
+    command: &'static str,
+    project: String,
+    project_name: String,
+    project_version: String,
+    registries: Vec<ConfigRegistry>,
+    mirrors: Vec<ConfigMirror>,
+    overrides: Vec<ConfigOverride>,
+    env: Vec<ConfigEnvEntry>,
+}
+
+#[derive(Debug, Serialize)]
+struct ConfigRegistry {
+    name: String,
+    url: String,
+    #[serde(rename = "ref")]
+    refname: String,
+    naming: String,
+    /// `"vibe.toml"` for v0; future config layers (user-level,
+    /// CLI overrides) will surface here.
+    provenance: &'static str,
+}
+
+#[derive(Debug, Serialize)]
+struct ConfigMirror {
+    of: String,
+    url: String,
+    priority: i32,
+    provenance: &'static str,
+}
+
+#[derive(Debug, Serialize)]
+struct ConfigOverride {
+    pkgref: String,
+    source_url: String,
+    #[serde(rename = "ref", skip_serializing_if = "Option::is_none")]
+    refname: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    reason: Option<String>,
+    provenance: &'static str,
+}
+
+#[derive(Debug, Serialize)]
+struct ConfigEnvEntry {
+    name: &'static str,
+    value: Option<String>,
+    /// `"env"` (set in environment), `"default"` (built-in fallback,
+    /// no env value), or `"redacted"` (set in environment but the
+    /// raw value is sensitive — token-shaped).
+    provenance: &'static str,
+    /// Short description of what the variable controls.
+    description: &'static str,
+}
+
+const CONFIG_ENV_VARS: &[(&str, &str, bool /* sensitive */)] = &[
+    (
+        "VIBE_REGISTRY_CACHE",
+        "Override the default `~/.vibe/registries/` cache root.",
+        false,
+    ),
+    (
+        "VIBE_LOG",
+        "Tracing filter (reads `tracing-subscriber::EnvFilter`).",
+        false,
+    ),
+    (
+        "VIBEVM_PUBLISH_TOKEN",
+        "Publish token for `vibe registry publish` (host-agnostic; takes precedence over `~/.vibevm/<host>.publish.token`).",
+        true,
+    ),
+];
+
+fn run_config(ctx: &output::Context, args: ShowConfigArgs) -> Result<()> {
+    let project_root = resolve_project_root(&args.path)?;
+    let manifest_path = project_root.join(ProjectManifest::FILENAME);
+    let manifest = ProjectManifest::read(&manifest_path).with_context(|| {
+        format!("reading `{}`", manifest_path.display())
+    })?;
+
+    let registries: Vec<ConfigRegistry> = manifest
+        .registries
+        .iter()
+        .map(|r| ConfigRegistry {
+            name: r.name.clone(),
+            url: r.url.clone(),
+            refname: r.r#ref.clone(),
+            naming: naming_label(r.naming),
+            provenance: "vibe.toml",
+        })
+        .collect();
+    let mirrors: Vec<ConfigMirror> = manifest
+        .mirrors
+        .iter()
+        .map(|m| ConfigMirror {
+            of: m.of.clone(),
+            url: m.url.clone(),
+            priority: m.priority,
+            provenance: "vibe.toml",
+        })
+        .collect();
+    let overrides: Vec<ConfigOverride> = manifest
+        .overrides
+        .iter()
+        .map(|o| ConfigOverride {
+            pkgref: o.pkgref.clone(),
+            source_url: o.source_url.clone(),
+            refname: o.r#ref.clone(),
+            reason: o.reason.clone(),
+            provenance: "vibe.toml",
+        })
+        .collect();
+
+    let env: Vec<ConfigEnvEntry> = CONFIG_ENV_VARS
+        .iter()
+        .map(|(name, desc, sensitive)| {
+            let value = std::env::var(*name).ok();
+            let (rendered, provenance) = match (&value, sensitive) {
+                (Some(_), true) => (
+                    Some("(redacted; set in environment)".to_string()),
+                    "redacted",
+                ),
+                (Some(v), false) => (Some(v.clone()), "env"),
+                (None, _) => (None, "default"),
+            };
+            ConfigEnvEntry {
+                name,
+                value: rendered,
+                provenance,
+                description: desc,
+            }
+        })
+        .collect();
+
+    if ctx.is_json() {
+        let payload = ConfigReport {
+            ok: true,
+            command: "show:config",
+            project: project_root.display().to_string(),
+            project_name: manifest.project.name.clone(),
+            project_version: manifest.project.version.clone(),
+            registries,
+            mirrors,
+            overrides,
+            env,
+        };
+        ctx.emit_json(&payload)?;
+        return Ok(());
+    }
+    if ctx.is_quiet() {
+        ctx.summary(&format!(
+            "vibe show config: {} registries, {} mirror{}, {} override{}, {} env entries",
+            registries.len(),
+            mirrors.len(),
+            if mirrors.len() == 1 { "" } else { "s" },
+            overrides.len(),
+            if overrides.len() == 1 { "" } else { "s" },
+            env.len(),
+        ));
+        return Ok(());
+    }
+
+    println!(
+        "Project: {} {} ({})",
+        manifest.project.name,
+        manifest.project.version,
+        project_root.display()
+    );
+    println!();
+    println!(
+        "Registries ({}; primary first):",
+        registries.len()
+    );
+    if registries.is_empty() {
+        println!("  (none configured)");
+    } else {
+        for (i, r) in registries.iter().enumerate() {
+            let primary = if i == 0 { " (primary)" } else { "" };
+            println!(
+                "  {}. {}{}\n     url:    {}\n     ref:    {}\n     naming: {}\n     source: {}",
+                i + 1,
+                r.name,
+                primary,
+                r.url,
+                r.refname,
+                r.naming,
+                r.provenance
+            );
+        }
+    }
+    println!();
+    println!("Mirrors ({}):", mirrors.len());
+    if mirrors.is_empty() {
+        println!("  (none configured)");
+    } else {
+        for m in &mirrors {
+            println!(
+                "  - of=`{}` priority={} url={} (source: {})",
+                m.of, m.priority, m.url, m.provenance
+            );
+        }
+    }
+    println!();
+    println!("Overrides ({}):", overrides.len());
+    if overrides.is_empty() {
+        println!("  (none configured)");
+    } else {
+        for o in &overrides {
+            let ref_part = o
+                .refname
+                .as_deref()
+                .map(|r| format!("@{r}"))
+                .unwrap_or_default();
+            let reason_part = o
+                .reason
+                .as_deref()
+                .map(|r| format!(" — {r}"))
+                .unwrap_or_default();
+            println!(
+                "  - {} → {}{}{} (source: {})",
+                o.pkgref, o.source_url, ref_part, reason_part, o.provenance
+            );
+        }
+    }
+    println!();
+    println!("Environment:");
+    for e in &env {
+        let value_part = match (&e.value, e.provenance) {
+            (Some(v), "redacted") => v.clone(),
+            (Some(v), _) => format!("`{v}`"),
+            (None, _) => "(unset; using built-in default)".to_string(),
+        };
+        println!(
+            "  {}  [source: {}]\n    {}\n    {}",
+            e.name, e.provenance, e.description, value_part
+        );
+    }
+
+    ctx.summary(&format!(
+        "\nvibe show config: {} registries, {} mirrors, {} overrides, {} env entries",
+        registries.len(),
+        mirrors.len(),
+        overrides.len(),
+        env.len()
+    ));
+    Ok(())
+}
+
+fn naming_label(naming: vibe_core::manifest::NamingConvention) -> String {
+    match naming {
+        vibe_core::manifest::NamingConvention::KindName => "kind-name",
+        vibe_core::manifest::NamingConvention::Name => "name",
+        vibe_core::manifest::NamingConvention::KindSlashName => "kind/name",
+    }
+    .to_string()
+}
+
+// ===================== shared =====================
+
+fn resolve_project_root(path: &Path) -> Result<PathBuf> {
+    let canonical = path
+        .canonicalize()
+        .with_context(|| format!("canonicalizing `{}`", path.display()))?;
+    let stripped = super::init::strip_unc_public(canonical);
+    if !stripped.join(ProjectManifest::FILENAME).exists() {
+        bail!(
+            "no `vibe.toml` in `{}`; run `vibe init` first or pass `--path <dir>` pointing at a project root",
+            stripped.display()
+        );
+    }
+    Ok(stripped)
+}
