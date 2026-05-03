@@ -421,6 +421,191 @@ fn install_from_git_registry() {
     // walks the lockfile to refresh per-package clones.
 }
 
+#[test]
+fn vendor_produces_bare_repo_per_lockfile_entry() {
+    // End-to-end: install from a per-package git registry, then run
+    // `vibe registry vendor`. The vendor dir should contain a bare
+    // git repo per lockfile entry, ready for use as `[[mirror]] url
+    // = "file:///<abs>"`. Verifies the repo is consumable by checking
+    // that `git clone` succeeds against it and that the v0.1.0 tag
+    // is preserved.
+    if !git_available() {
+        eprintln!("skipping vendor_produces_bare_repo_per_lockfile_entry: git not on PATH");
+        return;
+    }
+
+    let outer = tempfile::tempdir().unwrap();
+    let org_root = make_per_package_registry(outer.path());
+    let cache = outer.path().join("cache");
+    fs::create_dir_all(&cache).unwrap();
+
+    let project = tempfile::tempdir().unwrap();
+    init_project(project.path());
+    let url = format!("git+file://{}", org_root.to_string_lossy().replace('\\', "/"));
+    write_project_with_per_package_registry(project.path(), &url);
+
+    vibe()
+        .env("VIBE_REGISTRY_CACHE", &cache)
+        .arg("install")
+        .arg("flow:wal")
+        .arg("--path")
+        .arg(project.path())
+        .arg("--assume-yes")
+        .assert()
+        .success();
+
+    // Run `vibe registry vendor` against the freshly installed project.
+    let vendor_dir = outer.path().join("vendor-output");
+    vibe()
+        .env("VIBE_REGISTRY_CACHE", &cache)
+        .arg("registry")
+        .arg("vendor")
+        .arg("--out")
+        .arg(&vendor_dir)
+        .arg("--path")
+        .arg(project.path())
+        .assert()
+        .success();
+
+    // The vendor dir contains a bare repo for the package and a
+    // README.md explaining how to wire it.
+    let bare_repo = vendor_dir.join("flow-wal.git");
+    assert!(
+        bare_repo.is_dir(),
+        "expected vendor bare repo at {}",
+        bare_repo.display()
+    );
+    assert!(
+        bare_repo.join("HEAD").is_file(),
+        "expected HEAD in vendor bare repo"
+    );
+    // Either loose ref or packed-refs is acceptable depending on git
+    // version — tag presence is verified via `git ls-remote` below.
+    assert!(
+        vendor_dir.join("README.md").is_file(),
+        "expected vendor/README.md"
+    );
+
+    // Verify the bare repo is a usable git source. `git ls-remote
+    // <vendor>/flow-wal.git` must list the v0.1.0 tag the install
+    // pulled in.
+    let ls_out = std::process::Command::new("git")
+        .args(["ls-remote", "--tags", bare_repo.to_str().unwrap()])
+        .env("LC_ALL", "C")
+        .env("LANG", "C")
+        .output()
+        .expect("spawn git ls-remote");
+    assert!(
+        ls_out.status.success(),
+        "git ls-remote against vendored repo failed: {}",
+        String::from_utf8_lossy(&ls_out.stderr)
+    );
+    let tags = String::from_utf8_lossy(&ls_out.stdout);
+    assert!(
+        tags.contains("refs/tags/v0.1.0"),
+        "vendored repo missing v0.1.0 tag — got:\n{tags}"
+    );
+
+    // Cloning from the vendored repo into a fresh worktree must
+    // produce the original package content. This is the
+    // operationally-relevant promise of `vibe registry vendor`:
+    // the dir is a true git source.
+    let worktree = outer.path().join("clone-from-vendor");
+    let clone_out = std::process::Command::new("git")
+        .args([
+            "clone",
+            "--branch",
+            "v0.1.0",
+            bare_repo.to_str().unwrap(),
+            worktree.to_str().unwrap(),
+        ])
+        .env("LC_ALL", "C")
+        .env("LANG", "C")
+        .output()
+        .expect("spawn git clone");
+    assert!(
+        clone_out.status.success(),
+        "git clone of vendored repo failed: {}",
+        String::from_utf8_lossy(&clone_out.stderr)
+    );
+    assert!(
+        worktree.join("vibe-package.toml").is_file(),
+        "vendored repo's v0.1.0 tag did not produce expected payload"
+    );
+}
+
+#[test]
+fn vendor_refuses_non_empty_out_dir_without_force() {
+    if !git_available() {
+        eprintln!("skipping vendor_refuses_non_empty_out_dir_without_force: git not on PATH");
+        return;
+    }
+
+    let outer = tempfile::tempdir().unwrap();
+    let org_root = make_per_package_registry(outer.path());
+    let cache = outer.path().join("cache");
+    fs::create_dir_all(&cache).unwrap();
+
+    let project = tempfile::tempdir().unwrap();
+    init_project(project.path());
+    let url = format!("git+file://{}", org_root.to_string_lossy().replace('\\', "/"));
+    write_project_with_per_package_registry(project.path(), &url);
+
+    vibe()
+        .env("VIBE_REGISTRY_CACHE", &cache)
+        .arg("install")
+        .arg("flow:wal")
+        .arg("--path")
+        .arg(project.path())
+        .arg("--assume-yes")
+        .assert()
+        .success();
+
+    // Plant operator content in the would-be vendor dir.
+    let vendor_dir = outer.path().join("user-content");
+    fs::create_dir_all(&vendor_dir).unwrap();
+    fs::write(vendor_dir.join("important.txt"), "do not delete\n").unwrap();
+
+    // Without --force, vendor must refuse. Operator content survives.
+    vibe()
+        .env("VIBE_REGISTRY_CACHE", &cache)
+        .arg("registry")
+        .arg("vendor")
+        .arg("--out")
+        .arg(&vendor_dir)
+        .arg("--path")
+        .arg(project.path())
+        .assert()
+        .failure()
+        .stderr(predicate::str::contains("not empty"))
+        .stderr(predicate::str::contains("--force"));
+    assert!(
+        vendor_dir.join("important.txt").exists(),
+        "user content was wiped despite --force not being passed"
+    );
+
+    // With --force, vendor proceeds and the user content is gone.
+    vibe()
+        .env("VIBE_REGISTRY_CACHE", &cache)
+        .arg("registry")
+        .arg("vendor")
+        .arg("--out")
+        .arg(&vendor_dir)
+        .arg("--force")
+        .arg("--path")
+        .arg(project.path())
+        .assert()
+        .success();
+    assert!(
+        !vendor_dir.join("important.txt").exists(),
+        "important.txt should be gone after --force vendor"
+    );
+    assert!(
+        vendor_dir.join("flow-wal.git").is_dir(),
+        "vendored bare repo missing after --force"
+    );
+}
+
 // ---------------------------------------------------------------------------
 // Help-text smoke — every CLI subcommand renders `--help`
 // ---------------------------------------------------------------------------
@@ -448,9 +633,14 @@ fn every_subcommand_renders_help() {
         &["install"],
         &["list"],
         &["uninstall"],
-        &["registry"],                  // shows the `sync` / `publish` enum
+        &["registry"],                  // shows the registry subcommand enum
         &["registry", "sync"],
         &["registry", "publish"],
+        &["registry", "list"],
+        &["registry", "add"],
+        &["registry", "set-mirror"],
+        &["registry", "remove"],
+        &["registry", "vendor"],
         &["version"],
     ];
 

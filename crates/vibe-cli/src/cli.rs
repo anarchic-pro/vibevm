@@ -78,6 +78,32 @@ pub enum RegistrySubcommand {
 
     /// Remove a `[[registry]]` or `[[mirror]]` block from `vibe.toml`.
     Remove(RegistryRemoveArgs),
+
+    /// Generate a local mirror directory containing every package
+    /// referenced by `vibe.lock`, suitable for use as a
+    /// `[[mirror]] url = "file:///<abs-path>"` for offline / air-gapped
+    /// installs.
+    Vendor(RegistryVendorArgs),
+}
+
+#[derive(Debug, clap::Args)]
+pub struct RegistryVendorArgs {
+    /// Output directory for the vendor mirror. Each package becomes a
+    /// bare repo at `<out>/<kind>-<name>.git/` (or whatever the
+    /// registry's naming convention produces). Defaults to
+    /// `<project>/vendor/`.
+    #[arg(long)]
+    pub out: Option<PathBuf>,
+
+    /// If `--out` exists and is non-empty, wipe it before vendoring.
+    /// Without this flag, a non-empty target dir is a hard error —
+    /// vibe never silently overwrites the operator's content.
+    #[arg(long)]
+    pub force: bool,
+
+    /// Project root with `vibe.toml`. Defaults to current directory.
+    #[arg(long, default_value = ".")]
+    pub path: PathBuf,
 }
 
 #[derive(Debug, clap::Args)]
