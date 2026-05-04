@@ -16,6 +16,7 @@ semver.workspace = true
 tracing.workspace = true
 vibe-core.workspace = true
 vibe-registry.workspace = true
+walkdir.workspace = true
 
 [dev-dependencies]
 tempfile.workspace = true
