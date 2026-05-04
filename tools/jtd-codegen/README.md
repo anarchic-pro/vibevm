@@ -28,10 +28,12 @@ travels with the repo.
 
 ```sh
 # From repo root, in PowerShell or Git Bash:
-curl -LO https://github.com/jsontypedef/json-typedef-codegen/releases/download/v0.4.1/x86_64-pc-windows-msvc.zip
-unzip -d tools/jtd-codegen x86_64-pc-windows-msvc.zip
-rm x86_64-pc-windows-msvc.zip
+curl -LO https://github.com/jsontypedef/json-typedef-codegen/releases/download/v0.4.1/x86_64-pc-windows-gnu.zip
+unzip -d tools/jtd-codegen x86_64-pc-windows-gnu.zip
+rm x86_64-pc-windows-gnu.zip
 ```
+
+(Upstream ships a `gnu` build, not `msvc` — the static binary works on all Windows hosts the project targets.)
 
 ### macOS
 
