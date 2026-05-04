@@ -112,11 +112,21 @@ The dry-run output shows the synthetic clone URL, the action verb (`Would create
 
 vibevm is its own bootstrap project: the repo root carries a minimal `vibe.toml` plus an empty-`[[package]]` `vibe.lock` so the shipped `vibe check` linter can run against the same `spec/` corpus the tool itself produces. The manifest does not declare any installed packages — vibevm is the tool, not a consumer of itself today; full self-hosting under `packages/` lands post-M1.
 
+The canonical entry point is the bundled script:
+
 ```sh
-cargo run -p vibe-cli -- check --path . --quiet
+bash tools/self-check.sh
 ```
 
-The expected output is `vibe check: 0 errors, 0 warnings, 0 info`. The six v0 checks (manifest validity, WAL freshness, WAL well-formedness, boot directory, lockfile/disk consistency, REVIEW marker aging) all run.
+It runs three invariants in order, exiting non-zero on the first failure (pass `--keep-going` to run all three regardless):
+
+1. `cargo test --workspace` — every test green.
+2. `cargo clippy --workspace --all-targets -- -D warnings` — zero warnings, treated as errors.
+3. `cargo run -p vibe-cli -- check --path . --quiet` — spec linter on the bootstrap manifest. Expected output: `vibe check: 0 errors, 0 warnings, 0 info`.
+
+If you only want the spec linter without the build/test prelude, run step 3 directly. Note: pre-built binaries under `target/release/` and `target/debug/` may be out of date relative to the source tree (e.g. built before a subcommand was added); the script always goes through `cargo run` so the binary is guaranteed to match `HEAD`.
+
+CI wiring: a single `bash tools/self-check.sh` line is enough. Local development: run before opening a PR; for quick iteration during a feature, run the relevant slice directly (`cargo test -p vibe-foo`) and reserve `self-check.sh` for "is the tree shippable right now?".
 
 If you `vibe install <pkgref>` against this manifest by accident, the install will succeed — there are no boot-prefix collisions today (`spec/boot/` carries only `00-core.md` and `90-user.md`). It will, however, materialise package files into `spec/flows/`, `spec/feats/`, or `spec/stacks/` and rewrite `vibe.lock` with `[[package]]` entries; revert with `vibe uninstall` (or `git restore vibe.lock spec/`) before committing.
 
