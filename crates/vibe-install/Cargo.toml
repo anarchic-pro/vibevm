@@ -13,6 +13,7 @@ description = "Install, uninstall, and update flows for vibevm packages"
 [dependencies]
 vibe-core.workspace = true
 vibe-registry.workspace = true
+vibe-resolver.workspace = true
 vibe-graph.workspace = true
 anyhow.workspace = true
 thiserror.workspace = true

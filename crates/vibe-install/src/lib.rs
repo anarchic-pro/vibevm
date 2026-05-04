@@ -141,6 +141,28 @@ pub enum InstallError {
         #[source]
         source: std::io::Error,
     },
+
+    #[error(
+        "subskill `{subskill_path}` could not be read: {detail}"
+    )]
+    SubskillReadFailed {
+        subskill_path: String,
+        detail: String,
+    },
+
+    #[error(
+        "subskill `{subskill_path}` writes target `{}` which collides with another planned write in this install",
+        target.display()
+    )]
+    SubskillFileCollision {
+        subskill_path: String,
+        target: PathBuf,
+    },
+
+    #[error(
+        "subskill conflict: `{a}` and `{b}` cannot be active together (declared in `[conflicts].subskills`)"
+    )]
+    SubskillConflict { a: String, b: String },
 }
 
 impl InstallError {
@@ -154,10 +176,22 @@ impl InstallError {
     }
 }
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+#[derive(Debug, Clone, PartialEq, Eq)]
 pub enum WriteKind {
+    /// `[writes]` entry from the package's main manifest.
     Regular,
+    /// Top-level `[boot_snippet]` from the package's main manifest.
     BootSnippet,
+    /// File belonging to an active subskill. The string is the subskill
+    /// path (`stack/rust`, etc.) so install reports can label
+    /// subskill-driven writes distinctly from the package's main
+    /// content.
+    SubskillContent { subskill_path: String },
+    /// Boot snippet from a subskill — same as `BootSnippet` but
+    /// authored on a subskill rather than the package itself. For now
+    /// vibe doesn't have a separate subskill boot mechanism, so this
+    /// is reserved.
+    SubskillBootSnippet { subskill_path: String },
 }
 
 #[derive(Debug, Clone)]
@@ -171,11 +205,36 @@ pub struct PlannedWrite {
     pub target_abs: PathBuf,
 }
 
+/// Outcome of evaluating a single subskill's activation rules at plan
+/// time. Recorded on `InstallPlan` so `register_installed` can emit
+/// the lockfile `subskills_active` entry without re-walking the
+/// activation logic.
+#[derive(Debug, Clone)]
+pub struct ActiveSubskill {
+    /// Canonical addressable name within the parent package, e.g.
+    /// `stack/rust`.
+    pub path: String,
+    /// Resolved delivery mode at plan time. `lazy-push` / `lazy-pull`
+    /// degrade to `eager` until `vibe-mcp` (M1.7) lands; the manifest
+    /// value is recorded here regardless so the lockfile remains
+    /// truthful and a future resolver upgrade can light up the runtime
+    /// behaviour without lockfile churn.
+    pub delivery: vibe_core::manifest::DeliveryMode,
+    /// Subskill's own `describes` PURL, if any. Forwarded into the
+    /// lockfile entry.
+    pub describes: Option<String>,
+    /// Channels that fired during evaluation (for diagnostic output).
+    pub channels_matched: Vec<&'static str>,
+}
+
 #[derive(Debug, Clone)]
 pub struct InstallPlan {
     pub cached: CachedPackage,
     pub writes: Vec<PlannedWrite>,
     pub boot_snippet_filename: Option<String>,
+    /// Subskills active for this install. Includes both manual
+    /// (feature-driven) and context-based activations.
+    pub active_subskills: Vec<ActiveSubskill>,
 }
 
 impl InstallPlan {
@@ -190,9 +249,10 @@ impl InstallPlan {
 }
 
 /// Knobs threaded into `plan_install`. Empty default = legacy behaviour
-/// (no language fallback, English-only canonical paths). PROP-003 r2
-/// language preference flows in here from `vibe-cli install --language`
-/// + project-level `[i18n]` declaration.
+/// (no language fallback, English-only canonical paths, no features
+/// activated, no subskills materialised). PROP-003 r2 surfaces every
+/// new flag here so the function signature stays stable as further
+/// slices land.
 #[derive(Debug, Clone, Default)]
 pub struct InstallOptions {
     /// Resolved language preference chain in priority order. First entry
@@ -200,6 +260,25 @@ pub struct InstallOptions {
     /// (no-suffix) variant is consulted last. Empty = no localisation,
     /// all source files used verbatim.
     pub language_chain: Vec<String>,
+
+    /// Features active for *this* package. Caller (typically
+    /// `vibe-cli`) collects from CLI flags, project manifest, and
+    /// transitive defaults; passes the resolved set in for the install
+    /// plan to materialise feature-driven content (subskill paths from
+    /// `[features]` activation, optional-dep flags, …). Empty = no
+    /// non-default features active.
+    pub feature_expansion: vibe_resolver::FeatureExpansion,
+
+    /// Snapshot of project / machine state used to evaluate subskill
+    /// `[activation]` probes. Empty default = no context-based
+    /// activation; only manual (via parent feature) channels fire.
+    pub activation_context: vibe_resolver::ActivationContext,
+
+    /// Manifest-declared `describes` PURL for this package
+    /// (forwarded from the package's `[package].describes`). Lockfile
+    /// records this verbatim as a string so PURL parsing differences
+    /// across versions don't change the lockfile bytes.
+    pub describes: Option<String>,
 }
 
 /// Build an [`InstallPlan`] without touching disk beyond reads. Legacy
@@ -324,11 +403,239 @@ pub fn plan_install_with_options(
         boot_snippet_filename = Some(snippet.filename.clone());
     }
 
+    // 4. Subskill discovery + activation + materialisation
+    // (PROP-003 §2.5).
+    //
+    // Walk `<cache>/subskills/<...>/vibe-subskill.toml`, evaluate each
+    // subskill's activation rules against the manual channel
+    // (`feature_expansion.active_subskills`) and the context probes,
+    // and add eager-mode writes to the plan. lazy-push / lazy-pull
+    // delivery modes degrade to eager with a `tracing::warn!` until
+    // M1.7 (`vibe-mcp`) lands; the manifest mode is preserved on the
+    // ActiveSubskill record so the lockfile stays truthful.
+    let manifest_describes_type = manifest
+        .package
+        .describes
+        .as_ref()
+        .map(|p| p.purl_type.clone());
+    let active_subskills = collect_active_subskills(
+        &cached.cache_dir,
+        &options.feature_expansion,
+        &options.activation_context,
+        manifest_describes_type.as_deref(),
+    )?;
+
+    for sub in &active_subskills {
+        let sub_root = cached.cache_dir.join("subskills").join(&sub.path);
+        let manifest_path = sub_root.join(SubskillManifestFile::FILENAME);
+        let sub_manifest = SubskillManifestFile::read(&manifest_path)
+            .map_err(|e| InstallError::SubskillReadFailed {
+                subskill_path: sub.path.clone(),
+                detail: e.to_string(),
+            })?;
+        match sub.delivery {
+            DeliveryMode::Eager => {}
+            DeliveryMode::LazyPush | DeliveryMode::LazyPull => {
+                tracing::warn!(
+                    target: "vibe_install",
+                    subskill = %sub.path,
+                    delivery = %sub.delivery.as_str(),
+                    package = %format!("{}:{}", cached.resolved.kind, cached.resolved.name),
+                    "subskill delivery `{}` not yet runtime-supported (M1.7); degrading to `eager` for materialisation. Manifest mode preserved in lockfile.",
+                    sub.delivery.as_str()
+                );
+            }
+        }
+        for file in &sub_manifest.content.files_written {
+            validate_target_rel(file)?;
+            let source_abs = if options.language_chain.is_empty() {
+                let abs = sub_root.join(file);
+                if !abs.is_file() {
+                    return Err(InstallError::MissingSourceFile { path: file.clone() });
+                }
+                abs
+            } else {
+                resolve_localised(&sub_root, file, &options.language_chain)
+                    .ok_or_else(|| InstallError::MissingSourceFile { path: file.clone() })?
+            };
+            let target_abs = project_root.join(file);
+            reject_existing_target(&target_abs)?;
+            let target_rel = normalize_rel(file);
+            if !seen_targets.insert(target_rel.clone()) {
+                // Same-package collision between base writes and a subskill
+                // (or between two active subskills) is an authoring bug —
+                // refuse loud.
+                return Err(InstallError::SubskillFileCollision {
+                    subskill_path: sub.path.clone(),
+                    target: target_rel,
+                });
+            }
+            // Boot-prefix conflict guard fires for any file landing
+            // under `spec/boot/`. Subskills frequently ship snippets;
+            // pin the exact same NN-prefix uniqueness invariant.
+            if let Some(boot_filename) = boot_filename_from(&target_rel) {
+                validate_boot_filename(&boot_filename)?;
+                reject_boot_snippet_conflict(
+                    project_root,
+                    lockfile,
+                    &boot_filename,
+                    &cached.resolved.kind,
+                    &cached.resolved.name,
+                )?;
+            }
+            writes.push(PlannedWrite {
+                kind: WriteKind::SubskillContent {
+                    subskill_path: sub.path.clone(),
+                },
+                source_abs,
+                target_rel,
+                target_abs,
+            });
+        }
+    }
+
     Ok(InstallPlan {
         cached,
         writes,
         boot_snippet_filename,
+        active_subskills,
     })
+}
+
+// ----------------------------------------------------------------------
+// Subskill discovery + activation
+// ----------------------------------------------------------------------
+
+use vibe_core::manifest::DeliveryMode;
+use vibe_core::manifest::SubskillManifest as SubskillManifestFile;
+
+/// Walk `<cache_dir>/subskills/` non-recursively past depth 1
+/// (PROP-003 §2.5.5 caps recursion at 3; recursive subskill resolution
+/// is queued for a follow-up slice). Returns the active set in
+/// canonical-path-sorted order so install plans are deterministic.
+fn collect_active_subskills(
+    cache_dir: &Path,
+    feat_exp: &vibe_resolver::FeatureExpansion,
+    ctx: &vibe_resolver::ActivationContext,
+    package_describes_type: Option<&str>,
+) -> Result<Vec<ActiveSubskill>, InstallError> {
+    let subskills_dir = cache_dir.join("subskills");
+    if !subskills_dir.is_dir() {
+        return Ok(Vec::new());
+    }
+
+    // Collect every subskill manifest plus the relative path inside
+    // `subskills/`. Walk to a generous depth (8) so deeply-nested layouts
+    // still surface; the depth cap from PROP-003 §2.5.5 is enforced via
+    // a separate findings pass in `vibe-check`, not here.
+    let mut found: Vec<(String, SubskillManifestFile)> = Vec::new();
+    for entry in walkdir::WalkDir::new(&subskills_dir)
+        .max_depth(8)
+        .into_iter()
+        .filter_map(|e| e.ok())
+    {
+        if !entry.file_type().is_file() {
+            continue;
+        }
+        if entry.file_name() != SubskillManifestFile::FILENAME {
+            continue;
+        }
+        let manifest_path = entry.path();
+        let parent = manifest_path
+            .parent()
+            .ok_or_else(|| InstallError::SubskillReadFailed {
+                subskill_path: manifest_path.display().to_string(),
+                detail: "subskill manifest has no parent dir".into(),
+            })?;
+        let rel = parent
+            .strip_prefix(&subskills_dir)
+            .map_err(|e| InstallError::SubskillReadFailed {
+                subskill_path: parent.display().to_string(),
+                detail: e.to_string(),
+            })?
+            .to_string_lossy()
+            .replace('\\', "/");
+        let manifest = SubskillManifestFile::read(manifest_path).map_err(|e| {
+            InstallError::SubskillReadFailed {
+                subskill_path: rel.clone(),
+                detail: e.to_string(),
+            }
+        })?;
+        // The `path` field in the manifest must match the directory path —
+        // catches authoring drift loudly.
+        if manifest.subskill.path != rel {
+            return Err(InstallError::SubskillReadFailed {
+                subskill_path: rel.clone(),
+                detail: format!(
+                    "subskill manifest declares path `{}` but lives at `subskills/{}`",
+                    manifest.subskill.path, rel
+                ),
+            });
+        }
+        found.push((rel, manifest));
+    }
+    // Sort for deterministic order.
+    found.sort_by(|a, b| a.0.cmp(&b.0));
+
+    // Evaluate activation per subskill.
+    let mut active: Vec<ActiveSubskill> = Vec::new();
+    for (path, manifest) in &found {
+        let manual_match = feat_exp.active_subskills.contains(path);
+        let sub_describes_type = manifest
+            .subskill
+            .describes
+            .as_ref()
+            .map(|p| p.purl_type.as_str())
+            .or(package_describes_type);
+        let probe_outcome =
+            vibe_resolver::activation::evaluate(&manifest.activation, ctx, sub_describes_type);
+        if !manual_match && !probe_outcome.active {
+            continue;
+        }
+        let mut channels: Vec<&'static str> = Vec::new();
+        if manual_match {
+            channels.push("manual");
+        }
+        channels.extend(probe_outcome.channels_matched);
+        active.push(ActiveSubskill {
+            path: path.clone(),
+            delivery: manifest.subskill.delivery,
+            describes: manifest.subskill.describes.as_ref().map(|p| p.to_string()),
+            channels_matched: channels,
+        });
+    }
+
+    // Conflict enforcement: every active subskill's
+    // `[conflicts].subskills` list must not contain another active
+    // subskill from the same package.
+    let active_paths: std::collections::HashSet<String> =
+        active.iter().map(|a| a.path.clone()).collect();
+    for (path, manifest) in &found {
+        if !active_paths.contains(path) {
+            continue;
+        }
+        for conflict in &manifest.conflicts.subskills {
+            if active_paths.contains(conflict) {
+                return Err(InstallError::SubskillConflict {
+                    a: path.clone(),
+                    b: conflict.clone(),
+                });
+            }
+        }
+    }
+
+    Ok(active)
+}
+
+/// Extract the boot-snippet filename from a `spec/boot/<NN-name>.<ext>`
+/// path. Returns `None` for any other shape.
+fn boot_filename_from(target_rel: &Path) -> Option<String> {
+    let s = target_rel.to_string_lossy().replace('\\', "/");
+    let stripped = s.strip_prefix("spec/boot/")?;
+    if stripped.contains('/') {
+        return None;
+    }
+    Some(stripped.to_string())
 }
 
 /// Perform the writes declared by `plan`. Returns the relative paths (as
@@ -382,19 +689,47 @@ pub fn register_installed(
     generated_at: String,
     dependencies: Vec<PackageRef>,
 ) {
-    // Lockfile-v2 provenance fields are forwarded from the `CachedPackage`
-    // produced by whichever registry impl served this install. Each impl
-    // fills them according to its semantics:
-    //
-    // - `LocalRegistry` (`--registry <path>`) and the legacy monorepo
-    //   `GitRegistry` leave them blank (None / false) — the M0-shape
-    //   doesn't carry registry-name or source-ref provenance.
-    // - `GitPackageRegistry` (per-package model, PROP-002) fills
-    //   `registry_name` from the `[[registry]].name` and `source_ref`
-    //   from the version tag.
-    // - `MultiRegistryResolver`'s override path sets `overridden = true`
-    //   and records the override's ref.
-    //
+    register_installed_with_metadata(
+        lockfile,
+        plan,
+        files_written,
+        generated_at,
+        dependencies,
+        RegisterMetadata::default(),
+    );
+}
+
+/// PROP-003 r2 lockfile-v3 fields. Empty/None defaults preserve the
+/// legacy v2-shape lockfile bytes for installs that don't activate
+/// features / subskills / language.
+#[derive(Debug, Default, Clone)]
+pub struct RegisterMetadata {
+    pub features: Vec<String>,
+    pub describes: Option<String>,
+    pub language: Option<String>,
+}
+
+/// Register an install with the full PROP-003 r2 v3 metadata. The
+/// `features`, `describes`, and `language` fields land directly in
+/// the lockfile entry; `subskills_active` is sourced from
+/// `plan.active_subskills`.
+pub fn register_installed_with_metadata(
+    lockfile: &mut Lockfile,
+    plan: &InstallPlan,
+    files_written: Vec<PathBuf>,
+    generated_at: String,
+    dependencies: Vec<PackageRef>,
+    metadata: RegisterMetadata,
+) {
+    let subskills_active: Vec<vibe_core::manifest::LockedSubskill> = plan
+        .active_subskills
+        .iter()
+        .map(|s| vibe_core::manifest::LockedSubskill {
+            path: s.path.clone(),
+            delivery: s.delivery.as_str().to_string(),
+            describes: s.describes.clone(),
+        })
+        .collect();
     let entry = LockedPackage {
         kind: plan.cached.resolved.kind,
         name: plan.cached.resolved.name.clone(),
@@ -408,15 +743,10 @@ pub fn register_installed(
         files_written,
         dependencies,
         overridden: plan.cached.overridden,
-        // PROP-003 r2 v3 fields — populated by feature/subskill aware
-        // install paths landing in subsequent slices. Today's plain
-        // `register_installed` carries the same shape as v2, so these
-        // are empty/None and the lockfile entry serialises in the
-        // legacy form.
-        features: Vec::new(),
-        subskills_active: Vec::new(),
-        describes: None,
-        language: None,
+        features: metadata.features,
+        subskills_active,
+        describes: metadata.describes,
+        language: metadata.language,
     };
     lockfile.packages.push(entry);
     lockfile.meta.generated_at = generated_at;
