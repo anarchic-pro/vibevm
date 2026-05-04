@@ -26,13 +26,19 @@ use serde::Serialize;
 use vibe_core::manifest::{Lockfile, ProjectManifest};
 use vibe_core::user_config::UserConfig;
 
-use crate::cli::{ShowArgs, ShowConfigArgs, ShowEffectiveArgs, ShowSubcommand};
+use crate::cli::{
+    ShowArgs, ShowConfigArgs, ShowEffectiveArgs, ShowFeaturesArgs, ShowPurlsArgs,
+    ShowSubcommand, ShowSubskillsArgs,
+};
 use crate::output;
 
 pub fn run(ctx: &output::Context, args: ShowArgs) -> Result<()> {
     match args.command {
         ShowSubcommand::Effective(sub) => run_effective(ctx, sub),
         ShowSubcommand::Config(sub) => run_config(ctx, sub),
+        ShowSubcommand::Features(sub) => run_features(ctx, sub),
+        ShowSubcommand::Subskills(sub) => run_subskills(ctx, sub),
+        ShowSubcommand::Purls(sub) => run_purls(ctx, sub),
     }
 }
 
@@ -632,4 +638,265 @@ fn resolve_project_root(path: &Path) -> Result<PathBuf> {
         );
     }
     Ok(stripped)
+}
+
+// ===================== show features =====================
+
+#[derive(Debug, Serialize)]
+struct FeaturesEntry {
+    package: String,
+    features: Vec<String>,
+}
+
+#[derive(Debug, Serialize)]
+struct FeaturesReport {
+    ok: bool,
+    command: &'static str,
+    project: String,
+    packages: Vec<FeaturesEntry>,
+    /// Total active feature lines, project-wide.
+    total: usize,
+}
+
+fn run_features(ctx: &output::Context, args: ShowFeaturesArgs) -> Result<()> {
+    let project_root = resolve_project_root(&args.path)?;
+    let lockfile_path = project_root.join(vibe_core::manifest::Lockfile::FILENAME);
+    let lockfile = if lockfile_path.exists() {
+        vibe_core::manifest::Lockfile::read(&lockfile_path)?
+    } else {
+        vibe_core::manifest::Lockfile::empty(
+            format!("vibe {}", env!("CARGO_PKG_VERSION")),
+            super::init::current_timestamp_utc(),
+        )
+    };
+
+    let mut entries: Vec<FeaturesEntry> = Vec::new();
+    let mut total = 0usize;
+    for p in &lockfile.packages {
+        if p.features.is_empty() {
+            continue;
+        }
+        total += p.features.len();
+        entries.push(FeaturesEntry {
+            package: format!("{}:{}", p.kind, p.name),
+            features: p.features.clone(),
+        });
+    }
+
+    if ctx.is_json() {
+        ctx.emit_json(&FeaturesReport {
+            ok: true,
+            command: "show:features",
+            project: project_root.display().to_string(),
+            packages: entries,
+            total,
+        })?;
+        return Ok(());
+    }
+    if ctx.is_quiet() {
+        ctx.summary(&format!(
+            "vibe show features: {} active feature{} across {} package{}",
+            total,
+            if total == 1 { "" } else { "s" },
+            entries.len(),
+            if entries.len() == 1 { "" } else { "s" },
+        ));
+        return Ok(());
+    }
+    if entries.is_empty() {
+        ctx.summary("(no features active in this project)");
+        return Ok(());
+    }
+    for e in &entries {
+        ctx.heading(&e.package);
+        for f in &e.features {
+            ctx.step(f);
+        }
+    }
+    ctx.summary(&format!(
+        "\n{} active feature{} across {} package{}",
+        total,
+        if total == 1 { "" } else { "s" },
+        entries.len(),
+        if entries.len() == 1 { "" } else { "s" },
+    ));
+    Ok(())
+}
+
+// ===================== show subskills =====================
+
+#[derive(Debug, Serialize)]
+struct SubskillEntry {
+    path: String,
+    delivery: String,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    describes: Option<String>,
+}
+
+#[derive(Debug, Serialize)]
+struct SubskillsPackageEntry {
+    package: String,
+    subskills: Vec<SubskillEntry>,
+}
+
+#[derive(Debug, Serialize)]
+struct SubskillsReport {
+    ok: bool,
+    command: &'static str,
+    project: String,
+    packages: Vec<SubskillsPackageEntry>,
+    total: usize,
+}
+
+fn run_subskills(ctx: &output::Context, args: ShowSubskillsArgs) -> Result<()> {
+    let project_root = resolve_project_root(&args.path)?;
+    let lockfile_path = project_root.join(vibe_core::manifest::Lockfile::FILENAME);
+    let lockfile = if lockfile_path.exists() {
+        vibe_core::manifest::Lockfile::read(&lockfile_path)?
+    } else {
+        vibe_core::manifest::Lockfile::empty(
+            format!("vibe {}", env!("CARGO_PKG_VERSION")),
+            super::init::current_timestamp_utc(),
+        )
+    };
+
+    let mut entries: Vec<SubskillsPackageEntry> = Vec::new();
+    let mut total = 0usize;
+    for p in &lockfile.packages {
+        if p.subskills_active.is_empty() {
+            continue;
+        }
+        total += p.subskills_active.len();
+        entries.push(SubskillsPackageEntry {
+            package: format!("{}:{}", p.kind, p.name),
+            subskills: p
+                .subskills_active
+                .iter()
+                .map(|s| SubskillEntry {
+                    path: s.path.clone(),
+                    delivery: s.delivery.clone(),
+                    describes: s.describes.clone(),
+                })
+                .collect(),
+        });
+    }
+
+    if ctx.is_json() {
+        ctx.emit_json(&SubskillsReport {
+            ok: true,
+            command: "show:subskills",
+            project: project_root.display().to_string(),
+            packages: entries,
+            total,
+        })?;
+        return Ok(());
+    }
+    if ctx.is_quiet() {
+        ctx.summary(&format!(
+            "vibe show subskills: {} active subskill{} across {} package{}",
+            total,
+            if total == 1 { "" } else { "s" },
+            entries.len(),
+            if entries.len() == 1 { "" } else { "s" },
+        ));
+        return Ok(());
+    }
+    if entries.is_empty() {
+        ctx.summary("(no subskills active in this project)");
+        return Ok(());
+    }
+    for e in &entries {
+        ctx.heading(&e.package);
+        for s in &e.subskills {
+            let mut line = format!("{} ({})", s.path, s.delivery);
+            if let Some(d) = &s.describes {
+                line.push_str(&format!("  describes: {d}"));
+            }
+            ctx.step(&line);
+        }
+    }
+    ctx.summary(&format!(
+        "\n{} active subskill{} across {} package{}",
+        total,
+        if total == 1 { "" } else { "s" },
+        entries.len(),
+        if entries.len() == 1 { "" } else { "s" },
+    ));
+    Ok(())
+}
+
+// ===================== show purls =====================
+
+#[derive(Debug, Serialize)]
+struct PurlEntry {
+    package: String,
+    purl: String,
+}
+
+#[derive(Debug, Serialize)]
+struct PurlsReport {
+    ok: bool,
+    command: &'static str,
+    project: String,
+    bindings: Vec<PurlEntry>,
+}
+
+fn run_purls(ctx: &output::Context, args: ShowPurlsArgs) -> Result<()> {
+    let project_root = resolve_project_root(&args.path)?;
+    let lockfile_path = project_root.join(vibe_core::manifest::Lockfile::FILENAME);
+    let lockfile = if lockfile_path.exists() {
+        vibe_core::manifest::Lockfile::read(&lockfile_path)?
+    } else {
+        vibe_core::manifest::Lockfile::empty(
+            format!("vibe {}", env!("CARGO_PKG_VERSION")),
+            super::init::current_timestamp_utc(),
+        )
+    };
+    let mut bindings: Vec<PurlEntry> = Vec::new();
+    for p in &lockfile.packages {
+        if let Some(purl) = &p.describes {
+            bindings.push(PurlEntry {
+                package: format!("{}:{}", p.kind, p.name),
+                purl: purl.clone(),
+            });
+        }
+        for s in &p.subskills_active {
+            if let Some(purl) = &s.describes {
+                bindings.push(PurlEntry {
+                    package: format!("{}:{}/{}", p.kind, p.name, s.path),
+                    purl: purl.clone(),
+                });
+            }
+        }
+    }
+    if ctx.is_json() {
+        ctx.emit_json(&PurlsReport {
+            ok: true,
+            command: "show:purls",
+            project: project_root.display().to_string(),
+            bindings,
+        })?;
+        return Ok(());
+    }
+    if ctx.is_quiet() {
+        ctx.summary(&format!(
+            "vibe show purls: {} binding{}",
+            bindings.len(),
+            if bindings.len() == 1 { "" } else { "s" },
+        ));
+        return Ok(());
+    }
+    if bindings.is_empty() {
+        ctx.summary("(no PURL bindings in this project)");
+        return Ok(());
+    }
+    for b in &bindings {
+        ctx.step(&format!("{}  →  {}", b.package, b.purl));
+    }
+    ctx.summary(&format!(
+        "\n{} PURL binding{}",
+        bindings.len(),
+        if bindings.len() == 1 { "" } else { "s" },
+    ));
+    Ok(())
 }

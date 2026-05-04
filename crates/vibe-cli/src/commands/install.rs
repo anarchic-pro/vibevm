@@ -2,6 +2,7 @@
 //!
 //! Spec: `VIBEVM-SPEC.md` §5.6, §9.1, §11.1.
 
+use std::collections::BTreeSet;
 use std::fs;
 use std::path::{Path, PathBuf};
 
@@ -11,12 +12,13 @@ use serde::Serialize;
 use vibe_core::{PackageRef, VersionSpec};
 use vibe_core::manifest::{Lockfile, ProjectManifest};
 use vibe_install::{
-    InstallError, InstallOptions, InstallPlan, WriteKind, apply_install,
-    plan_install_with_options, register_installed,
+    InstallError, InstallOptions, InstallPlan, RegisterMetadata, WriteKind, apply_install,
+    plan_install_with_options, register_installed_with_metadata,
 };
 use vibe_registry::{CachedPackage, LocalRegistry, MultiRegistryResolver};
 use vibe_resolver::{
-    DepSolver, LocalRegistryProvider, MultiRegistryProvider, NaiveDepSolver, ResolvedNode,
+    ActivationContext, DepSolver, FeatureExpansion, FeatureRequest, LocalRegistryProvider,
+    MultiRegistryProvider, NaiveDepSolver, ResolvedNode, expand_features,
 };
 
 use crate::cli::InstallArgs;
@@ -28,14 +30,10 @@ pub fn run(ctx: &output::Context, args: InstallArgs) -> Result<()> {
     let mut lockfile = load_or_empty_lockfile(&project_root)?;
     let resolver = build_install_resolver(&args, &manifest)?;
 
-    // PROP-003 §2.7 — language preference resolution. Order:
-    // 1. CLI flag `--language` is the head of the chain.
-    // 2. The project manifest's `[i18n]` block contributes its
-    //    `preferred` / `available` / `fallback` entries.
-    // 3. Canonical (`I18nDecl::canonical`, default `en`) closes the
-    //    chain so step 3 of PROP-003 §2.7.2's fallback ladder is
-    //    always reachable.
-    let install_options = build_install_options(args.language.as_deref(), &manifest);
+    // PROP-003 §2.7 language chain (CLI flag > project [i18n]).
+    let language_chain = build_language_chain(args.language.as_deref(), &manifest);
+    // PROP-003 §2.4 root-package feature request.
+    let root_feature_request = build_feature_request(&args);
 
     // Cache layout matches §8.3: `.vibe/cache/<kind>/<name>/<version>/`.
     let cache_root = project_root.join(".vibe/cache");
@@ -51,10 +49,7 @@ pub fn run(ctx: &output::Context, args: InstallArgs) -> Result<()> {
         })
         .collect::<Result<_>>()?;
 
-    // 2. Run the depsolver — this expands transitive deps into the full
-    //    graph the install pipeline materialises below. For the
-    //    all-empty-deps case (today's three demo flows), the graph
-    //    equals the input roots, no behaviour change.
+    // 2. Run the depsolver.
     ctx.heading(&format!(
         "Resolving {} root package{}…",
         roots.len(),
@@ -74,36 +69,86 @@ pub fn run(ctx: &output::Context, args: InstallArgs) -> Result<()> {
         ));
     }
 
-    // 3. For each node in graph order (roots first, then transitives in
-    //    deterministic order), pin to exact version, fetch, plan.
-    let mut plans: Vec<InstallPlan> = Vec::new();
-    let mut node_meta: Vec<NodeInstallMeta> = Vec::new();
+    // 3. Phase one — fetch every node, pin features per node. We need
+    //    full graph + every fetched manifest before we can build the
+    //    activation context, since context probes (`if_present`,
+    //    `if_provides`, `if_describes_match`) depend on the union of
+    //    capabilities, interfaces, and PURLs across the graph.
+    struct Fetched {
+        cached: CachedPackage,
+        feature_expansion: FeatureExpansion,
+        meta: NodeInstallMeta,
+    }
+    let mut fetched: Vec<Fetched> = Vec::with_capacity(graph.packages.len());
 
     for node in graph.iter() {
         let pkgref = exact_pinned_pkgref(node);
-        // Pass the lockfile pin (if any) through to the resolver so a
-        // mirror-aware fetch can fall through past a source whose
-        // content_hash disagrees with the pin. Without a pin (first
-        // install for this `(kind, name)`) the registry layer accepts
-        // the first reachable source's content; vibe-install's
-        // `plan_install` is still the authoritative integrity gate.
         let expected = lockfile
             .find(node.kind, &node.name)
             .map(|p| p.content_hash.clone());
         let cached =
             resolver.resolve_and_fetch(&pkgref, &cache_root, expected.as_deref())?;
-        let plan = plan_install_with_options(
-            &project_root,
-            &lockfile,
+        // Roots get the user-requested feature set; transitives get
+        // default features only. Cargo applies the same shape: a
+        // root's `--features` does not propagate to its transitives.
+        let req = if node.is_root {
+            root_feature_request.clone()
+        } else {
+            FeatureRequest::default()
+        };
+        let feature_expansion =
+            expand_features(&cached.manifest.features, &req).with_context(|| {
+                format!(
+                    "expanding features for `{}:{}@{}`",
+                    cached.resolved.kind, cached.resolved.name, cached.resolved.version
+                )
+            })?;
+        fetched.push(Fetched {
             cached,
-            &install_options,
-        )?;
+            feature_expansion,
+            meta: NodeInstallMeta {
+                dependencies: node.dependencies.clone(),
+                is_root: node.is_root,
+            },
+        });
+    }
+
+    // 4. Build the activation context once from the full graph.
+    let activation_context = build_activation_context(
+        fetched.iter().map(|f| &f.cached),
+        &project_root,
+        &language_chain,
+    );
+
+    // 5. Phase two — plan per node with feature expansion, activation
+    //    context, and language chain plumbed in.
+    let mut plans: Vec<InstallPlan> = Vec::new();
+    let mut node_meta: Vec<NodeInstallMeta> = Vec::new();
+    let mut feature_state: Vec<FeatureExpansion> = Vec::new();
+    let mut described_purls: Vec<Option<String>> = Vec::new();
+    let resolved_language: Option<String> =
+        language_chain.first().cloned().filter(|l| l != "en");
+
+    for f in fetched {
+        let describes_string = f
+            .cached
+            .manifest
+            .package
+            .describes
+            .as_ref()
+            .map(|p| p.to_string());
+        let opts = InstallOptions {
+            language_chain: language_chain.clone(),
+            feature_expansion: f.feature_expansion.clone(),
+            activation_context: activation_context.clone(),
+            describes: describes_string.clone(),
+        };
+        let plan = plan_install_with_options(&project_root, &lockfile, f.cached, &opts)?;
         check_cross_plan_conflicts(&plans, &plan)?;
         plans.push(plan);
-        node_meta.push(NodeInstallMeta {
-            dependencies: node.dependencies.clone(),
-            is_root: node.is_root,
-        });
+        node_meta.push(f.meta);
+        feature_state.push(f.feature_expansion);
+        described_purls.push(describes_string);
     }
 
     // Show combined plan.
@@ -139,7 +184,7 @@ pub fn run(ctx: &output::Context, args: InstallArgs) -> Result<()> {
 
     // Apply each plan in turn; update lockfile after each success.
     let mut applied: Vec<AppliedReport> = Vec::new();
-    for (plan, meta) in plans.iter().zip(node_meta.iter()) {
+    for (idx, (plan, meta)) in plans.iter().zip(node_meta.iter()).enumerate() {
         let label = plan.package_label();
         ctx.step(&format!(
             "Installing {label}{}",
@@ -147,12 +192,22 @@ pub fn run(ctx: &output::Context, args: InstallArgs) -> Result<()> {
         ));
         let written = apply_install(plan)?;
         let written_count = written.len();
-        register_installed(
+        let metadata = RegisterMetadata {
+            features: feature_state[idx]
+                .active_features
+                .iter()
+                .cloned()
+                .collect(),
+            describes: described_purls[idx].clone(),
+            language: resolved_language.clone(),
+        };
+        register_installed_with_metadata(
             &mut lockfile,
             plan,
             written.clone(),
             crate::commands::init::current_timestamp_utc(),
             meta.dependencies.clone(),
+            metadata,
         );
         applied.push(AppliedReport {
             package: label,
@@ -163,6 +218,21 @@ pub fn run(ctx: &output::Context, args: InstallArgs) -> Result<()> {
                 .collect(),
         });
     }
+
+    // 6. Record top-level lockfile metadata: language chain + active
+    //    features. Language chain only when explicitly resolved (not
+    //    just default `en`).
+    if !language_chain.is_empty() && language_chain != ["en"] {
+        lockfile.meta.language_chain = language_chain.clone();
+    }
+    let mut active_features_global: BTreeSet<String> = BTreeSet::new();
+    for (plan, fe) in plans.iter().zip(feature_state.iter()) {
+        let pkg_label = format!("{}:{}", plan.cached.resolved.kind, plan.cached.resolved.name);
+        for f in &fe.active_features {
+            active_features_global.insert(format!("{pkg_label}/{f}"));
+        }
+    }
+    lockfile.meta.active_features = active_features_global.into_iter().collect();
 
     // Update meta.root_dependencies — what the user directly asked for,
     // distinct from transitives the solver pulled in. Lockfile uses this
@@ -422,9 +492,15 @@ fn present_plans(ctx: &output::Context, project_root: &Path, plans: &[InstallPla
     for plan in plans {
         ctx.heading(&format!("\nPlan for {}", plan.package_label()));
         for w in &plan.writes {
-            let prefix = match w.kind {
-                WriteKind::Regular => "create",
-                WriteKind::BootSnippet => "boot  ",
+            let prefix = match &w.kind {
+                WriteKind::Regular => "create".to_string(),
+                WriteKind::BootSnippet => "boot  ".to_string(),
+                WriteKind::SubskillContent { subskill_path } => {
+                    format!("sub:{subskill_path}")
+                }
+                WriteKind::SubskillBootSnippet { subskill_path } => {
+                    format!("sub-boot:{subskill_path}")
+                }
             };
             let rel = w
                 .target_abs
@@ -432,6 +508,22 @@ fn present_plans(ctx: &output::Context, project_root: &Path, plans: &[InstallPla
                 .unwrap_or(&w.target_abs);
             let rel_s = rel.to_string_lossy().replace('\\', "/");
             println!("  {prefix}  {}", rel_s);
+        }
+        if !plan.active_subskills.is_empty() {
+            ctx.step(&format!(
+                "  ↳ {} subskill{} active: {}",
+                plan.active_subskills.len(),
+                if plan.active_subskills.len() == 1 {
+                    ""
+                } else {
+                    "s"
+                },
+                plan.active_subskills
+                    .iter()
+                    .map(|s| s.path.as_str())
+                    .collect::<Vec<_>>()
+                    .join(", "),
+            ));
         }
     }
     println!();
@@ -477,24 +569,64 @@ fn emit_report(
     Ok(())
 }
 
-/// Build [`InstallOptions`] from a CLI flag override + the project's
-/// `[i18n]` declaration. The CLI flag is the head of the chain;
-/// project-level preference and fallback come next; canonical /
+/// Build the resolved language chain from a CLI flag override + the
+/// project's `[i18n]` declaration. The CLI flag is the head of the
+/// chain; project-level preference and fallback come next; canonical /
 /// registry-default `en` close the chain.
-fn build_install_options(
+fn build_language_chain(
     cli_language: Option<&str>,
     manifest: &ProjectManifest,
-) -> InstallOptions {
+) -> Vec<String> {
     let mut effective = manifest.i18n.clone();
     if let Some(lang) = cli_language {
         effective.preferred = Some(lang.to_string());
     }
-    let chain = if effective.is_default() && cli_language.is_none() {
+    if effective.is_default() && cli_language.is_none() {
         Vec::new()
     } else {
         effective.project_preference_chain()
-    };
-    InstallOptions {
-        language_chain: chain,
     }
+}
+
+/// Build the feature request to apply to root packages from the CLI
+/// flags. `--all-features` wins over `--features` if both are set.
+fn build_feature_request(args: &InstallArgs) -> FeatureRequest {
+    FeatureRequest {
+        explicit: args.features.clone(),
+        no_defaults: args.no_default_features,
+        all: args.all_features,
+    }
+}
+
+/// Build the [`ActivationContext`] from the set of fetched packages
+/// plus project state. Walks every package's manifest once to populate
+/// `present`, `provides`, and `describes_types`. Sets `project_root`
+/// for `if_files` glob matching and `language_chain` for `if_language`.
+fn build_activation_context<'a, I>(
+    cached: I,
+    project_root: &Path,
+    language_chain: &[String],
+) -> ActivationContext
+where
+    I: IntoIterator<Item = &'a CachedPackage>,
+{
+    let mut ctx = ActivationContext {
+        project_root: Some(project_root.to_path_buf()),
+        language_chain: language_chain.to_vec(),
+        ..Default::default()
+    };
+    for c in cached {
+        ctx.add_present(format!("{}:{}", c.resolved.kind, c.resolved.name));
+        for cap in &c.manifest.provides.capabilities {
+            let qualified = cap.qualified();
+            ctx.add_present(qualified.clone());
+            if qualified.starts_with("interface:") {
+                ctx.add_provides(qualified);
+            }
+        }
+        if let Some(purl) = &c.manifest.package.describes {
+            ctx.describes_types.insert(purl.purl_type.clone());
+        }
+    }
+    ctx
 }

@@ -1326,6 +1326,370 @@ fn vendor_refuses_non_empty_out_dir_without_force() {
 }
 
 /// Build a self-contained local fixture registry that ships a flow
+/// package with `[features]` + subskills + describes for feature-aware
+/// install testing. Layout:
+///
+/// ```text
+/// registry/flow/feat-pkg/v0.1.0/
+/// ├── vibe-package.toml      [features].default = ["base"]
+/// │                          [features].base = []
+/// │                          [features].with-rust = ["subskill:stack/rust"]
+/// │                          [package].describes = "pkg:cargo/sqlx@0.8.0"
+/// ├── boot/10-feat-pkg.md
+/// ├── spec/feats/feat-pkg/CORE.md
+/// └── subskills/
+///     ├── stack/rust/
+///     │   ├── vibe-subskill.toml   activation.if_present = ["stack:rust"]
+///     │   │                        delivery = "eager"
+///     │   │                        content.files_written = ["spec/feats/feat-pkg/RUST.md"]
+///     │   └── spec/feats/feat-pkg/RUST.md
+///     └── doc/extra/
+///         ├── vibe-subskill.toml   activation.if_files = ["**/Cargo.toml"]
+///         │                        delivery = "eager"
+///         │                        content.files_written = ["spec/feats/feat-pkg/EXTRA.md"]
+///         └── spec/feats/feat-pkg/EXTRA.md
+/// ```
+fn make_features_fixture_registry(root: &Path) -> PathBuf {
+    let registry = root.join("registry");
+    let pkg = registry.join("flow").join("feat-pkg").join("v0.1.0");
+    fs::create_dir_all(pkg.join("spec/feats/feat-pkg")).unwrap();
+    fs::create_dir_all(pkg.join("boot")).unwrap();
+    fs::create_dir_all(pkg.join("subskills/stack/rust/spec/feats/feat-pkg"))
+        .unwrap();
+    fs::create_dir_all(pkg.join("subskills/doc/extra/spec/feats/feat-pkg"))
+        .unwrap();
+
+    fs::write(
+        pkg.join("vibe-package.toml"),
+        r#"[package]
+name = "feat-pkg"
+kind = "flow"
+version = "0.1.0"
+describes = "pkg:cargo/sqlx@0.8.0"
+
+[writes]
+files = ["spec/feats/feat-pkg/CORE.md"]
+
+[boot_snippet]
+filename = "10-feat-pkg.md"
+source = "boot/10-feat-pkg.md"
+
+[features]
+default = ["base"]
+base = []
+with-rust = ["subskill:stack/rust"]
+"#,
+    )
+    .unwrap();
+    fs::write(
+        pkg.join("spec/feats/feat-pkg/CORE.md"),
+        "# CORE protocol",
+    )
+    .unwrap();
+    fs::write(
+        pkg.join("boot/10-feat-pkg.md"),
+        "# boot snippet",
+    )
+    .unwrap();
+
+    fs::write(
+        pkg.join("subskills/stack/rust/vibe-subskill.toml"),
+        r#"[subskill]
+path = "stack/rust"
+delivery = "eager"
+
+[activation]
+if_present = ["stack:rust"]
+
+[content]
+files_written = ["spec/feats/feat-pkg/RUST.md"]
+"#,
+    )
+    .unwrap();
+    fs::write(
+        pkg.join("subskills/stack/rust/spec/feats/feat-pkg/RUST.md"),
+        "# Rust-specific guidance",
+    )
+    .unwrap();
+
+    fs::write(
+        pkg.join("subskills/doc/extra/vibe-subskill.toml"),
+        r#"[subskill]
+path = "doc/extra"
+delivery = "eager"
+
+[activation]
+if_files = ["**/Cargo.toml"]
+
+[content]
+files_written = ["spec/feats/feat-pkg/EXTRA.md"]
+"#,
+    )
+    .unwrap();
+    fs::write(
+        pkg.join("subskills/doc/extra/spec/feats/feat-pkg/EXTRA.md"),
+        "# extra context",
+    )
+    .unwrap();
+
+    registry
+}
+
+#[test]
+fn install_with_features_activates_subskill_and_writes_lockfile_metadata() {
+    let outer = tempfile::tempdir().unwrap();
+    let registry = make_features_fixture_registry(outer.path());
+
+    let project = tempfile::tempdir().unwrap();
+    init_project(project.path());
+
+    vibe()
+        .arg("install")
+        .arg("flow:feat-pkg")
+        .arg("--registry")
+        .arg(&registry)
+        .arg("--path")
+        .arg(project.path())
+        .arg("--features")
+        .arg("with-rust")
+        .arg("--assume-yes")
+        .assert()
+        .success();
+
+    // The base content always materialises.
+    assert!(
+        project
+            .path()
+            .join("spec/feats/feat-pkg/CORE.md")
+            .is_file(),
+        "expected CORE.md present"
+    );
+    // The subskill `stack/rust` materialises because the feature
+    // `with-rust` was activated and its activation list pulled
+    // `subskill:stack/rust` (manual channel).
+    assert!(
+        project
+            .path()
+            .join("spec/feats/feat-pkg/RUST.md")
+            .is_file(),
+        "expected RUST.md present from active stack/rust subskill"
+    );
+
+    // Lockfile records the active features + subskill + describes.
+    let lock_text =
+        fs::read_to_string(project.path().join("vibe.lock")).unwrap();
+    let lock: vibe_core::manifest::Lockfile = toml::from_str(&lock_text).unwrap();
+    let entry = &lock.packages[0];
+    assert!(
+        entry.features.contains(&"with-rust".to_string()),
+        "expected with-rust in features; got {:?}",
+        entry.features
+    );
+    assert!(
+        entry.features.contains(&"default".to_string())
+            || entry.features.contains(&"base".to_string()),
+        "expected default/base activation; got {:?}",
+        entry.features
+    );
+    assert_eq!(entry.subskills_active.len(), 1);
+    assert_eq!(entry.subskills_active[0].path, "stack/rust");
+    assert_eq!(entry.subskills_active[0].delivery, "eager");
+    assert_eq!(
+        entry.describes.as_deref(),
+        Some("pkg:cargo/sqlx@0.8.0")
+    );
+}
+
+#[test]
+fn install_no_default_features_skips_default_subskills() {
+    let outer = tempfile::tempdir().unwrap();
+    let registry = make_features_fixture_registry(outer.path());
+    let project = tempfile::tempdir().unwrap();
+    init_project(project.path());
+
+    vibe()
+        .arg("install")
+        .arg("flow:feat-pkg")
+        .arg("--registry")
+        .arg(&registry)
+        .arg("--path")
+        .arg(project.path())
+        .arg("--no-default-features")
+        .arg("--assume-yes")
+        .assert()
+        .success();
+
+    // Base files still ship — they're outside `[features]`. CORE.md is
+    // in the package's main `[writes]`, not behind a feature.
+    assert!(project.path().join("spec/feats/feat-pkg/CORE.md").is_file());
+    // No subskills activated.
+    assert!(!project.path().join("spec/feats/feat-pkg/RUST.md").exists());
+    let lock: vibe_core::manifest::Lockfile = toml::from_str(
+        &fs::read_to_string(project.path().join("vibe.lock")).unwrap(),
+    )
+    .unwrap();
+    assert_eq!(lock.packages[0].subskills_active.len(), 0);
+    assert!(
+        !lock.packages[0]
+            .features
+            .iter()
+            .any(|f| f == "default" || f == "base"),
+        "expected no default/base activation; got {:?}",
+        lock.packages[0].features
+    );
+}
+
+#[test]
+fn show_features_lists_active_features_after_install() {
+    // After installing with --features, `vibe show features --json`
+    // surfaces the activation set per package.
+    let outer = tempfile::tempdir().unwrap();
+    let registry = make_features_fixture_registry(outer.path());
+    let project = tempfile::tempdir().unwrap();
+    init_project(project.path());
+    vibe()
+        .arg("install")
+        .arg("flow:feat-pkg")
+        .arg("--registry")
+        .arg(&registry)
+        .arg("--path")
+        .arg(project.path())
+        .arg("--features")
+        .arg("with-rust")
+        .arg("--assume-yes")
+        .assert()
+        .success();
+    let out = vibe()
+        .arg("--json")
+        .arg("show")
+        .arg("features")
+        .arg("--path")
+        .arg(project.path())
+        .output()
+        .unwrap();
+    assert!(out.status.success());
+    let v: serde_json::Value =
+        serde_json::from_slice(&out.stdout).expect("stdout must be JSON");
+    assert_eq!(v["command"], "show:features");
+    let pkgs = v["packages"].as_array().unwrap();
+    assert_eq!(pkgs.len(), 1);
+    assert_eq!(pkgs[0]["package"], "flow:feat-pkg");
+    let features: Vec<&str> = pkgs[0]["features"]
+        .as_array()
+        .unwrap()
+        .iter()
+        .map(|v| v.as_str().unwrap())
+        .collect();
+    assert!(features.contains(&"with-rust"));
+}
+
+#[test]
+fn show_subskills_and_purls_after_install() {
+    let outer = tempfile::tempdir().unwrap();
+    let registry = make_features_fixture_registry(outer.path());
+    let project = tempfile::tempdir().unwrap();
+    init_project(project.path());
+    fs::write(project.path().join("Cargo.toml"), "[package]\nname=\"x\"\n")
+        .unwrap();
+    vibe()
+        .arg("install")
+        .arg("flow:feat-pkg")
+        .arg("--registry")
+        .arg(&registry)
+        .arg("--path")
+        .arg(project.path())
+        .arg("--assume-yes")
+        .assert()
+        .success();
+
+    // show subskills
+    let out = vibe()
+        .arg("--json")
+        .arg("show")
+        .arg("subskills")
+        .arg("--path")
+        .arg(project.path())
+        .output()
+        .unwrap();
+    let v: serde_json::Value =
+        serde_json::from_slice(&out.stdout).expect("JSON");
+    assert_eq!(v["command"], "show:subskills");
+    let subs: Vec<&str> = v["packages"][0]["subskills"]
+        .as_array()
+        .unwrap()
+        .iter()
+        .map(|s| s["path"].as_str().unwrap())
+        .collect();
+    assert!(subs.contains(&"doc/extra"));
+
+    // show purls
+    let out = vibe()
+        .arg("--json")
+        .arg("show")
+        .arg("purls")
+        .arg("--path")
+        .arg(project.path())
+        .output()
+        .unwrap();
+    let v: serde_json::Value =
+        serde_json::from_slice(&out.stdout).expect("JSON");
+    assert_eq!(v["command"], "show:purls");
+    let bindings = v["bindings"].as_array().unwrap();
+    assert!(
+        bindings.iter().any(|b| b["purl"] == "pkg:cargo/sqlx@0.8.0"),
+        "expected sqlx PURL in bindings; got {:?}",
+        bindings
+    );
+}
+
+#[test]
+fn install_subskill_activates_via_if_files_glob() {
+    // `doc/extra` subskill activates when project tree contains
+    // `Cargo.toml`. Drop one in the project root, install, expect the
+    // subskill's content to materialise without any feature flag.
+    let outer = tempfile::tempdir().unwrap();
+    let registry = make_features_fixture_registry(outer.path());
+    let project = tempfile::tempdir().unwrap();
+    init_project(project.path());
+    fs::write(project.path().join("Cargo.toml"), "[package]\nname=\"x\"\n")
+        .unwrap();
+
+    vibe()
+        .arg("install")
+        .arg("flow:feat-pkg")
+        .arg("--registry")
+        .arg(&registry)
+        .arg("--path")
+        .arg(project.path())
+        .arg("--assume-yes")
+        .assert()
+        .success();
+
+    assert!(
+        project
+            .path()
+            .join("spec/feats/feat-pkg/EXTRA.md")
+            .is_file(),
+        "expected EXTRA.md present from doc/extra subskill activated by if_files"
+    );
+    // Lockfile records the activation channel via subskills_active.
+    let lock: vibe_core::manifest::Lockfile = toml::from_str(
+        &fs::read_to_string(project.path().join("vibe.lock")).unwrap(),
+    )
+    .unwrap();
+    let paths: Vec<_> = lock.packages[0]
+        .subskills_active
+        .iter()
+        .map(|s| s.path.as_str())
+        .collect();
+    assert!(
+        paths.contains(&"doc/extra"),
+        "expected doc/extra in subskills_active; got {:?}",
+        paths
+    );
+}
+
+/// Build a self-contained local fixture registry that ships a flow
 /// package whose `morning-routine.md` carries a Russian sidecar
 /// (`morning-routine.ru.md`). Returns the registry root path and the
 /// expected canonical / Russian text bytes for assertions.
@@ -1576,6 +1940,9 @@ fn every_subcommand_renders_help() {
         &["show"],
         &["show", "effective"],
         &["show", "config"],
+        &["show", "features"],
+        &["show", "subskills"],
+        &["show", "purls"],
         &["registry"],                  // shows the registry subcommand enum
         &["registry", "sync"],
         &["registry", "publish"],

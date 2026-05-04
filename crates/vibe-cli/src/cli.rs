@@ -313,6 +313,27 @@ pub struct InstallArgs {
     /// `vibe.toml` decides; absent any declaration, English-only.
     #[arg(long)]
     pub language: Option<String>,
+
+    /// Activate one or more features on every root package
+    /// (PROP-003 §2.4). Repeatable, and accepts comma-separated lists:
+    /// `--features a,b --features c` is equivalent to passing `a`,
+    /// `b`, `c` together. Underscore-prefixed implementation-detail
+    /// features cannot be activated this way. Default features are
+    /// also included unless `--no-default-features` is set.
+    #[arg(long, value_delimiter = ',')]
+    pub features: Vec<String>,
+
+    /// Skip activation of `[features].default` entries on every root
+    /// package. Combined with `--features X,Y`, only the explicitly
+    /// listed features are active.
+    #[arg(long)]
+    pub no_default_features: bool,
+
+    /// Activate every non-private (no `_`-prefixed) feature on every
+    /// root package. Mutually exclusive with `--features`; when both
+    /// are set, `--all-features` wins.
+    #[arg(long)]
+    pub all_features: bool,
 }
 
 #[derive(Debug, clap::Args)]
@@ -331,6 +352,19 @@ pub enum ShowSubcommand {
     /// Print the effective configuration with per-value provenance
     /// (default / vibe.toml / env-var).
     Config(ShowConfigArgs),
+
+    /// Print every active feature recorded in the lockfile, grouped
+    /// by package. Per PROP-003 §2.10 / `vibe show features`.
+    Features(ShowFeaturesArgs),
+
+    /// Print every active subskill recorded in the lockfile, grouped
+    /// by package, with delivery mode and any `describes` PURL.
+    Subskills(ShowSubskillsArgs),
+
+    /// Print every PURL the project's lockfile binds to (the union of
+    /// per-package `describes` declarations). Useful as a sanity
+    /// check for upstream-version drift.
+    Purls(ShowPurlsArgs),
 }
 
 #[derive(Debug, clap::Args)]
@@ -342,6 +376,27 @@ pub struct ShowEffectiveArgs {
 
 #[derive(Debug, clap::Args)]
 pub struct ShowConfigArgs {
+    /// Project root. Defaults to current directory.
+    #[arg(long, default_value = ".")]
+    pub path: PathBuf,
+}
+
+#[derive(Debug, clap::Args)]
+pub struct ShowFeaturesArgs {
+    /// Project root. Defaults to current directory.
+    #[arg(long, default_value = ".")]
+    pub path: PathBuf,
+}
+
+#[derive(Debug, clap::Args)]
+pub struct ShowSubskillsArgs {
+    /// Project root. Defaults to current directory.
+    #[arg(long, default_value = ".")]
+    pub path: PathBuf,
+}
+
+#[derive(Debug, clap::Args)]
+pub struct ShowPurlsArgs {
     /// Project root. Defaults to current directory.
     #[arg(long, default_value = ".")]
     pub path: PathBuf,
