@@ -1,0 +1,17 @@
+[subskill]
+path = "stack/rust"
+summary = "Rust-stack-specific notes for integration-alpha"
+description = """
+When working with integration-alpha discipline in a project that
+already uses stack:integration-rust, apply the Rust-stack-specific
+trace-id and error-handling conventions documented here.
+"""
+delivery = "lazy-push"
+
+[activation]
+if_present = ["stack:integration-rust"]
+
+[content]
+files_written = [
+    "spec/flows/integration-alpha/RUST-NOTES.md",
+]

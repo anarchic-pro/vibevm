@@ -1,0 +1,13 @@
+[subskill]
+path = "feature/extra-discipline"
+summary = "Extra-discipline addendum activated only via the explicit feature flag"
+delivery = "eager"
+
+# No `[activation]` block — manual activation via parent's
+# `[features].extra-discipline = ["subskill:feature/extra-discipline"]`
+# is the only path. Lockfile records the channel as `manual`.
+
+[content]
+files_written = [
+    "spec/flows/integration-alpha/EXTRA-DISCIPLINE.md",
+]

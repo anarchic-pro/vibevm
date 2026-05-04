@@ -1,0 +1,16 @@
+[subskill]
+path = "if-cargo"
+summary = "Cargo-tree-aware notes activated by file-system probe"
+description = """
+When the consumer project tree contains a Cargo.toml at any depth,
+apply Cargo-tree-aware notes for integration-beta.
+"""
+delivery = "eager"
+
+[activation]
+if_files = ["**/Cargo.toml"]
+
+[content]
+files_written = [
+    "spec/flows/integration-beta/CARGO-NOTES.md",
+]

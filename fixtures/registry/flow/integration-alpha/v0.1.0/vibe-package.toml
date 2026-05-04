@@ -1,0 +1,42 @@
+[package]
+name = "integration-alpha"
+kind = "flow"
+version = "0.1.0"
+authors = ["vibevm test fixtures"]
+license = "EULA"
+description = "PROP-003 r2 integration fixture exercising features, subskills, i18n, conditional deps, and describes binding"
+keywords = ["test", "fixture", "integration"]
+describes = "pkg:cargo/sqlx@0.8.0"
+
+[i18n]
+canonical = "en"
+available = ["en", "ru"]
+
+[writes]
+files = [
+    "spec/flows/integration-alpha/PROTOCOL.md",
+    "spec/flows/integration-alpha/overview.md",
+]
+
+[boot_snippet]
+filename = "40-flow-integration-alpha.md"
+source = "boot/40-flow-integration-alpha.md"
+
+[provides]
+capabilities = ["capability:integration-discipline"]
+
+[features]
+default = ["base-discipline"]
+base-discipline = []
+extra-discipline = ["subskill:feature/extra-discipline"]
+prefer-strict = []
+prefer-loose = []
+
+[features.exclusive]
+strictness = ["prefer-strict", "prefer-loose"]
+
+# Conditional dep: when the project graph contains stack:integration-rust,
+# pull in flow:integration-beta. Tests the conditional-dep fixed-point
+# loop end-to-end.
+[target."context(stack:integration-rust)".dependencies]
+packages = ["flow:integration-beta@^0.1"]

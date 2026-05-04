@@ -1,0 +1,24 @@
+[subskill]
+path = "sqlx/v08"
+summary = "sqlx 0.8.x specific guidance"
+description = """
+When integration-alpha is paired with the sqlx crate at version 0.8,
+apply the sqlx-0.8-specific query-builder, migration, and
+connection-pool conventions.
+"""
+delivery = "lazy-pull"
+describes = "pkg:cargo/sqlx@^0.8"
+
+[activation]
+# Activates only when some package in the graph (or the subskill's
+# own type lookup) declares a `pkg:cargo/...` describes — i.e. the
+# project's effective graph carries something cargo-tagged. This is
+# the most-PROP-003 channel: per-subskill PURL binding lights up
+# automatically when a project signals it cares about the underlying
+# library ecosystem.
+if_describes_match = true
+
+[content]
+files_written = [
+    "spec/flows/integration-alpha/SQLX-V08.md",
+]

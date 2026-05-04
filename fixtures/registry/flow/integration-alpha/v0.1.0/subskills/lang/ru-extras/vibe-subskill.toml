@@ -1,0 +1,17 @@
+[subskill]
+path = "lang/ru-extras"
+summary = "Russian-language conventions and stylistic supplements"
+description = """
+When the operator's resolved language preference includes Russian,
+add the Russian-language stylistic conventions and translation
+glossary on top of the canonical integration-alpha protocol.
+"""
+delivery = "eager"
+
+[activation]
+if_language = ["ru"]
+
+[content]
+files_written = [
+    "spec/flows/integration-alpha/RU-EXTRAS.md",
+]
