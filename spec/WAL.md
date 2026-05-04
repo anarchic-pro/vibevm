@@ -235,7 +235,6 @@ Comprehensive cold-resume document (long form, with repo map, decision history, 
 
 ## Known issues
 
-- **`vibe-check::clean_minimal_project_has_no_findings` flakes on system clock past 2026-05-04T12:00:00Z.** The test hard-codes `now = 2026-05-04T12:00:00Z` but writes a fresh WAL whose mtime comes from the real filesystem clock; once wall-time crosses noon UTC on the test's date, mtime > now and the WAL-freshness check emits an `info` finding "WAL mtime is in the future". Workaround: pin the WAL's mtime to a time earlier than `fixed_now()` in `write_minimal_project` (or stub the file-mtime accessor). Not blocking M1.4/M1.6 surface; the rest of the workspace is green.
 - **Legacy lockfile v1 auto-migration UX.** Every project with an existing `vibe.lock` from M1.1 will see a migration notice on next `vibe install`. Behaviour benign (resolution unchanged); message must be actionable, not noisy.
 - **Line-ending warnings** on every commit — `.gitattributes` with `* text=auto eol=lf` side-quest still open.
 - **Registry cache locking** — two concurrent `vibe` invocations can race on the same per-package clone directory. Noted in PROP-001 §6 as M2 hardening; behaviour today: if a clone fails, delete the cache dir and retry.

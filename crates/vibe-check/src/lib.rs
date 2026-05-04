@@ -732,11 +732,27 @@ url = "https://example/vibespecs"
         fs::write(root.join("spec/boot/00-core.md"), "# core\n").unwrap();
         fs::write(root.join("spec/boot/90-user.md"), "# user\n").unwrap();
         // WAL with all required sections.
+        let wal = root.join("spec/WAL.md");
         fs::write(
-            root.join("spec/WAL.md"),
+            &wal,
             "# WAL\n\n## Current phase\n\n## Constraints\n\n## Done\n\n## Next\n\n## Known issues\n",
         )
         .unwrap();
+        // Pin the WAL mtime to 1h before `fixed_now()` so the freshness
+        // check sees a deterministic positive age regardless of where
+        // the host's wall-clock sits when the test runs. Otherwise
+        // `clean_minimal_project_has_no_findings` flakes whenever real
+        // wall-time crosses past `fixed_now()` (a fresh-write mtime
+        // ahead of `now` surfaces as the "WAL mtime is in the future"
+        // info finding).
+        let one_hour_before_fixed_now = SystemTime::UNIX_EPOCH
+            + std::time::Duration::from_secs(fixed_now().saturating_sub(3600));
+        fs::OpenOptions::new()
+            .write(true)
+            .open(&wal)
+            .unwrap()
+            .set_modified(one_hour_before_fixed_now)
+            .unwrap();
     }
 
     #[test]
