@@ -1539,6 +1539,501 @@ fn install_no_default_features_skips_default_subskills() {
     );
 }
 
+// ============================================================
+// PROP-003 r2 omnibus integration e2e
+// ============================================================
+//
+// `fixtures/registry/{flow/integration-alpha, flow/integration-beta,
+// stack/integration-rust}` are committed in-tree under the same
+// LocalRegistry layout the M0/M1 fixtures already use. They exercise
+// every PROP-003 r2 surface in combination:
+//
+// - alpha declares `[package].describes = "pkg:cargo/sqlx@0.8.0"`,
+//   `[i18n] available = ["en", "ru"]`, `[features]` with default +
+//   `extra-discipline` feature mapping `subskill:feature/extra-discipline`,
+//   `[features.exclusive]` group, and a conditional dep
+//   `[target."context(stack:integration-rust)".dependencies]` →
+//   `flow:integration-beta`.
+// - alpha ships subskills probing every channel: `feature/extra-
+//   discipline` (manual feature), `stack/rust` (if_present), `lang/ru-
+//   extras` (if_language), `sqlx/v08` (if_describes_match + own PURL).
+// - beta provides `interface:trace-discipline` and ships an
+//   `if-cargo` subskill activated by `if_files = ["**/Cargo.toml"]`.
+// - stack:integration-rust is the trigger that pulls beta in via
+//   alpha's conditional dep + activates alpha's `stack/rust` subskill.
+
+#[test]
+fn omnibus_install_exercises_every_prop003_surface() {
+    let registry = workspace_root().join("fixtures").join("registry");
+    let project = tempfile::tempdir().unwrap();
+    init_project(project.path());
+
+    vibe()
+        .arg("install")
+        .arg("stack:integration-rust")
+        .arg("flow:integration-alpha")
+        .arg("--registry")
+        .arg(&registry)
+        .arg("--path")
+        .arg(project.path())
+        .arg("--features")
+        .arg("extra-discipline")
+        .arg("--language")
+        .arg("ru")
+        .arg("--assume-yes")
+        .assert()
+        .success();
+
+    let lock: vibe_core::manifest::Lockfile = toml::from_str(
+        &fs::read_to_string(project.path().join("vibe.lock")).unwrap(),
+    )
+    .unwrap();
+    assert_eq!(lock.meta.schema_version, 3);
+    assert_eq!(lock.meta.language_chain, vec!["ru", "en"]);
+    assert_eq!(lock.packages.len(), 3);
+    let alpha = lock
+        .packages
+        .iter()
+        .find(|p| p.name == "integration-alpha")
+        .expect("alpha must be in lockfile");
+    let beta = lock
+        .packages
+        .iter()
+        .find(|p| p.name == "integration-beta")
+        .expect("beta must be pulled by alpha's conditional dep");
+    let stack = lock
+        .packages
+        .iter()
+        .find(|p| p.name == "integration-rust")
+        .expect("stack must be in lockfile");
+
+    assert_eq!(alpha.describes.as_deref(), Some("pkg:cargo/sqlx@0.8.0"));
+    assert_eq!(alpha.language.as_deref(), Some("ru"));
+    assert!(alpha.features.contains(&"extra-discipline".to_string()));
+    assert!(alpha.features.contains(&"default".to_string()));
+
+    let sub_paths: Vec<&str> = alpha
+        .subskills_active
+        .iter()
+        .map(|s| s.path.as_str())
+        .collect();
+    for expected in [
+        "feature/extra-discipline",
+        "lang/ru-extras",
+        "stack/rust",
+        "sqlx/v08",
+    ] {
+        assert!(
+            sub_paths.contains(&expected),
+            "alpha subskill `{expected}` should be active; got {:?}",
+            sub_paths
+        );
+    }
+
+    let stack_rust_entry = alpha
+        .subskills_active
+        .iter()
+        .find(|s| s.path == "stack/rust")
+        .unwrap();
+    assert_eq!(stack_rust_entry.delivery, "lazy-push");
+    let sqlx_entry = alpha
+        .subskills_active
+        .iter()
+        .find(|s| s.path == "sqlx/v08")
+        .unwrap();
+    assert_eq!(sqlx_entry.delivery, "lazy-pull");
+    assert_eq!(sqlx_entry.describes.as_deref(), Some("pkg:cargo/sqlx@^0.8"));
+
+    let proto = fs::read_to_string(
+        project.path().join("spec/flows/integration-alpha/PROTOCOL.md"),
+    )
+    .unwrap();
+    assert!(
+        proto.contains("русская версия"),
+        "PROTOCOL.md must carry Russian sidecar content; got:\n{proto}"
+    );
+    let overview = fs::read_to_string(
+        project.path().join("spec/flows/integration-alpha/overview.md"),
+    )
+    .unwrap();
+    assert!(
+        overview.contains("Always-materialised"),
+        "overview.md has no Russian sidecar — must fall back to canonical English; got:\n{overview}"
+    );
+    let boot = fs::read_to_string(
+        project.path().join("spec/boot/40-flow-integration-alpha.md"),
+    )
+    .unwrap();
+    assert!(
+        boot.contains("стартовый блок"),
+        "boot snippet must carry Russian sidecar content; got:\n{boot}"
+    );
+
+    for path in [
+        "spec/flows/integration-alpha/EXTRA-DISCIPLINE.md",
+        "spec/flows/integration-alpha/RU-EXTRAS.md",
+        "spec/flows/integration-alpha/RUST-NOTES.md",
+        "spec/flows/integration-alpha/SQLX-V08.md",
+    ] {
+        assert!(
+            project.path().join(path).is_file(),
+            "expected subskill file `{path}` materialised"
+        );
+    }
+
+    assert_eq!(
+        beta.boot_snippet.as_deref(),
+        Some("41-flow-integration-beta.md")
+    );
+    assert!(
+        !project
+            .path()
+            .join("spec/flows/integration-beta/CARGO-NOTES.md")
+            .exists(),
+        "beta's if-cargo subskill should NOT activate without Cargo.toml in project"
+    );
+    assert!(beta.subskills_active.is_empty());
+    assert!(stack.subskills_active.is_empty());
+    assert!(stack.features.is_empty());
+}
+
+#[test]
+fn omnibus_install_with_cargo_toml_activates_if_files_subskill() {
+    let registry = workspace_root().join("fixtures").join("registry");
+    let project = tempfile::tempdir().unwrap();
+    init_project(project.path());
+    fs::write(
+        project.path().join("Cargo.toml"),
+        "[package]\nname=\"x\"\nversion=\"0.1.0\"\n",
+    )
+    .unwrap();
+
+    vibe()
+        .arg("install")
+        .arg("stack:integration-rust")
+        .arg("flow:integration-alpha")
+        .arg("--registry")
+        .arg(&registry)
+        .arg("--path")
+        .arg(project.path())
+        .arg("--assume-yes")
+        .assert()
+        .success();
+
+    let lock: vibe_core::manifest::Lockfile = toml::from_str(
+        &fs::read_to_string(project.path().join("vibe.lock")).unwrap(),
+    )
+    .unwrap();
+    let beta = lock
+        .packages
+        .iter()
+        .find(|p| p.name == "integration-beta")
+        .expect("beta should be in lockfile");
+    let beta_subs: Vec<&str> = beta
+        .subskills_active
+        .iter()
+        .map(|s| s.path.as_str())
+        .collect();
+    assert!(
+        beta_subs.contains(&"if-cargo"),
+        "beta `if-cargo` subskill should activate via if_files; got {:?}",
+        beta_subs
+    );
+    assert!(
+        project
+            .path()
+            .join("spec/flows/integration-beta/CARGO-NOTES.md")
+            .is_file(),
+        "if-cargo subskill content should be materialised"
+    );
+}
+
+#[test]
+fn omnibus_install_without_stack_does_not_pull_conditional_dep() {
+    let registry = workspace_root().join("fixtures").join("registry");
+    let project = tempfile::tempdir().unwrap();
+    init_project(project.path());
+
+    vibe()
+        .arg("install")
+        .arg("flow:integration-alpha")
+        .arg("--registry")
+        .arg(&registry)
+        .arg("--path")
+        .arg(project.path())
+        .arg("--assume-yes")
+        .assert()
+        .success();
+
+    let lock: vibe_core::manifest::Lockfile = toml::from_str(
+        &fs::read_to_string(project.path().join("vibe.lock")).unwrap(),
+    )
+    .unwrap();
+    assert_eq!(lock.packages.len(), 1);
+    let alpha = &lock.packages[0];
+    let sub_paths: Vec<&str> = alpha
+        .subskills_active
+        .iter()
+        .map(|s| s.path.as_str())
+        .collect();
+    assert!(
+        !sub_paths.contains(&"stack/rust"),
+        "alpha `stack/rust` should NOT be active without stack:integration-rust; got {:?}",
+        sub_paths
+    );
+    assert!(
+        sub_paths.contains(&"sqlx/v08"),
+        "alpha `sqlx/v08` should still activate via if_describes_match against alpha's own cargo PURL"
+    );
+    assert!(
+        !project
+            .path()
+            .join("spec/flows/integration-beta/PROTOCOL.md")
+            .exists()
+    );
+}
+
+#[test]
+fn omnibus_uninstall_removes_subskill_files_too() {
+    // After install pulls in subskill content, `vibe uninstall` must
+    // remove every file the lockfile recorded — including subskill-
+    // sourced ones, since they're recorded under `files_written`
+    // exactly the same as base writes.
+    let registry = workspace_root().join("fixtures").join("registry");
+    let project = tempfile::tempdir().unwrap();
+    init_project(project.path());
+
+    vibe()
+        .arg("install")
+        .arg("stack:integration-rust")
+        .arg("flow:integration-alpha")
+        .arg("--registry")
+        .arg(&registry)
+        .arg("--path")
+        .arg(project.path())
+        .arg("--features")
+        .arg("extra-discipline")
+        .arg("--assume-yes")
+        .assert()
+        .success();
+
+    // Verify the subskill files actually exist.
+    for path in [
+        "spec/flows/integration-alpha/EXTRA-DISCIPLINE.md",
+        "spec/flows/integration-alpha/RUST-NOTES.md",
+        "spec/flows/integration-alpha/SQLX-V08.md",
+    ] {
+        assert!(
+            project.path().join(path).exists(),
+            "precondition: `{path}` must exist before uninstall"
+        );
+    }
+
+    vibe()
+        .arg("uninstall")
+        .arg("flow:integration-alpha")
+        .arg("--path")
+        .arg(project.path())
+        .arg("--assume-yes")
+        .assert()
+        .success();
+
+    // Every alpha-sourced file should be gone, including subskill files.
+    for path in [
+        "spec/flows/integration-alpha/PROTOCOL.md",
+        "spec/flows/integration-alpha/overview.md",
+        "spec/flows/integration-alpha/EXTRA-DISCIPLINE.md",
+        "spec/flows/integration-alpha/RUST-NOTES.md",
+        "spec/flows/integration-alpha/SQLX-V08.md",
+        "spec/boot/40-flow-integration-alpha.md",
+    ] {
+        assert!(
+            !project.path().join(path).exists(),
+            "expected `{path}` removed after uninstall; got it still on disk"
+        );
+    }
+
+    // User-owned and stack files survive.
+    assert!(project.path().join("spec/boot/00-core.md").exists());
+    assert!(project.path().join("spec/boot/90-user.md").exists());
+    assert!(
+        project.path().join("spec/stacks/integration-rust/STACK.md").exists()
+    );
+
+    // Lockfile no longer carries alpha.
+    let lock: vibe_core::manifest::Lockfile = toml::from_str(
+        &fs::read_to_string(project.path().join("vibe.lock")).unwrap(),
+    )
+    .unwrap();
+    assert!(
+        !lock.packages.iter().any(|p| p.name == "integration-alpha"),
+        "lockfile should not list alpha after uninstall"
+    );
+}
+
+#[test]
+fn omnibus_show_features_subskills_purls_after_install() {
+    // `vibe show features|subskills|purls` JSON envelopes carry the
+    // expected shape after the omnibus install.
+    let registry = workspace_root().join("fixtures").join("registry");
+    let project = tempfile::tempdir().unwrap();
+    init_project(project.path());
+
+    vibe()
+        .arg("install")
+        .arg("stack:integration-rust")
+        .arg("flow:integration-alpha")
+        .arg("--registry")
+        .arg(&registry)
+        .arg("--path")
+        .arg(project.path())
+        .arg("--features")
+        .arg("extra-discipline")
+        .arg("--language")
+        .arg("ru")
+        .arg("--assume-yes")
+        .assert()
+        .success();
+
+    let out = vibe()
+        .arg("--json")
+        .arg("show")
+        .arg("features")
+        .arg("--path")
+        .arg(project.path())
+        .output()
+        .unwrap();
+    let v: serde_json::Value =
+        serde_json::from_slice(&out.stdout).expect("JSON");
+    assert_eq!(v["command"], "show:features");
+    let pkgs: Vec<&str> = v["packages"]
+        .as_array()
+        .unwrap()
+        .iter()
+        .map(|p| p["package"].as_str().unwrap())
+        .collect();
+    assert!(pkgs.contains(&"flow:integration-alpha"));
+    let alpha_features: Vec<&str> = v["packages"]
+        .as_array()
+        .unwrap()
+        .iter()
+        .find(|p| p["package"] == "flow:integration-alpha")
+        .unwrap()["features"]
+        .as_array()
+        .unwrap()
+        .iter()
+        .map(|f| f.as_str().unwrap())
+        .collect();
+    assert!(alpha_features.contains(&"extra-discipline"));
+
+    let out = vibe()
+        .arg("--json")
+        .arg("show")
+        .arg("subskills")
+        .arg("--path")
+        .arg(project.path())
+        .output()
+        .unwrap();
+    let v: serde_json::Value =
+        serde_json::from_slice(&out.stdout).expect("JSON");
+    let alpha_subs = v["packages"]
+        .as_array()
+        .unwrap()
+        .iter()
+        .find(|p| p["package"] == "flow:integration-alpha")
+        .unwrap()["subskills"]
+        .as_array()
+        .unwrap();
+    let paths: Vec<&str> = alpha_subs
+        .iter()
+        .map(|s| s["path"].as_str().unwrap())
+        .collect();
+    assert!(paths.contains(&"feature/extra-discipline"));
+    assert!(paths.contains(&"lang/ru-extras"));
+    assert!(paths.contains(&"stack/rust"));
+    assert!(paths.contains(&"sqlx/v08"));
+
+    let out = vibe()
+        .arg("--json")
+        .arg("show")
+        .arg("purls")
+        .arg("--path")
+        .arg(project.path())
+        .output()
+        .unwrap();
+    let v: serde_json::Value =
+        serde_json::from_slice(&out.stdout).expect("JSON");
+    let bindings = v["bindings"].as_array().unwrap();
+    assert!(
+        bindings
+            .iter()
+            .any(|b| b["purl"] == "pkg:cargo/sqlx@0.8.0"
+                && b["package"] == "flow:integration-alpha"),
+        "expected alpha→cargo/sqlx@0.8.0 binding; got {:?}",
+        bindings
+    );
+    assert!(
+        bindings
+            .iter()
+            .any(|b| b["purl"] == "pkg:cargo/sqlx@^0.8"
+                && b["package"]
+                    == "flow:integration-alpha/sqlx/v08"),
+        "expected subskill-level cargo/sqlx@^0.8 binding; got {:?}",
+        bindings
+    );
+}
+
+#[test]
+fn omnibus_install_no_default_features_drops_default_subskill() {
+    let registry = workspace_root().join("fixtures").join("registry");
+    let project = tempfile::tempdir().unwrap();
+    init_project(project.path());
+
+    vibe()
+        .arg("install")
+        .arg("flow:integration-alpha")
+        .arg("--registry")
+        .arg(&registry)
+        .arg("--path")
+        .arg(project.path())
+        .arg("--no-default-features")
+        .arg("--features")
+        .arg("extra-discipline")
+        .arg("--assume-yes")
+        .assert()
+        .success();
+
+    let lock: vibe_core::manifest::Lockfile = toml::from_str(
+        &fs::read_to_string(project.path().join("vibe.lock")).unwrap(),
+    )
+    .unwrap();
+    let alpha = lock
+        .packages
+        .iter()
+        .find(|p| p.name == "integration-alpha")
+        .unwrap();
+    assert!(
+        !alpha.features.contains(&"default".to_string()),
+        "expected `default` excluded with --no-default-features; got {:?}",
+        alpha.features
+    );
+    assert!(
+        !alpha.features.contains(&"base-discipline".to_string()),
+        "expected `base-discipline` excluded too; got {:?}",
+        alpha.features
+    );
+    assert!(alpha.features.contains(&"extra-discipline".to_string()));
+}
+
+fn workspace_root() -> std::path::PathBuf {
+    let crate_dir = std::path::PathBuf::from(env!("CARGO_MANIFEST_DIR"));
+    crate_dir
+        .parent()
+        .and_then(|p| p.parent())
+        .expect("workspace root")
+        .to_path_buf()
+}
+
 /// Build a per-package git registry hosting three flow packages:
 ///
 /// - `flow:dispatcher` v0.1.0 with a `[target."context(stack:rust)"]`

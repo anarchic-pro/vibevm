@@ -89,11 +89,15 @@ pub fn run(ctx: &output::Context, args: InstallArgs) -> Result<()> {
             .map(|p| p.content_hash.clone());
         let cached =
             resolver.resolve_and_fetch(&pkgref, &cache_root, expected.as_deref())?;
-        // Roots get the user-requested feature set; transitives get
-        // default features only. Cargo applies the same shape: a
-        // root's `--features` does not propagate to its transitives.
+        // Roots get the user-requested feature set, but features the
+        // root doesn't declare are silently filtered out — multi-root
+        // `vibe install A B --features X` should not fail just because
+        // X belongs to A and not B. Cargo's `--features` behaviour for
+        // multi-root installs is the same. The cross-root visibility
+        // check at the end of phase 1 surfaces a warning if some
+        // requested feature ended up matching no root at all.
         let req = if node.is_root {
-            root_feature_request.clone()
+            tailor_feature_request(&root_feature_request, &cached.manifest.features)
         } else {
             FeatureRequest::default()
         };
@@ -112,6 +116,34 @@ pub fn run(ctx: &output::Context, args: InstallArgs) -> Result<()> {
                 is_root: node.is_root,
             },
         });
+    }
+
+    // Visibility check: warn if `--features X` was requested but no
+    // root package accepted X.
+    if !root_feature_request.explicit.is_empty() {
+        let accepted: BTreeSet<&str> = fetched
+            .iter()
+            .filter(|f| f.meta.is_root)
+            .flat_map(|f| f.feature_expansion.active_features.iter())
+            .map(|s| s.as_str())
+            .collect();
+        let unmatched: Vec<&str> = root_feature_request
+            .explicit
+            .iter()
+            .filter(|f| !accepted.contains(f.as_str()))
+            .map(|s| s.as_str())
+            .collect();
+        if !unmatched.is_empty() {
+            ctx.step(&format!(
+                "warning: requested feature{} {} not declared on any root package — silently ignored",
+                if unmatched.len() == 1 { "" } else { "s" },
+                unmatched
+                    .iter()
+                    .map(|s| format!("`{s}`"))
+                    .collect::<Vec<_>>()
+                    .join(", ")
+            ));
+        }
     }
 
     // 4. Conditional dependency expansion (PROP-003 §2.6.1) —
@@ -230,7 +262,7 @@ pub fn run(ctx: &output::Context, args: InstallArgs) -> Result<()> {
                 expected.as_deref(),
             )?;
             let req = if node.is_root {
-                root_feature_request.clone()
+                tailor_feature_request(&root_feature_request, &cached.manifest.features)
             } else {
                 FeatureRequest::default()
             };
@@ -737,6 +769,27 @@ fn build_feature_request(args: &InstallArgs) -> FeatureRequest {
         explicit: args.features.clone(),
         no_defaults: args.no_default_features,
         all: args.all_features,
+    }
+}
+
+/// Per-root-package tailoring: trim `explicit` features down to those
+/// the package actually declares. A multi-root `vibe install A B
+/// --features X` should not fail just because X belongs to A and not B
+/// — silently filter X out of B's request and rely on the post-phase-1
+/// visibility check to surface a warning if X matched no root at all.
+fn tailor_feature_request(
+    request: &FeatureRequest,
+    table: &vibe_core::manifest::FeaturesTable,
+) -> FeatureRequest {
+    FeatureRequest {
+        explicit: request
+            .explicit
+            .iter()
+            .filter(|f| table.features.contains_key(f.as_str()))
+            .cloned()
+            .collect(),
+        no_defaults: request.no_defaults,
+        all: request.all,
     }
 }
 
