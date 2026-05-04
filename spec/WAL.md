@@ -3,6 +3,16 @@ _Updated: 2026-05-05_
 
 ## Current phase
 
+**M1.7 vibe-mcp slice 3 — per-subskill files index + materialise_subskill (2026-05-05).** Closes the lazy-pull runtime promise from PROP-003 §2.5.0. Three coupled changes land together so `delivery=lazy-pull` subskills behave correctly end-to-end without polluting the project tree.
+
+- **`LockedSubskill` schema** (`390fc3a`). Two new fields on the v3 lockfile entry. `files_written: Vec<PathBuf>` — project-relative paths a subskill specifically contributed (empty for lazy-pull). `cache_files: Vec<PathBuf>` — subskill-root-relative paths inside the package cache (populated for every delivery mode so MCP can resolve bytes via the cache regardless of mode). Both `#[serde(default)]` so legacy lockfiles parse.
+- **`vibe-install` lazy-pull becomes truly lazy** (`390fc3a`). The install pipeline no longer materialises `delivery=lazy-pull` subskills into the project tree. `lazy-push` continues to degrade to eager until M2.8 ships the runtime push path. Both modes write their per-subskill files indices into the lockfile from day one so future tooling has the data without lockfile churn.
+- **`vibe-mcp` cache-precise tools** (`3c9e710`). `read_subskill` upgraded — for `eager`/`lazy-push`, reads `files_written` from the project; for `lazy-pull`, reads `cache_files` from the package cache. Wire shape stays uniform across modes. New `materialise_subskill(package, subskill_path, force?)` tool promotes a lazy-pull subskill into the project tree on demand; refuses to overwrite existing files unless `force=true` (preserves user edits, same discipline as `vibe update`'s `UserEditedFile` gate). Eager/lazy-push subskills are no-ops on this tool.
+
+Tests: 4 new (1 omnibus reflow for the lazy-pull behaviour shift + 3 new vibe-mcp unit on materialise paths) + 1 new e2e `mcp_materialise_subskill_promotes_lazy_pull_into_project` spawning `vibe mcp serve` and driving the JSON-RPC call to verify end-to-end materialisation through the MCP wire form.
+
+Workspace state: 403 tests (+4 over slice 2's 399), `cargo clippy --workspace --all-targets -- -D warnings` clean, `tools/self-check.sh` green. M1.7 effectively complete for non-LLM scope: server + transport + tools + agent auto-config + lazy-pull runtime. Remaining slices: Gemini/Codex/Copilot agent writers, `query_capabilities` / `list_subskills` discovery tools, integration with the LLM virtual-capability emission story (Phase F, post-M1.5).
+
 **M1.7 vibe-mcp slice 2 — agent detection + MCP config writers (2026-05-05).** Slice 1 shipped the server itself; slice 2 closes the integration loop so a fresh vibevm install hooks into the operator's existing coding-agent setup automatically. Combined with M1.11 (agent auto-detection at `vibe init` — overlap closed in this slice).
 
 `vibe mcp install [--path] [--agent claude|cursor|all] [--dry-run] [--force]` (`98fec82`):
