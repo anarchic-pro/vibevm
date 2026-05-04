@@ -1,7 +1,15 @@
 # WAL — Project Continuation State
-_Updated: 2026-05-04_
+_Updated: 2026-05-05_
 
 ## Current phase
+
+**M1.7 vibe-mcp slice 1 — Model Context Protocol server crate + CLI plumbing (2026-05-05).** PROP-004's headline gap ("vibevm has no MCP server" — highest-impact item per §5.1) starts landing piece-by-piece. Slice 1 is a self-contained crate with the JSON-RPC 2.0 transport, MCP message shapes, two tools, and full CLI wiring through `vibe mcp serve`. Slice 2 will add agent-config writers (`vibe init` writing `.claude/settings.json` MCP entries based on auto-detected agent) and a per-subskill files-index so `read_subskill` can return precisely the subskill's content rather than the union of the package's files.
+
+- **`vibe-mcp`** crate (`c2977fa`). Transport-agnostic `Server<T: Transport>` — production wires `StdioTransport` (line-delimited JSON-RPC over stdin/stdout, the canonical MCP shape for stdio servers); tests use `MemoryTransport` for deterministic round-trip checks without spawning subprocesses. `Server::dispatch` handles `initialize` (returns `protocolVersion = "2024-11-05"`, `serverInfo`, `capabilities.tools.listChanged = false`), `tools/list`, `tools/call`, `ping`. Unknown methods → JSON-RPC -32601, malformed JSON → -32700. Notifications (no `id`) accepted and silently ignored. Tool registry is `BTreeMap<name, RegisteredTool>` with `register_tool(descriptor, handler)` ergonomics. `ServerContext` reloads the lockfile fresh per tool call so concurrent `vibe install` runs surface without restart.
+- **Two tools shipped.** `query_package(name)` returns the full lockfile entry (kind/name/version, content_hash, registry, source_url, source_ref, resolved_commit, files_written, features, subskills_active with delivery+describes, describes PURL, language). `read_subskill(package, subskill_path)` returns the concatenated text of the package's files_written (path-headed) when the named subskill is active. Both surface tool-level errors as `isError: true` payloads (vs. JSON-RPC errors that signal transport failures).
+- **`vibe mcp serve`** (`416ac74`). New `Command::Mcp` with `Subcommand::Serve(McpServeArgs)` — enum-of-subcommands leaves room for `mcp config` / `mcp test` follow-ups. `--path` defaults to `.`. End-to-end test `mcp_serve_responds_to_initialize_and_query_package` spawns the binary, drives 3 JSON-RPC messages over stdin (`initialize` → `tools/list` → `tools/call query_package` against the omnibus alpha fixture), parses response lines, asserts protocol version + tool registry shape + lockfile-derived payload (describes/features/subskills_active populated). Same shape Claude Code / Cursor will speak.
+
+Workspace state: 385 tests (+20: 19 vibe-mcp unit + 1 e2e), `cargo clippy --workspace --all-targets -- -D warnings` clean, `tools/self-check.sh` green.
 
 **PROP-003 r2 omnibus integration fixtures + cross-cutting e2e (2026-05-04).** Slices 1–4 each locked one PROP-003 surface in isolation; the omnibus slice proves they actually compose correctly at the byte level. Three new fixture packages committed under `fixtures/registry/`, plus six end-to-end tests in `cli_e2e.rs` exercising every surface in combination. Two real integration bugs surfaced and fixed during the build.
 
