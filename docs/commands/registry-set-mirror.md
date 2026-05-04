@@ -16,7 +16,7 @@ vibe registry set-mirror <OF> <URL>
 | Argument | Description |
 | --- | --- |
 | `<OF>` | Target registry name. Either an exact `[[registry]].name` (the mirror attaches to that registry only) or `*` (the mirror attaches to every registry, including registries added later). Must be non-empty. |
-| `<URL>` | Mirror URL. Any git URL `git` accepts; must yield non-empty host and org segments — same gate as `vibe registry add`. |
+| `<URL>` | Mirror URL. Any git URL `git` accepts. Unlike a `[[registry]]` URL, a mirror URL is **not** required to have a host or org segment — `[[mirror]]` is an availability copy, not a publish target, so `file:///<dir>` URLs (the shape `vibe registry vendor` produces) are accepted verbatim. The only client-side gate is non-empty after trim; anything else is `git`'s job to reject at fetch time. |
 
 ## Flags
 
@@ -89,7 +89,7 @@ vibe registry set-mirror "*" "file:///abs/path/to/local-org" --json | jq .attach
 
 - **Empty `<OF>`** — exits non-zero. Use `*` for any-registry.
 - **Unknown `<OF>`** — exits non-zero, listing the names of registries that *do* exist in `vibe.toml`. The error message reminds the user that `*` is the wildcard.
-- **Malformed `<URL>`** — exits non-zero with the `extract_*_segment` error chain (same gate as `vibe registry add`).
+- **Empty / whitespace `<URL>`** — exits non-zero with `mirror URL must be non-empty`. Past that, an unreachable / unparseable URL surfaces only when the mirror is actually consulted at fetch time, in the operator-actionable diagnostic the resolver renders.
 - **Exact duplicate `(of, url)`** — exits non-zero. Two mirrors with identical `of` + `url` is almost always a typo; rejected so the priority chain doesn't end up with silent duplicates. Different priorities for the same `(of, url)` are also rejected. Different URL with the same `of` is fine — that's the whole point of a mirror chain.
 - **No `vibe.toml`** — exits non-zero. Run `vibe init` first.
 

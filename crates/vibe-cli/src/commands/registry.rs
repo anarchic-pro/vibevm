@@ -621,13 +621,20 @@ fn run_set_mirror(ctx: &output::Context, args: RegistrySetMirrorArgs) -> Result<
         );
     }
 
-    // URL must shape-parse as a usable git URL. Same gate as
-    // `registry add` — if `extract_*_segment` can't pull a host/org
-    // out of it, neither can `git fetch`.
-    let _host = extract_host_segment(&args.url)
-        .map_err(|e| anyhow!("mirror URL `{}`: {e}", args.url))?;
-    let _org = extract_org_segment(&args.url)
-        .map_err(|e| anyhow!("mirror URL `{}`: {e}", args.url))?;
+    // Mirror URL validation. A `[[mirror]]` is an availability copy of
+    // the same source — consumed only by `git ls-remote` / `git fetch`,
+    // never handed to a `RepoCreator` adapter — so the org/host
+    // extraction that `[[registry]]` URLs require does not apply here.
+    // In particular, `vibe registry vendor` produces `file:///<dir>`
+    // mirror URLs that have no host or org segment by construction;
+    // refusing them at this gate would self-contradict. Cheap sanity:
+    // non-empty after trim. Anything past that is `git`'s job to reject
+    // at fetch time (and `MultiRegistryResolver` surfaces the diagnostic
+    // to the operator with the failing URL inline).
+    let url_trimmed = args.url.trim();
+    if url_trimmed.is_empty() {
+        bail!("mirror URL must be non-empty");
+    }
 
     // Exact duplicate guard. A repeat add of the same `(of, url)` is
     // almost always a typo — refuse rather than silently double up

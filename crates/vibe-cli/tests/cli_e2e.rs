@@ -1322,6 +1322,70 @@ fn vendor_refuses_non_empty_out_dir_without_force() {
     );
 }
 
+#[test]
+fn set_mirror_accepts_file_url_with_no_org_segment() {
+    // Regression defence for the 2026-05-04 walk of
+    // manual-tests/M1.6-mirror-vendor-smoke.md Scenario A4. Earlier
+    // `run_set_mirror` ran `extract_host_segment` + `extract_org_segment`
+    // on the mirror URL — the same gate that `[[registry]]` URLs go
+    // through. That refused `file:///<dir>` URLs because they have no
+    // host or org segment, even though `vibe registry vendor` produces
+    // exactly that URL shape and recommends it as a `[[mirror]]`. This
+    // test pins the post-fix shape: a `file:///` URL is accepted, the
+    // manifest learns a new `[[mirror]]` block, and the URL is recorded
+    // verbatim.
+    let project = tempfile::tempdir().unwrap();
+    init_project(project.path());
+
+    let vendor_dir = tempfile::tempdir().unwrap();
+    let abs_vendor = vendor_dir.path().to_string_lossy().replace('\\', "/");
+    let mirror_url = format!("file:///{abs_vendor}");
+
+    vibe()
+        .arg("registry")
+        .arg("set-mirror")
+        .arg("vibespecs")
+        .arg(&mirror_url)
+        .arg("--path")
+        .arg(project.path())
+        .assert()
+        .success();
+
+    let manifest = fs::read_to_string(project.path().join("vibe.toml")).unwrap();
+    assert!(
+        manifest.contains("[[mirror]]"),
+        "expected [[mirror]] block in manifest; got:\n{manifest}"
+    );
+    assert!(
+        manifest.contains(&mirror_url),
+        "expected mirror URL `{mirror_url}` in manifest; got:\n{manifest}"
+    );
+}
+
+#[test]
+fn set_mirror_rejects_empty_url() {
+    // The pre-fix gate accidentally caught empty URLs as a side effect
+    // of `extract_host_segment` failing on them. The post-fix gate is
+    // intentionally narrow: non-empty after trim. Pin both the empty
+    // and the whitespace-only case so a refactor that loosens the
+    // check doesn't sneak through unnoticed.
+    let project = tempfile::tempdir().unwrap();
+    init_project(project.path());
+
+    for bad in ["", "   "] {
+        vibe()
+            .arg("registry")
+            .arg("set-mirror")
+            .arg("vibespecs")
+            .arg(bad)
+            .arg("--path")
+            .arg(project.path())
+            .assert()
+            .failure()
+            .stderr(predicate::str::contains("mirror URL must be non-empty"));
+    }
+}
+
 // ---------------------------------------------------------------------------
 // Help-text smoke — every CLI subcommand renders `--help`
 // ---------------------------------------------------------------------------
