@@ -1751,6 +1751,7 @@ dependencies = [
  "vibe-publish",
  "vibe-registry",
  "vibe-resolver",
+ "vibe-wire",
  "walkdir",
 ]
 
