@@ -83,6 +83,19 @@ Mirror integrity verification is **mandatory**, not optional. A mirror whose `co
 
 Phase A: `[[mirror]]` parser and lockfile-canonical-URL invariant ship. Runtime fallback chain lands in Phase B, because we want to exercise it against a second *real* mirror, not just a constructed test fixture.
 
+#### 2.3.1 Failure-mode discriminator: registry-walk vs mirror-walk {#failure-discriminator}
+
+`[[registry]]` and `[[mirror]]` mean different things, and the resolver treats their failures differently. Confusing them produces either silent mis-config (treating typos in a primary URL as transient) or broken offline workflows (failing fast on a mirror that is supposed to absorb outages).
+
+- A `[[registry]]` is a **distinct package source** — its own naming convention, its own publishing identity, its own trust scope. The priority-ordered registry walk falls through on **`UnknownPackage` only**: a registry that confidently answers "I don't have this package" is free to defer to the next one. Any other primary failure — connect-failure (DNS / TCP), auth-failure (bad token, missing key), server error, malformed manifest — halts the install with an actionable error. This is the same policy Cargo and npm apply to a registry that errors out: the operator wants to know about a typo or an outage, not paper over it with a different registry that may carry a different version.
+- A `[[mirror]]` is an **availability copy of the same source** — same naming, same identity, same `content_hash`. The mirror walk falls through on **any availability failure** (`NetworkUnreachable`, `AuthFailed` on the mirror, server error, `content_hash` mismatch). `RepoNotFound` from a mirror bubbles up to the registry-walk layer (same policy as if the canonical primary had said `UnknownPackage`), because absence-of-package is a registry-level fact, not a mirror-level one.
+
+**Why split.** A single uniform "fall through on any failure" rule maximises resilience but loses the ability to detect a misconfigured primary. A single uniform "fail-fast on any failure" rule preserves diagnostics but breaks the offline / vendor-mirror story Phase B v0 explicitly enables (`vibe registry vendor` → wire as `file://` `[[mirror]]` → install while the network primary is down). Splitting failure semantics by entry kind keeps both properties intact.
+
+**Operator UX.** When a primary `[[registry]]` connect-fails, the error message points the operator at `vibe registry list` (typo check) and the network (outage check). When a `[[mirror]]` fails, the resolver logs `tracing::debug!` and tries the next mirror; the operator learns about it only if every source disappears, in which case the most informative diagnostic — the primary's own error — is what surfaces.
+
+**Implementation.** The error classifier (`crates/vibe-registry/src/git_backend/shell.rs::classify_stderr_message`) maps git's free-form stderr into a typed `GitError` variant. `GitPackageRegistry`'s mirror walk pattern-matches on the variant (`NetworkUnreachable` / `AuthFailed` / `CommandFailed` / mirror-side `RepoNotFound`) and falls through; the canonical primary's `UnknownPackage` is what `MultiRegistryResolver` translates into a registry-walk fall-through. The split lives in code at the trait-method boundary, not in a single switch.
+
 ### 2.4 Overrides: surgical pin of source location {#override}
 
 **Decision.** `[[override]]` bypasses the registry layer for a named pkgref:
