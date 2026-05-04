@@ -20,8 +20,9 @@ pub use lockfile::{
     VirtualCapabilityRecord,
 };
 pub use package::{
-    BootSnippet, Compatibility, ConflictsList, FeaturesTable, Obsoletes, PackageDependencies,
-    PackageManifest, PackageMeta, Provides, Requires, RequiresAny, WritesSection,
+    BootSnippet, Compatibility, ConditionalTarget, ConflictsList, FeaturesTable, Obsoletes,
+    PackageDependencies, PackageManifest, PackageMeta, Provides, Requires, RequiresAny,
+    WritesSection,
 };
 pub use project::{
     ActiveSection, DEFAULT_REGISTRY_NAME, DEFAULT_REGISTRY_REF, DEFAULT_REGISTRY_URL, LlmSection,

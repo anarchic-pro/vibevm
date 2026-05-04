@@ -43,6 +43,7 @@ use vibe_core::manifest::PackageManifest;
 use vibe_core::{PackageKind, PackageRef, VersionSpec};
 
 pub mod activation;
+pub mod conditional;
 pub mod features;
 pub mod local_registry_provider;
 pub mod multi_registry_provider;

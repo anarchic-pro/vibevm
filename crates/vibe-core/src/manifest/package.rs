@@ -84,6 +84,27 @@ pub struct PackageManifest {
     /// Per PROP-003 §2.7. Empty default = English-only.
     #[serde(default, skip_serializing_if = "I18nDecl::is_default")]
     pub i18n: I18nDecl,
+
+    /// Conditional dependencies — `[target."context(<probe>)".dependencies]`
+    /// per PROP-003 §2.6.1. Each key is a context predicate string; the
+    /// value carries `[dependencies]` in `[requires]`-shape that get
+    /// added to the dep graph when the predicate matches the resolved
+    /// project state. Predicate language: `context(<key>)` where
+    /// `<key>` is a capability/pkgref/interface tag that probes the
+    /// `present` / `provides` channels of the activation context.
+    /// Richer predicates (`if_files`, boolean composition) reserved for
+    /// follow-up slices.
+    #[serde(default, rename = "target", skip_serializing_if = "BTreeMap::is_empty")]
+    pub conditional_deps: BTreeMap<String, ConditionalTarget>,
+}
+
+/// `[target."<predicate>"]` body — currently just `[dependencies]`,
+/// shaped like `[requires]`.
+#[derive(Debug, Clone, Default, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(deny_unknown_fields)]
+pub struct ConditionalTarget {
+    #[serde(default, skip_serializing_if = "Requires::is_empty")]
+    pub dependencies: Requires,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
@@ -575,6 +596,38 @@ packages = ["not-a-valid-pkgref"]
         let err = toml::from_str::<PackageManifest>(raw).unwrap_err();
         let msg = err.to_string();
         assert!(msg.contains("invalid package reference") || msg.contains("missing `:`"));
+    }
+
+    #[test]
+    fn parses_conditional_deps_block() {
+        let raw = r#"
+[package]
+name = "x"
+kind = "flow"
+version = "0.1.0"
+
+[target."context(stack:rust)".dependencies]
+packages = ["flow:rust-best-practices@^0.1"]
+
+[target."context(interface:build-system)".dependencies]
+packages = ["flow:build-discipline@^0.1"]
+"#;
+        let m: PackageManifest = toml::from_str(raw).unwrap();
+        assert_eq!(m.conditional_deps.len(), 2);
+        let rust_target = m
+            .conditional_deps
+            .get("context(stack:rust)")
+            .expect("rust target");
+        assert_eq!(rust_target.dependencies.packages.len(), 1);
+        assert_eq!(
+            rust_target.dependencies.packages[0].qualified_name(),
+            "flow:rust-best-practices"
+        );
+        let build_target = m
+            .conditional_deps
+            .get("context(interface:build-system)")
+            .expect("build target");
+        assert_eq!(build_target.dependencies.packages.len(), 1);
     }
 
     #[test]
