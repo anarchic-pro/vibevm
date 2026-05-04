@@ -367,7 +367,6 @@ fn classify_failure(args: &[&str], output: &Output) -> GitError {
     let stderr = String::from_utf8_lossy(&output.stderr).into_owned();
     let stdout = String::from_utf8_lossy(&output.stdout);
     let combined = format!("{stderr}{stdout}");
-    let lc = combined.to_lowercase();
 
     // Extract `--` followed by URL for clone. For fetch, URL is from
     // origin which we don't know here; fall back to an empty string.
@@ -385,31 +384,60 @@ fn classify_failure(args: &[&str], output: &Output) -> GitError {
         .map(|s| s.to_string())
         .unwrap_or_default();
 
+    classify_stderr_message(&combined, url, refname).unwrap_or_else(|| GitError::CommandFailed {
+        cmd: render_argv_for_display(args),
+        status: output.status.code().unwrap_or(-1),
+        stderr: combined.trim_end().to_string(),
+    })
+}
+
+/// Pure substring-driven classifier. Receives the combined stderr+stdout
+/// of a failed `git` invocation plus the URL/refname extracted from the
+/// argv, and returns the matching `GitError` variant — or `None` to let
+/// the caller fall back to `CommandFailed { cmd, status, stderr }`.
+///
+/// Order of checks is significant: more specific matchers run before
+/// broader ones (e.g. `unable to access` is a wrapper that frames many
+/// of the lower-level failures, so we look for the inner connect-failure
+/// substrings first and let `unable to access` ride along on whatever
+/// they found).
+fn classify_stderr_message(combined: &str, url: String, refname: String) -> Option<GitError> {
+    let lc = combined.to_lowercase();
+
     if lc.contains("repository not found") || lc.contains("does not appear to be a git repository")
     {
-        return GitError::RepoNotFound { url };
+        return Some(GitError::RepoNotFound { url });
     }
     if lc.contains("permission denied (publickey)") || lc.contains("authentication failed") {
-        return GitError::AuthFailed { url };
+        return Some(GitError::AuthFailed { url });
     }
+    // Network / connect-failure shapes seen in the wild from git 2.x +
+    // libcurl. `failed to connect` / `could not connect to server` cover
+    // the curl path (the wording flipped over the 7.x → 8.x transition);
+    // `connection refused` / `connection timed out` / `operation timed
+    // out` cover bare-TCP and proxy paths; `could not resolve host` /
+    // `network is unreachable` are the historical entries; `could not
+    // read from remote repository` is the SSH-side equivalent that ssh
+    // emits before git can class it any tighter.
     if lc.contains("could not resolve host")
         || lc.contains("could not read from remote repository")
         || lc.contains("network is unreachable")
+        || lc.contains("failed to connect")
+        || lc.contains("could not connect to")
+        || lc.contains("connection refused")
+        || lc.contains("connection timed out")
+        || lc.contains("operation timed out")
     {
-        return GitError::NetworkUnreachable { url };
+        return Some(GitError::NetworkUnreachable { url });
     }
     if lc.contains("remote branch")
         && lc.contains("not found")
         || lc.contains("couldn't find remote ref")
     {
-        return GitError::RefNotFound { url, refname };
+        return Some(GitError::RefNotFound { url, refname });
     }
 
-    GitError::CommandFailed {
-        cmd: render_argv_for_display(args),
-        status: output.status.code().unwrap_or(-1),
-        stderr: combined.trim_end().to_string(),
-    }
+    None
 }
 
 fn render_argv(binary: &Path, args: &[&str]) -> String {
@@ -821,5 +849,96 @@ mod tests {
         assert_eq!(parse_octal(b"00000000027\0").unwrap(), 0o27);
         assert_eq!(parse_octal(b"  144 \0").unwrap(), 0o144);
         assert_eq!(parse_octal(b"\0\0\0\0\0\0\0\0\0\0\0\0").unwrap(), 0);
+    }
+
+    fn classify(stderr: &str) -> Option<GitError> {
+        classify_stderr_message(stderr, "URL".into(), "REF".into())
+    }
+
+    #[test]
+    fn classify_repo_not_found_message() {
+        // GitHub / Gitea-shape 404 surfaces a verbatim "Repository not
+        // found." line from the remote helper; that's the substring
+        // the classifier locks onto.
+        assert!(matches!(
+            classify("remote: Repository not found.\nfatal: ...").unwrap(),
+            GitError::RepoNotFound { .. }
+        ));
+        assert!(matches!(
+            classify("fatal: 'x' does not appear to be a git repository").unwrap(),
+            GitError::RepoNotFound { .. }
+        ));
+    }
+
+    #[test]
+    fn classify_auth_failed_message() {
+        assert!(matches!(
+            classify("git@github.com: Permission denied (publickey).").unwrap(),
+            GitError::AuthFailed { .. }
+        ));
+        assert!(matches!(
+            classify("remote: HTTP Basic: Access denied\nfatal: Authentication failed for ...").unwrap(),
+            GitError::AuthFailed { .. }
+        ));
+    }
+
+    #[test]
+    fn classify_network_unreachable_classic_substrings() {
+        // Substrings that the M1.1 classifier already recognised.
+        for stderr in [
+            "fatal: unable to access 'https://x/y.git/': Could not resolve host: x",
+            "fatal: Could not read from remote repository.",
+            "ssh: connect to host x port 22: Network is unreachable",
+        ] {
+            assert!(
+                matches!(classify(stderr).unwrap(), GitError::NetworkUnreachable { .. }),
+                "expected NetworkUnreachable for: {stderr}"
+            );
+        }
+    }
+
+    #[test]
+    fn classify_network_unreachable_connect_failure_substrings() {
+        // The shapes M1.6 Scenario B4 surfaced — connect-failure on a
+        // dead host. git 2.5x with libcurl 8.x emits the verbatim
+        // strings below; the Scenario B4 walk on 2026-05-04 produced
+        // the third one (`Could not connect to server`).
+        for stderr in [
+            "fatal: unable to access 'https://x/y.git/': Failed to connect to x port 443 after 2123 ms: Could not connect to server",
+            "fatal: unable to access 'https://x/y.git/': Failed to connect to x port 443: Connection refused",
+            "fatal: unable to access 'https://x/y.git/': Connection timed out after 30001 ms",
+            "fatal: unable to access 'https://x/y.git/': Operation timed out after 30001 ms",
+        ] {
+            assert!(
+                matches!(classify(stderr).unwrap(), GitError::NetworkUnreachable { .. }),
+                "expected NetworkUnreachable for: {stderr}"
+            );
+        }
+    }
+
+    #[test]
+    fn classify_ref_not_found_message() {
+        assert!(matches!(
+            classify("fatal: Remote branch no-such-branch not found in upstream origin").unwrap(),
+            GitError::RefNotFound { .. }
+        ));
+        assert!(matches!(
+            classify("fatal: couldn't find remote ref refs/tags/v9.9.9").unwrap(),
+            GitError::RefNotFound { .. }
+        ));
+    }
+
+    #[test]
+    fn classify_unknown_message_falls_through() {
+        assert!(classify("error: something we have never seen before").is_none());
+    }
+
+    #[test]
+    fn classify_specific_matchers_win_over_unable_to_access() {
+        // `unable to access` is a wrapper that frames many other
+        // failures; it must NOT shadow the inner connect-failure or
+        // auth-failed classification.
+        let stderr = "fatal: unable to access 'https://x/y.git/': Authentication failed for 'https://x/'";
+        assert!(matches!(classify(stderr).unwrap(), GitError::AuthFailed { .. }));
     }
 }
