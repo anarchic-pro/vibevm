@@ -1704,6 +1704,182 @@ fn install_expands_conditional_dependencies_when_predicate_matches() {
     );
 }
 
+/// Build a registry that exercises **cascading** conditional deps:
+///
+/// - `flow:cascade-root` depends conditionally on `flow:cascade-mid`
+///   when `stack:rust-cli` is present.
+/// - `flow:cascade-mid` depends conditionally on `flow:cascade-leaf`
+///   when `flow:cascade-root` is present.
+/// - `flow:cascade-leaf` has no further conditional deps.
+/// - `stack:rust-cli` is the trigger package.
+///
+/// Project installs `stack:rust-cli` + `flow:cascade-root`. Iteration 1
+/// of the fixed-point loop pulls in `flow:cascade-mid`; iteration 2
+/// pulls in `flow:cascade-leaf`; iteration 3 finds no new extras and
+/// breaks. Verifies the runtime supports cascading predicates the
+/// single-pass shape would have missed.
+fn make_cascading_conditional_registry(root: &Path) -> (PathBuf, String) {
+    let org = root.join("org");
+    fs::create_dir_all(&org).unwrap();
+
+    fn make_pkg(
+        out_root: &Path,
+        org_dir: &Path,
+        kind: &str,
+        name: &str,
+        version: &str,
+        manifest_extras: &str,
+        files: &[(&str, &str)],
+    ) {
+        let src = out_root.join(format!("src-{}-{}", kind, name));
+        fs::create_dir_all(&src).unwrap();
+        run_git(&src, &["init", "--initial-branch=main"]);
+        run_git(&src, &["config", "user.email", "t@example.com"]);
+        run_git(&src, &["config", "user.name", "Test"]);
+        let writes = files
+            .iter()
+            .map(|(p, _)| format!("    \"{p}\""))
+            .collect::<Vec<_>>()
+            .join(",\n");
+        let manifest = format!(
+            r#"[package]
+name = "{name}"
+kind = "{kind}"
+version = "{version}"
+
+[writes]
+files = [
+{writes}
+]
+{manifest_extras}
+"#
+        );
+        fs::write(src.join("vibe-package.toml"), manifest).unwrap();
+        for (path, content) in files {
+            let target = src.join(path);
+            if let Some(parent) = target.parent() {
+                fs::create_dir_all(parent).unwrap();
+            }
+            fs::write(target, content).unwrap();
+        }
+        run_git(&src, &["add", "-A"]);
+        run_git(&src, &["commit", "-m", &format!("v{version}")]);
+        run_git(&src, &["tag", &format!("v{version}")]);
+
+        let bare = org_dir.join(format!("{kind}-{name}.git"));
+        run_git(out_root, &[
+            "clone",
+            "--bare",
+            src.to_str().unwrap(),
+            bare.to_str().unwrap(),
+        ]);
+        run_git(&bare, &["symbolic-ref", "HEAD", "refs/heads/main"]);
+    }
+
+    make_pkg(
+        root,
+        &org,
+        "stack",
+        "rust-cli",
+        "0.1.0",
+        "",
+        &[("spec/stacks/rust-cli/STACK.md", "# rust-cli")],
+    );
+    make_pkg(
+        root,
+        &org,
+        "flow",
+        "cascade-root",
+        "0.1.0",
+        r#"
+[target."context(stack:rust-cli)".dependencies]
+packages = ["flow:cascade-mid@^0.1"]
+"#,
+        &[("spec/flows/cascade-root/CORE.md", "# root")],
+    );
+    make_pkg(
+        root,
+        &org,
+        "flow",
+        "cascade-mid",
+        "0.1.0",
+        r#"
+[target."context(flow:cascade-root)".dependencies]
+packages = ["flow:cascade-leaf@^0.1"]
+"#,
+        &[("spec/flows/cascade-mid/MID.md", "# mid")],
+    );
+    make_pkg(
+        root,
+        &org,
+        "flow",
+        "cascade-leaf",
+        "0.1.0",
+        "",
+        &[("spec/flows/cascade-leaf/LEAF.md", "# leaf")],
+    );
+
+    let abs_org = org
+        .canonicalize()
+        .unwrap()
+        .to_string_lossy()
+        .replace('\\', "/")
+        .trim_start_matches("//?/")
+        .to_string();
+    let url = format!("git+file:///{abs_org}");
+    (org, url)
+}
+
+#[test]
+fn install_expands_cascading_conditional_dependencies() {
+    if !git_available() {
+        eprintln!("skipping install_expands_cascading_conditional_dependencies: git not on PATH");
+        return;
+    }
+    let outer = tempfile::tempdir().unwrap();
+    let (_org, registry_url) =
+        make_cascading_conditional_registry(outer.path());
+
+    let project = tempfile::tempdir().unwrap();
+    init_project(project.path());
+    write_project_with_per_package_registry(project.path(), &registry_url);
+    let cache = outer.path().join("cache");
+    fs::create_dir_all(&cache).unwrap();
+
+    vibe()
+        .env("VIBE_REGISTRY_CACHE", &cache)
+        .arg("install")
+        .arg("stack:rust-cli")
+        .arg("flow:cascade-root")
+        .arg("--path")
+        .arg(project.path())
+        .arg("--assume-yes")
+        .assert()
+        .success();
+
+    let lock: vibe_core::manifest::Lockfile = toml::from_str(
+        &fs::read_to_string(project.path().join("vibe.lock")).unwrap(),
+    )
+    .unwrap();
+    let names: Vec<_> = lock
+        .packages
+        .iter()
+        .map(|p| format!("{}:{}", p.kind, p.name))
+        .collect();
+    for expected in [
+        "stack:rust-cli",
+        "flow:cascade-root",
+        "flow:cascade-mid",
+        "flow:cascade-leaf",
+    ] {
+        assert!(
+            names.iter().any(|n| n == expected),
+            "cascade expected {expected}; got {:?}",
+            names
+        );
+    }
+}
+
 #[test]
 fn conditional_dependencies_dormant_when_predicate_misses() {
     if !git_available() {

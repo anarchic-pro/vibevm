@@ -114,19 +114,30 @@ pub fn run(ctx: &output::Context, args: InstallArgs) -> Result<()> {
         });
     }
 
-    // 4. Conditional dependency expansion (PROP-003 §2.6.1).
-    //    Build an initial activation context from currently-fetched
-    //    nodes; walk every package's `[target."context(...)".dependencies]`;
-    //    if a predicate matches, fold those dependencies into a delta
-    //    list of extra roots. Re-run the solver once with the union of
-    //    original roots + delta, fetch newly-introduced nodes, append
-    //    to `fetched`. Single-pass shape — cascading conditional
-    //    chains (one conditional dep itself triggering another)
-    //    hand-off to a follow-up slice with an explicit fixed-point
-    //    loop. Today's expansion converges in one pass for any
-    //    realistic graph because authors rarely chain conditional
-    //    deps through transitive predicates.
-    {
+    // 4. Conditional dependency expansion (PROP-003 §2.6.1) —
+    //    fixed-point loop. Each pass: build activation context from
+    //    currently-fetched packages; walk every package's
+    //    `[target."context(...)".dependencies]`; if any predicate
+    //    matches and its targets aren't already in the graph, add
+    //    them as extra roots; re-solve and fetch. Repeat until no new
+    //    extras emerge, or until the iteration cap is hit.
+    //
+    //    Convergence: extras only ADD packages to the fetched set
+    //    (monotonic), and the predicate evaluation is a pure function
+    //    of `present` + `provides` which only grow. So either a pass
+    //    produces no extras (terminates), or every pass adds at
+    //    least one package — bounded by the registry's size.
+    //
+    //    The cap (5 iterations) catches authoring-bug cases where a
+    //    chain of conditional deps re-triggers on each iteration
+    //    without converging. The conservative cap surfaces as a
+    //    loud `bail!` so the operator can either fix the chain or
+    //    bump the limit explicitly. No realistic graph reaches the
+    //    cap.
+    const COND_DEP_MAX_ITER: usize = 5;
+    let mut iteration: usize = 0;
+    loop {
+        iteration += 1;
         let preliminary_ctx = build_activation_context(
             fetched.iter().map(|f| &f.cached),
             &project_root,
@@ -163,58 +174,83 @@ pub fn run(ctx: &output::Context, args: InstallArgs) -> Result<()> {
                 }
             }
         }
-        if !extra.is_empty() {
-            ctx.step(&format!(
-                "Conditional dependencies activated: {} extra root{}",
-                extra.len(),
-                if extra.len() == 1 { "" } else { "s" }
-            ));
-            let mut combined = roots.clone();
-            combined.extend(extra.iter().cloned());
-            let new_graph = resolver.solve(&combined).with_context(|| {
-                "dependency resolution failed during conditional expansion"
-            })?;
-            for node in new_graph.iter() {
-                if fetched.iter().any(|g| {
-                    g.cached.resolved.kind == node.kind
-                        && g.cached.resolved.name == node.name
-                }) {
-                    continue;
-                }
-                let pkgref = exact_pinned_pkgref(node);
-                let expected = lockfile
-                    .find(node.kind, &node.name)
-                    .map(|p| p.content_hash.clone());
-                let cached = resolver.resolve_and_fetch(
-                    &pkgref,
-                    &cache_root,
-                    expected.as_deref(),
-                )?;
-                let req = if node.is_root {
-                    root_feature_request.clone()
-                } else {
-                    FeatureRequest::default()
-                };
-                let feature_expansion =
-                    expand_features(&cached.manifest.features, &req).with_context(
-                        || {
-                            format!(
-                                "expanding features for `{}:{}@{}`",
-                                cached.resolved.kind,
-                                cached.resolved.name,
-                                cached.resolved.version
-                            )
-                        },
-                    )?;
-                fetched.push(Fetched {
-                    cached,
-                    feature_expansion,
-                    meta: NodeInstallMeta {
-                        dependencies: node.dependencies.clone(),
-                        is_root: node.is_root,
-                    },
-                });
+        if extra.is_empty() {
+            break;
+        }
+        if iteration > COND_DEP_MAX_ITER {
+            bail!(
+                "conditional-dep expansion exceeded {COND_DEP_MAX_ITER} iterations — cascading predicates may form a cycle or runaway chain. Pending extras at break: {extras:?}",
+                extras = extra
+                    .iter()
+                    .map(|r| r.qualified_name())
+                    .collect::<Vec<_>>()
+            );
+        }
+        ctx.step(&format!(
+            "Conditional dependencies (iter {}): {} extra root{}",
+            iteration,
+            extra.len(),
+            if extra.len() == 1 { "" } else { "s" }
+        ));
+        let mut combined = roots.clone();
+        combined.extend(
+            fetched
+                .iter()
+                .filter(|f| f.meta.is_root)
+                .map(|f| exact_pinned_pkgref(&ResolvedNode {
+                    kind: f.cached.resolved.kind,
+                    name: f.cached.resolved.name.clone(),
+                    version: f.cached.resolved.version.clone(),
+                    dependencies: Vec::new(),
+                    is_root: true,
+                })),
+        );
+        combined.extend(extra.iter().cloned());
+        // De-duplicate by (kind, name).
+        let mut seen: std::collections::HashSet<(_, String)> =
+            std::collections::HashSet::new();
+        combined.retain(|r| seen.insert((r.kind, r.name.clone())));
+        let new_graph = resolver.solve(&combined).with_context(|| {
+            "dependency resolution failed during conditional expansion"
+        })?;
+        for node in new_graph.iter() {
+            if fetched.iter().any(|g| {
+                g.cached.resolved.kind == node.kind
+                    && g.cached.resolved.name == node.name
+            }) {
+                continue;
             }
+            let pkgref = exact_pinned_pkgref(node);
+            let expected = lockfile
+                .find(node.kind, &node.name)
+                .map(|p| p.content_hash.clone());
+            let cached = resolver.resolve_and_fetch(
+                &pkgref,
+                &cache_root,
+                expected.as_deref(),
+            )?;
+            let req = if node.is_root {
+                root_feature_request.clone()
+            } else {
+                FeatureRequest::default()
+            };
+            let feature_expansion =
+                expand_features(&cached.manifest.features, &req).with_context(|| {
+                    format!(
+                        "expanding features for `{}:{}@{}`",
+                        cached.resolved.kind,
+                        cached.resolved.name,
+                        cached.resolved.version
+                    )
+                })?;
+            fetched.push(Fetched {
+                cached,
+                feature_expansion,
+                meta: NodeInstallMeta {
+                    dependencies: node.dependencies.clone(),
+                    is_root: node.is_root,
+                },
+            });
         }
     }
 
