@@ -3,6 +3,21 @@ _Updated: 2026-05-05_
 
 ## Current phase
 
+**M1.7 vibe-mcp slice 2 — agent detection + MCP config writers (2026-05-05).** Slice 1 shipped the server itself; slice 2 closes the integration loop so a fresh vibevm install hooks into the operator's existing coding-agent setup automatically. Combined with M1.11 (agent auto-detection at `vibe init` — overlap closed in this slice).
+
+`vibe mcp install [--path] [--agent claude|cursor|all] [--dry-run] [--force]` (`98fec82`):
+
+- Detects supported agents by probing for `.claude/` + `CLAUDE.md` (Claude Code) or `.cursor/` + `.cursorrules` (Cursor). Empty detection is legal; `--force` provisions even when the marker is absent.
+- For each targeted agent, ensures `mcpServers.vibevm` in the per-project config file points at `vibe mcp serve --path <project-root>`. Per-agent paths: `.claude/settings.json` / `.cursor/mcp.json`. Foreign keys (other servers, top-level settings) preserved on merge.
+- Idempotent: matching block → `unchanged`; divergent → `updated`; missing → `created`. Decision logic shared between `install` and `--dry-run` previews via a no-IO `decide_action`.
+- JSON envelope: `command = "mcp:install"`, `detected[]`, `targeted[]`, `results[]` with per-agent status + note.
+
+`vibe mcp status [--path]`: read-only counterpart, same JSON envelope shape (`command = "mcp:status"`). Useful in CI to assert configs haven't drifted.
+
+12 new tests landed (7 library-side: detect-by-marker-dir, detect-by-CLAUDE.md, parse_filter known/unknown, merge into empty file, merge preserving existing keys, decide_action across created/unchanged/updated; 5 e2e: writes claude settings, idempotent on second run, dry-run produces no file, force provisions absent agent, status reports per-agent state) + 2 help-smoke entries for the new subcommands.
+
+Workspace state: 399 tests (+14 over slice 1's 385). Clippy clean, self-check green. Out-of-scope deferrals: user-level config (`~/.config/claude/...`) and Gemini / Codex / Copilot agents land in follow-up slices.
+
 **M1.7 vibe-mcp slice 1 — Model Context Protocol server crate + CLI plumbing (2026-05-05).** PROP-004's headline gap ("vibevm has no MCP server" — highest-impact item per §5.1) starts landing piece-by-piece. Slice 1 is a self-contained crate with the JSON-RPC 2.0 transport, MCP message shapes, two tools, and full CLI wiring through `vibe mcp serve`. Slice 2 will add agent-config writers (`vibe init` writing `.claude/settings.json` MCP entries based on auto-detected agent) and a per-subskill files-index so `read_subskill` can return precisely the subskill's content rather than the union of the package's files.
 
 - **`vibe-mcp`** crate (`c2977fa`). Transport-agnostic `Server<T: Transport>` — production wires `StdioTransport` (line-delimited JSON-RPC over stdin/stdout, the canonical MCP shape for stdio servers); tests use `MemoryTransport` for deterministic round-trip checks without spawning subprocesses. `Server::dispatch` handles `initialize` (returns `protocolVersion = "2024-11-05"`, `serverInfo`, `capabilities.tools.listChanged = false`), `tools/list`, `tools/call`, `ping`. Unknown methods → JSON-RPC -32601, malformed JSON → -32700. Notifications (no `id`) accepted and silently ignored. Tool registry is `BTreeMap<name, RegisteredTool>` with `register_tool(descriptor, handler)` ergonomics. `ServerContext` reloads the lockfile fresh per tool call so concurrent `vibe install` runs surface without restart.
