@@ -18,7 +18,8 @@ use vibe_install::{
 use vibe_registry::{CachedPackage, LocalRegistry, MultiRegistryResolver};
 use vibe_resolver::{
     ActivationContext, DepSolver, FeatureExpansion, FeatureRequest, LocalRegistryProvider,
-    MultiRegistryProvider, NaiveDepSolver, ResolvedNode, expand_features,
+    MultiRegistryProvider, NaiveDepSolver, ResolvedNode, conditional::ConditionalPredicate,
+    expand_features,
 };
 
 use crate::cli::InstallArgs;
@@ -113,7 +114,112 @@ pub fn run(ctx: &output::Context, args: InstallArgs) -> Result<()> {
         });
     }
 
-    // 4. Build the activation context once from the full graph.
+    // 4. Conditional dependency expansion (PROP-003 §2.6.1).
+    //    Build an initial activation context from currently-fetched
+    //    nodes; walk every package's `[target."context(...)".dependencies]`;
+    //    if a predicate matches, fold those dependencies into a delta
+    //    list of extra roots. Re-run the solver once with the union of
+    //    original roots + delta, fetch newly-introduced nodes, append
+    //    to `fetched`. Single-pass shape — cascading conditional
+    //    chains (one conditional dep itself triggering another)
+    //    hand-off to a follow-up slice with an explicit fixed-point
+    //    loop. Today's expansion converges in one pass for any
+    //    realistic graph because authors rarely chain conditional
+    //    deps through transitive predicates.
+    {
+        let preliminary_ctx = build_activation_context(
+            fetched.iter().map(|f| &f.cached),
+            &project_root,
+            &language_chain,
+        );
+        let mut extra: Vec<PackageRef> = Vec::new();
+        for f in &fetched {
+            for (pred_str, target) in &f.cached.manifest.conditional_deps {
+                match ConditionalPredicate::parse(pred_str) {
+                    Ok(pred) => {
+                        if pred.evaluate(&preliminary_ctx) {
+                            for r in &target.dependencies.packages {
+                                let already = fetched.iter().any(|g| {
+                                    g.cached.resolved.kind == r.kind
+                                        && g.cached.resolved.name == r.name
+                                }) || extra.iter().any(|x| {
+                                    x.kind == r.kind && x.name == r.name
+                                });
+                                if !already {
+                                    extra.push(r.clone());
+                                }
+                            }
+                        }
+                    }
+                    Err(e) => {
+                        tracing::warn!(
+                            target: "vibe_install",
+                            package = %format!("{}:{}", f.cached.resolved.kind, f.cached.resolved.name),
+                            predicate = %pred_str,
+                            error = %e,
+                            "conditional-dep predicate could not be parsed; skipping"
+                        );
+                    }
+                }
+            }
+        }
+        if !extra.is_empty() {
+            ctx.step(&format!(
+                "Conditional dependencies activated: {} extra root{}",
+                extra.len(),
+                if extra.len() == 1 { "" } else { "s" }
+            ));
+            let mut combined = roots.clone();
+            combined.extend(extra.iter().cloned());
+            let new_graph = resolver.solve(&combined).with_context(|| {
+                "dependency resolution failed during conditional expansion"
+            })?;
+            for node in new_graph.iter() {
+                if fetched.iter().any(|g| {
+                    g.cached.resolved.kind == node.kind
+                        && g.cached.resolved.name == node.name
+                }) {
+                    continue;
+                }
+                let pkgref = exact_pinned_pkgref(node);
+                let expected = lockfile
+                    .find(node.kind, &node.name)
+                    .map(|p| p.content_hash.clone());
+                let cached = resolver.resolve_and_fetch(
+                    &pkgref,
+                    &cache_root,
+                    expected.as_deref(),
+                )?;
+                let req = if node.is_root {
+                    root_feature_request.clone()
+                } else {
+                    FeatureRequest::default()
+                };
+                let feature_expansion =
+                    expand_features(&cached.manifest.features, &req).with_context(
+                        || {
+                            format!(
+                                "expanding features for `{}:{}@{}`",
+                                cached.resolved.kind,
+                                cached.resolved.name,
+                                cached.resolved.version
+                            )
+                        },
+                    )?;
+                fetched.push(Fetched {
+                    cached,
+                    feature_expansion,
+                    meta: NodeInstallMeta {
+                        dependencies: node.dependencies.clone(),
+                        is_root: node.is_root,
+                    },
+                });
+            }
+        }
+    }
+
+    // 5. Build the final activation context once from the (possibly
+    //    expanded) graph.
     let activation_context = build_activation_context(
         fetched.iter().map(|f| &f.cached),
         &project_root,
