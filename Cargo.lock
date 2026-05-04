@@ -1750,6 +1750,7 @@ dependencies = [
  "vibe-core",
  "vibe-graph",
  "vibe-install",
+ "vibe-mcp",
  "vibe-publish",
  "vibe-registry",
  "vibe-resolver",
@@ -1809,6 +1810,20 @@ version = "0.1.0-dev"
 dependencies = [
  "anyhow",
  "thiserror 2.0.18",
+]
+
+[[package]]
+name = "vibe-mcp"
+version = "0.1.0-dev"
+dependencies = [
+ "anyhow",
+ "serde",
+ "serde_json",
+ "tempfile",
+ "thiserror 2.0.18",
+ "toml",
+ "tracing",
+ "vibe-core",
 ]
 
 [[package]]
