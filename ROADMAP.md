@@ -560,20 +560,20 @@ Source: [PROP-004 §5.2](spec/research/PROP-004-tessl-comparative-research.md#qu
 
 **Estimated effort.** 2 weekends on top of M1.5.1 + M1.8.
 
-### M2.8 — Three-mode delivery (eager / lazy-push / lazy-pull)
+### M2.8 — Lazy-push / lazy-pull runtime plumbing
 
-**Thesis.** Tessl's most distinctive architectural choice: rules eager-push, skills lazy-push by description match, docs lazy-pull on agent demand. vibevm today is eager-push of materialised files only. Adopt the three-mode model so packages can be authored with appropriate delivery semantics.
+**Thesis.** PROP-003 r2 already lands the three delivery modes (eager / lazy-push / lazy-pull) in the manifest schema and the lockfile from day one — so they don't require a v3-to-v4 lockfile migration later. What M2.8 covers is the **runtime side**: making lazy-push and lazy-pull actually do something, by plumbing them through `vibe-mcp` (M1.7) so the agent sees content at the right moment.
 
-Source: [PROP-004 §5.4](spec/research/PROP-004-tessl-comparative-research.md#three-modes).
+Source: [PROP-003 §2.5.0](spec/modules/vibe-resolver/PROP-003-dep-evolution.md#delivery-modes), [PROP-004 §5.4](spec/research/PROP-004-tessl-comparative-research.md#three-modes).
 
 **Scope.**
 
-- Subskill manifest gains `delivery = "eager" | "lazy-push" | "lazy-pull"`.
-- `vibe-mcp` (M1.7) enforces lazy-pull on demand.
-- `vibe-install` materialises eager + lazy-push (the latter only when an MCP-connected agent's task description matches the package's `description`).
-- Lockfile schema bump (v4) recording per-subskill delivery mode.
+- `vibe-mcp` (M1.7) gains lazy-push: when an agent's `query_package` reveals a lazy-push subskill whose `description` matches the agent's task, materialise into MCP context (not on disk).
+- `vibe-mcp` gains `read_subskill` / lazy-pull: agent-driven on-demand fetch of subskill content. No materialisation; the bytes only ever live in agent context.
+- `vibe-install` continues to materialise eager subskills as today; lazy-push and lazy-pull installs leave nothing on disk (just register the subskill with `vibe-mcp`'s pool).
+- Acceptance: a `delivery=lazy-push` subskill installed against a Claude Code session never appears in `spec/...` but is observably present in the agent's context when the trigger description matches.
 
-**Estimated effort.** 2–3 weekends. Depends on M1.7.
+**Estimated effort.** 2 weekends. Depends on M1.7.
 
 ### M2.9 — Scenario generation from real commits
 

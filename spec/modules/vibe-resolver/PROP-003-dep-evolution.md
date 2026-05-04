@@ -2,11 +2,24 @@
 
 **Status.** Design proposal — not yet implementation-locked. Companion to [PROP-000](../../common/PROP-000.md) (project foundation), [PROP-002](../vibe-registry/PROP-002-decentralized-registry.md) (registry model). Supersedes the depsolver paragraphs of PROP-002 §2.8 (which left the solver upgrade path as a one-line "resolvo or libsolv slot reserved"); does not touch PROP-002's identity or registry decisions.
 
+**Revision r2 (2026-05-04, post-PROP-004).** First revision shipped 2026-05-04 morning. Second revision shipped same day after the [PROP-004 Tessl comparative research](../../research/PROP-004-tessl-comparative-research.md) surfaced eight architectural improvements that were better folded into the design proposal *before* implementation than retrofitted later. Diff at the section level:
+
+- §2.5 expanded with **three delivery modes** (eager / lazy-push / lazy-pull) as a primary axis of the subskill manifest, not a follow-up bolt-on.
+- §2.5.1 subskill manifest grows a required **`description` field** for lazy-push activation — natural-language trigger that the agent matches against the current task (Tessl's load-bearing pattern, copied here verbatim semantics).
+- §2.5.2 context-based activation **broadened**: alongside `if_present` and `if_provides`, new probes `if_files`, `if_command`, `if_env`, `if_describes_match` cover real-world triggers that don't require explicit capability/interface declarations.
+- §2.5.3 LLM-inferred activation **refactored** from "LLM toggles subskills directly" into "LLM emits virtual capabilities into the dep graph" — same expressive power, single audit point, and normal activation channels (`if_present` / `if_provides`) handle the actual toggle.
+- New §2.5.6 — **`describes` PURL on subskills** (not just packages), so a subskill targeting FastAPI 0.116.1 is a different object from the one for 0.117 even within the same parent.
+- New §2.6.1 — **Conditional dependencies** (`[target."context(...)".dependencies]` ≈ Cargo's `cfg` deps), distinct from subskill activation.
+- §2.4's `__exclusive` sigil replaced with a **named-group `[features.exclusive]` table** — TOML-idiomatic, no underscore namespace dance.
+- §2.10 `vibe check` gains an **activation-conflict** check that catches description triggers that overlap across subskills (the same axis Tessl's review rubric scores under "activation distinctiveness").
+
+The first-revision text is preserved in place; revision-r2 additions are inline at their natural locations.
+
 **Scope.** This document specifies four interlocking upgrades to the vibevm dependency model:
 
 1. **SAT-class solver** behind the existing `DepSolver` trait, replacing `NaiveDepSolver` for non-trivial graphs while keeping the trait surface and lockfile shape intact.
 2. **Optional components (features)** in the cargo-features tradition — first-class declarations in the package manifest, with all the conditional-activation, additive-only, and feature-unification semantics of cargo's feature resolver v2.
-3. **Subskills** — a vibevm-native concept: optional sub-documents inside a package, addressable by feature mappings, by context-based activation rules, and (post-M1.5) by LLM inference. Subskills are *not* a re-skin of cargo features; they are a content unit with a richer activation surface that features feed into.
+3. **Subskills** — a vibevm-native concept: optional sub-documents inside a package with **three delivery modes** (eager / lazy-push / lazy-pull), addressable by feature mappings, by context-based activation rules, by natural-language description match, by `describes` PURL binding, and (post-M1.5) by LLM-emitted virtual capabilities. Subskills are *not* a re-skin of cargo features; they are a content unit with a much richer activation and delivery surface that features feed into.
 4. **Internationalization** — first-class language preference at the project, package, and CLI level; deterministic fallback to canonical English; standardised file-naming pattern that doesn't fight existing OS / Git tooling.
 
 **Why now (pre-release).** vibevm has no public release, no external users, and no migration cost yet. PROP-002 §2.7's lockfile schema v2 already had to absorb one revision; further schema churn before v0.1.0 is free. After release, every change to the dep-model would carry migration weight that we currently avoid. This is the right window to widen the contract.
@@ -124,8 +137,10 @@ llm-prompt-templates = ["subskill:llm-coordinator/anthropic"]
 rust-stack = ["subskill:stack/rust"]
 python-stack = ["subskill:stack/python"]
 
-# Mutually exclusive — solver enforces.
-__exclusive = [["rust-stack", "python-stack"]]
+# Mutually exclusive — solver enforces. Named groups, not the
+# underscore-prefixed sigil from revision r1; TOML-idiomatic.
+[features.exclusive]
+stacks = ["rust-stack", "python-stack"]
 ```
 
 **Semantics — copied from cargo's feature resolver v2 with one reduction and one extension.**
@@ -148,11 +163,11 @@ The cargo subset we **drop**:
 
 The vibevm-specific extension we add:
 
-- **Mutual exclusion.** `__exclusive = [[a, b], [c, d, e]]` — within each inner list, **at most one** feature may be active. Enforced by the SAT solver via direct conflict rules. cargo has no equivalent (because rustc cfg-conditioning makes mutual exclusion software-rebuilt, not solver-enforced); vibevm uses it for cross-cutting choices like `rust-stack` vs `python-stack` where both make sense individually but not together.
+- **Mutual exclusion** via `[features.exclusive]` named groups — each value list is an at-most-one set, enforced by the SAT solver via direct conflict rules. cargo has no equivalent (because rustc cfg-conditioning makes mutual exclusion software-rebuilt, not solver-enforced); vibevm uses it for cross-cutting choices like `rust-stack` vs `python-stack` where both make sense individually but not together. Named groups (`stacks = [...]`, `languages = [...]`) read better than r1's underscore-prefixed `__exclusive = [[…], […]]`.
 - **Feature → subskill mapping.** A feature can list `subskill:<path>` in its activation list, which directs the resolver to materialise the corresponding subskill (§2.5). This is the bridge between cargo-style features and vibevm-native subskill content.
 - **Feature visibility.** Features prefixed with `_` (underscore) are *implementation details* — invisible to consumer manifests; cannot be activated by name from outside the package. Cargo has an informal convention here; we make it solver-enforced.
 
-### 2.5 Subskills — vibevm-native optional content units {#subskills}
+### 2.5 Subskills — vibevm-native optional content units with three delivery modes {#subskills}
 
 **Decision.** A package may carry a `subskills/` subtree alongside its top-level content:
 
@@ -180,35 +195,84 @@ flow-wal/
         └── claude-prompt-templates.md
 ```
 
-A **subskill** is the smallest activatable content unit inside a package. Structurally it looks like a tiny package: own manifest, own files, own optional further subskill children (§2.5.4). The materialisation rules for a subskill that's been activated are identical to the rules for the package itself — files copy into the consumer project at the same relative paths, boot snippets land in `spec/boot/`, etc.
+A **subskill** is the smallest activatable content unit inside a package. Structurally it looks like a tiny package: own manifest, own files, own optional further subskill children (§2.5.5). What changes per subskill is the **delivery mode** (§2.5.0 below) and the **activation rules** (§2.5.2): together they decide when the subskill's content reaches the agent and how.
+
+#### 2.5.0 Three delivery modes — eager, lazy-push, lazy-pull {#delivery-modes}
+
+A subskill's `delivery` field is the **primary axis** of the manifest, not a follow-up bolt-on. It picks how the subskill's content reaches the agent. Three values, each well-defined:
+
+- **`eager`** (default — the only mode in revision r1). Once activation matches, the subskill's files materialise into the project tree under `spec/...` at install time. They stay on disk until uninstall. Every agent session that opens the project sees them — analogous to PROP-002 §2.5 base-package behaviour. **Use for** rules-of-the-house content that should always be visible: foundational protocols, boot snippets, mandatory disciplines.
+- **`lazy-push`**. Files are *not* materialised at install time. Instead, when an agent connects via the `vibe-mcp` server (M1.7), and the agent's current task description matches the subskill's natural-language `description` field (§2.5.1), `vibe-mcp` materialises the files **into the agent's current MCP context** — pushed to the agent on its behalf without disk-side cache. The push leaves no on-disk artefact unless `--persist` is passed. **Use for** workflow guidance (procedural skills) that's relevant only sometimes, and only on disk for the duration of one agent task.
+- **`lazy-pull`**. Files never materialise except on explicit agent request through `vibe-mcp`'s `read_subskill(package, path)` tool. The agent decides when to consult them; the user never sees them in `spec/...`. **Use for** library-knowledge documentation: API references, framework deep-dives, edge-case catalogs that an agent should be able to query but that would bloat the project tree if eager-materialised.
+
+The three modes mirror Tessl's "rules eager-push / skills lazy-push / docs lazy-pull" framing (research at [PROP-004 §2.10](../../research/PROP-004-tessl-comparative-research.md#delivery-modes)) — with the difference that vibevm makes the mode a **per-subskill choice** rather than a per-content-type one. A single package can ship eager rules + lazy-push workflows + lazy-pull deep references and the consumer sees each at the right moment.
+
+**Lockfile impact.** Lockfile schema v3 (§2.9) records the resolved delivery mode per active subskill so the materialisation behaviour is reproducible across machines.
+
+**Why all three modes need to exist in the schema from day one.** If we ship `eager` only and add `lazy-push` / `lazy-pull` later, every existing subskill manifest needs a default-mode declaration retroactively, and every existing lockfile needs the per-subskill-mode field. Pre-release schema churn is free; post-release it costs migrations. We pay the cost once, here.
 
 #### 2.5.1 Subskill manifest (`vibe-subskill.toml`) {#subskill-manifest}
 
 ```toml
 [subskill]
 path = "stack/rust"                   # canonical addressable name within parent package
-description = "Rust-specific guidance for the WAL flow"
+summary = "Rust-specific guidance for the WAL flow"
+
+# Natural-language activation trigger — load-bearing for `lazy-push` mode
+# and `vibe-mcp` exposure. Required for delivery = "lazy-push" /
+# "lazy-pull"; recommended for delivery = "eager" so `vibe-mcp` /
+# `vibe show subskills` can describe what the subskill is for. Style:
+# "When you ...". Specificity beats verbosity — the agent matches this
+# against task / files / conversation, so vague triggers ("about Rust")
+# trip on every Rust-adjacent task; concrete triggers ("when adding a
+# new WAL checkpoint to a Rust project that uses sqlx for storage")
+# only fire when the situation actually applies. `vibe review` scores
+# this string under the "activation" axis.
+description = """
+When you are adding or modifying WAL checkpoints in a Rust project,
+especially when using sqlx, diesel, or similar SQL libraries, and need
+the Rust-specific naming, error-handling, and trace-id conventions
+that complement the canonical WAL protocol.
+"""
+
+# How this subskill reaches the agent. See §2.5.0.
+delivery = "lazy-push"   # one of: "eager", "lazy-push", "lazy-pull"
+
+# Optional: pin this subskill to an upstream OSS package version. PURL
+# syntax (https://github.com/package-url/purl-spec). Set when the
+# content is genuinely version-specific to the upstream library —
+# e.g. a Rust-stack subskill that documents a sqlx 0.8 API. See
+# §2.5.6.
+describes = "pkg:cargo/sqlx@0.8.0"
 
 # Activation rules — any one matches → subskill is active.
+# Channels described in §2.5.2.
 [activation]
 # Manual: parent package's [features] map a feature name to this path.
 # (No declaration needed here — the parent's [features] table holds
 # the linkage. Stated for documentation only.)
 
-# Context-based: activate if these capabilities are present in the
-# project's effective spec.
+# Context-based: capabilities/interfaces/files/commands/env/PURL match.
 context.if_present = ["stack:rust"]
-
-# Context-based: activate if all of these interface tags are exposed
-# by some package in the graph.
 context.if_provides = ["interface/build-system"]
-
-# Activate if the project declares this language preference (BCP-47).
+context.if_files = ["**/Cargo.toml"]
+context.if_command = ["cargo"]
+context.if_env = ["RUST_LOG"]
+context.if_describes_match = true            # match if any package in
+                                              # the graph `describes` an
+                                              # upstream PURL whose `type`
+                                              # equals this subskill's
+                                              # `describes` type
+                                              # (e.g. pkg:cargo/*).
 context.if_language = ["en", "ru"]
 
-# LLM-inferred: the post-M1.5 build pipeline may include this subskill
-# even without static rules above. Set to `false` to opt out.
-context.allow_llm_inference = true
+# LLM-inferred activation: the post-M1.5 LLM build pipeline can emit
+# *virtual* capabilities into the dep graph (§2.5.3), which then
+# activate this subskill through the normal `if_present` /
+# `if_provides` channels. Set `context.allow_llm_emission = false` to
+# refuse virtual capabilities for this subskill specifically (default
+# true — opt-out, not opt-in).
+context.allow_llm_emission = true
 
 # Soft-preference: if activated alongside any of these, prefer to also
 # activate them (libsolv-Recommends-style).
@@ -229,29 +293,67 @@ files_written = [
 ]
 ```
 
-The manifest is intentionally a strict subset of `vibe-package.toml` — same TOML idioms, same fields where applicable, same `deny_unknown_fields` discipline.
+The manifest is intentionally a strict subset of `vibe-package.toml` — same TOML idioms, same fields where applicable, same `deny_unknown_fields` discipline. New per-subskill fields (revision r2): `delivery`, `description`, `describes`, plus the expanded `[activation].context.*` probes.
 
-#### 2.5.2 Subskill activation modes — the four orthogonal channels {#subskill-activation}
+**`description` is required for `delivery = "lazy-push"` and `lazy-pull`.** The activation trigger is the entire mechanism for those modes — without it, `vibe-mcp` has nothing to match against. `eager` mode also benefits but is not required. `vibe check` errors out (not warns) on a lazy-push subskill missing `description`.
 
-A subskill becomes "active" (its files materialise into the project) if any of these match. The channels compose; an active subskill activates once regardless of how many matched:
+**`description` length policy.** No hard limit, but `vibe review` activation-axis scoring penalises descriptions over ~600 characters as "vague when long" — Tessl's empirical finding (their skills cap at 500 lines for the body and ~5 lines for the description). Authors are expected to be precise.
 
-- **Manual via parent feature.** The parent package's `[features]` table includes the subskill in some feature's activation list (e.g. `rust-stack = ["subskill:stack/rust"]`); that feature is in the active feature set; therefore the subskill activates.
-- **Context-based: present-capability.** `context.if_present = ["stack:rust"]` — activates if the project's effective dep graph already contains `stack:rust` in any version. The check is structural: the solver scans the resolved graph after the SAT phase and toggles affected subskills, then re-runs the integrity layer (file collision detection, boot-prefix collision detection) since new content may have appeared.
-- **Context-based: provided-interface.** `context.if_provides = ["interface/build-system"]` — activates if any package in the graph has declared `[provides]` matching that interface tag (§2.7). Strictly more general than `if_present` because the producer can be any package, not a specific named one.
-- **LLM-inferred (post-M1.5).** During `vibe build`, after the static activation rules have run, the LLM is given the effective spec corpus + the target feat description + a list of *available but not yet activated* subskills with their `description` fields. The LLM may select additional subskills to activate. Each `vibe-subskill.toml`'s `context.allow_llm_inference = false` opts out (default `true`).
+#### 2.5.2 Subskill activation channels — broader probe surface {#subskill-activation}
 
-#### 2.5.3 Why subskills, not just more packages {#subskill-rationale}
+A subskill becomes "active" if any one of these channels matches. Channels compose orthogonally; an active subskill activates once regardless of how many matched. The full set, more comprehensive than revision r1:
+
+- **Manual via parent feature.** The parent's `[features]` table includes the subskill in some feature's activation list (`rust-stack = ["subskill:stack/rust"]`); the feature is active; the subskill activates.
+- **Context-based: `if_present`.** Activates if the project's effective dep graph contains a named package or capability (`stack:rust`, `capability:wal-protocol`).
+- **Context-based: `if_provides`.** Activates if any package in the graph declares `[provides]` matching the named interface tag (`interface:build-system`). Strictly more general than `if_present` (producer can be anyone fulfilling the role).
+- **Context-based: `if_files`.** New in r2. Activates if the project tree matches one of the supplied glob patterns (`**/Cargo.toml`, `package.json`, `requirements.txt`). This is what `tessl init` infers implicitly when it auto-detects "you are in a Rust project, you are in a Python project" — vibevm makes the probe explicit and per-subskill.
+- **Context-based: `if_command`.** New in r2. Activates if any of the listed commands resolve on the user's `PATH` (`cargo`, `python3`, `pnpm`). This is a **machine-state** trigger, distinct from project-state triggers — useful for tooling subskills that document a CLI the agent might shell out to.
+- **Context-based: `if_env`.** New in r2. Activates if any of the listed env-vars are set (`RUST_LOG`, `CI`, `KUBECONFIG`). Useful for environment-specific guidance ("you're in CI, here's the CI-specific gotchas subskill").
+- **Context-based: `if_describes_match`.** New in r2. Activates if any package in the graph (or the consumer project itself) declares `describes` with a PURL whose `type` matches this subskill's `describes` type. This is the bridge between the project's "I document FastAPI 0.116" PURL and a subskill's "I'm the Rust-specific cut of FastAPI guidance."
+- **Context-based: `if_language`.** Activates if the consumer's resolved language preference (§2.7.3) is in the listed set. Carried over from r1.
+- **LLM-emitted virtual capability.** New shape in r2 (replacing r1's "LLM-inferred" channel — see §2.5.3 below). Equivalent expressive power, single audit point.
+
+Each channel is **opt-in per subskill** — silence on a probe means "this probe doesn't fire for this subskill." `[activation]` with no probes at all means the subskill activates only manually (via parent feature).
+
+#### 2.5.3 LLM-emitted virtual capabilities (post-M1.5) — refactor of "LLM-inferred activation" {#llm-virtual-caps}
+
+Revision r1 introduced "LLM-inferred activation": during `vibe build`, the LLM was given a list of inactive subskills and could pick which to turn on. This created an ad-hoc imperative side-effect with no audit trail and no way for the dep graph to observe the LLM's reasoning.
+
+Revision r2 reformulates the channel as **virtual capability emission**:
+
+1. During `vibe build`, after the static SAT solve and the post-pass static activation rules have run, the LLM is invoked with a prompt summarising the project's effective spec, the target feat, and the project's surrounding context (recent commits, file tree, env).
+2. The LLM is asked: "What capabilities and interfaces, beyond those statically declared, should be considered present in this project for the purpose of context selection?"
+3. The LLM responds with a list of **virtual capabilities** — `capability:claude-coordinator`, `interface:build-system`, `language:russian-comments`, etc. Each is a string in the same namespace as static capabilities/interfaces.
+4. The virtual capabilities are added to the resolved graph as if a synthetic package emitted them. Normal activation channels (`if_present` / `if_provides`) handle the actual subskill toggle.
+5. The lockfile's `[meta]` block records which virtual capabilities the LLM emitted plus the prompt-and-response trace ID. `vibe show effective` displays virtually-emitted capabilities with a `[virtual via LLM]` annotation. The audit trail is per-resolution; reproducing a run reproduces the trace.
+
+The expressive power is identical: anything r1's "LLM picks subskill X" did, r2's "LLM emits capability Y → subskill X activates via `if_present = [Y]`" does. The differences are operationally meaningful:
+
+- **Single audit point.** Every LLM contribution to activation passes through one boundary (capability emission), not scattered across N subskill toggles.
+- **Static rules win.** Manually-declared `if_present` rules still apply uniformly to virtual emissions; the consumer can declare `[[overrides]] reject_virtual_capability = "language:..."` to shut off entire LLM-emitted dimensions if needed.
+- **Transparency at the spec layer.** A virtual capability is a spec-layer object — operator can write `[provides]` for it, `[requires]` against it, see it in `vibe show config`. r1's LLM-inferred activation never crossed back into the spec ontology.
+- **Per-subskill opt-out is unnecessary at the channel level.** Subskills that don't want LLM-emitted activation simply don't use `if_present` against the namespace the LLM is allowed to emit into. Project-level policy is `[llm].emission.allowed_namespaces = ["capability:*", "interface:*"]` (default — generous; restrict by namespace if security-sensitive).
+
+#### 2.5.4 Why subskills, not just more packages {#subskill-rationale}
 
 The same end-state could be achieved by splitting `flow:wal` into `flow:wal-base`, `flow:wal-rust`, `flow:wal-python`, etc. Two reasons we don't:
 
 1. **Cohesion.** The Rust-specific notes belong *inside* the `flow:wal` package as a unit — author-time, the same person writes them, they reference each other across the boundary, they ship as a single tag `v0.1.0`. Splitting forces the author to coordinate version numbers across N repos.
 2. **Discovery surface.** A registry browser sees one `flow:wal` and walks its subskills; with N split packages it sees a flood of micro-entries that don't communicate "these are different cuts of the same flow." This matters as soon as the registry has more than ~10 packages.
 
-Cargo solves this through `[features]` in a single crate — vibevm goes one step further because the unit ("a feature") and the activated content unit (some files, structure preserved) are not the same object in vibevm. Hence the explicit `subskill` model.
+Cargo solves this through `[features]` in a single crate — vibevm goes one step further because the unit ("a feature") and the activated content unit (some files, structure preserved) are not the same object in vibevm. Hence the explicit `subskill` model. **Tessl** ships only flat skills with no subdivision (research at [PROP-004 §5.3](../../research/PROP-004-tessl-comparative-research.md)) — that's a meaningful gap they'll need to close once their registry exceeds atomic-skill complexity.
 
-#### 2.5.4 Recursive subskills {#subskill-recursion}
+#### 2.5.5 Recursive subskills {#subskill-recursion}
 
-A subskill may itself carry a `subskills/` directory; activation rules apply recursively. Practical limit: depth ≤ 3 (anything deeper is almost certainly a smell — the package should be split). `vibe check` warns at depth 4.
+A subskill may itself carry a `subskills/` directory; activation rules apply recursively. Practical limit: depth ≤ 3 (anything deeper is almost certainly a smell — the package should be split). `vibe check` warns at depth 4. Each nested subskill carries its own `delivery` mode independently of its parent; an `eager` parent can have a `lazy-pull` deep reference subskill nested inside.
+
+#### 2.5.6 `describes` PURL on subskills {#subskill-describes}
+
+Per §2.7 of [PROP-004](../../research/PROP-004-tessl-comparative-research.md#purl), Tessl's headline marketing claim — version-matched documentation — rides on the `describes` field at the tile level. vibevm goes one step further: the field is available **on subskills as well as packages**. A `flow:wal` package as a whole may not bind to any one library, but its `subskills/stack/rust/` cut binds specifically to `pkg:cargo/sqlx@0.8.0`; another `subskills/stack/rust-diesel/` cut binds to `pkg:cargo/diesel@2.x`. The two coexist in the same package, and the activation channel `context.if_describes_match` selects the right one for the consumer's actual library version.
+
+**Format.** Standard Package URL spec ([`https://github.com/package-url/purl-spec`](https://github.com/package-url/purl-spec)) — `pkg:<type>/<namespace>/<name>@<version>` or `pkg:<type>/<name>@<version>` for unscoped. `<version>` may be a SemVer requirement (`^0.8`) rather than an exact version when the subskill applies to a range.
+
+**Lockfile impact.** When a subskill activates via `if_describes_match`, the lockfile records both the subskill's `describes` PURL and the matched in-graph PURL. Drift detection (M1.9 + M1.10) then cross-references: when the consumer upgrades sqlx 0.8 → 0.9, `vibe outdated --upstream` flags subskills whose `describes` no longer matches.
 
 ### 2.6 Capability-based interface tags — the abstract layer {#interface-tags}
 
@@ -283,7 +385,31 @@ Interface tags differ from capabilities in two ways:
 
 **Naming convention.** Interface tags use the `interface:<name>` namespace. The `<name>` segment uses `-` for word boundaries (kebab-case), `/` for category nesting (`interface:storage/sql`, `interface:storage/key-value`). Solver treats them as opaque strings; no semantic meaning beyond match/no-match.
 
-**Provenance.** Both `[provides]` and `[requires]` interface tags are user-authored (no LLM inference). The author is making an intentional declaration about an architectural role; that's not a thing the LLM should be guessing at.
+**Provenance.** Both `[provides]` and `[requires]` interface tags are user-authored (no LLM inference). The author is making an intentional declaration about an architectural role; that's not a thing the LLM should be guessing at. Note: §2.5.3 introduces *virtual capabilities* the LLM may emit at runtime (post-M1.5) — those flow through a different channel and never persist into the package manifest.
+
+### 2.6.1 Conditional dependencies — `[target."context(...)".dependencies]` {#conditional-deps}
+
+**Decision.** Beyond subskill activation (which controls *content within an active package*), vibevm gains conditional dependencies (which control *whether a package is in the graph at all*), modelled on Cargo's `[target."cfg(...)".dependencies]` shape but predicated on vibevm's context probes rather than rustc target triples:
+
+```toml
+[target."context(stack:rust)".dependencies]
+flow:rust-best-practices = "^0.1"
+flow:cargo-discipline = "^0.1"
+
+[target."context(if_files = '**/Dockerfile')".dependencies]
+flow:container-best-practices = "^0.1"
+
+[target."context(if_provides = 'interface:database-migrations')".dependencies]
+flow:migration-discipline = "^0.1"
+```
+
+The `context(...)` predicate accepts the same `if_present` / `if_provides` / `if_files` / `if_command` / `if_env` / `if_describes_match` / `if_language` probes from §2.5.2, plus boolean composition (`and`, `or`, `not`).
+
+**When to use which.** Subskills are *content shaped to context* — files inside a package. Conditional deps are *packages shaped to context* — entire packages added to the graph or not. Choose subskills when the content lives naturally inside an existing package; choose conditional deps when bringing in a separately-versioned, separately-authored package makes more sense.
+
+**Solver impact.** Conditional deps are evaluated **after** the static SAT solve has run on unconditional deps (otherwise the solver doesn't know which probes will fire). The flow: solve unconditional → evaluate `[target.<...>.dependencies]` predicates → add new requirements → re-solve. Convergence guaranteed in finite steps because each pass only adds requirements, never relaxes them; libsolv handles the incremental rule addition cleanly.
+
+**Cargo's resolution-stability lesson.** Cargo's `cfg`-based conditional deps were originally per-target evaluated at solve time, which produced different lockfiles per host triple. vibevm's `context(...)` is evaluated against the **resolved project state**, not host state — so the lockfile is host-invariant for the same project state. Build-host machine differences (e.g. `cargo` available or not) are explicitly out of scope; if the user wants those, they declare project-level capabilities.
 
 ### 2.7 Internationalization (i18n) — multi-language package content {#i18n}
 
@@ -474,8 +600,10 @@ The lockfile gains:
 
 - `[meta].language` and `[meta].language_fallback` (§2.7.5).
 - `[meta].active_features = [...]` — full list of features active in the resolution. Per-package activation goes under each `[[package]]` entry.
-- `[[package]]` entries gain `features = ["..."]` and `subskills_active = ["stack/rust", ...]` (the latter is materialisation-relevant; users see the file set change).
+- `[meta].virtual_capabilities = [...]` — capabilities emitted by the LLM during resolution (§2.5.3). Each entry carries `name`, `emitter` (the LLM provider/model identifier), `trace_id` (link into the audit log), and `emitted_at`.
+- `[[package]]` entries gain `features = ["..."]`, `subskills_active = [...]` (with each entry being `{ path = "stack/rust", delivery = "lazy-push" }` so the materialisation behaviour is reproducible) and the latter's delivery mode persisted because eager / lazy-push / lazy-pull are operationally distinct on the consumer side.
 - `[[package]]` entries gain optional `language` field if the package was materialised in a non-canonical language (otherwise inherits `[meta].language`).
+- `[[package]]` and per-subskill entries gain optional `describes` PURL when set in the source manifest.
 
 ```toml
 [meta]
@@ -517,10 +645,11 @@ New flags / commands:
 - `vibe install <pkgref> [--language <bcp47>]` — override resolved language for this install.
 - `vibe show features <pkgref>` — list the package's features, default state, current activation in the project.
 - `vibe show subskills <pkgref>` — list the package's subskills, activation state with reason ("active because feature `rust-stack`", "active because `stack:rust` is in the project", "available but not active", "would-activate-if-LLM-build" — post-M1.5).
-- `vibe check`'s existing checks gain three new entries (numbered per VIBEVM-SPEC §12 expansion):
+- `vibe check`'s existing checks gain four new entries (numbered per VIBEVM-SPEC §12 expansion):
   - **i18n coverage**: every file declared in `[content].files_written` exists for the package's canonical language; missing translations warn (not error) per language declared in `[i18n].available`.
-  - **subskill structure**: subskill manifests parse, activation rules are valid (`if_present` references exist, `if_provides` interface tags are well-formed).
+  - **subskill structure**: subskill manifests parse, activation rules are valid (`if_present` references exist, `if_provides` interface tags are well-formed, `if_files` glob patterns parse, `delivery` is one of the three allowed values, `description` is present when `delivery` ∈ {`lazy-push`, `lazy-pull`}).
   - **feature graph**: feature activations don't form cycles, exclusion sets are not violated by `default`, every `subskill:<path>` reference resolves to a real subskill in the package.
+  - **activation conflict**: subskill `description` triggers don't materially overlap. Detection runs an LLM-judge (when available) or a heuristic substring-overlap pass (in `vibe check`'s static mode) over every pair of subskills with `delivery ∈ {lazy-push, lazy-pull}` in the same package, flagging pairs whose triggers contain ≥75% of each other's content keywords. Mirrors Tessl's review-rubric "activation distinctiveness" axis (research at [PROP-004 §2.11](../../research/PROP-004-tessl-comparative-research.md#review-rubric)). Authors are expected to either tighten one description or merge the two subskills.
 
 Existing flags pick up new behaviours:
 
@@ -651,13 +780,15 @@ Concretely scoped slices, each shippable independently:
 - `--features` / `--no-default-features` / `--all-features` CLI flags.
 - Acceptance: a feat that depends on `flow:wal` with `--features rust-stack` materialises the rust-specific files; without the flag, those files are absent.
 
-### Phase C — subskills (manual + context-based)
+### Phase C — subskills (manual + context-based + three delivery modes)
 
 - Subskill manifest format, package layout convention.
+- Manifest fields: `delivery`, `description`, `describes`, full `[activation]` probe set (`if_present` / `if_provides` / `if_files` / `if_command` / `if_env` / `if_describes_match` / `if_language`).
 - Manual feature → subskill mapping (Phase B's hooks).
-- Context-based `if_present` and `if_provides` activation post-pass.
+- Context-based activation post-pass: probes evaluated against the resolved graph + project tree + machine state.
+- Eager-mode materialisation in `vibe-install`. Lazy-push / lazy-pull modes plumb through but require `vibe-mcp` (M1.7) to be useful — when M1.7 hasn't landed, the modes degrade to `eager` with a `tracing::warn!` so the consumer is never silently broken.
 - `vibe show subskills` CLI.
-- Acceptance: a package with `subskills/stack/rust/` activates under a `stack:rust` project without explicit user opt-in.
+- Acceptance: a package with `subskills/stack/rust/` (delivery=eager) activates under a `stack:rust` project without explicit user opt-in. A package with `subskills/sqlx-0.8/` (delivery=lazy-push, describes=`pkg:cargo/sqlx@0.8.0`) does NOT materialise files but registers itself for `vibe-mcp` exposure once M1.7 is in. Activation-conflict check fires when two lazy-push subskills' descriptions overlap.
 
 ### Phase D — i18n
 
@@ -673,21 +804,27 @@ Concretely scoped slices, each shippable independently:
 - Naive demoted to "tests + small graphs" path.
 - Acceptance: clean runs of every smoke (M1.5-gate-v2, M1.6-mirror-vendor, plus new feature/subskill smokes) green on fresh install.
 
-### Phase F — LLM-inferred subskill activation (post-M1.5)
+### Phase F — LLM-emitted virtual capabilities (post-M1.5)
 
 - Wire into the `vibe build` LLM tool-use loop.
-- `context.allow_llm_inference = false` opt-out semantics.
-- Trace surface: every LLM-driven activation logs reason + chosen subskill set.
-- Acceptance: a `feat:welcome-page × stack:rust` build picks up the `flow:wal/llm-coordinator/anthropic` subskill without user opt-in, and the trace shows why.
+- LLM is invoked with the effective spec + project context + a request to emit virtual capabilities (§2.5.3).
+- Subskills with matching `if_present` / `if_provides` rules activate through the normal channel.
+- Audit surface: every emission logs `(name, emitter, trace_id, reasoning)` to the lockfile's `[meta].virtual_capabilities`. `vibe show effective` annotates virtually-emitted capabilities with `[virtual via LLM]`.
+- Project-level policy: `[llm].emission.allowed_namespaces = ["capability:*", "interface:*"]` (default — generous; restrict by namespace if security-sensitive). Per-subskill `context.allow_llm_emission = false` is the per-subskill opt-out, but most subskills won't need it because they simply don't declare `if_present` against the LLM-emission namespace.
+- Acceptance: a `feat:welcome-page × stack:rust` build emits `interface:llm-coordinator` based on detecting an LLM-mediated workflow, which activates the `flow:wal/llm-coordinator/anthropic` subskill via its `if_provides = ["interface:llm-coordinator"]` rule, and the lockfile records the emission with full audit trail.
 
 ## 7. Open questions {#open}
 
-- **Mutually-exclusive feature sets across packages.** §2.4's `__exclusive` is intra-package. Should we support cross-package mutual exclusion ("at most one of `stack:rust` or `stack:python` in the same project")? Today this is implicit via `kind`/`name` uniqueness; explicit cross-package `__exclusive` would be a new construct. Defer to adoption signal.
+- **Mutually-exclusive feature sets across packages.** §2.4's `[features.exclusive]` is intra-package. Should we support cross-package mutual exclusion ("at most one of `stack:rust` or `stack:python` in the same project")? Today this is implicit via `kind`/`name` uniqueness on the resolution side, but a project that pulls both via different transitive paths is not currently rejected. Defer to adoption signal.
 - **Subskill versioning.** Today a subskill is part of its parent package's version. Do we ever want subskills with their own SemVer? Probably not — would force the subskill into being its own package. Mark closed.
 - **Translation provenance.** Should the lockfile record *which version of a translation* was materialised (translations may evolve faster than canonical)? Open — likely yes, requires schema extension to v4 if pursued.
 - **Interface-tag namespacing in the registry.** Today interface tags are global (`interface:build-system` matches across all registries). For multi-tenant federations we may need scoping; defer until multi-registry adoption surfaces real conflicts.
-- **LLM activation transparency to the consumer.** Should the consumer's `vibe.toml` get a `[llm-activation] denied = ["subskill:..."]` opt-out list, or is per-package `allow_llm_inference = false` enough? Open — leaning toward per-package to avoid scattering policy.
+- **Virtual-capability emission rate-limiting.** §2.5.3 leaves the LLM emission unconstrained. In the worst case the LLM could emit hundreds of virtual capabilities per resolution and inflate the activation graph. Open: should the schema cap emissions at N (configurable) and ask the LLM to prioritise? Lean toward `[llm].emission.max = 50` default with override at `vibe build --llm-emission-max=N`.
+- **Workspace / monorepo support.** Cargo's `[workspace]` shape lets a repo carry many crates with shared lockfile. vibevm today is one-package-one-repo. With subskills + features, this constraint is workable; without them, monorepos for multi-package collections (`vibespecs/flow-collection` carrying `flow:wal` + `flow:atomic-commits`) become attractive. Defer to adoption.
+- **`describes` PURL coverage.** Should `vibe check` warn when a `describes` PURL points at a package version that doesn't exist on the upstream registry (npm, pypi, crates.io)? Requires a probe layer that's opinionated about upstream-host APIs. Park as M2-territory.
+- **Activation-conflict detection threshold.** §2.10's check uses 75% keyword-overlap as the threshold for "descriptions materially overlap." Is that the right number? Tessl doesn't publish theirs. Open — instrument and adjust based on real-world false-positive rate once we have a corpus.
 - **Feature flags from environment variables.** `VIBE_FEATURES=foo,bar` — useful for CI/automation? Probably yes, mirrors `--features`. Cheap addition to Phase B if pulled.
+- **LLM activation transparency to the consumer.** Per-project policy at `[llm].emission.allowed_namespaces` (§2.5.3) covers the bulk case. Should there also be a `[llm].emission.denylist = ["capability:dangerous-pattern"]` for explicit refusal of named capabilities? Lean yes; cheap; probably lands as part of Phase F.
 
 ## 8. References {#references}
 
