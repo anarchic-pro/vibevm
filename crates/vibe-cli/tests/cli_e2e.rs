@@ -1550,6 +1550,72 @@ fn install_no_default_features_skips_default_subskills() {
 // when they speak to the server.
 
 #[test]
+fn mcp_materialise_subskill_promotes_lazy_pull_into_project() {
+    // After installing alpha, sqlx/v08 stays in cache only (lazy-
+    // pull). The MCP materialise_subskill tool copies it into the
+    // project tree on demand. This is the runtime that closes
+    // PROP-003 §2.5.0's lazy-pull promise end-to-end.
+    let registry = workspace_root().join("fixtures").join("registry");
+    let project = tempfile::tempdir().unwrap();
+    init_project(project.path());
+    vibe()
+        .arg("install")
+        .arg("flow:integration-alpha")
+        .arg("--registry")
+        .arg(&registry)
+        .arg("--path")
+        .arg(project.path())
+        .arg("--assume-yes")
+        .assert()
+        .success();
+    // Pre-condition: lazy-pull file is NOT on disk yet.
+    let target = project
+        .path()
+        .join("spec/flows/integration-alpha/SQLX-V08.md");
+    assert!(
+        !target.exists(),
+        "lazy-pull file must stay in cache pre-materialise"
+    );
+
+    // Drive the MCP server through the materialise_subskill tool.
+    let script = format!(
+        "{}\n",
+        r#"{"jsonrpc":"2.0","id":1,"method":"tools/call","params":{"name":"materialise_subskill","arguments":{"package":"flow:integration-alpha","subskill_path":"sqlx/v08"}}}"#
+    );
+    let bin = env!("CARGO_BIN_EXE_vibe");
+    let mut cmd = std::process::Command::new(bin);
+    cmd.arg("mcp").arg("serve").arg("--path").arg(project.path());
+    let mut child = cmd
+        .stdin(std::process::Stdio::piped())
+        .stdout(std::process::Stdio::piped())
+        .stderr(std::process::Stdio::piped())
+        .spawn()
+        .expect("spawn vibe mcp serve");
+    use std::io::Write;
+    child
+        .stdin
+        .as_mut()
+        .unwrap()
+        .write_all(script.as_bytes())
+        .unwrap();
+    drop(child.stdin.take());
+    let output = child.wait_with_output().expect("wait child");
+    assert!(output.status.success());
+    let stdout = String::from_utf8(output.stdout).unwrap();
+    let line = stdout.lines().next().expect("at least one response line");
+    let v: serde_json::Value = serde_json::from_str(line).unwrap();
+    assert_eq!(v["result"]["isError"], false);
+    assert_eq!(
+        v["result"]["structuredContent"]["status"],
+        "materialised"
+    );
+    // The file is on disk now.
+    assert!(target.is_file(), "materialise_subskill must write the file");
+    let body = fs::read_to_string(&target).unwrap();
+    assert!(body.contains("sqlx 0.8.x"), "got body: {body}");
+}
+
+#[test]
 fn mcp_install_writes_claude_settings() {
     let project = tempfile::tempdir().unwrap();
     init_project(project.path());
@@ -1931,17 +1997,46 @@ fn omnibus_install_exercises_every_prop003_surface() {
         "boot snippet must carry Russian sidecar content; got:\n{boot}"
     );
 
+    // eager + lazy-push (degraded to eager pre-M2.8) materialise into
+    // the project tree; lazy-pull (sqlx/v08) does NOT — it stays in
+    // the package cache and surfaces only via the MCP read_subskill
+    // / materialise_subskill tools.
     for path in [
         "spec/flows/integration-alpha/EXTRA-DISCIPLINE.md",
         "spec/flows/integration-alpha/RU-EXTRAS.md",
         "spec/flows/integration-alpha/RUST-NOTES.md",
-        "spec/flows/integration-alpha/SQLX-V08.md",
     ] {
         assert!(
             project.path().join(path).is_file(),
             "expected subskill file `{path}` materialised"
         );
     }
+    assert!(
+        !project
+            .path()
+            .join("spec/flows/integration-alpha/SQLX-V08.md")
+            .exists(),
+        "lazy-pull subskill should NOT materialise into the project tree"
+    );
+    // The lockfile entry for sqlx/v08 records its cache_files index
+    // so an MCP server can serve the bytes on demand.
+    let sqlx_entry = alpha
+        .subskills_active
+        .iter()
+        .find(|s| s.path == "sqlx/v08")
+        .unwrap();
+    assert!(
+        sqlx_entry.files_written.is_empty(),
+        "lazy-pull subskill should have no project-side files_written"
+    );
+    assert!(
+        sqlx_entry
+            .cache_files
+            .iter()
+            .any(|p| p.to_string_lossy().contains("SQLX-V08.md")),
+        "lazy-pull subskill should record cache_files index; got {:?}",
+        sqlx_entry.cache_files
+    );
 
     assert_eq!(
         beta.boot_snippet.as_deref(),
@@ -2079,11 +2174,11 @@ fn omnibus_uninstall_removes_subskill_files_too() {
         .assert()
         .success();
 
-    // Verify the subskill files actually exist.
+    // Verify the eager / lazy-push (degraded) subskill files exist
+    // before uninstall. lazy-pull SQLX-V08 stays in cache only.
     for path in [
         "spec/flows/integration-alpha/EXTRA-DISCIPLINE.md",
         "spec/flows/integration-alpha/RUST-NOTES.md",
-        "spec/flows/integration-alpha/SQLX-V08.md",
     ] {
         assert!(
             project.path().join(path).exists(),
@@ -2100,13 +2195,13 @@ fn omnibus_uninstall_removes_subskill_files_too() {
         .assert()
         .success();
 
-    // Every alpha-sourced file should be gone, including subskill files.
+    // Every alpha-sourced project-side file should be gone.
+    // lazy-pull SQLX-V08 was never on disk — nothing to remove there.
     for path in [
         "spec/flows/integration-alpha/PROTOCOL.md",
         "spec/flows/integration-alpha/overview.md",
         "spec/flows/integration-alpha/EXTRA-DISCIPLINE.md",
         "spec/flows/integration-alpha/RUST-NOTES.md",
-        "spec/flows/integration-alpha/SQLX-V08.md",
         "spec/boot/40-flow-integration-alpha.md",
     ] {
         assert!(
