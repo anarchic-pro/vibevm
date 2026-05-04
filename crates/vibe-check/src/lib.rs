@@ -326,6 +326,21 @@ fn check_subskill_structure(project_root: &Path, report: &mut CheckReport) {
                     format!("[{source_label}] {finding}"),
                 );
             }
+            // PROP-003 §2.5.5: practical depth cap is 3 (`a/b/c` is
+            // three components). At 4 or more, warn — the package is
+            // almost certainly better split into separate packages.
+            let depth = manifest.subskill.path.matches('/').count() + 1;
+            if depth >= 4 {
+                report.warn(
+                    CheckId::SubskillStructure,
+                    rel.clone(),
+                    None,
+                    format!(
+                        "[{source_label}] subskill `{}` nested {depth} levels deep — PROP-003 §2.5.5 caps practical depth at 3. Consider splitting into separate packages.",
+                        manifest.subskill.path
+                    ),
+                );
+            }
             // Every declared file exists relative to the subskill's
             // own root.
             let sub_root = manifest_path.parent().unwrap_or(&manifest_path);
@@ -1654,6 +1669,42 @@ description = "{desc}"
             report.findings
         );
         assert!(conflict_findings[0].message.contains("overlap by"));
+    }
+
+    #[test]
+    fn subskill_structure_warns_on_excessive_nesting_depth() {
+        let project = tempdir().unwrap();
+        write_minimal_project(project.path());
+        let pkg = project.path().join("packages").join("flow").join("test-pkg");
+        fs::create_dir_all(&pkg).unwrap();
+        fs::write(
+            pkg.join("vibe-package.toml"),
+            r#"[package]
+name = "test-pkg"
+kind = "flow"
+version = "0.1.0"
+"#,
+        )
+        .unwrap();
+        // 4-level nested subskill: a/b/c/d.
+        let sub = pkg.join("subskills/a/b/c/d");
+        fs::create_dir_all(&sub).unwrap();
+        fs::write(
+            sub.join("vibe-subskill.toml"),
+            r#"[subskill]
+path = "a/b/c/d"
+"#,
+        )
+        .unwrap();
+        let report = check_project(project.path(), &opts());
+        assert!(
+            report.findings.iter().any(|f| f.check
+                == CheckId::SubskillStructure
+                && f.severity == Severity::Warning
+                && f.message.contains("nested 4 levels deep")),
+            "expected depth-4 warning; got {:?}",
+            report.findings
+        );
     }
 
     #[test]

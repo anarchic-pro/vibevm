@@ -291,6 +291,12 @@ pub struct ListArgs {
     /// Directory of the project (defaults to current).
     #[arg(long, default_value = ".")]
     pub path: PathBuf,
+
+    /// Append per-package active features and subskill paths to the
+    /// text-mode output. JSON output already carries these fields
+    /// regardless. Off by default to preserve table width.
+    #[arg(long)]
+    pub verbose: bool,
 }
 
 #[derive(Debug, clap::Args)]

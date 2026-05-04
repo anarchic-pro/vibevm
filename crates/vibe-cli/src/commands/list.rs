@@ -30,6 +30,13 @@ pub fn run(ctx: &output::Context, args: ListArgs) -> Result<()> {
 
     if ctx.is_json() {
         #[derive(Serialize)]
+        struct LockedSubskillJson<'a> {
+            path: &'a str,
+            delivery: &'a str,
+            #[serde(skip_serializing_if = "Option::is_none")]
+            describes: Option<&'a str>,
+        }
+        #[derive(Serialize)]
         struct JsonEntry<'a> {
             kind: &'a str,
             name: &'a str,
@@ -46,6 +53,18 @@ pub fn run(ctx: &output::Context, args: ListArgs) -> Result<()> {
             files_written: Vec<String>,
             #[serde(skip_serializing_if = "std::ops::Not::not")]
             overridden: bool,
+            // PROP-003 r2 lockfile-v3 fields. Always emitted in JSON
+            // (not text — text-mode shows them only with `--verbose`)
+            // so machine consumers see the full state regardless of
+            // human-output formatting.
+            #[serde(skip_serializing_if = "Vec::is_empty")]
+            features: Vec<&'a str>,
+            #[serde(skip_serializing_if = "Vec::is_empty")]
+            subskills_active: Vec<LockedSubskillJson<'a>>,
+            #[serde(skip_serializing_if = "Option::is_none")]
+            describes: Option<&'a str>,
+            #[serde(skip_serializing_if = "Option::is_none")]
+            language: Option<&'a str>,
         }
         let entries: Vec<JsonEntry<'_>> = filtered
             .iter()
@@ -65,6 +84,18 @@ pub fn run(ctx: &output::Context, args: ListArgs) -> Result<()> {
                     .map(|f| f.to_string_lossy().to_string())
                     .collect(),
                 overridden: p.overridden,
+                features: p.features.iter().map(|s| s.as_str()).collect(),
+                subskills_active: p
+                    .subskills_active
+                    .iter()
+                    .map(|s| LockedSubskillJson {
+                        path: &s.path,
+                        delivery: &s.delivery,
+                        describes: s.describes.as_deref(),
+                    })
+                    .collect(),
+                describes: p.describes.as_deref(),
+                language: p.language.as_deref(),
             })
             .collect();
         ctx.emit_json(&serde_json::json!({
@@ -114,6 +145,25 @@ pub fn run(ctx: &output::Context, args: ListArgs) -> Result<()> {
             p.version.to_string(),
             p.boot_snippet.as_deref().unwrap_or("—"),
         );
+        if args.verbose {
+            if !p.features.is_empty() {
+                println!("    features:  {}", p.features.join(", "));
+            }
+            if !p.subskills_active.is_empty() {
+                let subs: Vec<String> = p
+                    .subskills_active
+                    .iter()
+                    .map(|s| format!("{} ({})", s.path, s.delivery))
+                    .collect();
+                println!("    subskills: {}", subs.join(", "));
+            }
+            if let Some(d) = &p.describes {
+                println!("    describes: {d}");
+            }
+            if let Some(l) = &p.language {
+                println!("    language:  {l}");
+            }
+        }
     }
     println!("\n{} package{} installed.", filtered.len(), if filtered.len() == 1 { "" } else { "s" });
     Ok(())
