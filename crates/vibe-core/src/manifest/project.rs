@@ -55,6 +55,12 @@ pub struct ProjectManifest {
     /// [PROP-002 §2.4](../../../spec/modules/vibe-registry/PROP-002-decentralized-registry.md#override).
     #[serde(default, rename = "override", skip_serializing_if = "Vec::is_empty")]
     pub overrides: Vec<OverrideSection>,
+
+    /// Project-level language preference per PROP-003 §2.7. Default is
+    /// English-only canonical content. Set `preferred = "ru"` to make
+    /// every install pull Russian-localised content where available.
+    #[serde(default, skip_serializing_if = "super::i18n::I18nDecl::is_default")]
+    pub i18n: super::i18n::I18nDecl,
 }
 
 // ---------------------------------------------------------------------------
@@ -89,6 +95,8 @@ struct ProjectManifestWire {
     mirrors: Vec<MirrorSection>,
     #[serde(default, rename = "override")]
     overrides: Vec<OverrideSection>,
+    #[serde(default)]
+    i18n: super::i18n::I18nDecl,
 }
 
 /// Two legal TOML shapes for the `registry` key. Untagged enum — serde tries
@@ -138,6 +146,7 @@ impl From<ProjectManifestWire> for ProjectManifest {
             registries,
             mirrors: w.mirrors,
             overrides: w.overrides,
+            i18n: w.i18n,
         }
     }
 }

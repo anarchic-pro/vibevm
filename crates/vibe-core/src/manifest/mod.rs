@@ -8,19 +8,29 @@
 //! - [`Lockfile`] — `vibe.lock` at a project's root. Schema: `VIBEVM-SPEC.md`
 //!   §7.4.
 
+pub mod i18n;
 mod lockfile;
 mod package;
 mod project;
+pub mod purl;
+mod subskill;
 
-pub use lockfile::{CURRENT_SCHEMA_VERSION, Lockfile, LockedPackage, LockfileMeta};
+pub use lockfile::{
+    CURRENT_SCHEMA_VERSION, Lockfile, LockedPackage, LockedSubskill, LockfileMeta,
+    VirtualCapabilityRecord,
+};
 pub use package::{
-    BootSnippet, Compatibility, ConflictsList, Obsoletes, PackageDependencies, PackageManifest,
-    PackageMeta, Provides, Requires, RequiresAny, WritesSection,
+    BootSnippet, Compatibility, ConflictsList, FeaturesTable, Obsoletes, PackageDependencies,
+    PackageManifest, PackageMeta, Provides, Requires, RequiresAny, WritesSection,
 };
 pub use project::{
     ActiveSection, DEFAULT_REGISTRY_NAME, DEFAULT_REGISTRY_REF, DEFAULT_REGISTRY_URL, LlmSection,
     MirrorSection, NamingConvention, OverrideSection, ProjectManifest, ProjectSection,
     RegistrySection,
+};
+pub use subskill::{
+    ActivationRules, DeliveryMode, SubskillConflicts, SubskillContent, SubskillManifest,
+    SubskillMeta, SubskillRecommends,
 };
 
 use std::fs;

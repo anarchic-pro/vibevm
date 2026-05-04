@@ -15,6 +15,7 @@
 //! today) round-trip unchanged because `PackageDependencies::is_empty()` is
 //! true for them, and the modern serializer skips empty sections too.
 
+use std::collections::BTreeMap;
 use std::path::{Path, PathBuf};
 
 use serde::{Deserialize, Serialize};
@@ -23,6 +24,8 @@ use crate::capability_ref::CapabilityRef;
 use crate::error::Result;
 use crate::package_ref::{PackageKind, PackageRef, VersionSpec};
 
+use super::i18n::I18nDecl;
+use super::purl::Purl;
 use super::{read_toml, write_toml};
 
 /// The package manifest — `vibe-package.toml` inside a package directory.
@@ -71,6 +74,16 @@ pub struct PackageManifest {
     /// field is empty; serialization skips it.
     #[serde(default, skip_serializing_if = "PackageDependencies::is_empty")]
     pub dependencies: PackageDependencies,
+
+    /// `[features]` — optional, conditionally-activated components per
+    /// PROP-003 §2.4. Empty by default; absent on round-trip.
+    #[serde(default, skip_serializing_if = "FeaturesTable::is_empty")]
+    pub features: FeaturesTable,
+
+    /// `[i18n]` — language preferences declared by this package.
+    /// Per PROP-003 §2.7. Empty default = English-only.
+    #[serde(default, skip_serializing_if = "I18nDecl::is_default")]
+    pub i18n: I18nDecl,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
@@ -89,6 +102,11 @@ pub struct PackageMeta {
     pub homepage: Option<String>,
     #[serde(default)]
     pub keywords: Vec<String>,
+    /// PURL of the upstream library this package documents
+    /// (PROP-003 §2.5.6). Optional; when set, ties the package's
+    /// version to a specific upstream artefact.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub describes: Option<Purl>,
 }
 
 #[derive(Debug, Clone, Default, PartialEq, Eq, Serialize, Deserialize)]
@@ -248,6 +266,94 @@ impl PackageManifest {
             self.package.name.clone(),
             VersionSpec::Req(req),
         )
+    }
+}
+
+/// `[features]` table — feature definitions per PROP-003 §2.4.
+///
+/// Each feature maps to a list of activation strings; the strings can
+/// be other feature names, dep-references (`dep:foo`, `foo?/feat`), or
+/// subskill-references (`subskill:<path>`). The TOML form is a mix of
+/// flat string-list keys plus a nested `exclusive` table; we deserialise
+/// both via a manual visitor so the public API stays clean.
+///
+/// ```toml
+/// [features]
+/// default = ["wal-protocol"]
+/// wal-protocol = []
+/// rust-stack = ["subskill:stack/rust"]
+/// python-stack = ["subskill:stack/python"]
+///
+/// [features.exclusive]
+/// stacks = ["rust-stack", "python-stack"]
+/// ```
+#[derive(Debug, Clone, Default, PartialEq, Eq)]
+pub struct FeaturesTable {
+    /// `feature-name` → list of activation strings.
+    pub features: BTreeMap<String, Vec<String>>,
+    /// `[features.exclusive]` — at-most-one named groups.
+    pub exclusive: BTreeMap<String, Vec<String>>,
+}
+
+impl FeaturesTable {
+    pub fn is_empty(&self) -> bool {
+        self.features.is_empty() && self.exclusive.is_empty()
+    }
+
+    /// Convenience — list of features active by default
+    /// (the `default` feature's activation list, if present).
+    pub fn defaults(&self) -> &[String] {
+        self.features
+            .get("default")
+            .map(|v| v.as_slice())
+            .unwrap_or(&[])
+    }
+
+    /// Look up a feature's activation list.
+    pub fn get(&self, name: &str) -> Option<&[String]> {
+        self.features.get(name).map(|v| v.as_slice())
+    }
+}
+
+impl Serialize for FeaturesTable {
+    fn serialize<S: serde::Serializer>(&self, s: S) -> Result<S::Ok, S::Error> {
+        use serde::ser::SerializeMap;
+        let mut total = self.features.len();
+        if !self.exclusive.is_empty() {
+            total += 1;
+        }
+        let mut m = s.serialize_map(Some(total))?;
+        for (k, v) in &self.features {
+            m.serialize_entry(k, v)?;
+        }
+        if !self.exclusive.is_empty() {
+            m.serialize_entry("exclusive", &self.exclusive)?;
+        }
+        m.end()
+    }
+}
+
+impl<'de> Deserialize<'de> for FeaturesTable {
+    fn deserialize<D: serde::Deserializer<'de>>(d: D) -> Result<Self, D::Error> {
+        // Receive as a generic `BTreeMap<String, toml::Value>` then split
+        // into features (string lists) and the special `exclusive` table.
+        let raw: BTreeMap<String, toml::Value> = BTreeMap::deserialize(d)?;
+        let mut features: BTreeMap<String, Vec<String>> = BTreeMap::new();
+        let mut exclusive: BTreeMap<String, Vec<String>> = BTreeMap::new();
+        for (k, v) in raw {
+            if k == "exclusive" {
+                let table: BTreeMap<String, Vec<String>> =
+                    v.try_into().map_err(serde::de::Error::custom)?;
+                exclusive = table;
+                continue;
+            }
+            let arr: Vec<String> = v.try_into().map_err(serde::de::Error::custom)?;
+            features.insert(k, arr);
+        }
+        Ok(FeaturesTable {
+            features,
+            exclusive,
+        })
     }
 }
 

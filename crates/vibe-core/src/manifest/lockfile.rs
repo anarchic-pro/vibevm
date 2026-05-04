@@ -37,7 +37,19 @@ use crate::package_ref::{PackageKind, PackageRef, VersionSpec};
 use super::{read_toml, write_toml};
 
 /// The current lockfile schema version produced by fresh `write()`s.
-pub const CURRENT_SCHEMA_VERSION: u32 = 2;
+///
+/// History:
+/// - `1` — M0 / M1.1 (single `source = "git+…#<kind>/<name>/v<ver>"` per
+///   package, no `solver`, no `root_dependencies`).
+/// - `2` — M1.1-revision (per-package registries, `[meta] schema_version
+///   = 2`, registry/source_url/source_ref/resolved_commit/dependencies/
+///   overridden per package, root_dependencies/solver in [meta]).
+/// - `3` — PROP-003 r2 (active features in [meta], virtual_capabilities
+///   in [meta], language preference in [meta], features +
+///   subskills_active + describes per package). v2 → v3 is read-side
+///   compatible — every new field defaults; on next write the lockfile
+///   surfaces in v3 form.
+pub const CURRENT_SCHEMA_VERSION: u32 = 3;
 
 fn default_schema_version() -> u32 {
     CURRENT_SCHEMA_VERSION
@@ -90,6 +102,43 @@ pub struct LockfileMeta {
     /// uninstalling a pure transitive is refused.
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
     pub root_dependencies: Vec<PackageRef>,
+
+    /// Resolved language preference for this project — the chain
+    /// produced by `[i18n].project_preference_chain()` at install
+    /// time. First entry is primary, last is the canonical fallback.
+    /// Empty/absent on v2 lockfiles or when no `[i18n]` block is
+    /// declared at the project level.
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub language_chain: Vec<String>,
+
+    /// Full set of features active in this resolution. Each entry is
+    /// `<kind>:<name>/<feature-name>`, scoped per package. Empty on v2
+    /// lockfiles and when no features are configured.
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub active_features: Vec<String>,
+
+    /// Virtual capabilities emitted by an LLM during resolution
+    /// (Phase F — post-M1.5). Each entry carries the capability name
+    /// plus an audit trail tying it to the emitting model and trace
+    /// ID.
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub virtual_capabilities: Vec<VirtualCapabilityRecord>,
+}
+
+/// One LLM-emitted virtual capability record. PROP-003 §2.5.3.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(deny_unknown_fields)]
+pub struct VirtualCapabilityRecord {
+    /// Capability name, in the same namespace as static capabilities.
+    /// Examples: `interface:llm-coordinator`, `capability:rust-tracing`.
+    pub name: String,
+    /// Provider/model identifier — `anthropic:claude-sonnet-4-6`.
+    pub emitter: String,
+    /// Trace ID of the LLM run that emitted this capability. Links into
+    /// the `vibe build` audit log.
+    pub trace_id: String,
+    /// ISO-8601 timestamp.
+    pub emitted_at: String,
 }
 
 /// One installed package, as it appears in the lockfile.
@@ -149,6 +198,42 @@ pub struct LockedPackage {
     /// `vibe list --overrides` and gates certain update paths.
     #[serde(default, skip_serializing_if = "is_false")]
     pub overridden: bool,
+
+    /// Features active for this package (PROP-003 §2.4). Empty for
+    /// packages with no `[features]` table or where no features were
+    /// requested.
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub features: Vec<String>,
+
+    /// Subskills active for this package — each entry is the subskill's
+    /// canonical path plus the resolved delivery mode (so reproducing
+    /// a checkout produces the same on-disk shape).
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub subskills_active: Vec<LockedSubskill>,
+
+    /// PURL pinning this package to an upstream library version, if
+    /// the package's manifest carried `[package].describes`.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub describes: Option<String>,
+
+    /// Language under which this package's content was materialised.
+    /// `None` ⇒ inherits `[meta].language_chain[0]`.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub language: Option<String>,
+}
+
+/// One subskill entry under a package's `subskills_active` list.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(deny_unknown_fields)]
+pub struct LockedSubskill {
+    /// Subskill canonical path within the parent package, e.g.
+    /// `stack/rust`.
+    pub path: String,
+    /// Resolved delivery mode — `eager` / `lazy-push` / `lazy-pull`.
+    pub delivery: String,
+    /// PURL inherited or declared on the subskill, if any.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub describes: Option<String>,
 }
 
 impl Lockfile {
@@ -162,6 +247,9 @@ impl Lockfile {
                 schema_version: CURRENT_SCHEMA_VERSION,
                 solver: None,
                 root_dependencies: Vec::new(),
+                language_chain: Vec::new(),
+                active_features: Vec::new(),
+                virtual_capabilities: Vec::new(),
             },
             packages: Vec::new(),
         }
@@ -321,8 +409,9 @@ files_written = []
     #[test]
     fn parses_v1_via_source_alias() {
         let lf: Lockfile = toml::from_str(FIXTURE_V1).unwrap();
-        // Missing schema_version defaults to CURRENT (2).
-        assert_eq!(lf.meta.schema_version, 2);
+        // Missing schema_version defaults to CURRENT_SCHEMA_VERSION
+        // (currently 3 after the PROP-003 r2 bump).
+        assert_eq!(lf.meta.schema_version, CURRENT_SCHEMA_VERSION);
         assert!(lf.meta.solver.is_none());
         assert!(lf.meta.root_dependencies.is_empty());
 
@@ -350,16 +439,22 @@ files_written = []
     }
 
     #[test]
-    fn v1_migrates_to_v2_on_write() {
+    fn v1_migrates_to_current_schema_on_write() {
         let lf: Lockfile = toml::from_str(FIXTURE_V1).unwrap();
         let rendered = toml::to_string_pretty(&lf).unwrap();
-        // Fresh-write always includes schema_version = 2.
-        assert!(rendered.contains("schema_version = 2"));
+        // Fresh-write always includes the current schema_version
+        // (3 after the PROP-003 r2 bump). `schema_version = 2` would
+        // mean we silently regressed.
+        let expected = format!("schema_version = {CURRENT_SCHEMA_VERSION}");
+        assert!(
+            rendered.contains(&expected),
+            "expected `{expected}` in rendered:\n{rendered}"
+        );
         // The `source` key is replaced by `source_url` on write (the
         // alias is read-only — serialization uses the primary name).
         assert!(rendered.contains("source_url = "));
         assert!(!rendered.contains("\nsource = "));
-        // Round-trip: v1-parsed → v2-written → v2-parsed is stable.
+        // Round-trip: v1-parsed → v3-written → v3-parsed is stable.
         let back: Lockfile = toml::from_str(&rendered).unwrap();
         assert_eq!(lf, back);
     }
