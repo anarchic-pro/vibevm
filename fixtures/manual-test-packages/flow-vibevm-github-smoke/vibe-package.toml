@@ -1,0 +1,25 @@
+[package]
+name = "vibevm-github-smoke"
+kind = "flow"
+version = "0.0.1"
+authors = ["Oleg Chirukhin"]
+license = "EULA"
+description = "Throwaway test fixture for `vibe registry publish` against GitHub. Not a real package — just exercises the GitHub API publish path. Safe to break."
+keywords = ["test", "smoke", "github", "publish"]
+
+[compatibility]
+min_vibe_version = "0.1.0"
+requires_kinds = []
+
+[writes]
+files = [
+    "spec/flows/vibevm-github-smoke/PROTOCOL.md",
+]
+
+[boot_snippet]
+filename = "10-flow-vibevm-github-smoke.md"
+source = "boot/10-flow-vibevm-github-smoke.md"
+
+[dependencies]
+required = []
+conflicts = []
