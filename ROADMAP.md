@@ -344,14 +344,20 @@ multi-source story to production quality.
 
 Source: [PROP-004 §5.1](spec/research/PROP-004-tessl-comparative-research.md#mcp-server). Targets [`https://modelcontextprotocol.io`](https://modelcontextprotocol.io).
 
-**Scope.**
+**Scope (slices 1–4 shipped).**
 
-- New `vibe-mcp` crate exposing an MCP server over stdio.
-- Tools: `query_package(name, version?)`, `read_subskill(package, path, language?)`, `list_capabilities(query?)`, `materialise_subskill(package, path)`.
-- `vibe init` writes the appropriate MCP config block to `.claude/settings.json` (Claude Code), `.cursor/mcp.json` (Cursor), `.gemini/...` (Gemini), etc., based on agent detection (M1.11).
-- New manual smoke `manual-tests/M1.7-mcp-claude-code-smoke.md` walking a full Claude Code → MCP → vibevm round-trip.
+- ✅ `vibe-mcp` crate exposing an MCP server over stdio (slice 1).
+- ✅ Tools: `query_package`, `read_subskill`, `materialise_subskill` (slices 1+3).
+- ✅ Per-subskill files index in lockfile schema v3, lazy-pull works end-to-end (slice 3).
+- ✅ Agent auto-detection + config writers — slice 2 (Claude Code, Cursor); slice 4 extends to Claude Desktop, OpenCode, Codex.
+- ✅ `vibe mcp install` UX — slice 4: interactive multi-select, `--auto`, `--with-skill` / `--without-skill`, `--skill-scope project|user`. Per-format mergers (JSON for Claude Code/Desktop/Cursor/OpenCode, TOML for Codex). OpenCode's command-array shape and Codex's `mcp_servers` snake-case section name handled per-agent.
+- ✅ `vibevm` SKILL.md — slice 4: short opinionated MD vendored in the binary, written under each supporting agent's skill dir on `--with-skill`. Pins the bootstrap protocol, requires `query_package` before guessing, requires `--invoked-by`, requires `vibe <subcmd> --help` consultation.
+- ✅ Global `--invoked-by <agent>` flag + `VIBE_INVOKED_BY` env var — slice 4: stamps every JSON envelope with the calling agent's identity. SKILL.md instructs the agent to pass it on every invocation.
+- New manual smoke `manual-tests/M1.7-mcp-claude-code-smoke.md` walking a full Claude Code → MCP → vibevm round-trip — pending. Operator-walked smoke for OpenCode + Codex tracks alongside.
 
-**Estimated effort.** 2–3 weekends.
+**Open follow-ups.** `query_capabilities` / `list_subskills` discovery tools, Gemini agent, integration with the LLM virtual-capability emission story (Phase F, post-M1.5), preserving comments in handcrafted Codex `config.toml` (would require switching from `toml` to `toml_edit`).
+
+**Estimated effort.** Slices 1–4 done. Remaining follow-ups roll into M1.5 dependencies.
 
 ### M1.8 — `vibe review` static quality scoring
 
@@ -406,13 +412,14 @@ Source: [PROP-004 §5.13](spec/research/PROP-004-tessl-comparative-research.md#o
 
 Source: [PROP-004 §5.7](spec/research/PROP-004-tessl-comparative-research.md#agent-auto-detect).
 
-**Scope.**
+**Scope (effectively closed alongside M1.7 slices 2 + 4).**
 
-- Probes for Claude Code, Cursor, Gemini, Codex, Copilot CLI/VSCode.
-- Per detected agent, write the corresponding instruction file plus MCP-server config (composes with M1.7).
-- Falls back to writing all three when no agent is detected.
+- ✅ Probes for Claude Code, Claude Desktop, Cursor, OpenCode, Codex (slice 4). Project markers + user-level config-dir host probe. `--force` pivot to install in agents absent from this machine.
+- ✅ Per-detected-agent MCP-server config writer — JSON for Claude Code/Desktop/Cursor/OpenCode, TOML for Codex. Foreign keys preserved on merge.
+- Gemini and Copilot CLI/VSCode integrations remain open follow-ups; the [`Agent`](crates/vibe-cli/src/commands/mcp.rs) enum has the per-agent profile slot ready.
+- Instruction-file fan-out (`CLAUDE.md` / `AGENTS.md` / `GEMINI.md` per `vibe init`) is a separate concern from MCP integration and stays at the current "write all three" default until a concrete bug surfaces.
 
-**Estimated effort.** 1 weekend.
+**Estimated effort.** Closed alongside M1.7 slice 4. Gemini / Copilot follow-ups land per-demand.
 
 ---
 

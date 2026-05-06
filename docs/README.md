@@ -23,6 +23,9 @@ The `vibe` binary is the single entry point for every operation. Global flags `-
 | [`vibe registry sync`](commands/registry-sync.md) | Refresh per-package registry clones referenced by the lockfile. |
 | [`vibe registry vendor`](commands/registry-vendor.md) | Generate a local mirror directory for offline / air-gapped installs. |
 | [`vibe registry publish`](commands/registry-publish.md) | Maintainer-side: publish a package directory as a tagged release. |
+| [`vibe mcp install`](commands/mcp-install.md) | Wire vibevm into a coding agent (Claude Code, Claude Desktop, Cursor, OpenCode, Codex) — writes per-agent MCP config + optional `vibevm` SKILL.md. |
+| [`vibe mcp status`](commands/mcp-status.md) | Read-only counterpart of `mcp install`; reports per-agent integration state without writing. |
+| [`vibe mcp serve`](commands/mcp-serve.md) | Run the JSON-RPC MCP server over stdio. Agents invoke this themselves via the configs written by `mcp install`. |
 | [`vibe version`](commands/version.md) | Print the binary's version. |
 
 ## Architecture overview
