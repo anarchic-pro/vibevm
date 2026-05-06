@@ -149,6 +149,62 @@ impl IndexClient {
         Ok(Some(versions))
     }
 
+    /// Direct PURL lookup against the live-server route
+    /// `<server_base>/v1/purls/{purl}` from PROP-005 §2.10. Returns
+    /// every package whose top-level `describes` or any subskill's
+    /// `describes` equals the supplied PURL, with the `binding_site`
+    /// surfaced so consumers see whether the match originated at the
+    /// package or subskill level.
+    ///
+    /// Non-2xx surfaces as [`IndexError::Status`]; 404 here means the
+    /// URL points at a raw-file mirror without the live server. Empty
+    /// `hits` is the "no match" case (HTTP 200 with 0-length list),
+    /// not 404. Path-segment encoding is delegated to `reqwest::Url`
+    /// so PURL punctuation (`:`, `/`, `@`) is escaped correctly.
+    pub fn lookup_purl(&self, purl: &str) -> Result<PurlLookupResults, IndexError> {
+        let base_url = format!("{}/v1/purls/", self.server_base);
+        let mut parsed = reqwest::Url::parse(&base_url).map_err(|e| IndexError::Http {
+            url: base_url.clone(),
+            message: e.to_string(),
+        })?;
+        parsed
+            .path_segments_mut()
+            .map_err(|_| IndexError::Http {
+                url: base_url.clone(),
+                message: "base URL is not hierarchical".into(),
+            })?
+            .pop_if_empty()
+            .push(purl);
+        let url = parsed.to_string();
+        let client = Self::build_client(Duration::from_secs(FETCH_TIMEOUT_SECS))
+            .map_err(|e| IndexError::Http {
+                url: url.clone(),
+                message: e.to_string(),
+            })?;
+        let resp = client.get(&url).send().map_err(|e| IndexError::Http {
+            url: url.clone(),
+            message: e.to_string(),
+        })?;
+        let status = resp.status();
+        if !status.is_success() {
+            return Err(IndexError::Status {
+                url,
+                status: status.as_u16(),
+            });
+        }
+        let body = resp.bytes().map_err(|e| IndexError::Http {
+            url: url.clone(),
+            message: e.to_string(),
+        })?;
+        let parsed: PurlLookupResults = serde_json::from_slice(&body).map_err(|e| {
+            IndexError::Malformed {
+                url: url.clone(),
+                message: e.to_string(),
+            }
+        })?;
+        Ok(parsed)
+    }
+
     /// Run a full-text search against the live-server route
     /// `<server_base>/v1/packages?q=<query>[&kind=&limit=]` from
     /// PROP-005 §2.10. Returns the structured response on 200; any
@@ -228,7 +284,11 @@ struct VersionEntryView {
 /// Extra fields on the wire (today: `command`) are tolerated
 /// silently — kept simple so a server-side envelope addition does
 /// not force a client bump.
-#[derive(Debug, Clone, Deserialize)]
+///
+/// `Serialize` is derived alongside `Deserialize` so the CLI-side
+/// `~/.vibe/search-cache/` layer can persist a decoded result and
+/// load it back without a separate cache-only schema.
+#[derive(Debug, Clone, serde::Serialize, Deserialize)]
 pub struct SearchResults {
     #[serde(default)]
     pub query: String,
@@ -239,7 +299,7 @@ pub struct SearchResults {
 }
 
 /// One package matched by the index's search backend.
-#[derive(Debug, Clone, Deserialize)]
+#[derive(Debug, Clone, serde::Serialize, Deserialize)]
 pub struct SearchHit {
     pub kind: PackageKind,
     pub name: String,
@@ -251,6 +311,47 @@ pub struct SearchHit {
     pub matched_tokens: Vec<String>,
     #[serde(default)]
     pub description: Option<String>,
+}
+
+/// Decoded body of the structured PURL-lookup route. Mirrors
+/// `services/vibe-index::server::routes::purls::Response`.
+#[derive(Debug, Clone, Deserialize)]
+pub struct PurlLookupResults {
+    #[serde(default)]
+    pub purl: String,
+    #[serde(default)]
+    pub hit_count: usize,
+    #[serde(default)]
+    pub hits: Vec<PurlLookupHit>,
+}
+
+/// One concrete `(kind, name, version)` whose package- or subskill-level
+/// `describes` matched the queried PURL.
+#[derive(Debug, Clone, Deserialize)]
+pub struct PurlLookupHit {
+    pub kind: PackageKind,
+    pub name: String,
+    pub version: Version,
+    pub binding_site: BindingSite,
+}
+
+/// Where the PURL match originated on the matched entry.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Deserialize, serde::Serialize)]
+#[serde(rename_all = "lowercase")]
+pub enum BindingSite {
+    /// PURL declared on the entry's top-level `describes` field.
+    Package,
+    /// PURL declared on a subskill within the entry.
+    Subskill,
+}
+
+impl std::fmt::Display for BindingSite {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            BindingSite::Package => f.write_str("package"),
+            BindingSite::Subskill => f.write_str("subskill"),
+        }
+    }
 }
 
 /// Resolve `<index_url>` for the named registry from environment.
@@ -340,5 +441,41 @@ mod tests {
         assert!(parsed.latest_stable.is_none());
         assert!(parsed.matched_tokens.is_empty());
         assert!(parsed.description.is_none());
+    }
+
+    #[test]
+    fn purl_lookup_results_decode_full_envelope() {
+        let body = serde_json::json!({
+            "command": "purls",
+            "purl": "pkg:cargo/sqlx@0.8.0",
+            "hit_count": 2,
+            "hits": [
+                {
+                    "kind": "flow",
+                    "name": "sqlx-skin",
+                    "version": "0.1.0",
+                    "binding_site": "package"
+                },
+                {
+                    "kind": "stack",
+                    "name": "rust",
+                    "version": "0.2.0",
+                    "binding_site": "subskill"
+                }
+            ]
+        });
+        let parsed: PurlLookupResults = serde_json::from_value(body).unwrap();
+        assert_eq!(parsed.purl, "pkg:cargo/sqlx@0.8.0");
+        assert_eq!(parsed.hit_count, 2);
+        assert_eq!(parsed.hits.len(), 2);
+        assert_eq!(parsed.hits[0].kind, PackageKind::Flow);
+        assert_eq!(parsed.hits[0].binding_site, BindingSite::Package);
+        assert_eq!(parsed.hits[1].binding_site, BindingSite::Subskill);
+    }
+
+    #[test]
+    fn binding_site_display_renders_lowercase_word() {
+        assert_eq!(format!("{}", BindingSite::Package), "package");
+        assert_eq!(format!("{}", BindingSite::Subskill), "subskill");
     }
 }

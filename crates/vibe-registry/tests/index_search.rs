@@ -9,7 +9,7 @@ use std::sync::{Arc, Mutex, mpsc};
 use std::thread;
 
 use axum::Router;
-use axum::extract::{Query, State};
+use axum::extract::{Path, Query, State};
 use axum::http::StatusCode;
 use axum::response::IntoResponse;
 use axum::routing::get;
@@ -17,7 +17,7 @@ use serde::Deserialize;
 use tokio::net::TcpListener;
 
 use vibe_core::PackageKind;
-use vibe_registry::IndexClient;
+use vibe_registry::{BindingSite, IndexClient};
 
 #[derive(Default)]
 struct CannedSearch {
@@ -29,6 +29,12 @@ struct CannedSearch {
     last_q: Option<String>,
     last_kind: Option<String>,
     last_limit: Option<usize>,
+    /// Most recent PURL path-segment captured by the purl handler.
+    last_purl: Option<String>,
+    /// Canned PURL response. Independent of `response` so a single
+    /// mock can stand in for both `/v1/packages` and `/v1/purls/{purl}`.
+    purl_response: Option<serde_json::Value>,
+    purl_status_code: u16,
 }
 
 #[derive(Clone)]
@@ -58,6 +64,19 @@ async fn search_handler(
     (status, "").into_response()
 }
 
+async fn purls_handler(
+    State(state): State<MockState>,
+    Path(purl): Path<String>,
+) -> axum::response::Response {
+    let mut files = state.files.lock().unwrap();
+    files.last_purl = Some(purl);
+    if let Some(body) = files.purl_response.clone() {
+        return (StatusCode::OK, axum::Json(body)).into_response();
+    }
+    let status = StatusCode::from_u16(files.purl_status_code).unwrap_or(StatusCode::OK);
+    (status, "").into_response()
+}
+
 struct Mock {
     base_url: String,
     files: Arc<Mutex<CannedSearch>>,
@@ -81,6 +100,7 @@ fn spawn_mock(canned: CannedSearch) -> Mock {
             };
             let app = Router::new()
                 .route("/v1/packages", get(search_handler))
+                .route("/v1/purls/{purl}", get(purls_handler))
                 .with_state(state);
             tx.send(format!("http://{addr}")).unwrap();
             axum::serve(listener, app).await.unwrap();
@@ -206,4 +226,92 @@ fn search_surfaces_404_when_route_absent_on_static_mirror() {
         err,
         vibe_registry::IndexError::Status { status: 404, .. }
     ));
+}
+
+#[test]
+fn lookup_purl_decodes_response_and_url_encodes_purl_segment() {
+    let canned = CannedSearch {
+        purl_response: Some(serde_json::json!({
+            "command": "purls",
+            "purl": "pkg:cargo/sqlx@0.8.0",
+            "hit_count": 2,
+            "hits": [
+                {
+                    "kind": "flow",
+                    "name": "sqlx-skin",
+                    "version": "0.1.0",
+                    "binding_site": "package"
+                },
+                {
+                    "kind": "stack",
+                    "name": "rust",
+                    "version": "0.2.0",
+                    "binding_site": "subskill"
+                }
+            ]
+        })),
+        purl_status_code: 200,
+        ..CannedSearch::default()
+    };
+    let mock = spawn_mock(canned);
+    let client = IndexClient::at(&mock.base_url);
+
+    let result = client.lookup_purl("pkg:cargo/sqlx@0.8.0").unwrap();
+    assert_eq!(result.purl, "pkg:cargo/sqlx@0.8.0");
+    assert_eq!(result.hit_count, 2);
+    assert_eq!(result.hits.len(), 2);
+    assert_eq!(result.hits[0].kind, PackageKind::Flow);
+    assert_eq!(result.hits[0].name, "sqlx-skin");
+    assert_eq!(result.hits[0].binding_site, BindingSite::Package);
+    assert_eq!(result.hits[1].name, "rust");
+    assert_eq!(result.hits[1].binding_site, BindingSite::Subskill);
+
+    // Server received the PURL with `:`, `/`, `@` decoded back from
+    // the URL path-segment encoding the client did on send.
+    let observed = mock.files.lock().unwrap();
+    assert_eq!(
+        observed.last_purl.as_deref(),
+        Some("pkg:cargo/sqlx@0.8.0"),
+        "axum's Path<String> URL-decodes; if encoding broke the round-trip the captured \
+         segment would carry literal % escapes"
+    );
+}
+
+#[test]
+fn lookup_purl_handles_empty_hits_envelope() {
+    let canned = CannedSearch {
+        purl_response: Some(serde_json::json!({
+            "command": "purls",
+            "purl": "pkg:cargo/nonexistent@9.9.9",
+            "hit_count": 0,
+            "hits": []
+        })),
+        purl_status_code: 200,
+        ..CannedSearch::default()
+    };
+    let mock = spawn_mock(canned);
+    let client = IndexClient::at(&mock.base_url);
+
+    let result = client.lookup_purl("pkg:cargo/nonexistent@9.9.9").unwrap();
+    assert_eq!(result.hit_count, 0);
+    assert!(result.hits.is_empty());
+}
+
+#[test]
+fn lookup_purl_surfaces_non_2xx_as_status_error() {
+    let canned = CannedSearch {
+        purl_response: None,
+        purl_status_code: 503,
+        ..CannedSearch::default()
+    };
+    let mock = spawn_mock(canned);
+    let client = IndexClient::at(&mock.base_url);
+
+    let err = client.lookup_purl("pkg:cargo/x").unwrap_err();
+    match err {
+        vibe_registry::IndexError::Status { status, .. } => {
+            assert_eq!(status, 503);
+        }
+        other => panic!("unexpected error variant: {other:?}"),
+    }
 }

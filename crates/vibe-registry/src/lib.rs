@@ -36,7 +36,10 @@ pub mod multi_registry_resolver;
 pub use git_backend::{GitBackend, GitError, ShellGit};
 pub use git_package_registry::GitPackageRegistry;
 pub use git_registry::{GitRegistry, RegistryMeta, default_cache_root};
-pub use index_client::{IndexClient, IndexError, SearchHit, SearchResults, index_url_for};
+pub use index_client::{
+    BindingSite, IndexClient, IndexError, PurlLookupHit, PurlLookupResults, SearchHit,
+    SearchResults, index_url_for,
+};
 pub use multi_registry_resolver::{
     DEFAULT_OVERRIDE_REF, MultiRegistryResolver, MultiResolution, RefreshReport, RefreshedEntry,
     RefreshedVia, SkippedEntry,
