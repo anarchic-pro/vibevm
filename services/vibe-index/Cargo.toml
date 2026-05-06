@@ -42,10 +42,16 @@ walkdir = "2"
 chrono = { version = "0.4", default-features = false, features = ["serde", "clock", "std"] }
 tempfile = "3"
 tracing = "0.1"
+tokio = { version = "1", features = ["rt-multi-thread", "macros", "signal", "sync", "net", "time", "fs"] }
+axum = "0.8"
+tower = "0.5"
+tower-http = { version = "0.6", features = ["cors", "trace"] }
+tracing-subscriber = { version = "0.3", features = ["env-filter"] }
 
 [dev-dependencies]
 assert_cmd = "2"
 predicates = "3"
+reqwest = { version = "0.12", default-features = false, features = ["blocking", "json", "rustls-tls"] }
 
 [profile.release]
 lto = "thin"

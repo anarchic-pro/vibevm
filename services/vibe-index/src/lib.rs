@@ -22,6 +22,7 @@ pub mod error;
 pub mod index;
 pub mod lockfile;
 pub mod scanner;
+pub mod server;
 pub mod types;
 
 pub use error::{Error, Result};

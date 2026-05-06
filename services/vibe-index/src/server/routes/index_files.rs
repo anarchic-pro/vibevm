@@ -1,0 +1,77 @@
+//! GET handlers that serve the on-disk index files verbatim. The
+//! server is the single writer; the on-disk shape stays consistent
+//! with the in-RAM state at every batch update.
+
+use std::sync::Arc;
+
+use axum::body::Body;
+use axum::extract::{Path, State};
+use axum::http::{StatusCode, header};
+use axum::response::{IntoResponse, Response};
+
+use crate::server::error::ApiError;
+use crate::server::state::AppState;
+use crate::types::PackageKind;
+
+pub async fn repomd_json(State(state): State<Arc<AppState>>) -> Result<Response, ApiError> {
+    state.stats.note_request();
+    serve_file(&state.data_dir.join("repomd.json"), "application/json").await
+}
+
+pub async fn primary_jsonl(State(state): State<Arc<AppState>>) -> Result<Response, ApiError> {
+    state.stats.note_request();
+    serve_file(
+        &state.data_dir.join("primary.jsonl"),
+        "application/x-ndjson",
+    )
+    .await
+}
+
+pub async fn by_name_json(
+    State(state): State<Arc<AppState>>,
+    Path((kind_str, name_with_ext)): Path<(String, String)>,
+) -> Result<Response, ApiError> {
+    state.stats.note_request();
+    let _kind: PackageKind = kind_str.parse().map_err(|_| {
+        ApiError::not_found(format!(
+            "unknown kind `{kind_str}` — expected one of: flow, feat, stack, tool"
+        ))
+    })?;
+    let name = name_with_ext
+        .strip_suffix(".json")
+        .ok_or_else(|| ApiError::not_found(format!(
+            "expected `<name>.json` path segment, got `{name_with_ext}`"
+        )))?;
+    let path = state
+        .data_dir
+        .join("by-name")
+        .join(&kind_str)
+        .join(format!("{name}.json"));
+    serve_file(&path, "application/json").await
+}
+
+async fn serve_file(path: &std::path::Path, content_type: &str) -> Result<Response, ApiError> {
+    let bytes = match tokio::fs::read(path).await {
+        Ok(b) => b,
+        Err(e) if e.kind() == std::io::ErrorKind::NotFound => {
+            return Err(ApiError::not_found(format!(
+                "`{}` is not present in this index",
+                path.display()
+            )));
+        }
+        Err(e) => {
+            return Err(ApiError::internal(format!(
+                "could not read `{}`: {e}",
+                path.display()
+            )));
+        }
+    };
+    let mut resp = Response::builder()
+        .status(StatusCode::OK)
+        .header(header::CONTENT_TYPE, content_type)
+        .body(Body::from(bytes))
+        .map_err(|e| ApiError::internal(format!("response build: {e}")))?;
+    resp.headers_mut()
+        .insert(header::CACHE_CONTROL, "no-cache".parse().unwrap());
+    Ok(resp.into_response())
+}
