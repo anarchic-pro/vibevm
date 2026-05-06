@@ -26,7 +26,14 @@
 //! | Codex             | `mcp_servers` | `<home>/.codex/config.toml`                         | TOML   | `{command, args}` |
 
 use std::fs;
+use std::io::IsTerminal;
 use std::path::{Path, PathBuf};
+
+/// Centralised TTY probe for the install UX gates. Pulled out so the
+/// interactive helpers don't each grow their own `IsTerminal` import.
+fn stdin_is_tty() -> bool {
+    std::io::stdin().is_terminal()
+}
 
 use anyhow::{Context, Result, anyhow, bail};
 use serde::Serialize;
@@ -93,17 +100,12 @@ pub enum ConfigLocation {
 /// Where a `vibevm` skill artefact lives — alongside the project (in
 /// the agent's project-scoped skills dir, committed to git) or in the
 /// operator's home / config dir (machine-local, not in git).
-//
-// `#[allow(dead_code)]` until the Phase-D install UX wires this through.
-// The next slice consumes every variant + method on this type.
-#[allow(dead_code)]
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum SkillScope {
     Project,
     User,
 }
 
-#[allow(dead_code)]
 impl SkillScope {
     pub fn as_str(self) -> &'static str {
         match self {
@@ -127,12 +129,10 @@ impl SkillScope {
 /// Living right beside `mcp.rs` keeps the template version-locked to
 /// the surrounding agent + tool surface — when the CLI grows a new
 /// flag the skill text travels with it through `cargo build`.
-#[allow(dead_code)] // wired in Phase D
 pub const SKILL_TEMPLATE: &str = include_str!("skill_template.md");
 
 /// Skill name. Matches the `name:` frontmatter field in the template
 /// and the directory name we write under each agent's skills root.
-#[allow(dead_code)] // wired in Phase D
 pub const SKILL_NAME: &str = "vibevm";
 
 #[derive(Debug, Clone)]
@@ -302,7 +302,6 @@ impl Agent {
     /// Claude Desktop are JSON-config-only — they have no on-disk skill
     /// loader, so [`Agent::skill_path`] returns `None` and
     /// `vibe mcp install --with-skill` reports them as `skipped`.
-    #[allow(dead_code)] // wired in Phase D
     pub fn supports_skill(self) -> bool {
         match self {
             Agent::ClaudeCode | Agent::OpenCode | Agent::Codex => true,
@@ -324,7 +323,6 @@ impl Agent {
     /// | Claude Code | `<project>/.claude/skills/vibevm/SKILL.md`            | `<home>/.claude/skills/vibevm/SKILL.md`               |
     /// | OpenCode    | `<project>/.opencode/skills/vibevm/SKILL.md`          | `<config-dir>/opencode/skills/vibevm/SKILL.md`        |
     /// | Codex       | `<project>/.agents/skills/vibevm/SKILL.md`            | `<home>/.agents/skills/vibevm/SKILL.md`               |
-    #[allow(dead_code)] // wired in Phase D
     pub fn skill_path(
         self,
         scope: SkillScope,
@@ -417,6 +415,22 @@ struct InstallReport {
     detected: Vec<String>,
     targeted: Vec<String>,
     results: Vec<AgentInstallReport>,
+    /// SKILL.md write outcomes — only populated when skill installation
+    /// is active (`--with-skill` / `--auto` without `--without-skill` /
+    /// interactive yes). Empty array when MCP-only install.
+    skill_results: Vec<SkillInstallReport>,
+    /// `"project"` or `"user"`. Mirrors `--skill-scope`. Reported even
+    /// when `skill_results` is empty so downstream consumers can see
+    /// what would have applied.
+    skill_scope: &'static str,
+    /// Whether SKILL.md writes were attempted on this run. Lets the
+    /// JSON-envelope consumer distinguish "skipped because all targets
+    /// don't support skills" from "skill toggle was off".
+    install_skill: bool,
+    /// `"auto"` / `"agent-flag"` / `"interactive"` — surfaced so logs
+    /// retain the *path* the operator took to land here, not just the
+    /// resolved target list.
+    mode: &'static str,
     dry_run: bool,
 }
 
@@ -424,17 +438,64 @@ struct InstallReport {
 // install / status
 // ---------------------------------------------------------------------------
 
+/// Determines which UX path drove the install — `--auto`, an explicit
+/// `--agent <filter>`, or the interactive multi-select picker.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+enum InstallMode {
+    Auto,
+    AgentFlag,
+    Interactive,
+}
+
+impl InstallMode {
+    fn as_str(self) -> &'static str {
+        match self {
+            InstallMode::Auto => "auto",
+            InstallMode::AgentFlag => "agent-flag",
+            InstallMode::Interactive => "interactive",
+        }
+    }
+}
+
 fn run_install(ctx: &output::Context, args: McpInstallArgs) -> Result<()> {
     let project_root = resolve_project_root(&args.path)?;
     let detected = detect_agents(&project_root);
-    let filter = Agent::parse_filter(&args.agent)?;
-    let targeted: Vec<Agent> = filter
-        .iter()
-        .copied()
-        .filter(|a| args.force || detected.contains(a))
-        .collect();
+
+    // Resolve agent set + UX mode.
+    let (mode, targeted): (InstallMode, Vec<Agent>) = if args.auto {
+        (InstallMode::Auto, detected.clone())
+    } else if let Some(filter) = &args.agent {
+        let parsed = Agent::parse_filter(filter)?;
+        let filtered: Vec<Agent> = parsed
+            .into_iter()
+            .filter(|a| args.force || detected.contains(a))
+            .collect();
+        (InstallMode::AgentFlag, filtered)
+    } else {
+        let chosen = interactive_select_agents(&detected, args.force)?;
+        (InstallMode::Interactive, chosen)
+    };
+
+    // Resolve skill toggle.
+    let install_skill_flag = if args.without_skill {
+        false
+    } else if args.with_skill {
+        true
+    } else {
+        // Defaults: --auto turns skill on; explicit --agent leaves it
+        // off (operator can opt in with --with-skill); interactive
+        // mode asks.
+        match mode {
+            InstallMode::Auto => true,
+            InstallMode::AgentFlag => false,
+            InstallMode::Interactive => interactive_ask_skill()?,
+        }
+    };
+
+    let skill_scope = SkillScope::parse(&args.skill_scope)?;
 
     let mut results: Vec<AgentInstallReport> = Vec::new();
+    let mut skill_results: Vec<SkillInstallReport> = Vec::new();
     for agent in &targeted {
         let path = agent.config_path(&project_root)?;
         let payload = agent.build_mcp_entry(&project_root);
@@ -444,6 +505,12 @@ fn run_install(ctx: &output::Context, args: McpInstallArgs) -> Result<()> {
             apply_install(*agent, &path, &payload)?
         };
         results.push(outcome);
+
+        if install_skill_flag {
+            let skill_outcome =
+                install_skill(*agent, skill_scope, &project_root, args.dry_run)?;
+            skill_results.push(skill_outcome);
+        }
     }
 
     let report = InstallReport {
@@ -453,6 +520,10 @@ fn run_install(ctx: &output::Context, args: McpInstallArgs) -> Result<()> {
         detected: detected.iter().map(|a| a.as_str().to_string()).collect(),
         targeted: targeted.iter().map(|a| a.as_str().to_string()).collect(),
         results: results.clone(),
+        skill_results: skill_results.clone(),
+        skill_scope: skill_scope.as_str(),
+        install_skill: install_skill_flag,
+        mode: mode.as_str(),
         dry_run: args.dry_run,
     };
 
@@ -461,14 +532,19 @@ fn run_install(ctx: &output::Context, args: McpInstallArgs) -> Result<()> {
         return Ok(());
     }
     if ctx.is_quiet() {
-        let written = results
+        let mcp_written = results
             .iter()
             .filter(|r| matches!(r.status, "created" | "updated"))
             .count();
+        let skill_written = skill_results
+            .iter()
+            .filter(|r| matches!(r.status, "created" | "updated"))
+            .count();
+        let verb = if args.dry_run { "previewed" } else { "written" };
         ctx.summary(&format!(
-            "vibe mcp install: {written} agent config{} {}",
-            if written == 1 { "" } else { "s" },
-            if args.dry_run { "previewed" } else { "written" }
+            "vibe mcp install: {mcp_written} MCP config{} + {skill_written} skill file{} {verb}",
+            if mcp_written == 1 { "" } else { "s" },
+            if skill_written == 1 { "" } else { "s" }
         ));
         return Ok(());
     }
@@ -488,11 +564,99 @@ fn run_install(ctx: &output::Context, args: McpInstallArgs) -> Result<()> {
             .map(|n| format!(" ({n})"))
             .unwrap_or_default();
         ctx.step(&format!(
-            "{} update  {}  → {}{note}",
+            "{} mcp     {}  → {}{note}",
             prefix, r.agent, r.config_path
         ));
     }
+    for r in &skill_results {
+        let prefix = if args.dry_run { "would" } else { r.status };
+        let note = r
+            .note
+            .as_deref()
+            .map(|n| format!(" ({n})"))
+            .unwrap_or_default();
+        let path_str = r.path.as_deref().unwrap_or("(no skill loader)");
+        ctx.step(&format!(
+            "{} skill   {} ({})  → {}{note}",
+            prefix, r.agent, skill_scope.as_str(), path_str
+        ));
+    }
     Ok(())
+}
+
+// ---------------------------------------------------------------------------
+// Interactive helpers — TTY-only paths
+// ---------------------------------------------------------------------------
+
+/// Multi-select agent picker. Defaults every detected agent to `true`
+/// so an operator on a known machine can press Enter to confirm. When
+/// `force` is set, the picker presents `Agent::ALL` so the operator
+/// can install in agents that are absent from this machine (parity
+/// with `vibe mcp install --agent <name> --force`).
+fn interactive_select_agents(detected: &[Agent], force: bool) -> Result<Vec<Agent>> {
+    if !stdin_is_tty() {
+        bail!(
+            "no agent specified and stdin is not a TTY — pass `--agent <name>` (one of \
+             `all`, `claude`, `claude-desktop`, `cursor`, `opencode`, `codex`) or `--auto` \
+             to detect every supported agent"
+        );
+    }
+    let pool: Vec<Agent> = if force {
+        Agent::ALL.to_vec()
+    } else {
+        detected.to_vec()
+    };
+    if pool.is_empty() {
+        bail!(
+            "no supported agents detected on this machine — re-run with `--force` to pick \
+             from the full list, or `--agent <name>` to target one explicitly"
+        );
+    }
+    let labels: Vec<String> = pool
+        .iter()
+        .map(|a| {
+            let badge = if detected.contains(a) {
+                ""
+            } else {
+                "  (not detected)"
+            };
+            format!("{}{}", a.as_str(), badge)
+        })
+        .collect();
+    let defaults: Vec<bool> = pool.iter().map(|a| detected.contains(a)).collect();
+    let chosen = dialoguer::MultiSelect::new()
+        .with_prompt(
+            "Install vibevm MCP config in which agents? (space to toggle, enter to confirm)",
+        )
+        .items(&labels)
+        .defaults(&defaults)
+        .interact()?;
+    Ok(chosen.into_iter().map(|i| pool[i]).collect())
+}
+
+fn interactive_ask_skill() -> Result<bool> {
+    if !stdin_is_tty() {
+        // Falls under the same gate as agent picker; if the agent
+        // picker ran successfully we are guaranteed a TTY here, but
+        // the explicit check keeps the function safe to call from
+        // future non-interactive paths without latent panics.
+        return Ok(false);
+    }
+    Ok(dialoguer::Confirm::new()
+        .with_prompt(
+            "Also install the `vibevm` SKILL.md so each agent loads vibevm-aware instructions?",
+        )
+        .default(true)
+        .interact()?)
+}
+
+#[derive(Debug, Serialize)]
+struct StatusReport {
+    ok: bool,
+    command: &'static str,
+    project: String,
+    detected: Vec<String>,
+    results: Vec<AgentInstallReport>,
 }
 
 fn run_status(ctx: &output::Context, args: McpStatusArgs) -> Result<()> {
@@ -505,14 +669,12 @@ fn run_status(ctx: &output::Context, args: McpStatusArgs) -> Result<()> {
         let outcome = preview_install(agent, &path, &payload)?;
         results.push(outcome);
     }
-    let report = InstallReport {
+    let report = StatusReport {
         ok: true,
         command: "mcp:status",
         project: project_root.display().to_string(),
         detected: detected.iter().map(|a| a.as_str().to_string()).collect(),
-        targeted: vec![],
         results: results.clone(),
-        dry_run: true,
     };
     if ctx.is_json() {
         ctx.emit_json(&report)?;
@@ -748,7 +910,6 @@ fn resolve_project_root(path: &Path) -> Result<PathBuf> {
 // Skill artefact — per-agent SKILL.md writer
 // ---------------------------------------------------------------------------
 
-#[allow(dead_code)] // wired in Phase D
 #[derive(Debug, Clone, Serialize)]
 pub struct SkillInstallReport {
     pub agent: String,
@@ -765,7 +926,6 @@ pub struct SkillInstallReport {
 /// the chosen scope. Idempotent: re-running with byte-identical output
 /// reports `unchanged`. Cursor / Claude Desktop are reported as
 /// `skipped` because they have no filesystem skill loader.
-#[allow(dead_code)] // wired in Phase D
 pub fn install_skill(
     agent: Agent,
     scope: SkillScope,
@@ -818,7 +978,6 @@ pub fn install_skill(
     })
 }
 
-#[allow(dead_code)] // wired in Phase D
 fn decide_skill_action(path: &Path, body: &str) -> Result<&'static str> {
     if !path.exists() {
         return Ok("created");

@@ -479,11 +479,17 @@ pub enum McpSubcommand {
     /// disconnects (EOF on stdin).
     Serve(McpServeArgs),
 
-    /// Detect supported coding agents in the project tree (Claude
-    /// Code, Cursor, Gemini, Codex) and write the per-agent MCP
-    /// server configuration so the agent picks up vibevm
-    /// automatically on its next session start. Idempotent —
-    /// already-correct configs surface as `unchanged`.
+    /// Detect supported coding agents and write the per-agent MCP
+    /// server configuration plus an optional `vibevm` SKILL.md so the
+    /// agent picks up vibevm automatically on its next session start.
+    /// Five agents supported: Claude Code, Claude Desktop, Cursor,
+    /// OpenCode, Codex. Idempotent — already-correct configs surface
+    /// as `unchanged`.
+    ///
+    /// Without flags, drops into an interactive multi-select picker
+    /// (requires a TTY). For CI / scripts use `--auto` (install
+    /// everywhere, with skill) or `--agent <name>` (one explicit
+    /// target).
     Install(McpInstallArgs),
 
     /// Same as `install` but printing the planned config diff
@@ -497,10 +503,37 @@ pub struct McpInstallArgs {
     #[arg(long, default_value = ".")]
     pub path: PathBuf,
 
-    /// Restrict to a specific agent: `claude`, `cursor`, or `all`
-    /// (default — write configs for every detected agent).
-    #[arg(long, default_value = "all")]
-    pub agent: String,
+    /// Restrict to a specific agent. One of `all`, `claude`,
+    /// `claude-desktop`, `cursor`, `opencode`, `codex`. When absent
+    /// and `--auto` is also absent, the command runs interactively
+    /// (TTY required). Conflicts with `--auto`.
+    #[arg(long, conflicts_with = "auto")]
+    pub agent: Option<String>,
+
+    /// Detect every supported agent on this machine and install MCP
+    /// config + skill in all of them. No prompts. Skill defaults to
+    /// on under `--auto`; pass `--without-skill` to suppress. Useful
+    /// for first-run scripts and CI. Conflicts with `--agent`.
+    #[arg(long)]
+    pub auto: bool,
+
+    /// Also install the `vibevm` SKILL.md alongside the MCP config.
+    /// Three agents support filesystem skills (Claude Code, OpenCode,
+    /// Codex); Cursor and Claude Desktop report `skipped`. Conflicts
+    /// with `--without-skill`.
+    #[arg(long = "with-skill", conflicts_with = "without_skill")]
+    pub with_skill: bool,
+
+    /// Install only the MCP server entry, suppressing any SKILL.md
+    /// write. Conflicts with `--with-skill`.
+    #[arg(long = "without-skill")]
+    pub without_skill: bool,
+
+    /// Where to land the SKILL.md when skill installation is active.
+    /// `project` (default) commits to the per-agent project skill
+    /// dir; `user` writes to the operator's home / config dir.
+    #[arg(long = "skill-scope", default_value = "project")]
+    pub skill_scope: String,
 
     /// Print the planned config without writing files.
     #[arg(long)]

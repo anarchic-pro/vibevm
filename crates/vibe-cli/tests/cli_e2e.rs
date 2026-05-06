@@ -1629,6 +1629,8 @@ fn mcp_install_writes_claude_settings() {
         .arg("install")
         .arg("--path")
         .arg(project.path())
+        .arg("--agent")
+        .arg("claude")
         .assert()
         .success();
 
@@ -1697,6 +1699,8 @@ fn mcp_install_dry_run_does_not_write() {
         .arg("install")
         .arg("--path")
         .arg(project.path())
+        .arg("--agent")
+        .arg("cursor")
         .arg("--dry-run")
         .assert()
         .success();
@@ -1734,6 +1738,269 @@ fn mcp_install_force_writes_even_without_marker() {
         project.path().join(".claude/settings.json").is_file(),
         "expected force-written `.claude/settings.json`"
     );
+}
+
+#[test]
+fn mcp_install_with_skill_writes_skill_md_for_claude() {
+    let project = tempfile::tempdir().unwrap();
+    init_project(project.path());
+    fs::create_dir_all(project.path().join(".claude")).unwrap();
+
+    let out = vibe()
+        .arg("--json")
+        .arg("mcp")
+        .arg("install")
+        .arg("--path")
+        .arg(project.path())
+        .arg("--agent")
+        .arg("claude")
+        .arg("--with-skill")
+        .output()
+        .unwrap();
+    assert!(out.status.success(), "stderr: {}", String::from_utf8_lossy(&out.stderr));
+    let v: serde_json::Value = serde_json::from_slice(&out.stdout).unwrap();
+    assert_eq!(v["install_skill"], true);
+    let skill_results = v["skill_results"].as_array().unwrap();
+    assert_eq!(skill_results.len(), 1);
+    assert_eq!(skill_results[0]["agent"], "claude");
+    assert!(matches!(
+        skill_results[0]["status"].as_str(),
+        Some("created" | "unchanged")
+    ));
+
+    let skill = project.path().join(".claude/skills/vibevm/SKILL.md");
+    assert!(skill.is_file(), "expected SKILL.md at {}", skill.display());
+    let body = fs::read_to_string(&skill).unwrap();
+    assert!(body.contains("name: vibevm"));
+    assert!(body.contains("--invoked-by"));
+    assert!(body.contains("query_package"));
+}
+
+#[test]
+fn mcp_install_with_skill_writes_skill_for_opencode() {
+    let project = tempfile::tempdir().unwrap();
+    init_project(project.path());
+    fs::create_dir_all(project.path().join(".opencode")).unwrap();
+
+    vibe()
+        .arg("mcp")
+        .arg("install")
+        .arg("--path")
+        .arg(project.path())
+        .arg("--agent")
+        .arg("opencode")
+        .arg("--with-skill")
+        .assert()
+        .success();
+
+    // OpenCode JSON config in project root
+    let config = project.path().join("opencode.json");
+    assert!(config.is_file());
+    let v: serde_json::Value =
+        serde_json::from_str(&fs::read_to_string(&config).unwrap()).unwrap();
+    assert_eq!(v["mcp"]["vibevm"]["type"], "local");
+    assert_eq!(v["mcp"]["vibevm"]["enabled"], true);
+    assert!(v["mcp"]["vibevm"]["command"].is_array());
+
+    // Skill at .opencode/skills/vibevm/SKILL.md
+    let skill = project.path().join(".opencode/skills/vibevm/SKILL.md");
+    assert!(skill.is_file(), "expected SKILL.md at {}", skill.display());
+}
+
+#[test]
+fn mcp_install_with_skill_for_cursor_reports_skipped() {
+    let project = tempfile::tempdir().unwrap();
+    init_project(project.path());
+    fs::create_dir_all(project.path().join(".cursor")).unwrap();
+
+    let out = vibe()
+        .arg("--json")
+        .arg("mcp")
+        .arg("install")
+        .arg("--path")
+        .arg(project.path())
+        .arg("--agent")
+        .arg("cursor")
+        .arg("--with-skill")
+        .output()
+        .unwrap();
+    assert!(out.status.success());
+    let v: serde_json::Value = serde_json::from_slice(&out.stdout).unwrap();
+    let skill_results = v["skill_results"].as_array().unwrap();
+    assert_eq!(skill_results.len(), 1);
+    assert_eq!(skill_results[0]["agent"], "cursor");
+    assert_eq!(skill_results[0]["status"], "skipped");
+    assert!(skill_results[0]["path"].is_null());
+}
+
+#[test]
+fn mcp_install_without_skill_emits_empty_skill_results() {
+    let project = tempfile::tempdir().unwrap();
+    init_project(project.path());
+    fs::create_dir_all(project.path().join(".claude")).unwrap();
+
+    let out = vibe()
+        .arg("--json")
+        .arg("mcp")
+        .arg("install")
+        .arg("--path")
+        .arg(project.path())
+        .arg("--agent")
+        .arg("claude")
+        .arg("--without-skill")
+        .output()
+        .unwrap();
+    assert!(out.status.success());
+    let v: serde_json::Value = serde_json::from_slice(&out.stdout).unwrap();
+    assert_eq!(v["install_skill"], false);
+    assert!(v["skill_results"].as_array().unwrap().is_empty());
+    // SKILL.md must NOT be present
+    assert!(
+        !project.path().join(".claude/skills/vibevm/SKILL.md").exists(),
+        "without-skill must not write SKILL.md"
+    );
+}
+
+#[test]
+fn mcp_install_auto_with_dry_run_previews_every_detected_agent() {
+    let project = tempfile::tempdir().unwrap();
+    init_project(project.path());
+    // Light up multiple project markers so detection finds several
+    // agents at once. We stay on `--dry-run` so the run does not
+    // touch the operator's user-level config dirs (Claude Desktop,
+    // Codex), even when those exist on the test host.
+    fs::create_dir_all(project.path().join(".claude")).unwrap();
+    fs::create_dir_all(project.path().join(".cursor")).unwrap();
+    fs::create_dir_all(project.path().join(".opencode")).unwrap();
+
+    let out = vibe()
+        .arg("--json")
+        .arg("mcp")
+        .arg("install")
+        .arg("--path")
+        .arg(project.path())
+        .arg("--auto")
+        .arg("--dry-run")
+        .output()
+        .unwrap();
+    assert!(out.status.success(), "stderr: {}", String::from_utf8_lossy(&out.stderr));
+    let v: serde_json::Value = serde_json::from_slice(&out.stdout).unwrap();
+    assert_eq!(v["mode"], "auto");
+    assert_eq!(v["dry_run"], true);
+    assert_eq!(v["install_skill"], true);
+    let detected: Vec<&str> = v["detected"]
+        .as_array()
+        .unwrap()
+        .iter()
+        .map(|d| d.as_str().unwrap())
+        .collect();
+    for a in &["claude", "cursor", "opencode"] {
+        assert!(
+            detected.contains(a),
+            "expected `{a}` in detected={detected:?}"
+        );
+    }
+    // Every targeted agent gets a `would-create` or similar
+    // status; nothing actually got written because --dry-run.
+    for r in v["results"].as_array().unwrap() {
+        let s = r["status"].as_str().unwrap();
+        assert!(
+            s.starts_with("would-") || s == "unchanged",
+            "unexpected dry-run status `{s}`"
+        );
+    }
+    // Skill results should reflect supports_skill: claude + opencode
+    // emit `would-create`/`unchanged`, cursor emits `skipped`.
+    let skill_by_agent: std::collections::BTreeMap<&str, &str> = v["skill_results"]
+        .as_array()
+        .unwrap()
+        .iter()
+        .map(|r| {
+            (
+                r["agent"].as_str().unwrap(),
+                r["status"].as_str().unwrap(),
+            )
+        })
+        .collect();
+    assert_eq!(skill_by_agent.get("cursor"), Some(&"skipped"));
+    assert!(matches!(
+        skill_by_agent.get("claude"),
+        Some(&"would-create") | Some(&"unchanged")
+    ));
+    assert!(matches!(
+        skill_by_agent.get("opencode"),
+        Some(&"would-create") | Some(&"unchanged")
+    ));
+}
+
+#[test]
+fn mcp_install_auto_conflicts_with_explicit_agent() {
+    let project = tempfile::tempdir().unwrap();
+    init_project(project.path());
+    let out = vibe()
+        .arg("mcp")
+        .arg("install")
+        .arg("--path")
+        .arg(project.path())
+        .arg("--auto")
+        .arg("--agent")
+        .arg("claude")
+        .output()
+        .unwrap();
+    assert!(!out.status.success(), "expected --auto + --agent to clap-fail");
+    let stderr = String::from_utf8_lossy(&out.stderr);
+    assert!(
+        stderr.contains("conflict") || stderr.contains("cannot be used"),
+        "expected clap conflict message; got: {stderr}"
+    );
+}
+
+#[test]
+fn mcp_install_no_args_in_non_tty_emits_error() {
+    let project = tempfile::tempdir().unwrap();
+    init_project(project.path());
+    fs::create_dir_all(project.path().join(".claude")).unwrap();
+
+    // assert_cmd runs the binary with stdin piped, so user_attended_stdin
+    // is false. The command should fail with a helpful message rather
+    // than panic in dialoguer.
+    let out = vibe()
+        .arg("mcp")
+        .arg("install")
+        .arg("--path")
+        .arg(project.path())
+        .output()
+        .unwrap();
+    assert!(!out.status.success(), "expected failure in non-TTY interactive path");
+    let stderr = String::from_utf8_lossy(&out.stderr);
+    assert!(
+        stderr.contains("--agent") || stderr.contains("--auto"),
+        "expected hint pointing at --agent/--auto; got: {stderr}"
+    );
+}
+
+#[test]
+fn mcp_install_with_invoked_by_stamps_envelope() {
+    let project = tempfile::tempdir().unwrap();
+    init_project(project.path());
+    fs::create_dir_all(project.path().join(".claude")).unwrap();
+
+    let out = vibe()
+        .arg("--invoked-by")
+        .arg("opencode")
+        .arg("--json")
+        .arg("mcp")
+        .arg("install")
+        .arg("--path")
+        .arg(project.path())
+        .arg("--agent")
+        .arg("claude")
+        .arg("--without-skill")
+        .output()
+        .unwrap();
+    assert!(out.status.success());
+    let v: serde_json::Value = serde_json::from_slice(&out.stdout).unwrap();
+    assert_eq!(v["invoked_by"], "opencode");
 }
 
 #[test]
