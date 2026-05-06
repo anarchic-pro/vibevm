@@ -1,30 +1,37 @@
 # CONTINUE — cold-resume checkpoint
 
-_Written: 2026-05-05. Owner-readable, self-contained. Pick this up with zero prior context._
+_Written: 2026-05-06. Owner-readable, self-contained. Pick this up with zero prior context._
 
 ---
 
 ## TL;DR (executive summary)
 
-**M1.7 vibe-mcp complete (non-LLM scope) + PROP-003 r2 fully landed end-to-end with omnibus integration proof.** Across the most recent push window: feature-aware install + subskill materialisation + conditional dependencies (cascading fixed-point loop) + BCP-47 i18n + lockfile schema v3 + `vibe show features|subskills|purls` + `vibe outdated` + `vibe-check` activation_conflict heuristic + three integration fixture packages + Model Context Protocol server (`vibe mcp serve` / `install` / `status`) with cache-precise `read_subskill` and on-demand `materialise_subskill`.
+**Publish-side reworked end to end.** This session landed a coherent slice across `vibe-core` / `vibe-publish` / `vibe-cli`:
 
-Workspace state at HEAD (`0566dbf`):
+1. Default `vibe init` now scaffolds **two `[[registry]]` blocks** — `vibespecs` (GitHub, primary, drives the API publish path) + `vibespecs-gitverse` (GitVerse, secondary, queried on `UnknownPackage` fall-through). GitVerse default uses `naming = "name"` because the org provisions repos under bare names (`vibevm-direct-push-smoke`) rather than the kind-prefixed form GitHub uses.
+2. **GitVerse publish stub.** `vibe registry publish --registry vibespecs-gitverse` short-circuits with a clear "not implemented" envelope (`ok: false, stub: true, host: gitverse.ru`). The GitVerse public REST API does not yet expose org-scoped repo creation; the stub is honest about that without burning a token.
+3. **Per-host publish-token env vars.** New precedence: `VIBEVM_PUBLISH_TOKEN_<HOST>` (host-specific) → `VIBEVM_PUBLISH_TOKEN` (legacy host-agnostic) → `~/.vibevm/<host-prefix>.publish.token` → `~/.vibevm/git.publish.token`. CI can hold tokens for several hosts in the same env without one clobbering the others. `vibe show config` lists all three publish-token vars with `redacted` provenance gating intact.
+4. **`vibe registry publish --repo-url <git-url>`** — new no-API direct-push path. Pushes the freshly-built commit + tag straight to a supplied URL using the local user's git credentials (SSH agent / credential.helper / netrc). No token loaded, no host-API call. Implemented as `DirectGitCreator` declaring `direct_repo_url()`; `Publisher::publish` short-circuits the org-extraction + repo_exists + create_repo dance when that hook returns `Some`. `--repo-url` and `--registry` are mutually exclusive at the clap layer.
+5. **Live e2e suite + manual-test fixtures.** Three `#[ignore]`-d tests in `crates/vibe-cli/tests/cli_live_e2e.rs` reach `github.com` + `gitverse.ru` and prove cross-registry resolution end to end. Two test packages published live: `https://github.com/vibespecs/flow-vibevm-github-smoke` (API path) + `git@gitverse.ru:vibespecs/vibevm-direct-push-smoke.git` (direct push). Walked successfully on this machine — all three tests green in 21.8s combined.
 
-- **403 tests** across the workspace, all green.
+Workspace state at HEAD (`f6f4f0c`):
+
+- **418 hermetic tests** + **3 ignored live tests** across the workspace, all green.
 - `cargo clippy --workspace --all-targets -- -D warnings` clean.
 - `tools/self-check.sh` green.
+- Working tree clean (only `.claude/settings.local.json` untracked).
 
-The most recent commit chain (newest first) covers M1.7 slice 3 — lazy-pull runtime — plus the slice 2 agent-config writers and slice 1 server itself:
+The most recent commit chain (newest first):
 
 ```
+f6f4f0c test(cli): live e2e for cross-registry resolution + smoke fixtures
+44a8c1c feat(core,publish,cli): two default registries + per-host tokens + no-API direct push
+5429c17 docs(wal): session-end checkpoint 2026-05-05 — refresh top + Next
+25915f5 docs(continue): cold-resume checkpoint at 2026-05-05 session-end
 0566dbf docs(wal): record M1.7 slice 3 landing — lazy-pull runtime closed
 3c9e710 feat(vibe-mcp): cache-precise read_subskill + materialise_subskill tool
 390fc3a feat(vibe-core,vibe-install): per-subskill files index + lazy-pull becomes truly lazy
 37d0ceb docs(wal): record M1.7 slice 2 landing — vibe mcp install + status
-98fec82 feat(vibe-cli): vibe mcp install — auto-detect agents + write MCP config
-eaefab7 docs(wal): record M1.7 vibe-mcp slice 1 landing
-416ac74 feat(vibe-cli): vibe mcp serve — wire Model Context Protocol over stdio
-c2977fa feat(vibe-mcp): new crate — Model Context Protocol server (M1.7 slice 1)
 ```
 
 Push to `gitverse.ru:anarchic/vibevm` is current.
@@ -34,33 +41,54 @@ Push to `gitverse.ru:anarchic/vibevm` is current.
 ## Where we are right now
 
 - **Branch:** `main`. Working tree clean.
-- **Latest checkpoint:** `0566dbf` (the M1.7 slice 3 WAL update).
-- **Live registry:** `https://github.com/vibespecs` carries the original three v0.1.0 demo flows (`flow:wal`, `flow:sync-from-code`, `flow:atomic-commits`). Untouched in this session.
-- **Integration fixtures:** `fixtures/registry/{flow/integration-alpha, flow/integration-beta, stack/integration-rust}` exercise every PROP-003 r2 surface in combination. Not yet published to vibespecs; ready when wanted.
+- **Latest commit:** `f6f4f0c` (live e2e + fixtures).
+- **Live test packages:**
+  - GitHub: `https://github.com/vibespecs/flow-vibevm-github-smoke` @ `v0.0.1` (created via API path).
+  - GitVerse: `git@gitverse.ru:vibespecs/vibevm-direct-push-smoke.git` @ `v0.0.1` (created via `--repo-url` direct push, SSH).
+- **Other registry contents (untouched this session):** `https://github.com/vibespecs` still carries the original three v0.1.0 demo flows (`flow:wal`, `flow:sync-from-code`, `flow:atomic-commits`). GitVerse `vibespecs` org carries only the smoke fixture.
+- **Integration fixtures (untouched):** `fixtures/registry/{flow/integration-alpha, flow/integration-beta, stack/integration-rust}` exercise every PROP-003 r2 surface in combination. Not yet published to vibespecs; ready when wanted.
 
 ---
 
 ## What landed in this session (chronological, newest first)
 
-### M1.7 vibe-mcp — three slices
+### Live e2e + manual-test fixtures (`f6f4f0c`)
 
-**Slice 3 — lazy-pull runtime (closes M2.8 dependency for read paths).** `LockedSubskill` schema v3 gains `files_written: Vec<PathBuf>` (project-relative paths a subskill specifically contributed; empty for lazy-pull) and `cache_files: Vec<PathBuf>` (subskill-root-relative paths inside the package cache; populated for every delivery mode). `vibe-install` no longer materialises `delivery=lazy-pull` subskills into the project tree; they live in the cache and surface only via MCP. `read_subskill` upgraded to be cache-precise — reads from project for eager/lazy-push, from cache for lazy-pull. New `materialise_subskill(package, subskill_path, force?)` tool promotes a lazy-pull subskill into the project tree on demand; refuses overwrite without `force=true` (preserves user edits, same discipline as `vibe update`'s `UserEditedFile` gate).
+- `crates/vibe-cli/tests/cli_live_e2e.rs` — three `#[ignore]`-d tests:
+  - `install_github_smoke_alone` — `flow:vibevm-github-smoke` resolves via `vibespecs` (GitHub).
+  - `install_gitverse_smoke_alone` — `flow:vibevm-direct-push-smoke` falls through GitHub's `UnknownPackage` and lands via `vibespecs-gitverse`.
+  - `cross_registry_resolution_routes_each_package_to_correct_host` — both in the same `vibe install` invocation; lockfile records the right `registry` per package; distinct `content_hash`-es.
+- `fixtures/manual-test-packages/flow-vibevm-github-smoke/` — throwaway test fixture for the GitHub API publish path.
+- `fixtures/manual-test-packages/flow-vibevm-direct-push-smoke/` — throwaway test fixture for the no-API `--repo-url` direct push path.
+- Both fixtures: trivial no-op flows (one PROTOCOL.md + one boot snippet); names scream "test"; pinned at `v0.0.1` forever so they stay deletable.
+- Run live tests with: `cargo test --test cli_live_e2e -- --ignored`.
 
-**Slice 2 — agent detection + MCP config writers (closes M1.11).** New `vibe mcp install [--agent claude|cursor|all] [--dry-run] [--force]` detects supported agents in the project tree (`.claude/` / `CLAUDE.md` for Claude Code, `.cursor/` / `.cursorrules` for Cursor), writes `mcpServers.vibevm` block into `.claude/settings.json` / `.cursor/mcp.json`. Idempotent on bytes (matching → unchanged, divergent → updated, missing → created). Foreign keys preserved on JSON merge. `vibe mcp status` is the read-only counterpart.
+### Publish-side rework (`44a8c1c`)
 
-**Slice 1 — server itself.** New `vibe-mcp` crate. JSON-RPC 2.0 over stdio (line-delimited). `Server<T: Transport>` is transport-agnostic — production wires `StdioTransport`, tests use `MemoryTransport`. Two tools at slice 1: `query_package(name)` returns full lockfile entry, `read_subskill(package, subskill_path)` returns concatenated text. `vibe mcp serve --path <dir>` CLI command. `PROTOCOL_VERSION = "2024-11-05"`.
+**Dual-registry default.**
+- `crates/vibe-core/src/manifest/project.rs` — new constants `DEFAULT_REGISTRY_GITVERSE_NAME = "vibespecs-gitverse"`, `DEFAULT_REGISTRY_GITVERSE_URL = "https://gitverse.ru/vibespecs"`. Existing `DEFAULT_REGISTRY_*` (GitHub) untouched.
+- `crates/vibe-cli/src/commands/init.rs::resolve_registry_sections` — returns `Vec<RegistrySection>`; default = both registries (GitHub primary, kind-name; GitVerse secondary, name); `--registry-url` overrides to single; `--no-registry` empty.
+- Root `vibe.toml` updated to mirror the new default shape (so self-`vibe check` validates against the same layout fresh projects use).
 
-### PROP-003 r2 — six slices (complete end-to-end)
+**GitVerse publish stub.**
+- `crates/vibe-cli/src/commands/registry.rs::run_publish` — host-detection short-circuit for GitVerse-shaped registries. Emits `PublishStubReport { ok: false, command: "registry:publish", host, org_url, registry, stub: true, reason }`. No token loaded, no HTTP call.
+- Resolve-time reads against GitVerse continue to work via `MultiRegistryResolver` (the stub only affects `vibe registry publish`).
 
-**Omnibus integration (`fixtures/registry/{integration-alpha,integration-beta,integration-rust}/`).** Three fixture packages exercising every PROP-003 r2 surface in combination — features, subskills, all four activation channels (manual / if_present / if_provides / if_files / if_command / if_env / if_describes_match / if_language), all three delivery modes, BCP-47 i18n, conditional deps, package-level + subskill-level `describes` PURLs. Six omnibus e2e tests verify the byte-level shape end-to-end. Two real integration bugs found and fixed in the process (`tailor_feature_request` per root + the same fix in the conditional-deps re-fetch path).
+**Per-host publish-token env vars.**
+- `crates/vibe-publish/src/token.rs` — `TokenSource::EnvVar(String)` (was `&'static str`); new `host_env_var(host) -> Option<String>` builds `VIBEVM_PUBLISH_TOKEN_<HOST>` (e.g. `_GITHUB`, `_GITVERSE`). New precedence: host-env → legacy-env → host-file → legacy-file.
+- `crates/vibe-cli/src/commands/show.rs` — `CONFIG_ENV_VARS` lists all three publish-token vars (`_GITHUB`, `_GITVERSE`, legacy bare). All `sensitive: true` → `redacted` provenance.
 
-**Slice 4 — fixed-point conditional + activation-conflict heuristic.** Conditional-dep expansion promoted from single-pass to fixed-point loop with iteration cap = 5; cascading conditional deps now work. `vibe-check::ActivationConflict` runs Jaccard keyword-overlap (≥70% after stopword filtering) on subskill descriptions in the same package's lazy-push/lazy-pull set, mirroring Tessl's review-rubric "activation distinctiveness" axis without LLM dependency.
+**`--repo-url` direct push (no API).**
+- `crates/vibe-publish/src/direct_git.rs` — new `DirectGitCreator` adapter. `repo_exists` → `Ok(true)`; `create_repo` → error (unreachable on direct path); `push_url` → configured URL verbatim; `direct_repo_url` returns `Some(&url)`.
+- `crates/vibe-publish/src/lib.rs` — new `RepoCreator::direct_repo_url() -> Option<&str>` hook (default `None`); `Publisher::publish` short-circuits on `Some`, skipping `extract_org_segment` + `repo_exists` + `create_repo`, going straight into `git_publish::push_release` with the supplied URL.
+- `crates/vibe-cli/src/cli.rs` — new `RegistryPublishArgs::repo_url: Option<String>` with `conflicts_with = "registry"`.
+- `crates/vibe-cli/src/commands/registry.rs::run_publish_direct` — dispatch path; emits `DirectPublishReport { ok: true, command: "registry:publish", mode: "direct-git", host, repo_url, repo_name, tag, dry_run }`. No token loading on this path.
 
-**Slice 3 — conditional dependencies + `vibe outdated`.** `[target."context(<key>)".dependencies]` schema in `vibe-core`; `vibe-resolver::conditional` parses + evaluates predicates (`Present(<key>)` form today, richer `if_files = '...'` and boolean composition flagged as `Unsupported`). `vibe-cli/install.rs` runs single-pass expansion (later promoted to fixed-point in slice 4). New `vibe outdated` registry-side update preview with JSON envelope.
-
-**Slice 2 — feature-aware install + subskill materialisation.** `InstallOptions` extended with `feature_expansion`/`activation_context`/`describes`. Subskill discovery + activation + eager materialisation in `plan_install_with_options`. Two-phase install pipeline: fetch all → activation context → plan all. `--features` / `--no-default-features` / `--all-features` CLI. `register_installed_with_metadata` writes v3 lockfile fields. Three new `vibe show` subcommands (features / subskills / purls).
-
-**Slice 1 — schema + activation evaluator.** `manifest::purl` (Package URL parser, npm-`@scope/name`-aware via `rsplit_once('@')`). `manifest::i18n` (BCP-47 sidecar pattern, fallback chain, `localised_path`, `resolve_localised`). `manifest::subskill` (`vibe-subskill.toml` schema with `[subskill]`/`[activation]`/`[recommends]`/`[conflicts]`/`[content]`, `DeliveryMode` enum, static validation). Lockfile schema bumped to v3. `vibe-resolver::features` + `vibe-resolver::activation` modules.
+**Tests.**
+- 4 new unit tests in `vibe-publish::token::tests` (host_env_var rendering / sanitisation / blank input).
+- 7 new unit tests in `vibe-publish::direct_git::tests` (host extraction / scope no-op / push_url verbatim / etc.).
+- 3 new e2e tests in `cli_e2e.rs` (`publish_against_gitverse_registry_emits_stub_envelope`, `publish_direct_repo_url_pushes_to_local_bare_repo` against `--bare` `file:///` repo, `publish_repo_url_and_registry_are_mutually_exclusive`).
+- Existing `init_writes_default_registry` updated to assert both registries land + GitVerse uses `naming = "name"`.
 
 ---
 
@@ -76,18 +104,18 @@ vibevm/                                     (this repo — gitverse.ru:anarchic/
 ├── VIBEVM-SPEC.md                          ← owner-frozen v1.0
 ├── tools/self-check.sh                     ← cargo test + clippy + vibe check, one entry point
 ├── tools/jtd-codegen/                      ← JTD codegen toolchain (binary not committed)
-├── vibe.toml / vibe.lock                   ← bootstrap manifest so `vibe check` runs against vibevm itself
+├── vibe.toml / vibe.lock                   ← bootstrap manifest (now carries dual registry default)
 │
 ├── crates/                                 (Rust workspace — 13 crates, 3 placeholders)
-│   ├── vibe-core/      ← manifest types, lockfile (schema v3), PURL, i18n, subskill, features, conditional
-│   ├── vibe-cli/       ← `vibe` binary
+│   ├── vibe-core/      ← manifest types, lockfile (schema v3), PURL, i18n, subskill, features,
+│   │                     conditional, DEFAULT_REGISTRY_* + DEFAULT_REGISTRY_GITVERSE_*
+│   ├── vibe-cli/       ← `vibe` binary; `--repo-url` direct push, GitVerse publish stub,
+│   │                     dual-registry init defaults
 │   ├── vibe-registry/  ← LocalRegistry + GitPackageRegistry + MultiRegistryResolver
-│   ├── vibe-resolver/  ← NaiveDepSolver + features expansion + activation evaluator + conditional predicate
+│   ├── vibe-resolver/  ← NaiveDepSolver + features expansion + activation evaluator + conditional
 │   ├── vibe-install/   ← plan/apply/register install, subskill discovery + materialisation
-│   ├── vibe-publish/   ← GitHub / GitVerse RepoCreator adapters, token redaction
-│   ├── vibe-check/     ← spec linter (manifest_validity / wal_freshness / wal_wellformed /
-│   │                     boot_directory / lockfile_files / review_aging / features_graph /
-│   │                     subskill_structure / i18n_coverage / activation_conflict)
+│   ├── vibe-publish/   ← GitHub / GitVerse / DirectGit RepoCreator adapters, host-aware token loader
+│   ├── vibe-check/     ← spec linter (10 checks, including activation_conflict)
 │   ├── vibe-mcp/       ← Model Context Protocol server (JSON-RPC over stdio, query_package /
 │   │                     read_subskill / materialise_subskill tools)
 │   ├── vibe-wire/      ← JTD-generated wire types (init_report fully migrated; rest hand-rolled)
@@ -95,10 +123,14 @@ vibevm/                                     (this repo — gitverse.ru:anarchic/
 │   ├── vibe-graph/     ← M0 placeholder
 │   └── xtask/          ← `cargo xtask codegen` / `check-codegen`
 │
-├── fixtures/registry/                      (LocalRegistry layout)
-│   ├── flow/{wal, sync-from-code, atomic-commits}/v0.1.0/   ← legacy demo flows
-│   ├── flow/{integration-alpha, integration-beta}/v0.1.0/   ← PROP-003 r2 omnibus
-│   └── stack/integration-rust/v0.1.0/
+├── fixtures/
+│   ├── registry/                            ← LocalRegistry + PROP-003 r2 omnibus (untouched)
+│   │   ├── flow/{wal, sync-from-code, atomic-commits}/v0.1.0/
+│   │   ├── flow/{integration-alpha, integration-beta}/v0.1.0/
+│   │   └── stack/integration-rust/v0.1.0/
+│   └── manual-test-packages/                ← NEW: throwaway fixtures for live publish tests
+│       ├── flow-vibevm-github-smoke/        ← published live to GitHub
+│       └── flow-vibevm-direct-push-smoke/   ← published live to GitVerse
 │
 ├── docs/                                   ← user-facing reference per command
 ├── manual-tests/                           ← runnable smoke protocols
@@ -123,23 +155,32 @@ vibevm/                                     (this repo — gitverse.ru:anarchic/
 # Workspace health.
 bash tools/self-check.sh
 
-# Install the omnibus alpha + beta + stack from the in-tree fixture.
-cargo run -p vibe-cli -- init --path /tmp/demo
-cargo run -p vibe-cli -- install \
-    stack:integration-rust flow:integration-alpha \
-    --registry "$(pwd)/fixtures/registry" \
-    --path /tmp/demo \
-    --features extra-discipline \
-    --language ru \
-    --assume-yes
+# Run live e2e tests against real internet (~22s combined).
+cargo test --test cli_live_e2e -- --ignored
+
+# Inspect host-aware token resolution in `vibe show config`.
+cargo run -p vibe-cli -- show config
+
+# Direct-push a fixture to a known git URL (no API, no token, local creds).
+cargo run -p vibe-cli -- registry publish \
+    fixtures/manual-test-packages/flow-vibevm-direct-push-smoke \
+    --repo-url git@gitverse.ru:vibespecs/vibevm-direct-push-smoke.git \
+    --path .
 
 # Drive the MCP server manually.
 echo '{"jsonrpc":"2.0","id":1,"method":"initialize","params":{}}' | \
   cargo run -p vibe-cli -- mcp serve --path /tmp/demo
-
-# Wire the project's coding agent.
-cargo run -p vibe-cli -- mcp install --path /tmp/demo --agent claude
 ```
+
+---
+
+## Non-obvious findings discovered this session
+
+1. **GitVerse HTTPS public read works for repos that exist; returns 401-with-credentials-prompt for repos that don't.** This is host behaviour, not vibevm's. The first run of the live e2e failed not because GitVerse needed auth but because the resolver was asking for a wrong-named URL (`flow-vibevm-direct-push-smoke.git` under default `kind-name`, while the actual repo is `vibevm-direct-push-smoke.git`). The fix was the `naming = "name"` default for `vibespecs-gitverse`, not switching auth paths.
+2. **GitVerse `vibespecs` org convention is bare names (no `kind-` prefix).** Recorded as the default `naming` for the secondary registry. If the convention changes in the future, the default needs to change with it.
+3. **`forbid(unsafe_code)` blocks env-mutation tests** — `std::env::set_var` is `unsafe` from Rust 1.85+. `vibe-publish` uses `forbid(unsafe_code)` so token-loading tests with live env mutations are not possible there. The host_env_var unit tests cover the renderer; live env-precedence is exercised through the live e2e suite (sets `VIBEVM_PUBLISH_TOKEN_GITHUB` / `VIBEVM_PUBLISH_TOKEN` to bogus values and asserts direct-push doesn't read them).
+4. **GitHub publishing's HTTPS-token push works fine even when the registry URL is HTTPS public read.** The push URL is constructed by `GitHubCreator::push_url` (token-credentialed HTTPS) regardless of the configured registry URL form. Switching the default registry URL to SSH would not have affected push behaviour.
+5. **The user's machine preference is SSH for push paths** (recorded in `~/.claude/projects/.../memory/feedback_publish_url_form_preference.md`). Product code supports both equally; on this dev box, default to SSH form when proposing `--repo-url` invocations.
 
 ---
 
@@ -147,25 +188,29 @@ cargo run -p vibe-cli -- mcp install --path /tmp/demo --agent claude
 
 By size and priority:
 
-1. **M1.8 — `vibe review` static quality scoring.** New `vibe-eval` crate with three-axis scoring (validation / implementation / activation). Static portion only; LLM-judge mode lands in M2.7. Tessl-parity with their review rubric without the LLM dependency. Smallest immediate win — ~1 weekend.
+1. **M1.8 — `vibe review` static quality scoring.** New `vibe-eval` crate with three-axis scoring (validation / implementation / activation). Static portion only; LLM-judge mode lands in M2.7. Smallest immediate win — ~1 weekend.
 
-2. **M2.10 — `vibe search` registry inspector.** Walks every configured `[[registry]]` URL, lists packages whose `vibe-package.toml` description matches a query. Naive at first; indexing later. Useful at 20+ packages, essential at 100+.
+2. **M2.10 — `vibe search` registry inspector.** Walks every configured `[[registry]]` URL, lists packages whose `vibe-package.toml` description matches a query. Naive at first; indexing later. Useful at 20+ packages, essential at 100+. Recent research surfaced three viable paths (cargo sparse-index style / DNF repodata-style / Nix flake-registry-style); leaning toward the cargo sparse-style for the first pass — one optional JSON file per package in the org, populated by `vibe registry publish`.
 
-3. **M1.5 — LLM provider abstraction + `vibe build`.** The Big One. ROADMAP §M1.5.1–§M1.5.5. 3-6 weekends. Requires explicit owner sign-off per CLAUDE.md Rule 4 (non-routine, scope decisions about LLM provider, tool-use sandbox, cost reporting, etc.). Once `vibe-llm` is real, M2.7 (`--optimize` + multi-model A/B) and M2.9 (scenario generation from real commits) light up.
+3. **M1.5 — LLM provider abstraction + `vibe build`.** The Big One. ROADMAP §M1.5.1–§M1.5.5. 3-6 weekends. Requires explicit owner sign-off per CLAUDE.md Rule 4.
 
-4. **libsolv FFI / `SatDepSolver`** (PROP-003 §2.1, Phase A). Standalone slice — adds the BSD-3-Clause libsolv dependency, Rust FFI bindings, rule encoding. NaiveDepSolver augmented with feature-awareness covers every current fixture, but fairs poorly on disjunction-rich graphs. ~2-3 weekends.
+4. **libsolv FFI / `SatDepSolver`** (PROP-003 §2.1, Phase A). Standalone slice. ~2-3 weekends.
 
-5. **M2.9 — scenario generation from real commits.** Depends on M1.5.1 + M1.8. Tessl's most architecturally distinctive primitive. Format pinned to be drop-in compatible with their `task.md`/`criteria.json`/`scenario.json` triple.
+5. **M2.9 — scenario generation from real commits.** Depends on M1.5.1 + M1.8.
 
-6. **`vibe update` feature-awareness.** Known gap: `vibe install foo --features X` followed by `vibe update foo` loses X. `plan_update_with_options` mirroring `plan_install_with_options` would fix it. ~1 weekend.
+6. **`vibe update` feature-awareness.** Known gap: `vibe install foo --features X` followed by `vibe update foo` loses X. ~1 weekend.
 
-7. **vibe-mcp follow-ups.** Gemini / Codex / Copilot agent writers (need their public MCP-config conventions). `list_capabilities` / `query_capabilities` discovery tool. User-level config (`~/.config/claude/...`) for `vibe mcp install`.
+7. **vibe-mcp follow-ups.** Gemini / Codex / Copilot agent writers, `list_capabilities` discovery tool, user-level config (`~/.config/claude/...`).
 
-8. **Documentation files for new commands.** `docs/commands/{features,subskills,purls,outdated,mcp-serve,mcp-install,mcp-status}.md`. Mostly mechanical translation of `--help` text into reference shape.
+8. **GitHub publish path → SSH option.** Currently HTTPS-token only. Could add SSH fallback for operators who prefer key-based push. Tied to broader publish-flow polish.
 
-9. **Conditional-dep cleanup on uninstall** — orphan auto-remove when a trigger goes away. Conceptually similar to npm/cargo's auto-prune. Park.
+9. **`vibe registry publish --repo-url` for GitVerse → unstub.** When/if the GitVerse public API ever exposes org-scoped repo creation, the stub branch in `run_publish` flips back to the regular adapter dispatch. Note tracked in the stub message itself.
 
-10. **`vibe outdated --upstream`** PURL probe. Requires per-ecosystem HTTP clients (npm / pypi / cargo.io / crates.io). Tied to the M3.1 security threat-model question (what does "vulnerability" mean for spec content?).
+10. **Documentation files for new commands.** `docs/commands/{publish-direct.md,publish-stub.md}` plus `docs/commands/show.md` refresh for the new env-var entries. Mostly mechanical translation of `--help` text into reference shape.
+
+11. **Conditional-dep cleanup on uninstall** — orphan auto-remove when a trigger goes away. Park.
+
+12. **`vibe outdated --upstream`** PURL probe. Per-ecosystem HTTP clients.
 
 ---
 
@@ -176,14 +221,16 @@ By size and priority:
 - **Memory discipline:** project facts in repo, machine-local in user-memory.
 - **Setup-docs obligation** ([PROP-000 §19](spec/common/PROP-000.md#setup-docs)): toolchain / prereqs / env / paths changes → `DEV-GUIDE.md` or `RUNTIME-GUIDE.md` in same commit.
 - **Vocabulary lock:** `flow` / `feat` / `stack` / `tool`; never `lifecycle` / `phase` / `goal` / `plugin`.
-- **Token secrecy** ([PROP-000 §20](spec/common/PROP-000.md#token-secrecy)): never display, never persist outside `~/.vibevm/`, never commit.
+- **Token secrecy** ([PROP-000 §20](spec/common/PROP-000.md#token-secrecy)): never display, never persist outside `~/.vibevm/`, never commit. Per-host env vars (`VIBEVM_PUBLISH_TOKEN_<HOST>`) follow the same discipline.
 - **User-owned files** (`vibe install` / `uninstall` never modifies): `spec/boot/00-core.md`, `spec/boot/90-user.md`, `spec/WAL.md`, `VIBEVM-SPEC.md`, `refs/book/**`, any 00-09 or 90-99 boot file.
+- **Default registries:** GitHub primary (`https://github.com/vibespecs`, `kind-name`); GitVerse secondary (`https://gitverse.ru/vibespecs`, `name`). Pull is HTTPS public read (no auth); push prefers SSH on this dev machine.
+- **Live e2e tests are `#[ignore]`-d.** CI stays hermetic; live walks are an explicit `cargo test --test cli_live_e2e -- --ignored` opt-in.
 
 ---
 
 ## If something has changed since this checkpoint
 
-This file is frozen at 2026-05-05. Before acting on it:
+This file is frozen at 2026-05-06. Before acting on it:
 
 - Re-read `spec/WAL.md` (it gets updated more often, and at session-end at the same time).
 - `git log origin/main..HEAD --oneline` to see local-only work (should be empty after a clean session-end).
