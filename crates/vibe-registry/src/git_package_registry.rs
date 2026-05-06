@@ -66,6 +66,12 @@ pub struct GitPackageRegistry {
     /// fetch/clone path stays primary-only until cross-source
     /// `content_hash` verification lands.
     mirror_urls: Vec<String>,
+    /// Optional upstream index — when set, `list_versions` queries
+    /// it before falling back to `git ls-remote`. PROP-005 §2.10
+    /// slice 10. The fetch path is unaffected: `content_hash` is
+    /// still verified at fetch time per [PROP-002 §2.1] regardless
+    /// of how versions were enumerated.
+    index_client: Option<crate::index_client::IndexClient>,
     /// Implicit-update freshness TTL — reserved for the next commit, where
     /// per-package `meta.toml` files track `last_synced_at`. Stored now so
     /// callers parameterising it do not need to thread it through later.
@@ -155,8 +161,22 @@ impl GitPackageRegistry {
             cache_root: cache_root_owned,
             canonical_hash,
             mirror_urls,
+            index_client: None,
             freshness_secs,
         })
+    }
+
+    /// Attach an [`IndexClient`](crate::index_client::IndexClient) to
+    /// this registry. When set, `list_versions` consults the index
+    /// before falling back to `git ls-remote`. Returns the modified
+    /// registry for chaining. Slice 10.
+    pub fn with_index_client(mut self, client: crate::index_client::IndexClient) -> Self {
+        self.index_client = Some(client);
+        self
+    }
+
+    pub fn index_client(&self) -> Option<&crate::index_client::IndexClient> {
+        self.index_client.as_ref()
     }
 
     pub fn name(&self) -> &str {
@@ -402,6 +422,44 @@ impl GitPackageRegistry {
         kind: PackageKind,
         name: &str,
     ) -> Result<Vec<semver::Version>, RegistryError> {
+        // Index fast path (PROP-005 §2.10 slice 10). When the
+        // registry has an upstream index attached, query it first.
+        // 200 → return versions; 404 → fall through to git path
+        // (UnknownPackage from the index does not authoritatively
+        // mean "absent" — the index may be stale); other errors →
+        // also fall through with a debug-level log.
+        if let Some(client) = &self.index_client {
+            match client.list_versions(kind, name) {
+                Ok(Some(versions)) => {
+                    tracing::debug!(
+                        target: "vibe_registry::index",
+                        registry = %self.name,
+                        kind = %kind,
+                        name = %name,
+                        count = versions.len(),
+                        "list_versions served from index"
+                    );
+                    return Ok(versions);
+                }
+                Ok(None) => {
+                    tracing::debug!(
+                        target: "vibe_registry::index",
+                        registry = %self.name,
+                        kind = %kind,
+                        name = %name,
+                        "index returned 404; falling through to git ls-remote"
+                    );
+                }
+                Err(e) => {
+                    tracing::debug!(
+                        target: "vibe_registry::index",
+                        registry = %self.name,
+                        error = %e,
+                        "index lookup failed; falling through to git ls-remote"
+                    );
+                }
+            }
+        }
         let backend = Arc::clone(&self.backend);
         let owned_name = name.to_owned();
         self.try_lookup(kind, name, move |url| {

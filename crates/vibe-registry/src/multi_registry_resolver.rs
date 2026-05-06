@@ -132,7 +132,7 @@ impl MultiRegistryResolver {
             let mirror_urls: Vec<String> =
                 chain.into_iter().map(|m| m.url.clone()).collect();
 
-            built.push(Arc::new(GitPackageRegistry::open_with_mirrors(
+            let mut entry = GitPackageRegistry::open_with_mirrors(
                 &reg.name,
                 &reg.url,
                 &reg.r#ref,
@@ -141,7 +141,18 @@ impl MultiRegistryResolver {
                 &cache_root,
                 Arc::clone(&backend),
                 freshness_secs,
-            )?));
+            )?;
+            // PROP-005 §2.10 slice 10 — when an upstream index is
+            // configured for this registry via env vars, attach the
+            // probed client. Probe is best-effort; absent or
+            // unreachable index leaves the registry on the existing
+            // git ls-remote path with no warning.
+            if let Some(url) = crate::index_client::index_url_for(&reg.name)
+                && let Some(client) = crate::index_client::IndexClient::probe(&url)
+            {
+                entry = entry.with_index_client(client);
+            }
+            built.push(Arc::new(entry));
         }
         Ok(Self::new(
             built,
