@@ -11,7 +11,10 @@ use serde::Serialize;
 
 use crate::error::{Error, Result};
 use crate::index::Index;
-use crate::scanner::from_clones::{FromClonesOptions, ScanReport, scan_org_dir};
+use crate::index::checkpoint::{self, Checkpoint};
+use crate::scanner::from_clones::{
+    FromClonesOptions, ScanReport, scan_org_dir, scan_org_dir_with_filter,
+};
 use crate::types::{NamingConvention, PackageKind, VersionEntry};
 
 #[derive(Debug, Parser)]
@@ -55,9 +58,6 @@ pub struct Args {
 }
 
 pub fn run(args: Args) -> Result<()> {
-    if args.incremental {
-        return Err(Error::NotYetImplemented("reindex --incremental"));
-    }
     if args.from_github.is_some() {
         return Err(Error::NotYetImplemented("reindex --from-github"));
     }
@@ -89,16 +89,75 @@ pub fn run(args: Args) -> Result<()> {
         indexed_at: Utc::now(),
     };
 
-    let report = scan_org_dir(org_dir, &opts)?;
+    let prior = if args.incremental {
+        Some(checkpoint::load(&args.data_dir)?)
+    } else {
+        None
+    };
 
+    let report = if args.incremental {
+        scan_org_dir_with_filter(org_dir, &opts, prior.as_ref())?
+    } else {
+        scan_org_dir(org_dir, &opts)?
+    };
+
+    // For incremental, retain entries for repos that the scanner
+    // skipped due to "unchanged since last checkpoint". For full,
+    // start fresh.
     let mut next = Index::new(&existing.registry, &existing.registry_url, existing.naming);
     next.generator = opts.generator.clone();
+
+    if args.incremental {
+        for entry in existing.iter_versions() {
+            // Map entry → repo name via the registry's naming
+            // convention; if that repo's snapshot was skipped (i.e.
+            // not in the new scan's `entries`), keep the entry.
+            let repo_name = existing.naming.repo_name(entry.kind, &entry.name);
+            let scanned_now = report
+                .snapshots
+                .get(&repo_name)
+                .map(|_| {
+                    // Repo is present in the scan; if entries from this
+                    // scan ALSO carry an entry for the same (kind, name),
+                    // that's the freshly walked source. Otherwise the
+                    // repo was skipped as unchanged — keep the existing
+                    // entry.
+                    report
+                        .entries
+                        .iter()
+                        .any(|e| e.kind == entry.kind && e.name == entry.name)
+                })
+                .unwrap_or(false);
+            let kept_unchanged = report
+                .snapshots
+                .contains_key(&repo_name)
+                && !scanned_now;
+            if kept_unchanged {
+                next.upsert(entry.clone());
+            }
+        }
+    }
     for entry in &report.entries {
         next.upsert(entry.clone());
     }
     next.write_to(&args.data_dir)?;
 
-    let summary = Summary::from_report(&report, &args.data_dir, &existing.registry, &next);
+    // Persist the new checkpoint regardless of mode — incremental
+    // walks pick it up next time, full walks reset it.
+    let new_checkpoint = Checkpoint {
+        schema_version: 1,
+        generated_at: Some(opts.indexed_at),
+        repos: report.snapshots.clone(),
+    };
+    checkpoint::save(&args.data_dir, &new_checkpoint)?;
+
+    let summary = Summary::from_report(
+        &report,
+        &args.data_dir,
+        &existing.registry,
+        &next,
+        if args.incremental { "incremental" } else { "full" },
+    );
     if args.json {
         let envelope = serde_json::to_string_pretty(&summary).map_err(|e| {
             Error::Malformed(format!("could not serialise reindex summary: {e}"))
@@ -116,6 +175,7 @@ pub struct Summary {
     pub data_dir: PathBuf,
     pub registry: String,
     pub source: &'static str,
+    pub mode: &'static str,
     pub package_count: u32,
     pub version_count: u32,
     pub skipped: Vec<SkippedSummary>,
@@ -141,6 +201,7 @@ impl Summary {
         data_dir: &std::path::Path,
         registry: &str,
         index: &Index,
+        mode: &'static str,
     ) -> Self {
         let mut by_kind: Vec<KindCount> = PackageKind::all()
             .iter()
@@ -160,6 +221,7 @@ impl Summary {
             data_dir: data_dir.to_path_buf(),
             registry: registry.to_string(),
             source: "clones",
+            mode,
             package_count: index.package_count(),
             version_count: index.version_count(),
             skipped: report
@@ -179,6 +241,7 @@ impl Summary {
 fn render_text(summary: &Summary) {
     println!("registry  : {}", summary.registry);
     println!("source    : {}", summary.source);
+    println!("mode      : {}", summary.mode);
     println!("packages  : {}", summary.package_count);
     println!("versions  : {}", summary.version_count);
     for kc in &summary.by_kind {

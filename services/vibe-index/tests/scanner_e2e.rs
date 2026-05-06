@@ -268,6 +268,106 @@ fn reindex_text_output_lists_skipped_entries() {
 }
 
 #[test]
+fn incremental_skips_unchanged_repos_and_picks_up_new_tags() {
+    if !git_available() {
+        return;
+    }
+    let work = tempfile::tempdir().unwrap();
+    let org = work.path().join("org");
+    fs_must_create(&org);
+
+    let wal = org.join("flow-wal");
+    init_repo(&wal);
+    commit_and_tag(
+        &wal,
+        &manifest_for("wal", "flow", "0.1.0", Some("EULA")),
+        "v0.1.0",
+    );
+
+    let data = work.path().join("data");
+    cmd()
+        .args([
+            "init",
+            data.to_str().unwrap(),
+            "--registry",
+            "vibespecs",
+            "--registry-url",
+            "https://example.invalid/vibespecs",
+        ])
+        .assert()
+        .success();
+
+    // First full run.
+    cmd()
+        .args([
+            "reindex",
+            data.to_str().unwrap(),
+            "--from-clones",
+            org.to_str().unwrap(),
+            "--full",
+        ])
+        .assert()
+        .success();
+    assert!(data.join("state/checkpoint.json").exists());
+
+    // Incremental run with no changes — should skip the repo as
+    // unchanged but keep its entry.
+    let out = cmd()
+        .args([
+            "reindex",
+            data.to_str().unwrap(),
+            "--from-clones",
+            org.to_str().unwrap(),
+            "--incremental",
+            "--json",
+        ])
+        .assert()
+        .success();
+    let stdout = String::from_utf8(out.get_output().stdout.clone()).unwrap();
+    let summary: serde_json::Value = serde_json::from_str(&stdout).unwrap();
+    assert_eq!(summary["mode"], "incremental");
+    assert_eq!(summary["package_count"], 1);
+    assert_eq!(summary["version_count"], 1);
+    assert!(summary["skipped"]
+        .as_array()
+        .unwrap()
+        .iter()
+        .any(|s| s["reason"]
+            .as_str()
+            .unwrap()
+            .contains("unchanged since last checkpoint")));
+
+    // Add a new tag and reindex incrementally — the new version
+    // should land while existing ones are preserved via checkpoint.
+    commit_and_tag(
+        &wal,
+        &manifest_for("wal", "flow", "0.2.0", Some("EULA")),
+        "v0.2.0",
+    );
+    let out = cmd()
+        .args([
+            "reindex",
+            data.to_str().unwrap(),
+            "--from-clones",
+            org.to_str().unwrap(),
+            "--incremental",
+            "--json",
+        ])
+        .assert()
+        .success();
+    let stdout = String::from_utf8(out.get_output().stdout.clone()).unwrap();
+    let summary: serde_json::Value = serde_json::from_str(&stdout).unwrap();
+    assert_eq!(summary["package_count"], 1);
+    assert_eq!(summary["version_count"], 2);
+
+    let by_name: serde_json::Value = serde_json::from_slice(
+        &std::fs::read(data.join("by-name/flow/wal.json")).unwrap(),
+    )
+    .unwrap();
+    assert_eq!(by_name["latest_stable"], "0.2.0");
+}
+
+#[test]
 fn reindex_preserves_registry_metadata_from_init() {
     if !git_available() {
         return;

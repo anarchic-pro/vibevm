@@ -8,6 +8,7 @@
 //! later slices.
 
 pub mod by_name;
+pub mod checkpoint;
 pub mod memory;
 pub mod persistence;
 pub mod primary;

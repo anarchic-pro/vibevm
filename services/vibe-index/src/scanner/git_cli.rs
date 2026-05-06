@@ -55,6 +55,25 @@ pub fn resolve_commit(repo: &Path, tag: &str) -> Result<String> {
     Ok(out.trim().to_string())
 }
 
+/// Best-effort HEAD commit of the repo's working tree. Returns
+/// `None` for empty repositories or weird states (no commits at all).
+pub fn head_commit(repo: &Path) -> Option<String> {
+    let out = std::process::Command::new(binary())
+        .args([
+            "-C",
+            repo.to_str()?,
+            "rev-parse",
+            "HEAD",
+        ])
+        .output()
+        .ok()?;
+    if !out.status.success() {
+        return None;
+    }
+    let s = String::from_utf8_lossy(&out.stdout).trim().to_string();
+    if s.is_empty() { None } else { Some(s) }
+}
+
 /// Materialise the tag's working tree at `dest`. Uses
 /// `git clone --depth 1 --branch <tag>` against the source repo path,
 /// then removes the embedded `.git/` so the result is clean for

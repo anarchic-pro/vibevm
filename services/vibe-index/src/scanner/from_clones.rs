@@ -9,6 +9,7 @@
 //! `tracing::warn!` but do not abort the scan — the operator gets a
 //! best-effort index even with one bad package in the mix.
 
+use std::collections::BTreeMap;
 use std::path::{Path, PathBuf};
 
 use chrono::Utc;
@@ -16,6 +17,7 @@ use semver::Version;
 
 use crate::content_hash::compute_content_hash;
 use crate::error::{Error, Result};
+use crate::index::checkpoint::{Checkpoint, RepoSnapshot};
 use crate::scanner::git_cli;
 use crate::scanner::manifest as mfst;
 use crate::types::{NamingConvention, PackageKind, VersionEntry};
@@ -35,6 +37,10 @@ pub struct FromClonesOptions {
 pub struct ScanReport {
     pub entries: Vec<VersionEntry>,
     pub skipped: Vec<SkipNote>,
+    /// Snapshot of every walked repo's HEAD + tag list. Persisted by
+    /// the reindex driver as `<data-dir>/state/checkpoint.json` so
+    /// the next `--incremental` run can skip unchanged repos.
+    pub snapshots: BTreeMap<String, RepoSnapshot>,
 }
 
 #[derive(Debug, Clone)]
@@ -45,6 +51,18 @@ pub struct SkipNote {
 }
 
 pub fn scan_org_dir(org_dir: &Path, opts: &FromClonesOptions) -> Result<ScanReport> {
+    scan_org_dir_with_filter(org_dir, opts, None)
+}
+
+/// Walk `org_dir` and produce a [`ScanReport`]. When `prior` is
+/// `Some`, repos whose HEAD commit AND tag list match the recorded
+/// snapshot are skipped — the reindex driver carries forward their
+/// existing index entries unchanged. PROP-005 §2.8 incremental.
+pub fn scan_org_dir_with_filter(
+    org_dir: &Path,
+    opts: &FromClonesOptions,
+    prior: Option<&Checkpoint>,
+) -> Result<ScanReport> {
     if !org_dir.is_dir() {
         return Err(Error::InvalidInput(format!(
             "org-dir `{}` is not a directory",
@@ -53,6 +71,7 @@ pub fn scan_org_dir(org_dir: &Path, opts: &FromClonesOptions) -> Result<ScanRepo
     }
     let mut entries = Vec::new();
     let mut skipped = Vec::new();
+    let mut snapshots: BTreeMap<String, RepoSnapshot> = BTreeMap::new();
 
     let mut subdirs: Vec<PathBuf> = std::fs::read_dir(org_dir)
         .map_err(|e| Error::Io {
@@ -89,6 +108,29 @@ pub fn scan_org_dir(org_dir: &Path, opts: &FromClonesOptions) -> Result<ScanRepo
                 continue;
             }
         };
+        let head = git_cli::head_commit(&repo);
+
+        let mut sorted_tags = tags.clone();
+        sorted_tags.sort();
+        let snapshot = RepoSnapshot {
+            head_commit: head.clone(),
+            tags: sorted_tags.clone(),
+        };
+        snapshots.insert(repo_name.clone(), snapshot.clone());
+
+        let prior_snap = prior.and_then(|p| p.repos.get(&repo_name));
+        if let Some(prev) = prior_snap
+            && prev == &snapshot
+        {
+            // Unchanged — caller copies entries from the previous
+            // index. Skip note is informational rather than a warning.
+            skipped.push(SkipNote {
+                repo: repo_name,
+                tag: None,
+                reason: "unchanged since last checkpoint (incremental skip)".into(),
+            });
+            continue;
+        }
 
         for tag in tags {
             let Some(version) = parse_v_tag(&tag) else {
@@ -110,7 +152,11 @@ pub fn scan_org_dir(org_dir: &Path, opts: &FromClonesOptions) -> Result<ScanRepo
         }
     }
 
-    Ok(ScanReport { entries, skipped })
+    Ok(ScanReport {
+        entries,
+        skipped,
+        snapshots,
+    })
 }
 
 fn build_entry(
