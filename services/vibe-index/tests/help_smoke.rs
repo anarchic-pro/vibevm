@@ -70,11 +70,12 @@ fn unknown_subcommand_fails_clean() {
 }
 
 #[test]
-fn reindex_from_gitverse_still_unimplemented() {
+fn reindex_from_gitverse_emits_stub_envelope() {
     // `--from-gitverse` waits on GitVerse exposing org-scoped repo
     // enumeration in their public API. Until then the dispatcher
-    // returns `NotYetImplemented` so the help-smoke notices when
-    // that branch comes online.
+    // emits a structured `stub: true` envelope (mirrors the
+    // `vibe registry publish` GitVerse stub) so consumers detect
+    // the limitation programmatically without scraping stderr.
     let dir = tempfile::tempdir().unwrap();
     cmd()
         .args([
@@ -93,12 +94,43 @@ fn reindex_from_gitverse_still_unimplemented() {
             dir.path().to_str().unwrap(),
             "--from-gitverse",
             "vibespecs",
+            "--json",
         ])
         .assert()
-        .failure();
-    let stderr = String::from_utf8(out.get_output().stderr.clone()).unwrap();
-    assert!(
-        stderr.contains("not yet implemented"),
-        "expected NotYetImplemented stderr, got: {stderr}"
-    );
+        .success();
+    let stdout = String::from_utf8(out.get_output().stdout.clone()).unwrap();
+    let envelope: serde_json::Value = serde_json::from_str(&stdout).unwrap();
+    assert_eq!(envelope["ok"], false);
+    assert_eq!(envelope["stub"], true);
+    assert_eq!(envelope["host"], "gitverse.ru");
+    assert_eq!(envelope["org"], "vibespecs");
+    assert_eq!(envelope["command"], "registry:reindex");
+    let reason = envelope["reason"].as_str().unwrap();
+    assert!(reason.contains("not implemented"));
+}
+
+#[test]
+fn reindex_from_gitverse_text_form_shows_reason() {
+    let dir = tempfile::tempdir().unwrap();
+    cmd()
+        .args([
+            "init",
+            dir.path().to_str().unwrap(),
+            "--registry",
+            "vibespecs-gitverse",
+            "--registry-url",
+            "https://gitverse.ru/vibespecs",
+        ])
+        .assert()
+        .success();
+    cmd()
+        .args([
+            "reindex",
+            dir.path().to_str().unwrap(),
+            "--from-gitverse",
+            "vibespecs",
+        ])
+        .assert()
+        .success()
+        .stdout(predicates::str::contains("not implemented"));
 }

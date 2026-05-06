@@ -70,8 +70,8 @@ pub struct Args {
 }
 
 pub fn run(args: Args) -> Result<()> {
-    if args.from_gitverse.is_some() {
-        return Err(Error::NotYetImplemented("reindex --from-gitverse"));
+    if let Some(org) = args.from_gitverse.as_deref() {
+        return emit_gitverse_stub(org, &args);
     }
 
     // Load existing index manifest to preserve registry name / URL /
@@ -229,6 +229,53 @@ pub struct Summary {
     pub version_count: u32,
     pub skipped: Vec<SkippedSummary>,
     pub by_kind: Vec<KindCount>,
+}
+
+/// `--from-gitverse` is a deliberate stub today — GitVerse's public
+/// REST API does not yet expose org-scoped repository enumeration
+/// (the same upstream gap that keeps `vibe registry publish
+/// --registry vibespecs-gitverse` stub-bound). Emit a structured
+/// envelope so consumers can detect the stub without parsing
+/// stderr; mirror shape per `vibe-publish` GitVerse stub.
+fn emit_gitverse_stub(org: &str, args: &Args) -> Result<()> {
+    let reason = format!(
+        "`--from-gitverse {org}` is not implemented yet — the GitVerse public API does \
+         not expose org-scoped repository enumeration (same upstream gap that keeps \
+         `vibe registry publish --registry <gitverse>` stub-bound). Use `--from-clones \
+         <org-dir>` against a local mirror of the GitVerse org, or `--from-github` if \
+         the org has a GitHub mirror. This branch flips back to a real implementation \
+         the moment the upstream API exposes the equivalent of \
+         `GET /orgs/<org>/repos`."
+    );
+    let envelope = GitVerseStubReport {
+        ok: false,
+        command: "registry:reindex",
+        host: "gitverse.ru",
+        org: org.to_string(),
+        data_dir: args.data_dir.clone(),
+        stub: true,
+        reason: reason.clone(),
+    };
+    if args.json {
+        let s = serde_json::to_string_pretty(&envelope).map_err(|e| {
+            Error::Malformed(format!("could not serialise gitverse stub envelope: {e}"))
+        })?;
+        println!("{s}");
+    } else {
+        println!("vibe-index reindex --from-gitverse {org}: {reason}");
+    }
+    Ok(())
+}
+
+#[derive(Debug, Serialize)]
+struct GitVerseStubReport {
+    ok: bool,
+    command: &'static str,
+    host: &'static str,
+    org: String,
+    data_dir: PathBuf,
+    stub: bool,
+    reason: String,
 }
 
 fn read_token(path: &std::path::Path) -> Result<String> {
