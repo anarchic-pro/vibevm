@@ -4,6 +4,7 @@ use std::sync::Arc;
 
 use axum::Json;
 use axum::extract::{Path, Query, State};
+use axum::http::{HeaderMap, StatusCode, header};
 use semver::Version;
 use serde::{Deserialize, Serialize};
 
@@ -176,3 +177,162 @@ pub async fn single_version(
 }
 
 use axum::response::IntoResponse;
+
+// ---------------------------------------------------------------------------
+// Mutating endpoints (slice 6)
+// ---------------------------------------------------------------------------
+
+#[derive(Debug, Serialize)]
+pub struct UpsertResponse {
+    pub command: &'static str,
+    pub kind: PackageKind,
+    pub name: String,
+    pub version: Version,
+    pub created: bool,
+}
+
+pub async fn upsert(
+    State(state): State<Arc<AppState>>,
+    headers: HeaderMap,
+    Json(entry): Json<VersionEntry>,
+) -> Result<(StatusCode, Json<UpsertResponse>), ApiError> {
+    require_writeable(&state, &headers)?;
+    if entry.registry != state.index.read().await.registry {
+        return Err(ApiError::bad_request(format!(
+            "scope violation: entry.registry=`{}` differs from server registry=`{}`",
+            entry.registry,
+            state.index.read().await.registry
+        )));
+    }
+    let kind = entry.kind;
+    let name = entry.name.clone();
+    let version = entry.version.clone();
+
+    let created = {
+        let mut idx = state.index.write().await;
+        let existed = idx
+            .get(kind, &name)
+            .map(|p| p.versions.iter().any(|v| v.version == version))
+            .unwrap_or(false);
+        idx.upsert(entry);
+        idx.write_to(&state.data_dir).map_err(|e| {
+            ApiError::internal(format!("could not persist index: {e}"))
+        })?;
+        !existed
+    };
+
+    state.stats.note_mutation();
+    let status = if created {
+        StatusCode::CREATED
+    } else {
+        StatusCode::OK
+    };
+    Ok((
+        status,
+        Json(UpsertResponse {
+            command: "upsert",
+            kind,
+            name,
+            version,
+            created,
+        }),
+    ))
+}
+
+#[derive(Debug, Serialize)]
+pub struct DeleteResponse {
+    pub command: &'static str,
+    pub kind: PackageKind,
+    pub name: String,
+    pub version: Option<Version>,
+    pub removed: bool,
+}
+
+pub async fn delete_version(
+    State(state): State<Arc<AppState>>,
+    headers: HeaderMap,
+    Path((kind_str, name, version_str)): Path<(String, String, String)>,
+) -> Result<Json<DeleteResponse>, ApiError> {
+    require_writeable(&state, &headers)?;
+    let kind: PackageKind = kind_str
+        .parse()
+        .map_err(|_| ApiError::not_found(format!("unknown kind `{kind_str}`")))?;
+    let v: Version = version_str
+        .parse()
+        .map_err(|e| ApiError::bad_request(format!("`{version_str}` is not valid semver: {e}")))?;
+    let removed = {
+        let mut idx = state.index.write().await;
+        let r = idx.remove_version(kind, &name, &v);
+        if r {
+            idx.write_to(&state.data_dir).map_err(|e| {
+                ApiError::internal(format!("could not persist index: {e}"))
+            })?;
+        }
+        r
+    };
+    if removed {
+        state.stats.note_mutation();
+    }
+    Ok(Json(DeleteResponse {
+        command: "delete",
+        kind,
+        name,
+        version: Some(v),
+        removed,
+    }))
+}
+
+pub async fn delete_package(
+    State(state): State<Arc<AppState>>,
+    headers: HeaderMap,
+    Path((kind_str, name)): Path<(String, String)>,
+) -> Result<Json<DeleteResponse>, ApiError> {
+    require_writeable(&state, &headers)?;
+    let kind: PackageKind = kind_str
+        .parse()
+        .map_err(|_| ApiError::not_found(format!("unknown kind `{kind_str}`")))?;
+    let removed = {
+        let mut idx = state.index.write().await;
+        let r = idx.remove_package(kind, &name);
+        if r {
+            idx.write_to(&state.data_dir).map_err(|e| {
+                ApiError::internal(format!("could not persist index: {e}"))
+            })?;
+        }
+        r
+    };
+    if removed {
+        state.stats.note_mutation();
+    }
+    Ok(Json(DeleteResponse {
+        command: "delete",
+        kind,
+        name,
+        version: None,
+        removed,
+    }))
+}
+
+fn require_writeable(state: &AppState, headers: &HeaderMap) -> Result<(), ApiError> {
+    if state.read_only {
+        return Err(ApiError::forbidden(
+            "server is running in --read-only mode",
+        ));
+    }
+    if !state.tokens.has_any() {
+        return Err(ApiError::forbidden(
+            "server has no admin tokens configured (--auth-tokens-file required for writes)",
+        ));
+    }
+    let supplied = headers
+        .get(header::AUTHORIZATION)
+        .and_then(|v| v.to_str().ok())
+        .and_then(|v| v.strip_prefix("Bearer "));
+    let Some(token) = supplied else {
+        return Err(ApiError::unauthorized());
+    };
+    if !state.tokens.check(token) {
+        return Err(ApiError::unauthorized());
+    }
+    Ok(())
+}

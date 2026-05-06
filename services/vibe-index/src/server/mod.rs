@@ -3,12 +3,14 @@
 //! Slice 5 lands the read surface; slice 6 adds the write surface
 //! (POST/DELETE) and bearer-token auth.
 
+pub mod auth;
 pub mod error;
 pub mod lock;
 pub mod metrics;
 pub mod routes;
 pub mod state;
 
+pub use auth::TokenStore;
 pub use error::ApiError;
 pub use lock::ServerLock;
 pub use state::AppState;
@@ -47,14 +49,17 @@ pub fn build_app(state: AppState) -> Router {
             get(routes::index_files::by_name_json),
         )
         // Structured query.
-        .route("/v1/packages", get(routes::packages::list_or_search))
+        .route(
+            "/v1/packages",
+            get(routes::packages::list_or_search).post(routes::packages::upsert),
+        )
         .route(
             "/v1/packages/{kind}/{name}",
-            get(routes::packages::package_versions),
+            get(routes::packages::package_versions).delete(routes::packages::delete_package),
         )
         .route(
             "/v1/packages/{kind}/{name}/{version}",
-            get(routes::packages::single_version),
+            get(routes::packages::single_version).delete(routes::packages::delete_version),
         )
         .route(
             "/v1/capabilities/{capability}",

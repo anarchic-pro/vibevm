@@ -9,6 +9,7 @@ use std::time::Instant;
 use tokio::sync::RwLock;
 
 use crate::index::Index;
+use crate::server::auth::TokenStore;
 
 #[derive(Debug)]
 pub struct AppState {
@@ -18,6 +19,7 @@ pub struct AppState {
     pub generator: String,
     pub index: RwLock<Index>,
     pub stats: Stats,
+    pub tokens: TokenStore,
 }
 
 #[derive(Debug, Default)]
@@ -37,6 +39,15 @@ impl Stats {
 
 impl AppState {
     pub fn new(data_dir: PathBuf, read_only: bool, index: Index) -> Self {
+        AppState::with_tokens(data_dir, read_only, index, TokenStore::default())
+    }
+
+    pub fn with_tokens(
+        data_dir: PathBuf,
+        read_only: bool,
+        index: Index,
+        tokens: TokenStore,
+    ) -> Self {
         AppState {
             generator: index.generator.clone(),
             data_dir,
@@ -44,6 +55,7 @@ impl AppState {
             started_at: Instant::now(),
             index: RwLock::new(index),
             stats: Stats::default(),
+            tokens,
         }
     }
 }

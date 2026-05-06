@@ -6,6 +6,7 @@
 
 use assert_cmd::Command;
 use predicates::prelude::*;
+extern crate tempfile;
 
 const SUBCOMMANDS: &[&str] = &[
     "init",
@@ -69,16 +70,29 @@ fn unknown_subcommand_fails_clean() {
 }
 
 #[test]
-fn stub_subcommands_emit_not_yet_implemented() {
-    // `add` is still a stub in slice 2 — `init` / `dump` / `verify`
-    // got real bodies. Supply enough args so clap parses; the
-    // dispatcher's NotYetImplemented branch fires.
+fn reindex_from_github_still_unimplemented() {
+    // `--from-github` waits on slice 8; the dispatcher returns
+    // `NotYetImplemented` so the help-smoke can keep an eye on
+    // when that branch comes online without depending on which
+    // subcommand happens to still be stubbed.
+    let dir = tempfile::tempdir().unwrap();
+    cmd()
+        .args([
+            "init",
+            dir.path().to_str().unwrap(),
+            "--registry",
+            "vibespecs",
+            "--registry-url",
+            "https://example.invalid/vibespecs",
+        ])
+        .assert()
+        .success();
     let out = cmd()
         .args([
-            "add",
-            "/tmp/does-not-matter-stub",
-            "--manifest",
-            "/tmp/nope.toml",
+            "reindex",
+            dir.path().to_str().unwrap(),
+            "--from-github",
+            "vibespecs",
         ])
         .assert()
         .failure();

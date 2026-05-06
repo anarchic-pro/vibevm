@@ -7,7 +7,7 @@ use clap::Parser;
 
 use crate::error::{Error, Result};
 use crate::index::Index;
-use crate::server::{AppState, ServerLock, build_app};
+use crate::server::{AppState, ServerLock, TokenStore, build_app};
 
 #[derive(Debug, Parser)]
 #[command(about = "Run the HTTP server.")]
@@ -37,7 +37,6 @@ pub struct Args {
 
 pub fn run(args: Args) -> Result<()> {
     let _ = args.auto_commit_push; // parked until slice 9.
-    let _ = args.auth_tokens_file; // parked until slice 6.
 
     let index = Index::load_from(&args.data_dir).map_err(|e| match e {
         Error::Io { .. } | Error::Malformed(_) => Error::InvalidInput(format!(
@@ -50,7 +49,12 @@ pub fn run(args: Args) -> Result<()> {
 
     let lock = ServerLock::try_acquire(&args.data_dir)?;
 
-    let state = AppState::new(args.data_dir.clone(), args.read_only, index);
+    let tokens = match args.auth_tokens_file.as_deref() {
+        Some(path) => TokenStore::load_from_path(path)?,
+        None => TokenStore::load(&args.data_dir)?,
+    };
+
+    let state = AppState::with_tokens(args.data_dir.clone(), args.read_only, index, tokens);
 
     let runtime = tokio::runtime::Builder::new_multi_thread()
         .enable_all()
