@@ -277,6 +277,24 @@ struct ConfigReport {
     overrides: Vec<ConfigOverride>,
     env: Vec<ConfigEnvEntry>,
     user_config: ConfigUserConfigSummary,
+    /// Detailed resolution block for the agent-context layer. The top-
+    /// level `invoked_by: "<agent>"` field stamped on every JSON
+    /// envelope by `output::Context` is just the resolved value;
+    /// `invoked_by_resolution` adds the provenance ("cli-flag" / "env"
+    /// / "default") so an operator can see which layer supplied it.
+    invoked_by_resolution: ConfigInvokedBy,
+}
+
+#[derive(Debug, Serialize)]
+struct ConfigInvokedBy {
+    /// Resolved agent identifier — `null` when neither `--invoked-by`
+    /// nor `VIBE_INVOKED_BY` is set.
+    value: Option<String>,
+    /// `"cli-flag"` (passed via `--invoked-by`), `"env"` (`VIBE_INVOKED_BY`),
+    /// or `"default"` (unset; no agent context attached to envelopes).
+    provenance: &'static str,
+    /// Short description for human-readable output.
+    description: &'static str,
 }
 
 #[derive(Debug, Serialize)]
@@ -485,6 +503,17 @@ fn run_config(ctx: &output::Context, args: ShowConfigArgs) -> Result<()> {
     // loader looked.
     let _ = user_config;
 
+    let invoked_by_block = ConfigInvokedBy {
+        value: ctx.invoked_by().map(|s| s.to_string()),
+        provenance: ctx.invoked_by_provenance().as_str(),
+        description: "Identifier of the agent or harness invoking vibe. \
+                      Stamped onto every JSON envelope. Resolved from \
+                      `--invoked-by <agent>` (highest), `VIBE_INVOKED_BY` \
+                      env-var, or unset. The `vibevm` skill installed by \
+                      `vibe mcp install --with-skill` instructs each agent \
+                      to pass this flag automatically.",
+    };
+
     if ctx.is_json() {
         let payload = ConfigReport {
             ok: true,
@@ -497,6 +526,7 @@ fn run_config(ctx: &output::Context, args: ShowConfigArgs) -> Result<()> {
             overrides,
             env,
             user_config: user_config_summary,
+            invoked_by_resolution: invoked_by_block,
         };
         ctx.emit_json(&payload)?;
         return Ok(());
@@ -606,6 +636,17 @@ fn run_config(ctx: &output::Context, args: ShowConfigArgs) -> Result<()> {
             e.name, e.provenance, e.description, value_part
         );
     }
+
+    println!();
+    println!("Invoked-by:");
+    let invoked_value_text = match &invoked_by_block.value {
+        Some(v) => format!("`{v}`"),
+        None => "(unset; envelopes carry no `invoked_by` field)".to_string(),
+    };
+    println!(
+        "  [source: {}]\n  {}\n  {}",
+        invoked_by_block.provenance, invoked_by_block.description, invoked_value_text
+    );
 
     ctx.summary(&format!(
         "\nvibe show config: {} registries, {} mirrors, {} overrides, {} env entries",

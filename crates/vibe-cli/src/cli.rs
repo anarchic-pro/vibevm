@@ -24,6 +24,18 @@ pub struct Cli {
     #[arg(long, global = true, conflicts_with = "json")]
     pub quiet: bool,
 
+    /// Identifier of the agent or harness invoking this command. Free-form
+    /// string; conventional values are `claude-code`, `claude-desktop`,
+    /// `cursor`, `opencode`, `codex`. When set, the value is stamped onto
+    /// every JSON envelope vibe emits (`"invoked_by": "<value>"`) so the
+    /// caller's context is recoverable from logs and machine-readable
+    /// output. Falls back to the `VIBE_INVOKED_BY` environment variable
+    /// when the flag is absent; flag wins on conflict. The `vibevm` skill
+    /// installed by `vibe mcp install --with-skill` instructs each agent
+    /// to pass this flag automatically.
+    #[arg(long = "invoked-by", global = true, value_name = "AGENT")]
+    pub invoked_by: Option<String>,
+
     #[command(subcommand)]
     pub command: Command,
 }
