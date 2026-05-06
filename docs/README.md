@@ -14,6 +14,7 @@ The `vibe` binary is the single entry point for every operation. Global flags `-
 | [`vibe check`](commands/check.md) | Run the spec-consistency linter against the project tree. |
 | [`vibe show`](commands/show.md) | Inspect computed project state — effective spec, configuration. |
 | [`vibe list`](commands/list.md) | Show the packages currently locked into the project. |
+| [`vibe search`](commands/search.md) | Full-text query across the configured `[[registry]]` indexes (per PROP-005). |
 | [`vibe uninstall`](commands/uninstall.md) | Remove a package and its files (user-owned files preserved). |
 | [`vibe registry list`](commands/registry-list.md) | Show the project's configured `[[registry]]` / `[[mirror]]` / `[[override]]` blocks and the host adapter each registry dispatches to. |
 | [`vibe registry add`](commands/registry-add.md) | Mutate `vibe.toml` to register a new `[[registry]]`. |
