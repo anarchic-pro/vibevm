@@ -23,8 +23,10 @@ The `vibe` binary is the single entry point for every operation. Global flags `-
 | [`vibe registry sync`](commands/registry-sync.md) | Refresh per-package registry clones referenced by the lockfile. |
 | [`vibe registry vendor`](commands/registry-vendor.md) | Generate a local mirror directory for offline / air-gapped installs. |
 | [`vibe registry publish`](commands/registry-publish.md) | Maintainer-side: publish a package directory as a tagged release. |
-| [`vibe mcp install`](commands/mcp-install.md) | Wire vibevm into a coding agent (Claude Code, Claude Desktop, Cursor, OpenCode, Codex) — writes per-agent MCP config + optional `vibevm` SKILL.md. |
-| [`vibe mcp status`](commands/mcp-status.md) | Read-only counterpart of `mcp install`; reports per-agent integration state without writing. |
+| [`vibe mcp install`](commands/mcp-install.md) | Wire vibevm into a coding agent (Claude Code, Claude Desktop, Cursor, OpenCode, Codex) — writes per-agent MCP config + optional `vibevm` SKILL.md. Scope axes: project / user / both. Wizard-driven without flags; fully scriptable. |
+| [`vibe mcp upgrade`](commands/mcp-upgrade.md) | Refresh existing vibevm integrations to the version shipped in this binary. Scans installed places, rewrites only the diverged ones; never creates new installations. |
+| [`vibe mcp uninstall`](commands/mcp-uninstall.md) | Remove vibevm from one or more agents — drops the `vibevm` MCP block and deletes SKILL.md, foreign keys preserved. |
+| [`vibe mcp status`](commands/mcp-status.md) | Read-only counterpart of `mcp install` / `mcp upgrade`; reports per-(agent × scope) MCP and SKILL.md drift without writing. |
 | [`vibe mcp serve`](commands/mcp-serve.md) | Run the JSON-RPC MCP server over stdio. Agents invoke this themselves via the configs written by `mcp install`. |
 | [`vibe version`](commands/version.md) | Print the binary's version. |
 

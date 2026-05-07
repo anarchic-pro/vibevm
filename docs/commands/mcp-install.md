@@ -1,22 +1,36 @@
 # `vibe mcp install` — wire vibevm into a coding agent
 
-Detects supported coding agents on this machine + the current project and writes the per-agent MCP server configuration so the agent picks up vibevm automatically on its next session start. Optionally also installs the `vibevm` SKILL.md — a short, binding instruction file the agent loads when its description matches the user's task.
+Detects supported coding agents on this machine + the current project, writes the per-agent MCP server configuration, and (optionally) installs the `vibevm` SKILL.md instructing the agent how to use vibevm. Idempotent — already-correct configs surface as `unchanged`.
 
-Idempotent — already-correct configs surface as `unchanged`.
+Spec: [PROP-004 §5.1](../../spec/research/PROP-004-tessl-comparative-research.md), [`spec/WAL.md`](../../spec/WAL.md) (M1.7 slices 4 + 5).
 
-Spec: [PROP-004 §5.1](../../spec/research/PROP-004-tessl-comparative-research.md), [`spec/WAL.md`](../../spec/WAL.md) (M1.7 slice 4).
+## Two scopes — project vs user
+
+Every install can land at one of three places:
+
+- **`--scope project`** — files in the project tree (`<proj>/.<agent>/...`), committed to git, every clone gets the same setup. The MCP server entry hardcodes `--path <abs-project>` so the server always serves this project.
+- **`--scope user`** — global home / config dirs (`~/.<agent>/...`), machine-local, works in every directory. The MCP server entry omits `--path` so the server resolves CWD per invocation. **Bootstrap-mode** — does NOT require `vibe.toml` in `--path`.
+- **`--scope both`** — write to project AND user simultaneously. For agents with no project surface (Claude Desktop, Codex), Both collapses to user with a `skipped` row in the project results.
+
+Without `--scope`, the wizard asks. Default in wizard: `project` if `vibe.toml` is present in `--path`, else `user`.
+
+## Two install kinds — MCP and SKILL.md
+
+`--what` chooses what to install:
+
+- **`--what mcp`** — only the MCP server entry (no SKILL.md write).
+- **`--what skill`** — only the SKILL.md (no MCP-config touch).
+- **`--what both`** (default) — both.
 
 ## Supported agents
 
-Five agents land in slice 4. Detection runs against project markers (project-scoped agents) or the existence of the agent's user-config dir (user-scoped agents).
-
-| Agent | Markers | Config file | Format | Skill loader |
+| Agent | Markers (project) | Project config | User config | Skill loader |
 | --- | --- | --- | --- | --- |
-| `claude` | `.claude/`, `CLAUDE.md` | `<project>/.claude/settings.json` | JSON | yes — `~/.claude/skills/` or `<project>/.claude/skills/` |
-| `claude-desktop` | (user-level only) `<config-dir>/Claude/` exists | `<config-dir>/Claude/claude_desktop_config.json` | JSON | no |
-| `cursor` | `.cursor/`, `.cursorrules` | `<project>/.cursor/mcp.json` | JSON | no |
-| `opencode` | `.opencode/`, `opencode.json`, `opencode.jsonc`, `AGENTS.md` | `<project>/opencode.json` | JSON (key `mcp`) | yes — `<project>/.opencode/skills/` or `<config-dir>/opencode/skills/` |
-| `codex` | (user-level only) `~/.codex/` exists | `~/.codex/config.toml` | TOML (key `mcp_servers`) | yes — `<project>/.agents/skills/` or `~/.agents/skills/` |
+| `claude` | `.claude/`, `CLAUDE.md` | `<proj>/.claude/settings.json` | `~/.claude/settings.json` | yes — `<proj>/.claude/skills/` and `~/.claude/skills/` |
+| `claude-desktop` | (user-only) `<config-dir>/Claude/` exists | (n/a) | `<config-dir>/Claude/claude_desktop_config.json` | no |
+| `cursor` | `.cursor/`, `.cursorrules` | `<proj>/.cursor/mcp.json` | `~/.cursor/mcp.json` | no |
+| `opencode` | `.opencode/`, `opencode.json`, `opencode.jsonc`, `AGENTS.md` | `<proj>/opencode.json` | `<config-dir>/opencode/opencode.json` | yes — `<proj>/.opencode/skills/` and `<config-dir>/opencode/skills/` |
+| `codex` | (user-only) `~/.codex/` exists | (n/a) | `~/.codex/config.toml` (TOML) | yes — `<proj>/.agents/skills/` and `~/.agents/skills/` |
 
 `<config-dir>` resolves through `dirs::config_dir()` — `%APPDATA%` on Windows, `~/Library/Application Support` on macOS, `~/.config` on Linux.
 
@@ -25,64 +39,71 @@ Five agents land in slice 4. Detection runs against project markers (project-sco
 ```
 vibe mcp install [--path <dir>]
                  [--agent <FILTER> | --auto]
-                 [--with-skill | --without-skill]
-                 [--skill-scope project | user]
+                 [--scope project | user | both]
+                 [--what mcp | skill | both]
                  [--dry-run]
+                 [--yes]
                  [--force]
 ```
 
-Without flags, drops into an interactive multi-select picker (TTY required). For CI / scripts use `--auto` (install everywhere, skill on by default) or `--agent <name>` (one explicit target).
+Without flags, drops into a 3-question wizard (TTY required): pick scope, pick what, pick agents (multi-select with detected ones preselected). For CI / scripts use `--auto` (install everywhere, all detected agents, scope auto-resolves) or any combination of explicit flags.
 
 ## Flags
 
 | Flag | Description | Default |
 | --- | --- | --- |
-| `--path <dir>` | Project root with `vibe.toml`. | `.` |
-| `--agent <FILTER>` | One of `all`, `claude`, `claude-desktop`, `cursor`, `opencode`, `codex`. Conflicts with `--auto`. | (interactive if absent) |
-| `--auto` | Detect every supported agent and install in all of them. No prompts. Skill defaults to on; `--without-skill` overrides. Conflicts with `--agent`. | off |
-| `--with-skill` | Also write `vibevm` SKILL.md alongside the MCP config. Cursor / Claude Desktop are reported as `skipped`. Conflicts with `--without-skill`. | (mode-dependent — see below) |
-| `--without-skill` | Install only the MCP server entry. Conflicts with `--with-skill`. | (mode-dependent) |
-| `--skill-scope project | user` | Where SKILL.md lands. `project` writes under the per-agent project skill dir (committed to git); `user` writes to the operator's home / config dir. | `project` |
+| `--path <dir>` | Project root for project-scope walks. Required only when scope is `project` or `both`. With `--scope user`, runs without a project. | `.` |
+| `--agent <FILTER>` | One of `all`, `claude`, `claude-desktop`, `cursor`, `opencode`, `codex`. Conflicts with `--auto`. | (interactive) |
+| `--auto` | Detect every supported agent and install in all of them. No prompts (except apply confirm — pass `--yes` to skip). Conflicts with `--agent`. Auto-resolves: scope = `project` if `vibe.toml` in `--path`, else `user`; what = `both`. | off |
+| `--scope project|user|both` | See [Two scopes](#two-scopes--project-vs-user). | (interactive / auto-resolved under `--auto`) |
+| `--what mcp|skill|both` | See [Two install kinds](#two-install-kinds--mcp-and-skillmd). | `both` |
 | `--dry-run` | Print what would be written without touching disk. | off |
+| `--yes` | Skip the apply confirm prompt. | off |
 | `--force` | Provision the agent's config even when no presence marker is detected. | off |
-| `--json` (global) | Emit a structured envelope; see [Output (JSON)](#output-json). | off |
-| `--quiet` (global) | One-line summary `N MCP configs + M skill files written`. | off |
-| `--invoked-by <agent>` (global) | Stamps `invoked_by` on the JSON envelope; see [`vibe show config`](show.md). | (env: `VIBE_INVOKED_BY`, else absent) |
-
-### Skill toggle defaults
-
-When neither `--with-skill` nor `--without-skill` is set, the resolved value depends on the install mode:
-
-- `--auto` → on (CI / first-run scripts get the full opinionated setup).
-- explicit `--agent <name>` → off (advanced operators opt in).
-- interactive → asks via a `Yes/No` prompt.
+| `--json` (global) | Emit a structured envelope. | off |
+| `--quiet` (global) | One-line summary. | off |
+| `--invoked-by <agent>` (global) | Stamps `invoked_by` on the JSON envelope. | (env: `VIBE_INVOKED_BY`, else absent) |
 
 ## Examples
 
+### Bootstrap (first install, no project yet)
+
 ```bash
-# Interactive — pick agents + skill toggle. TTY required.
+# Wizard mode — pick scope + what + agents.
 vibe mcp install
 
-# CI / first-run script — install MCP + skill in every detected agent.
+# Or fully scripted: install everywhere, MCP + skill, user-level.
+vibe mcp install --auto --scope user
+
+# Or explicit single-agent bootstrap.
+vibe mcp install --agent opencode --scope user --what both
+```
+
+### Project-level (already inside a vibevm project)
+
+```bash
+# Wizard — defaults to project-scope when vibe.toml is present.
+vibe mcp install
+
+# Scripted, all agents detected in the project tree.
 vibe mcp install --auto
 
-# CI variant — MCP only, no skill.
-vibe mcp install --auto --without-skill
+# One-off: just refresh the OpenCode SKILL.md, nothing else.
+vibe mcp install --agent opencode --scope project --what skill
+```
 
-# Single explicit target — Claude Code, MCP only.
-vibe mcp install --agent claude
+### Both — project pinned + user fallback
 
-# Single explicit target — OpenCode with skill in user-level scope.
-vibe mcp install --agent opencode --with-skill --skill-scope user
+```bash
+# Write project config (always serves this project) AND user config
+# (works when opencode starts outside the project too).
+vibe mcp install --scope both --auto
+```
 
-# Dry-run preview before committing changes.
+### Pre-flight diff before applying
+
+```bash
 vibe mcp install --auto --dry-run
-
-# Force-provision even when the agent's marker dir is absent.
-vibe mcp install --agent claude --force
-
-# Pass the calling agent's identity so envelopes carry attribution.
-vibe --invoked-by opencode mcp install --auto --json
 ```
 
 ## Output
@@ -90,10 +111,10 @@ vibe --invoked-by opencode mcp install --auto --json
 ### Human-readable
 
 ```
-→ created mcp     claude  → /home/dev/proj/.claude/settings.json
-→ created skill   claude (project)  → /home/dev/proj/.claude/skills/vibevm/SKILL.md
-→ unchanged mcp   opencode  → /home/dev/proj/opencode.json
-→ skipped skill   cursor (project)  → (no skill loader) (agent `cursor` does not load filesystem skills)
+→ created mcp     claude (project) → /home/dev/proj/.claude/settings.json
+→ created skill   claude (project) → /home/dev/proj/.claude/skills/vibevm/SKILL.md
+→ unchanged mcp   opencode (project) → /home/dev/proj/opencode.json
+→ skipped skill   cursor (project) → (no skill loader) (agent `cursor` does not load filesystem skills)
 ```
 
 ### Output (JSON)
@@ -103,53 +124,20 @@ vibe --invoked-by opencode mcp install --auto --json
   "ok": true,
   "command": "mcp:install",
   "project": "/home/dev/proj",
+  "scope": "project",
+  "what": "both",
   "detected": ["claude", "cursor", "opencode"],
   "targeted": ["claude", "cursor", "opencode"],
   "results": [
-    {
-      "agent": "claude",
-      "config_path": "/home/dev/proj/.claude/settings.json",
-      "status": "created",
-      "note": "file does not exist yet"
-    },
-    {
-      "agent": "cursor",
-      "config_path": "/home/dev/proj/.cursor/mcp.json",
-      "status": "unchanged",
-      "note": null
-    },
-    {
-      "agent": "opencode",
-      "config_path": "/home/dev/proj/opencode.json",
-      "status": "created",
-      "note": "file does not exist yet"
-    }
+    { "agent": "claude",   "scope": "project", "config_path": ".../.claude/settings.json", "status": "created", "note": "file does not exist yet" },
+    { "agent": "cursor",   "scope": "project", "config_path": ".../.cursor/mcp.json",      "status": "unchanged", "note": null },
+    { "agent": "opencode", "scope": "project", "config_path": ".../opencode.json",         "status": "created", "note": "file does not exist yet" }
   ],
   "skill_results": [
-    {
-      "agent": "claude",
-      "scope": "project",
-      "path": "/home/dev/proj/.claude/skills/vibevm/SKILL.md",
-      "status": "created",
-      "note": null
-    },
-    {
-      "agent": "cursor",
-      "scope": "project",
-      "path": null,
-      "status": "skipped",
-      "note": "agent `cursor` does not load filesystem skills"
-    },
-    {
-      "agent": "opencode",
-      "scope": "project",
-      "path": "/home/dev/proj/.opencode/skills/vibevm/SKILL.md",
-      "status": "created",
-      "note": null
-    }
+    { "agent": "claude",   "scope": "project", "path": ".../.claude/skills/vibevm/SKILL.md", "status": "created", "note": null },
+    { "agent": "cursor",   "scope": "project", "path": null, "status": "skipped", "note": "agent `cursor` does not load filesystem skills" },
+    { "agent": "opencode", "scope": "project", "path": ".../.opencode/skills/vibevm/SKILL.md", "status": "created", "note": null }
   ],
-  "skill_scope": "project",
-  "install_skill": true,
   "mode": "auto",
   "dry_run": false,
   "invoked_by": "opencode"
@@ -159,21 +147,22 @@ vibe --invoked-by opencode mcp install --auto --json
 `status` vocabulary:
 
 - `created` — file did not exist; we wrote it.
-- `updated` — file existed but differed; we rewrote it. (For the JSON / TOML mergers, foreign keys outside the `mcpServers` / `mcp` / `mcp_servers` block are preserved.)
-- `unchanged` — byte-identical block already on disk; nothing written.
-- `would-create` / `would-update` — `--dry-run` previews of `created` / `updated`.
-- `skipped` — agent does not support the requested action (skill writes for Cursor / Claude Desktop).
+- `updated` — file existed but differed; we rewrote it. Foreign keys outside the `mcpServers` / `mcp` / `mcp_servers` block are preserved.
+- `unchanged` — byte-identical block already on disk.
+- `would-create` / `would-update` — `--dry-run` previews.
+- `skipped` — agent has no surface for the requested action (skill writes for Cursor/Claude Desktop; project-scope MCP for Claude Desktop/Codex when `--scope both` or `--scope project --force`).
 
-`mode` records the path the operator took:
+`mode`:
 
 - `auto` — `--auto` was used.
-- `agent-flag` — `--agent <FILTER>` was used.
-- `interactive` — neither; the multi-select picker ran.
+- `flags` — explicit `--scope` / `--what` / `--agent` mix.
+- `interactive` — wizard ran.
 
 ## What gets written
 
 ### Claude Code / Claude Desktop / Cursor (JSON, `mcpServers`)
 
+Project scope:
 ```jsonc
 {
   "mcpServers": {
@@ -185,8 +174,21 @@ vibe --invoked-by opencode mcp install --auto --json
 }
 ```
 
+User scope (no `--path`):
+```jsonc
+{
+  "mcpServers": {
+    "vibevm": {
+      "command": "vibe",
+      "args": ["mcp", "serve"]
+    }
+  }
+}
+```
+
 ### OpenCode (JSON, `mcp`, command-array shape)
 
+Project scope:
 ```jsonc
 {
   "$schema": "https://opencode.ai/config.json",
@@ -200,36 +202,52 @@ vibe --invoked-by opencode mcp install --auto --json
 }
 ```
 
+User scope:
+```jsonc
+{
+  "mcp": {
+    "vibevm": {
+      "type": "local",
+      "command": ["vibe", "mcp", "serve"],
+      "enabled": true
+    }
+  }
+}
+```
+
 ### Codex (TOML, `mcp_servers`)
 
 ```toml
 [mcp_servers.vibevm]
 command = "vibe"
-args = ["mcp", "serve", "--path", "/home/dev/proj"]
+args = ["mcp", "serve"]   # or ["mcp", "serve", "--path", "/home/dev/proj"] for project scope
 ```
 
 ### SKILL.md (Claude Code, OpenCode, Codex)
 
-A short opinionated MD — YAML frontmatter (`name: vibevm`, description matching every vibevm signal) plus a body that:
+Two-state document with three sections:
 
-- pins the bootstrap protocol (`CLAUDE.md` / `AGENTS.md` first, then `spec/boot/*`, then `spec/WAL.md`, then relevant `PROP-*` / `FEAT-*`),
-- documents the three MCP tools (`query_package`, `read_subskill`, `materialise_subskill`) and *requires* the agent to call them before guessing about installed packages,
-- *requires* the agent to pass `--invoked-by <YOUR-AGENT>` (or `VIBE_INVOKED_BY=<your-agent>`) on every `vibe` invocation,
-- *requires* the agent to consult `vibe <subcommand> --help` before suggesting a command (the CLI's truth is its own help text, not training data),
-- inherits the four non-negotiable rules (no AI attribution, Conventional Commits, group commits by meaning, ask before destructive operations).
+1. **Detect** — first step is to check whether `vibe.toml` exists in CWD.
+2. **Section A — bootstrap** — what to do when no `vibe.toml` is here (`vibe init`, install starter packages, optionally land project skill, transition to Section B).
+3. **Section B — inside an existing project** — bootstrap protocol (`CLAUDE.md` → `spec/boot` → `spec/WAL.md` → relevant PROPs), MCP-tool contracts, "lockfile is canonical".
+4. **Common section** (applies to both) — required `--invoked-by` / `VIBE_INVOKED_BY`, `vibe <subcmd> --help` discipline (with the full subcommand list including `mcp install/upgrade/uninstall/status/serve`), the four non-negotiable rules.
 
-The exact body is the `crates/vibe-cli/src/commands/skill_template.md` file, vendored at compile time so it ships byte-identical inside the `vibe` binary.
+The exact body is `crates/vibe-cli/src/commands/skill_template.md`, vendored at compile time so it ships byte-identical inside the `vibe` binary. Two-state structure means a global / user-scope skill works whether the agent is bootstrapping or inside a project.
 
 ## Edge cases
 
-- **No agents detected, no `--force`.** Empty `targeted` list; the run succeeds with a "no supported agents detected" summary. Pass `--force` to provision configs even without markers.
-- **Non-TTY without `--auto` / `--agent`.** The interactive picker refuses with a hint pointing at `--auto` / `--agent`. Useful in CI where stdin is piped.
-- **User-level `--auto` writes.** Claude Desktop and Codex configs live in the operator's home / config dir, not the project tree. `--auto` will touch them when their parent dir exists. `--dry-run` is the safe way to preview before committing.
-- **Stale skill content.** `install_skill` overwrites stale on-disk SKILL.md with the current template — the contract is set by the binary, not the operator. Run `vibe mcp install --with-skill` after upgrading vibevm to re-sync.
-- **Foreign keys.** The JSON / TOML mergers preserve every key outside the `mcpServers` / `mcp` / `mcp_servers` block. An existing `[provider.lmstudio]` in `~/.config/opencode/opencode.json` survives a vibevm install.
+- **No agents detected, no `--force`.** Empty `targeted` list; the run succeeds with a "no supported agents detected" summary.
+- **Non-TTY without `--auto` / `--agent` / `--scope`.** The wizard refuses with a hint pointing at `--scope`/`--auto` rather than panicking inside dialoguer.
+- **`--scope project` without `vibe.toml`.** Hard error with a hint pointing at `--scope user` for bootstrap-mode.
+- **Stale skill content.** `install --what skill` overwrites stale on-disk SKILL.md with the current template — the contract is set by the binary. For "refresh after vibe upgrade" use [`vibe mcp upgrade`](mcp-upgrade.md).
+- **Foreign keys.** The JSON / TOML mergers preserve every key outside the `mcpServers` / `mcp` / `mcp_servers` block.
+- **User-level `--scope user` writes touch `~/`.** Claude Desktop and Codex configs live in the operator's home / config dir, not the project tree. `--auto` will mutate them when their parent dir exists. `--dry-run` is the safe preview path.
 
 ## Related
 
-- [`vibe mcp status`](mcp-status.md) — same shape, no writes.
-- [`vibe mcp serve`](mcp-serve.md) — the JSON-RPC server itself, invoked from each agent's MCP config.
+- [`vibe mcp upgrade`](mcp-upgrade.md) — refresh stale installs to the current shape, no new installations.
+- [`vibe mcp uninstall`](mcp-uninstall.md) — remove vibevm from one or more agents.
+- [`vibe mcp status`](mcp-status.md) — read-only drift report (MCP + skill).
+- [`vibe mcp serve`](mcp-serve.md) — the MCP server invoked from the configs `mcp install` writes.
 - [`vibe show config`](show.md) — surfaces the resolved `--invoked-by` value with provenance.
+- [Quickstart guide](../guides/agent-mcp-quickstart-opencode.md) — end-to-end walkthrough for opencode.
