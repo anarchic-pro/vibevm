@@ -495,6 +495,16 @@ pub enum McpSubcommand {
     /// Same as `install` but printing the planned config diff
     /// without writing any files. Useful for CI / review.
     Status(McpStatusArgs),
+
+    /// Refresh existing vibevm MCP integrations to the version
+    /// shipped in this binary. Scans known paths, compares the
+    /// on-disk MCP-server entry / SKILL.md to what `install` would
+    /// write today, and rewrites only the diverged ones. Does NOT
+    /// create new installations — use `mcp install` for that. Useful
+    /// after `cargo install --path crates/vibe-cli` (or any vibe
+    /// upgrade) to pull the new SKILL.md / wire shape into agents
+    /// that already had vibevm wired.
+    Upgrade(McpUpgradeArgs),
 }
 
 #[derive(Debug, clap::Args)]
@@ -557,6 +567,45 @@ pub struct McpStatusArgs {
     /// Project root with `vibe.toml`. Defaults to current directory.
     #[arg(long, default_value = ".")]
     pub path: PathBuf,
+}
+
+#[derive(Debug, clap::Args)]
+pub struct McpUpgradeArgs {
+    /// Project root with `vibe.toml`. Defaults to current directory.
+    /// When `vibe.toml` is absent, project-scope upgrades are silently
+    /// skipped (only user-scope is scanned).
+    #[arg(long, default_value = ".")]
+    pub path: PathBuf,
+
+    /// Restrict the scan to one scope. `project` (only project files,
+    /// requires `vibe.toml`), `user` (only user-level), `both`
+    /// (default — scan everything that exists).
+    #[arg(long)]
+    pub scope: Option<String>,
+
+    /// Restrict the scan to one or more agents. Same vocabulary as
+    /// `mcp install`: `all`, `claude`, `claude-desktop`, `cursor`,
+    /// `opencode`, `codex`. Default: scan all five.
+    #[arg(long)]
+    pub agent: Option<String>,
+
+    /// Restrict to MCP-config files only (skip SKILL.md). Default:
+    /// scan both.
+    #[arg(long = "config-only", conflicts_with = "skill_only")]
+    pub config_only: bool,
+
+    /// Restrict to SKILL.md files only (skip MCP configs). Default:
+    /// scan both.
+    #[arg(long = "skill-only")]
+    pub skill_only: bool,
+
+    /// Print the refresh plan and exit without writing.
+    #[arg(long)]
+    pub dry_run: bool,
+
+    /// Skip the apply confirm prompt. Useful in CI / cron.
+    #[arg(long)]
+    pub yes: bool,
 }
 
 #[derive(Debug, clap::Args)]

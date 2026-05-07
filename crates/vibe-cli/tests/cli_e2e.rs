@@ -2182,6 +2182,215 @@ fn mcp_install_with_invoked_by_stamps_envelope() {
 }
 
 #[test]
+fn mcp_upgrade_reports_not_installed_when_block_absent() {
+    let project = tempfile::tempdir().unwrap();
+    init_project(project.path());
+    fs::create_dir_all(project.path().join(".claude")).unwrap();
+
+    let out = vibe()
+        .arg("--json")
+        .arg("mcp")
+        .arg("upgrade")
+        .arg("--path")
+        .arg(project.path())
+        .arg("--scope")
+        .arg("project")
+        .arg("--agent")
+        .arg("claude")
+        .arg("--dry-run")
+        .output()
+        .unwrap();
+    assert!(out.status.success(), "stderr: {}", String::from_utf8_lossy(&out.stderr));
+    let v: serde_json::Value = serde_json::from_slice(&out.stdout).unwrap();
+    assert_eq!(v["command"], "mcp:upgrade");
+    let claude = v["results"]
+        .as_array()
+        .unwrap()
+        .iter()
+        .find(|r| r["agent"] == "claude" && r["scope"] == "project")
+        .expect("claude project entry present");
+    assert_eq!(claude["status"], "not-installed");
+}
+
+#[test]
+fn mcp_upgrade_reports_unchanged_after_fresh_install() {
+    let project = tempfile::tempdir().unwrap();
+    init_project(project.path());
+    fs::create_dir_all(project.path().join(".claude")).unwrap();
+
+    // Install fresh.
+    vibe()
+        .arg("mcp")
+        .arg("install")
+        .arg("--path")
+        .arg(project.path())
+        .arg("--agent")
+        .arg("claude")
+        .arg("--scope")
+        .arg("project")
+        .arg("--what")
+        .arg("both")
+        .assert()
+        .success();
+
+    // Upgrade should be a no-op (everything matches the shipped template).
+    let out = vibe()
+        .arg("--json")
+        .arg("mcp")
+        .arg("upgrade")
+        .arg("--path")
+        .arg(project.path())
+        .arg("--scope")
+        .arg("project")
+        .arg("--agent")
+        .arg("claude")
+        .output()
+        .unwrap();
+    assert!(out.status.success(), "stderr: {}", String::from_utf8_lossy(&out.stderr));
+    let v: serde_json::Value = serde_json::from_slice(&out.stdout).unwrap();
+    let claude_mcp = v["results"]
+        .as_array()
+        .unwrap()
+        .iter()
+        .find(|r| r["agent"] == "claude" && r["scope"] == "project")
+        .unwrap();
+    assert_eq!(claude_mcp["status"], "unchanged");
+    let claude_skill = v["skill_results"]
+        .as_array()
+        .unwrap()
+        .iter()
+        .find(|r| r["agent"] == "claude" && r["scope"] == "project")
+        .unwrap();
+    assert_eq!(claude_skill["status"], "unchanged");
+}
+
+#[test]
+fn mcp_upgrade_detects_drift_and_rewrites_to_current() {
+    let project = tempfile::tempdir().unwrap();
+    init_project(project.path());
+    fs::create_dir_all(project.path().join(".claude")).unwrap();
+
+    // Plant a stale vibevm block + stale SKILL.md by hand.
+    let settings_path = project.path().join(".claude/settings.json");
+    fs::write(
+        &settings_path,
+        r#"{ "mcpServers": { "vibevm": { "command": "old-binary", "args": [] } } }"#,
+    )
+    .unwrap();
+    let skill_path = project.path().join(".claude/skills/vibevm/SKILL.md");
+    fs::create_dir_all(skill_path.parent().unwrap()).unwrap();
+    fs::write(&skill_path, "stale content").unwrap();
+
+    let out = vibe()
+        .arg("--json")
+        .arg("mcp")
+        .arg("upgrade")
+        .arg("--path")
+        .arg(project.path())
+        .arg("--scope")
+        .arg("project")
+        .arg("--agent")
+        .arg("claude")
+        .output()
+        .unwrap();
+    assert!(out.status.success(), "stderr: {}", String::from_utf8_lossy(&out.stderr));
+    let v: serde_json::Value = serde_json::from_slice(&out.stdout).unwrap();
+
+    let claude_mcp = v["results"]
+        .as_array()
+        .unwrap()
+        .iter()
+        .find(|r| r["agent"] == "claude" && r["scope"] == "project")
+        .unwrap();
+    assert_eq!(claude_mcp["status"], "updated");
+    let claude_skill = v["skill_results"]
+        .as_array()
+        .unwrap()
+        .iter()
+        .find(|r| r["agent"] == "claude" && r["scope"] == "project")
+        .unwrap();
+    assert_eq!(claude_skill["status"], "updated");
+
+    // Verify on-disk state was actually refreshed.
+    let written = fs::read_to_string(&settings_path).unwrap();
+    let parsed: serde_json::Value = serde_json::from_str(&written).unwrap();
+    assert_eq!(parsed["mcpServers"]["vibevm"]["command"], "vibe");
+    let new_skill = fs::read_to_string(&skill_path).unwrap();
+    assert!(new_skill.contains("name: vibevm"));
+}
+
+#[test]
+fn mcp_upgrade_dry_run_does_not_write() {
+    let project = tempfile::tempdir().unwrap();
+    init_project(project.path());
+    fs::create_dir_all(project.path().join(".claude")).unwrap();
+
+    let settings_path = project.path().join(".claude/settings.json");
+    let original = r#"{ "mcpServers": { "vibevm": { "command": "old", "args": [] } } }"#;
+    fs::write(&settings_path, original).unwrap();
+
+    let out = vibe()
+        .arg("mcp")
+        .arg("upgrade")
+        .arg("--path")
+        .arg(project.path())
+        .arg("--scope")
+        .arg("project")
+        .arg("--agent")
+        .arg("claude")
+        .arg("--config-only")
+        .arg("--dry-run")
+        .output()
+        .unwrap();
+    assert!(out.status.success());
+    // File untouched.
+    assert_eq!(fs::read_to_string(&settings_path).unwrap(), original);
+}
+
+#[test]
+fn mcp_upgrade_skill_only_skips_mcp_results() {
+    let project = tempfile::tempdir().unwrap();
+    init_project(project.path());
+    fs::create_dir_all(project.path().join(".claude")).unwrap();
+
+    let out = vibe()
+        .arg("--json")
+        .arg("mcp")
+        .arg("upgrade")
+        .arg("--path")
+        .arg(project.path())
+        .arg("--scope")
+        .arg("project")
+        .arg("--agent")
+        .arg("claude")
+        .arg("--skill-only")
+        .arg("--dry-run")
+        .output()
+        .unwrap();
+    assert!(out.status.success());
+    let v: serde_json::Value = serde_json::from_slice(&out.stdout).unwrap();
+    assert_eq!(v["what"], "skill");
+    assert!(v["results"].as_array().unwrap().is_empty(), "skill-only must skip mcp");
+}
+
+#[test]
+fn mcp_upgrade_scope_project_without_vibe_toml_errors() {
+    let project = tempfile::tempdir().unwrap();
+    let out = vibe()
+        .arg("mcp")
+        .arg("upgrade")
+        .arg("--path")
+        .arg(project.path())
+        .arg("--scope")
+        .arg("project")
+        .output()
+        .unwrap();
+    assert!(!out.status.success());
+    let stderr = String::from_utf8_lossy(&out.stderr);
+    assert!(stderr.contains("--scope user"), "expected hint; got {stderr}");
+}
+
+#[test]
 fn mcp_status_reports_per_agent_state() {
     let project = tempfile::tempdir().unwrap();
     init_project(project.path());
