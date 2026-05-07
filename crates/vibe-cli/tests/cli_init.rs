@@ -29,7 +29,6 @@ fn init_creates_expected_layout() {
         "GEMINI.md",
         "spec/boot/00-core.md",
         "spec/boot/90-user.md",
-        "spec/WAL.md",
         "vibe.toml",
         "vibe.lock",
         ".vibe/.gitignore",
@@ -40,6 +39,14 @@ fn init_creates_expected_layout() {
             "expected `{rel}` to exist after init"
         );
     }
+    // `spec/WAL.md` is NOT created by default — WAL discipline is a
+    // project convention, not part of the package manager's contract.
+    // Operators who want the WAL protocol install it explicitly via
+    // `vibe install flow:wal` or write the file themselves.
+    assert!(
+        !path.join("spec/WAL.md").exists(),
+        "spec/WAL.md must NOT be created by default; it's a project convention, not part of the package manager"
+    );
 
     // CLAUDE.md / AGENTS.md / GEMINI.md have the exact same one-line body.
     let claude = fs::read_to_string(path.join("CLAUDE.md")).unwrap();
@@ -154,7 +161,12 @@ fn init_json_output_parses() {
     let v: serde_json::Value = serde_json::from_str(&stdout).expect("stdout must be valid JSON");
     assert_eq!(v["ok"], true);
     assert_eq!(v["command"], "init");
-    assert_eq!(v["created"], 10);
+    // 9 files created by default: CLAUDE.md / AGENTS.md / GEMINI.md
+    // (3 redirects), spec/boot/00-core.md, spec/boot/90-user.md
+    // (2 boot snippets), vibe.toml, vibe.lock (manifest + lockfile),
+    // .vibe/.gitignore, .gitignore (root). spec/WAL.md is NOT
+    // created — it's a project convention, see init.rs step 4 comment.
+    assert_eq!(v["created"], 9);
     assert_eq!(v["kept"], 0);
 }
 

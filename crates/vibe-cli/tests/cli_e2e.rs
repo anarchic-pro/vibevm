@@ -683,7 +683,7 @@ fn update_refuses_when_user_edited_file() {
 }
 
 #[test]
-fn show_effective_emits_boot_files_and_wal_with_provenance() {
+fn show_effective_emits_boot_files_with_provenance() {
     let project = tempfile::tempdir().unwrap();
     init_project(project.path());
 
@@ -695,7 +695,10 @@ fn show_effective_emits_boot_files_and_wal_with_provenance() {
         .assert()
         .success();
     let stdout = String::from_utf8_lossy(&assertion.get_output().stdout);
-    // 00-core and 90-user boot files, plus the WAL.
+    // 00-core and 90-user boot files. spec/WAL.md is NOT created by
+    // default `vibe init` — it's a project convention, not part of
+    // the package manager's contract — so `show effective` should
+    // simply skip it when absent, not blow up.
     assert!(
         stdout.contains("spec://project/boot/00-core.md"),
         "expected 00-core spec URI; got:\n{stdout}"
@@ -704,14 +707,40 @@ fn show_effective_emits_boot_files_and_wal_with_provenance() {
         stdout.contains("spec://project/boot/90-user.md"),
         "expected 90-user spec URI; got:\n{stdout}"
     );
+    // Provenance marker for foundation (user-owned) files.
+    assert!(
+        stdout.contains("(user)"),
+        "expected (user) provenance marker; got:\n{stdout}"
+    );
+}
+
+#[test]
+fn show_effective_includes_wal_when_present() {
+    // When the operator (or `flow:wal` install) put `spec/WAL.md` in
+    // place, `show effective` includes it with `(wal)` provenance.
+    let project = tempfile::tempdir().unwrap();
+    init_project(project.path());
+    fs::write(
+        project.path().join("spec/WAL.md"),
+        "# WAL\n\n## current phase\n\nTest checkpoint.\n",
+    )
+    .unwrap();
+
+    let assertion = vibe()
+        .arg("show")
+        .arg("effective")
+        .arg("--path")
+        .arg(project.path())
+        .assert()
+        .success();
+    let stdout = String::from_utf8_lossy(&assertion.get_output().stdout);
     assert!(
         stdout.contains("spec://project/WAL"),
         "expected WAL spec URI; got:\n{stdout}"
     );
-    // Provenance for foundation files.
     assert!(
-        stdout.contains("(user)") || stdout.contains("(wal)"),
-        "expected user / wal provenance markers; got:\n{stdout}"
+        stdout.contains("(wal)"),
+        "expected (wal) provenance marker; got:\n{stdout}"
     );
 }
 

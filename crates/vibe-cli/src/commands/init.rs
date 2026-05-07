@@ -71,16 +71,13 @@ pub fn run(ctx: &output::Context, args: InitArgs) -> Result<()> {
         "boot: user overrides",
     )?);
 
-    // 4. WAL.
-    outcomes.push(ensure_file(
-        ctx,
-        &path,
-        &path.join("spec/WAL.md"),
-        &wal_template(&project_name),
-        "WAL checkpoint",
-    )?);
-
     // 5. Project manifest and empty lockfile.
+    //
+    // (Step 4 — `spec/WAL.md` scaffold — is intentionally absent. WAL
+    // discipline is a project convention, not part of the package
+    // manager's contract. Operators who want the WAL protocol install
+    // it explicitly, e.g. via `vibe install flow:wal`, which ships a
+    // protocol document plus a starter `spec/WAL.md` template.)
     let registries = resolve_registry_sections(&args);
     outcomes.push(ensure_project_manifest(
         ctx,
@@ -454,49 +451,6 @@ wrong, add a `<!-- REVIEW: … -->` marker, implement what the spec says, and
 surface the disagreement in the end-of-session report.
 "#
     )
-}
-
-fn wal_template(project_name: &str) -> String {
-    let today = current_date_utc();
-    format!(
-        r#"# WAL — Project Continuation State
-_Updated: {today}_
-
-## Current phase
-
-Project `{project_name}` — just initialized. No work in flight.
-
-## Constraints (do not violate without discussion)
-
-- (none yet — add as decisions are made)
-
-## Done
-
-- [x] Project initialized with `vibe init`.
-
-## In progress
-
-- (nothing)
-
-## Next
-
-- (fill in before starting the first real session)
-
-## Known issues
-
-- (none)
-
-## Session context
-
-- Start of next session: read this WAL, then `spec/boot/`, then the relevant
-  PROP/FEAT under `spec/common/` or `spec/modules/`.
-"#
-    )
-}
-
-fn current_date_utc() -> String {
-    let ts = current_timestamp_utc();
-    ts.split('T').next().unwrap_or(&ts).to_string()
 }
 
 const ROOT_GITIGNORE_TEMPLATE: &str = r#"# vibevm cache (per-project, should never be committed)
