@@ -2168,6 +2168,78 @@ mod tests {
     }
 
     #[test]
+    fn skill_template_pins_non_tty_install_discipline() {
+        // Regression guard surfaced by a real-world walk against
+        // glm-flash via opencode: the model invoked `vibe install`
+        // without `--assume-yes`, mistook the printed plan for
+        // success, and only realised many steps later that the
+        // package had not actually installed. The skill must
+        // explicitly tell agents to pass `--assume-yes` on every
+        // install / uninstall, that the printed plan is not a
+        // status indicator, and that the harness has no TTY.
+        let body = SKILL_TEMPLATE.to_lowercase();
+        assert!(
+            body.contains("--assume-yes"),
+            "skill must mention --assume-yes for install/uninstall"
+        );
+        assert!(
+            body.contains("no tty") || body.contains("not a tty") || body.contains("non-tty"),
+            "skill must call out the non-TTY constraint explicitly"
+        );
+        assert!(
+            body.contains("exit code"),
+            "skill must direct agents to read the exit code, not the printed plan"
+        );
+    }
+
+    #[test]
+    fn skill_template_blocks_search_panic_loop() {
+        // Same opencode walk: when `vibe search` returned empty
+        // (no `VIBEVM_INDEX_URL_<R>` configured), the model
+        // diagnosed it as a registry misconfiguration and started
+        // adding new registries with fictional URLs and
+        // hallucinated index URLs. The skill must say:
+        //   - empty search is expected when no index is configured,
+        //   - install resolves directly through `[[registry]]`
+        //     without an index,
+        //   - do NOT add registries / set index URLs in response
+        //     to an empty search.
+        let body = SKILL_TEMPLATE.to_lowercase();
+        assert!(
+            body.contains("vibe_index_url") || body.contains("vibevm_index_url"),
+            "skill must name the index env-var so agents recognise the empty-search message"
+        );
+        assert!(
+            body.contains("does not consult the index")
+                || body.contains("does not need search")
+                || body.contains("does not need an index")
+                || body.contains("not a runtime dependency"),
+            "skill must state install does not require the index"
+        );
+        assert!(
+            body.contains("registry add") && body.contains("do not"),
+            "skill must explicitly forbid `vibe registry add` as a panic response"
+        );
+    }
+
+    #[test]
+    fn skill_template_carries_happy_path_recipe() {
+        // The cheapest cure for a small model is a copy-paste
+        // recipe. The skill must carry the two-command bootstrap
+        // happy path so the model does not have to reason its
+        // way to the right shape from first principles.
+        let body = SKILL_TEMPLATE;
+        assert!(
+            body.contains("vibe init") && body.contains("vibe install"),
+            "skill must spell out the two-command bootstrap recipe"
+        );
+        assert!(
+            body.to_lowercase().contains("happy path"),
+            "skill must label the recipe as a happy-path block so agents recognise it"
+        );
+    }
+
+    #[test]
     fn skill_template_does_not_impose_project_conventions() {
         // Regression guard. Past versions of the skill (slice 4 +
         // slice 5 first pass) treated "read CLAUDE.md → spec/boot/*

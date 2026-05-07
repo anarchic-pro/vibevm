@@ -34,19 +34,39 @@ To create one:
 1. **`vibe init`** — scaffolds `vibe.toml` (project manifest with
    default registries) + an empty `vibe.lock`. It also writes a
    handful of starter files (`spec/boot/00-core.md`,
-   `spec/boot/90-user.md`, `spec/WAL.md`, `CLAUDE.md`, `AGENTS.md`,
-   `GEMINI.md`). These starter files are **project conventions**,
-   not load-bearing for vibevm itself — they're a template the
-   project's owner can keep, edit, or delete. vibevm commands work
-   the same way whether they're present or not.
+   `spec/boot/90-user.md`, `CLAUDE.md`, `AGENTS.md`, `GEMINI.md`).
+   These starter files are **project conventions**, not load-bearing
+   for vibevm itself — they're a template the project's owner can
+   keep, edit, or delete. vibevm commands work the same way whether
+   they're present or not.
 
-2. **(Optional) `vibe install <pkgref>`** — install one or more
-   packages from the configured registries (default: `vibespecs`
-   on GitHub + GitVerse). Use `vibe search <query>` to discover
-   what's available. There is no required first package.
+   **Two registries are already configured** by `vibe init`:
+   `vibespecs` (GitHub) and `vibespecs-gitverse` (GitVerse). **Do
+   NOT call `vibe registry add`** unless the user explicitly asked
+   for a custom host — adding a redundant entry just slows resolves
+   and confuses code review.
+
+2. **(Optional) `vibe install <pkgref> --assume-yes`** — install one
+   or more packages from the configured registries. There is no
+   required first package.
 
 3. The project is now operational. Switch to Section B for further
    work.
+
+### Happy path — typical bootstrap
+
+The two-command shape an agent should use when the user asks to
+"create a vibevm project with `<kind>:<name>`":
+
+```
+vibe init --invoked-by <agent>
+vibe install <kind>:<name> --assume-yes --invoked-by <agent>
+```
+
+That is sufficient. No `vibe search`, no `vibe registry add`, no
+environment variables. If the install fails with a real error
+(see "Reading exit codes" below), report it back to the user
+verbatim — do NOT improvise registry / index reconfiguration.
 
 ## Section B — inside a vibevm project
 
@@ -99,6 +119,49 @@ particular workflow on the project.
 
 ## Common — applies to both sections
 
+### Non-interactive invocation: always pass `--assume-yes`
+
+You are running vibe through an agent harness, not at a real terminal.
+`vibe install` and `vibe uninstall` show the plan and then prompt the
+operator to confirm; without a TTY they exit with code `1` and the
+message:
+
+```
+error: no TTY available for confirmation; re-run with `--assume-yes` to apply this plan non-interactively
+```
+
+The plan IS printed before that error, which can be misread as success.
+**It is not success — exit code is 1 and nothing was written to disk.**
+
+Always pass `--assume-yes` (alias `--yes`) on every `vibe install` /
+`vibe uninstall` invocation. The plan still prints; the prompt is
+skipped; the command runs to completion. Same flag for both commands.
+
+### Reading exit codes
+
+`vibe` exits with `0` on success, non-zero on failure. The output
+preceding the prompt or the report is **not** a status indicator on
+its own — read the exit code (or the `error:` prefix in the last
+output lines) before declaring victory. `error:` in the last line is
+always a failure even if a plan / partial report was printed earlier.
+
+### `vibe search` is optional discovery
+
+`vibe search <query>` walks per-registry index servers (PROP-005).
+On a fresh machine the index URLs are usually unset (`VIBEVM_INDEX_URL_<R>`
+is empty) and `search` returns "0 searched, N without index URL".
+**This is expected, not an error, and does not block install.**
+
+If you already know the pkgref (`flow:wal`, `stack:rust-cli`, etc.)
+go straight to `vibe install <kind>:<name> --assume-yes`. The install
+path resolves through the configured `[[registry]]` entries directly
+via git — it does not consult the index. The index is a discovery
+optimisation, not a runtime dependency.
+
+Do not "fix" empty search results by adding new registries, setting
+fictional `VIBEVM_INDEX_URL_<R>` values, or otherwise mutating the
+project's configuration.
+
 ### `vibe --help` is the source of truth for the CLI
 
 The vibevm CLI evolves between releases. Before suggesting **any**
@@ -110,7 +173,11 @@ Frequently relevant subcommands (all of them have flags worth
 checking via `--help`):
 
 - `vibe init` — scaffold a new project (Section A entry point).
-- `vibe install <pkgref>` — install one or more packages.
+- `vibe install <pkgref> --assume-yes` — install one or more packages.
+  `--assume-yes` is mandatory in non-TTY runs (see above).
+  `vibe install` with no pkgref reads `vibe.toml` `[requires]` and
+  installs every entry — the cargo `cargo build` shape.
+- `vibe uninstall <pkgref> --assume-yes` — symmetric to install.
 - `vibe update <pkgref>` / `vibe update --all` — version-bump within
   the lockfile's root constraints.
 - `vibe outdated [--json]` — preview upstream-newer versions.
@@ -118,9 +185,12 @@ checking via `--help`):
 - `vibe show effective | config | features | subskills | purls`
   — pure inspection.
 - `vibe list [--kind] [--verbose]` — what's in the lockfile.
-- `vibe search <query>` — query registries.
-- `vibe registry list | add | remove | set-mirror | vendor | sync
-  | publish` — registry CRUD.
+- `vibe search <query>` — optional discovery (see above; safe to skip).
+- `vibe registry list` — inspect registries. Do **not** call
+  `vibe registry add` / `set-mirror` / `remove` unless the user
+  explicitly asked for it; `vibe init` already wires the defaults.
+- `vibe registry vendor | sync | publish` — operator-driven registry
+  CRUD; reach for these only on explicit request.
 - `vibe mcp install | upgrade | uninstall | status | serve` —
   agent integration. Use `--scope project|user|both` and
   `--what mcp|skill|both` to control where and what.
