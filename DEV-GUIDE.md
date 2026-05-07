@@ -128,7 +128,12 @@ New-Item -Path $PROFILE -ItemType File -Force
 Then add to `$PROFILE`:
 
 ```powershell
-$env:VIBEVM_REPO = 'C:\Users\<you>\gits\vibevm'   # adjust path
+# Default assumes the repo is at ~/gits/vibevm. If it's elsewhere,
+# replace the right-hand side with an absolute path like
+# 'D:\src\vibevm'. Do NOT leave a placeholder like <you> in the
+# string — Windows treats `<>` as illegal path characters and
+# Test-Path will throw before reaching the existence check.
+$env:VIBEVM_REPO = "$HOME\gits\vibevm"
 
 function Update-Vibe {
     [CmdletBinding()]
@@ -188,7 +193,9 @@ If PowerShell refuses to load the profile with `running scripts is disabled on t
 Add to `~/.bashrc` / `~/.zshrc`:
 
 ```bash
-export VIBEVM_REPO="$HOME/gits/vibevm"   # adjust path
+# Default assumes the repo is at ~/gits/vibevm. If it's elsewhere,
+# replace the right-hand side with an absolute path.
+export VIBEVM_REPO="$HOME/gits/vibevm"
 
 vu() {
     [ -d "$VIBEVM_REPO" ] || { echo "VIBEVM_REPO ($VIBEVM_REPO) does not exist" >&2; return 1; }
