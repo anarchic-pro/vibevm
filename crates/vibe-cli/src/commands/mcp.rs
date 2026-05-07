@@ -315,12 +315,26 @@ impl Agent {
                 Ok(Some(home.join(".cursor").join("mcp.json")))
             }
             (Agent::OpenCode, Scope::User) => {
-                let cfg = dirs::config_dir().ok_or_else(|| {
-                    anyhow!("could not resolve user-config dir for OpenCode")
-                })?;
-                Ok(Some(cfg.join("opencode").join("opencode.json")))
+                // OpenCode's documented global-config location is
+                // `~/.config/opencode/opencode.json` cross-platform —
+                // they use a Unix-style XDG path on every OS, NOT
+                // `%APPDATA%` on Windows. Verified empirically:
+                // operator-set `~/.config/opencode/opencode.json` is
+                // what `opencode` reads on Windows; `%APPDATA%\opencode\`
+                // is silently ignored. So we resolve via `home_dir`,
+                // not `config_dir`.
+                let home = dirs::home_dir()
+                    .ok_or_else(|| anyhow!("could not resolve home dir for OpenCode"))?;
+                Ok(Some(
+                    home.join(".config").join("opencode").join("opencode.json"),
+                ))
             }
             (Agent::ClaudeCodeDesktop, Scope::User) => {
+                // Claude Desktop is a native Anthropic GUI app and DOES
+                // use platform-specific config dirs (`%APPDATA%\Claude\`
+                // on Windows, `~/Library/Application Support/Claude/`
+                // on macOS). dirs::config_dir() is the right resolver
+                // here.
                 let cfg = dirs::config_dir().ok_or_else(|| {
                     anyhow!("could not resolve user-config dir for Claude Desktop")
                 })?;
@@ -370,10 +384,20 @@ impl Agent {
                 Ok(Some(home.join(".claude").join("skills").join(SKILL_NAME).join("SKILL.md")))
             }
             (Agent::OpenCode, Scope::User) => {
-                let cfg = dirs::config_dir().ok_or_else(|| {
-                    anyhow!("could not resolve user-config dir for OpenCode skill")
+                // Same XDG-on-every-OS contract as Agent::config_path
+                // for OpenCode — see the comment there. Empirically
+                // verified that opencode reads `~/.config/opencode/`
+                // on Windows, NOT `%APPDATA%\opencode\`.
+                let home = dirs::home_dir().ok_or_else(|| {
+                    anyhow!("could not resolve home dir for OpenCode skill")
                 })?;
-                Ok(Some(cfg.join("opencode").join("skills").join(SKILL_NAME).join("SKILL.md")))
+                Ok(Some(
+                    home.join(".config")
+                        .join("opencode")
+                        .join("skills")
+                        .join(SKILL_NAME)
+                        .join("SKILL.md"),
+                ))
             }
             (Agent::Codex, Scope::User) => {
                 let home = dirs::home_dir().ok_or_else(|| {
@@ -1917,6 +1941,33 @@ mod tests {
             let p = a.config_path(Scope::User, None).unwrap();
             assert!(p.is_some(), "user-scope path missing for {}", a.as_str());
         }
+    }
+
+    #[test]
+    fn opencode_user_paths_use_xdg_style_on_every_os() {
+        // OpenCode is documented to read `~/.config/opencode/` on
+        // every platform — XDG-style, NOT %APPDATA% on Windows. We
+        // check that both the config-file path and the skill path
+        // contain the literal `.config/opencode` segment regardless
+        // of the host's `dirs::config_dir()` resolution.
+        let cfg = Agent::OpenCode
+            .config_path(Scope::User, None)
+            .unwrap()
+            .unwrap();
+        let cfg_s = cfg.display().to_string().replace('\\', "/");
+        assert!(
+            cfg_s.contains("/.config/opencode/opencode.json"),
+            "expected XDG-style ~/.config/opencode/opencode.json; got `{cfg_s}`"
+        );
+        let skill = Agent::OpenCode
+            .skill_path(Scope::User, None)
+            .unwrap()
+            .unwrap();
+        let skill_s = skill.display().to_string().replace('\\', "/");
+        assert!(
+            skill_s.contains("/.config/opencode/skills/vibevm/SKILL.md"),
+            "expected XDG-style ~/.config/opencode/skills/vibevm/SKILL.md; got `{skill_s}`"
+        );
     }
 
     #[test]

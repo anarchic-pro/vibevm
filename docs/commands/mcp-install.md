@@ -29,10 +29,12 @@ Without `--scope`, the wizard asks. Default in wizard: `project` if `vibe.toml` 
 | `claude` | `.claude/`, `CLAUDE.md` | `<proj>/.claude/settings.json` | `~/.claude/settings.json` | yes — `<proj>/.claude/skills/` and `~/.claude/skills/` |
 | `claude-desktop` | (user-only) `<config-dir>/Claude/` exists | (n/a) | `<config-dir>/Claude/claude_desktop_config.json` | no |
 | `cursor` | `.cursor/`, `.cursorrules` | `<proj>/.cursor/mcp.json` | `~/.cursor/mcp.json` | no |
-| `opencode` | `.opencode/`, `opencode.json`, `opencode.jsonc`, `AGENTS.md` | `<proj>/opencode.json` | `<config-dir>/opencode/opencode.json` | yes — `<proj>/.opencode/skills/` and `<config-dir>/opencode/skills/` |
+| `opencode` | `.opencode/`, `opencode.json`, `opencode.jsonc`, `AGENTS.md` | `<proj>/opencode.json` | `~/.config/opencode/opencode.json` (XDG path on every OS — see note) | yes — `<proj>/.opencode/skills/` and `~/.config/opencode/skills/` |
 | `codex` | (user-only) `~/.codex/` exists | (n/a) | `~/.codex/config.toml` (TOML) | yes — `<proj>/.agents/skills/` and `~/.agents/skills/` |
 
-`<config-dir>` resolves through `dirs::config_dir()` — `%APPDATA%` on Windows, `~/Library/Application Support` on macOS, `~/.config` on Linux.
+`<config-dir>` resolves through `dirs::config_dir()` — `%APPDATA%` on Windows, `~/Library/Application Support` on macOS, `~/.config` on Linux. **Used by Claude Desktop only.**
+
+**Note on OpenCode user paths.** OpenCode is documented to read `~/.config/opencode/` on every platform — XDG-style cross-platform, even on Windows where `dirs::config_dir()` would point at `%APPDATA%\opencode\`. vibevm resolves OpenCode user-scope via `dirs::home_dir().join(".config").join("opencode")` to match what opencode actually reads, regardless of OS. (Pre-fix slice-5 versions mistakenly used `%APPDATA%\opencode\` on Windows — that location is silently ignored by opencode. If you ran an earlier slice-5 install, delete `%APPDATA%\Roaming\opencode\` by hand; the config and skill it created there have no effect.)
 
 ## Usage
 
