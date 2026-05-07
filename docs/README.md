@@ -42,6 +42,10 @@ End-to-end walkthroughs that compose multiple commands into a real scenario. Eac
 
 [`architecture.md`](architecture.md) — contributor-facing tour of the workspace: how the crates fit together, what each abstraction trait does (`GitBackend`, `Registry`, `MultiRegistryResolver`, `DepProvider` / `DepSolver`, `RepoCreator`), how the install / publish / sync pipelines walk, where to look in the source for what.
 
+## Version syntax
+
+[`version-syntax.md`](version-syntax.md) — how version constraints work everywhere a pkgref appears (`vibe install`, `[requires].packages`, `[provides].capabilities`, `[[override]]`). Caret / tilde / equal / range operators, the `vibe.toml` ↔ `vibe.lock` two-file model, the `--exact` flag, comparison with Cargo / npm / Poetry / Bundler. Read this if you've ever been surprised that `flow:wal@0.3.0` matched `0.3.5`.
+
 ## Lockfile reference
 
 [`lockfile-format.md`](lockfile-format.md) — exhaustive reference for `vibe.lock` v2. Field-by-field semantics, identity model, v1 → v2 migration, tooling examples (jq snippets), worked example.
