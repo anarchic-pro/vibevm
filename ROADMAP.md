@@ -423,6 +423,27 @@ Source: [PROP-004 §5.7](spec/research/PROP-004-tessl-comparative-research.md#ag
 
 **Estimated effort.** Closed alongside M1.7 slice 4. Gemini / Copilot follow-ups land per-demand.
 
+### M1.12 — `vibe.toml` `[requires]` section + cargo-shape install ✅ SHIPPED (2026-05-08)
+
+**Thesis.** Bring vibevm in line with cargo / npm / Poetry / Bundler:
+the project manifest carries the *declaration* of dependencies
+(human-readable, in semver-constraint form), the lockfile carries the
+*materialisation* (resolved versions, content hashes, transitive
+graph). Pre-`[requires]` schema kept the user's pkgrefs only in
+`vibe.lock`, which made `vibe install` (no arguments) a no-op and made
+PR diffs unreadable (a one-line dep change manifested as dozens of
+hash/source/ref lines in the lockfile).
+
+**Scope (closed in one slice).**
+
+- ✅ `ProjectManifest` gains `[requires]` section, reusing the existing `Requires` type from `vibe-package.toml`. Round-trips through serde with the modern `packages = ["flow:wal@^0.1", …]` shape; pre-`[requires]` manifests parse cleanly with the section absent.
+- ✅ `vibe install <pkgref>` writes the user-supplied pkgref to `vibe.toml` `[requires].packages` after a successful apply (de-duplicated by `(kind, name)`; constraint change overwrites prior entry).
+- ✅ `vibe install` with no arguments reads `[requires].packages` and installs every entry — the cargo `cargo build` / npm `npm install` shape. First-run migration path: when `[requires]` is empty but `vibe.lock` `meta.root_dependencies` is not, the manifest is seeded from the lockfile snapshot before resolving.
+- ✅ `vibe uninstall <pkgref>` drops the matching entry from `vibe.toml` `[requires].packages` symmetrically with the lockfile cleanup. Pure transitives (never declared) leave the manifest untouched.
+- ✅ Spec updated: `VIBEVM-SPEC.md` §5.6 install workflow gains an `install:update-manifest` node + the install-from-manifest mode; §7.4 reframes `meta.root_dependencies` as a mirror of `vibe.toml`; §7.5 adds the `[requires]` section and the two-file model paragraph. `PROP-002 §2.7` refactored accordingly.
+
+**Estimated effort.** One slice. Tests: 4 e2e + 4 unit + 2 schema round-trip.
+
 ---
 
 ## M1.5 — Generation

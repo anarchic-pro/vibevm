@@ -30,7 +30,8 @@ vibe uninstall <pkgref> [--path <dir>] [--assume-yes]
 2. The full `files_written` list from the entry is filtered against the user-owned-paths set.
 3. Plan is rendered; the operator confirms (unless `--assume-yes` / `--json`).
 4. Files are removed; empty parent directories are pruned upward where safe.
-5. The lockfile entry is dropped. If the package was a root (`[meta].root_dependencies` contains it), it's removed from that list too. Transitives are not auto-pruned in M1 — that's reserved for `vibe update --prune` in a later milestone.
+5. `vibe.toml` `[requires].packages` is rewritten without the matching entry (no-op when the package was a pure transitive, never declared in the manifest).
+6. The lockfile entry is dropped. If the package was a root (`[meta].root_dependencies` contains it), it's removed from that list too. Transitives are not auto-pruned in M1 — that's reserved for `vibe update --prune` in a later milestone.
 
 ## Examples
 

@@ -2,10 +2,14 @@
 
 Installs one or more packages into the current project. Every install runs through the four-stage pipeline pinned in [`VIBEVM-SPEC.md` §5.6](../../VIBEVM-SPEC.md): **resolve → plan → confirm → apply**. Installs are transitive — when a package's `[requires]` lists other packages, the depsolver pulls them in automatically.
 
+Two-file model. `vibe.toml` carries the *declaration* — `[requires].packages` lists every pkgref the project depends on directly. `vibe.lock` carries the *materialisation* — exact resolved versions, content hashes, transitive graph. Same shape as Cargo (`Cargo.toml` / `Cargo.lock`), npm (`package.json` / `package-lock.json`), Poetry, Bundler.
+
+`vibe install <pkgref>` does two things: it resolves and applies the package as before, AND it appends the user-supplied pkgref to `vibe.toml` `[requires].packages` (de-duplicated by `(kind, name)`; a re-install with a new constraint replaces the old entry). `vibe install` without arguments reads `[requires].packages` and installs every entry — the cargo `cargo build` / npm `npm install` shape, useful when cloning a vibevm project from git for the first time.
+
 ## Usage
 
 ```
-vibe install <pkgref> [<pkgref> ...] [--path <dir>] [--registry <path>]
+vibe install [<pkgref> ...] [--path <dir>] [--registry <path>]
              [--assume-yes]
              [--json | --quiet]
 ```
@@ -46,22 +50,30 @@ Per package, every entry in the package's `vibe-package.toml` `[writes].files` l
 
 User-owned files (`spec/boot/00-core.md`, `spec/boot/90-user.md`, `spec/WAL.md`, `VIBEVM-SPEC.md`, `refs/book/**`, any `00-` or `90-` boot file) are never written. Any package whose declared writes target a user-owned path is rejected at plan time with exit code `3`.
 
-## Lockfile
+## Manifest and lockfile updates
 
-The lockfile (`vibe.lock`) is updated after every successful apply, in schema v2 shape ([`VIBEVM-SPEC.md` §7.4](../../VIBEVM-SPEC.md)):
+After a successful apply, `vibe install` writes:
 
-- `[meta].schema_version = 2`
-- `[meta].root_dependencies` carries the user-typed pkgrefs (distinct from transitives the solver pulled in).
-- Per `[[package]]`: `kind`, `name`, `version`, `registry` (matching `[[registry]].name`), `source_url`, `source_ref`, `resolved_commit`, `content_hash` (the *identity* of the install), `boot_snippet`, `files_written`, `dependencies`, `overridden`.
+- `vibe.toml` `[requires].packages` — appends each user-supplied pkgref (CLI args), de-duplicated by `(kind, name)`. A repeat install with a new constraint (`flow:wal@^0.3` → `flow:wal@=0.4.0`) overwrites the old entry. A no-arguments install (install-from-manifest mode) leaves the section untouched — the manifest was already authoritative for that input.
+- `vibe.lock` — schema v2 shape ([`VIBEVM-SPEC.md` §7.4](../../VIBEVM-SPEC.md)):
+  - `[meta].schema_version = 2`
+  - `[meta].root_dependencies` mirrors `vibe.toml` `[requires].packages` so the lockfile is a self-contained snapshot of the solve state.
+  - Per `[[package]]`: `kind`, `name`, `version`, `registry` (matching `[[registry]].name`), `source_url`, `source_ref`, `resolved_commit`, `content_hash` (the *identity* of the install), `boot_snippet`, `files_written`, `dependencies`, `overridden`.
 
-A v1 lockfile from a pre-M1.1-revision install is read transparently (serde aliasing) and rewritten in v2 shape on the next apply.
+A v1 lockfile from a pre-M1.1-revision install is read transparently (serde aliasing) and rewritten in v2 shape on the next apply. A pre-`[requires]` `vibe.toml` (manifest predates the section) is migrated automatically: when a no-arguments install finds an empty `[requires]` but a non-empty `meta.root_dependencies`, the manifest is seeded from the lockfile snapshot before resolving.
 
 ## Examples
 
-Install one flow from the configured registry:
+Install one flow from the configured registry (and record it in `vibe.toml` `[requires]`):
 
 ```bash
 vibe install flow:wal
+```
+
+Reproduce a project's full package set after `git clone` (reads `vibe.toml` `[requires]`):
+
+```bash
+vibe install
 ```
 
 Install three flows in one transaction:
