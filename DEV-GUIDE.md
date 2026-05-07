@@ -169,11 +169,11 @@ function Update-Vibe {
                 # instead of silently leaving a stale binary in place.
                 try {
                     Copy-Item -LiteralPath $src -Destination $dst -Force -ErrorAction Stop
-                    Write-Host "✓ vibe.exe → $dst" -ForegroundColor Green
+                    Write-Host "[OK] vibe.exe -> $dst" -ForegroundColor Green
                     $ok = $true
                 } catch {
                     Write-Error "Copy-Item failed: $_"
-                    Write-Error "Hint: another process may hold vibe.exe — close opencode / Claude / any shell currently running vibe and retry."
+                    Write-Error "Hint: another process may hold vibe.exe -- close opencode / Claude / any shell currently running vibe and retry."
                 }
             }
         }
@@ -204,6 +204,8 @@ PowerShell accepts unambiguous parameter-name prefixes, so `vu -Re` would be amb
 
 If PowerShell refuses to load the profile with `running scripts is disabled on this system`, allow user-scope scripts once: `Set-ExecutionPolicy -Scope CurrentUser RemoteSigned`.
 
+**Encoding gotcha.** Windows PowerShell 5.1 reads `.ps1` files as ANSI codepage when they have no BOM. Notepad (default save) writes ANSI / UTF-8-no-BOM, so any non-ASCII character pasted into `$PROFILE` (smart quotes, em-dashes, check marks) becomes mojibake and breaks the parser ("string is missing the terminator"). The snippet above is intentionally ASCII-only to avoid this. If you must include non-ASCII (e.g. Cyrillic comments), save the profile as **UTF-8 with BOM** — in notepad: File → Save As → Encoding → "UTF-8 with BOM".
+
 #### Bash / zsh (macOS, Linux, Git Bash)
 
 Add to `~/.bashrc` / `~/.zshrc`:
@@ -232,8 +234,8 @@ vu() {
         # cp's exit status surfaces destination-locked errors
         # (busy on Windows when a process holds vibe.exe).
         cp "$VIBEVM_REPO/target/debug/vibe$ext" "$HOME/.cargo/bin/vibe$ext" \
-            && echo "✓ vibe$ext → $HOME/.cargo/bin/vibe$ext" \
-            || { echo "vu: cp failed — close any running vibe / vibe mcp serve and retry" >&2; return 1; }
+            && echo "[OK] vibe$ext -> $HOME/.cargo/bin/vibe$ext" \
+            || { echo "vu: cp failed -- close any running vibe / vibe mcp serve and retry" >&2; return 1; }
     fi
     if [ "$refresh" = true ]; then
         vibe mcp upgrade --yes --invoked-by shell-update-vibe
