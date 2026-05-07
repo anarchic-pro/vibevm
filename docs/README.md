@@ -28,6 +28,14 @@ The `vibe` binary is the single entry point for every operation. Global flags `-
 | [`vibe mcp serve`](commands/mcp-serve.md) | Run the JSON-RPC MCP server over stdio. Agents invoke this themselves via the configs written by `mcp install`. |
 | [`vibe version`](commands/version.md) | Print the binary's version. |
 
+## Guides
+
+End-to-end walkthroughs that compose multiple commands into a real scenario. Each guide is **dual-purpose** — copy-paste tutorial for new operators, and an integration-test checklist for vibevm releases (every guide ends with an acceptance section that names what must be true after a successful run).
+
+| Guide | What it covers |
+| --- | --- |
+| [Quickstart: opencode + vibevm hello-world](guides/agent-mcp-quickstart-opencode.md) | Wire opencode to vibevm via MCP, install a skill, run hello-world prompts; integration-test gate for M1.7 slice 4. |
+
 ## Architecture overview
 
 [`architecture.md`](architecture.md) — contributor-facing tour of the workspace: how the crates fit together, what each abstraction trait does (`GitBackend`, `Registry`, `MultiRegistryResolver`, `DepProvider` / `DepSolver`, `RepoCreator`), how the install / publish / sync pipelines walk, where to look in the source for what.
