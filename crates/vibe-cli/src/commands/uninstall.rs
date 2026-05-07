@@ -8,7 +8,7 @@ use anyhow::{Context, Result, bail};
 use dialoguer::Confirm;
 use serde::Serialize;
 use vibe_core::PackageRef;
-use vibe_core::manifest::Lockfile;
+use vibe_core::manifest::{Lockfile, ProjectManifest};
 use vibe_install::{InstallError, apply_uninstall, plan_uninstall, unregister_installed};
 
 use crate::cli::UninstallArgs;
@@ -16,6 +16,7 @@ use crate::output;
 
 pub fn run(ctx: &output::Context, args: UninstallArgs) -> Result<()> {
     let project_root = resolve_project_root(&args.path)?;
+    let mut manifest = load_project_manifest(&project_root)?;
     let mut lockfile = load_lockfile(&project_root)?;
 
     let pkgref = PackageRef::parse(&args.package)
@@ -63,9 +64,33 @@ pub fn run(ctx: &output::Context, args: UninstallArgs) -> Result<()> {
         &pkgref,
         crate::commands::init::current_timestamp_utc(),
     )?;
+
+    // Drop the pkgref from `vibe.toml` `[requires].packages` if it was
+    // declared there. `unregister_installed` already removed the
+    // matching entry from `lockfile.meta.root_dependencies`; this
+    // mirror keeps the manifest authoritative for user-declared deps
+    // (PROP-002 §2.7). No-op when uninstalling a pure transitive that
+    // was never declared in the manifest.
+    let manifest_changed = drop_from_manifest_requires(&mut manifest, &pkgref);
+    if manifest_changed {
+        manifest.write(project_root.join(ProjectManifest::FILENAME))?;
+    }
+
     lockfile.write(project_root.join(Lockfile::FILENAME))?;
 
     emit_report(ctx, &plan.kind.to_string(), &plan.name, &plan.version.to_string(), &removed)
+}
+
+/// Remove the matching pkgref from the project manifest's
+/// `[requires].packages`. Returns `true` iff an entry was actually
+/// removed (caller persists only on change).
+fn drop_from_manifest_requires(manifest: &mut ProjectManifest, pkgref: &PackageRef) -> bool {
+    let before = manifest.requires.packages.len();
+    manifest
+        .requires
+        .packages
+        .retain(|r| !(r.kind == pkgref.kind && r.name == pkgref.name));
+    manifest.requires.packages.len() != before
 }
 
 #[derive(Debug, Serialize)]
@@ -138,4 +163,9 @@ fn resolve_project_root(path: &Path) -> Result<PathBuf> {
 fn load_lockfile(root: &Path) -> Result<Lockfile> {
     let path = root.join(Lockfile::FILENAME);
     Ok(Lockfile::read(&path)?)
+}
+
+fn load_project_manifest(root: &Path) -> Result<ProjectManifest> {
+    let path = root.join(ProjectManifest::FILENAME);
+    Ok(ProjectManifest::read(&path)?)
 }
