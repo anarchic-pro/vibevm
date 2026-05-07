@@ -83,6 +83,83 @@ cargo fmt --all
 
 81 tests green on `main` as of the last checkpoint; clippy clean with `-D warnings`.
 
+### 3.1 Quick-reinstall shortcut (optional)
+
+While iterating on `vibe-cli` you'll typically rebuild + reinstall many times a session:
+
+```
+cd <repo>
+cargo install --path crates/vibe-cli --locked
+```
+
+Below are platform-specific shell shortcuts for that pair, written so the helper preserves your CWD (uses `Push-Location` / `pushd`) and bails on a failed build before doing anything else (so you can chain follow-ups like `vibe mcp upgrade` safely).
+
+#### PowerShell (Windows)
+
+PowerShell aliases (`Set-Alias`) cannot accept arguments or chain commands — use a function plus a short alias.
+
+Add to your `$PROFILE` (`notepad $PROFILE`; create with `New-Item -Path $PROFILE -ItemType File -Force` if absent):
+
+```powershell
+$env:VIBEVM_REPO = 'C:\Users\<you>\gits\vibevm'   # adjust path
+
+function Update-Vibe {
+    [CmdletBinding()]
+    param(
+        # -Refresh: after a successful install, run `vibe mcp upgrade --yes`
+        # so SKILL.md / MCP-config files in every wired agent get
+        # resynced to the freshly-built binary.
+        [switch]$Refresh
+    )
+    if (-not (Test-Path $env:VIBEVM_REPO)) {
+        Write-Error "VIBEVM_REPO ($env:VIBEVM_REPO) does not exist"
+        return
+    }
+    Push-Location $env:VIBEVM_REPO
+    try {
+        cargo install --path crates/vibe-cli --locked
+        if ($LASTEXITCODE -eq 0 -and $Refresh) {
+            vibe mcp upgrade --yes --invoked-by powershell-update-vibe
+        }
+    } finally {
+        Pop-Location
+    }
+}
+Set-Alias vu Update-Vibe
+```
+
+Reload the profile in the current session (or open a new window):
+
+```powershell
+. $PROFILE
+```
+
+Usage: `vu` rebuilds; `vu -Refresh` (or `vu -r`, PowerShell accepts unambiguous prefixes) rebuilds and refreshes integrations.
+
+If PowerShell refuses to load the profile with `running scripts is disabled on this system`, allow user-scope scripts once: `Set-ExecutionPolicy -Scope CurrentUser RemoteSigned`.
+
+#### Bash / zsh (macOS, Linux, Git Bash)
+
+Add to `~/.bashrc` / `~/.zshrc`:
+
+```bash
+export VIBEVM_REPO="$HOME/gits/vibevm"   # adjust path
+
+vu() {
+    [ -d "$VIBEVM_REPO" ] || { echo "VIBEVM_REPO ($VIBEVM_REPO) does not exist" >&2; return 1; }
+    ( cd "$VIBEVM_REPO" && cargo install --path crates/vibe-cli --locked ) || return $?
+    if [ "$1" = "--refresh" ] || [ "$1" = "-r" ]; then
+        vibe mcp upgrade --yes --invoked-by shell-update-vibe
+    fi
+}
+```
+
+Reload: `source ~/.bashrc` (or `~/.zshrc`).
+
+Usage: `vu` rebuilds; `vu --refresh` (or `vu -r`) rebuilds + refreshes MCP integrations.
+
+The `( … )` subshell handles CWD restoration automatically — exit the subshell, you're back where you started. The `|| return $?` propagates a build failure so the optional refresh step doesn't run against a stale binary.
+
 ## 4. Manual smoke-tests
 
 Live integration scripts live under [`manual-tests/`](manual-tests/). One file per scenario, self-contained walkthrough with clean-slate setup and teardown. Read [`manual-tests/README.md`](manual-tests/README.md) for the authoring conventions. Run the relevant script before tagging any milestone and after any change to an integration surface (git backend, CLI args, lockfile schema).
