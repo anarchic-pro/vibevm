@@ -2391,6 +2391,230 @@ fn mcp_upgrade_scope_project_without_vibe_toml_errors() {
 }
 
 #[test]
+fn mcp_uninstall_removes_vibevm_block_from_claude() {
+    let project = tempfile::tempdir().unwrap();
+    init_project(project.path());
+    fs::create_dir_all(project.path().join(".claude")).unwrap();
+
+    // Install first.
+    vibe()
+        .arg("mcp")
+        .arg("install")
+        .arg("--path")
+        .arg(project.path())
+        .arg("--agent")
+        .arg("claude")
+        .arg("--scope")
+        .arg("project")
+        .arg("--what")
+        .arg("both")
+        .assert()
+        .success();
+    let settings = project.path().join(".claude/settings.json");
+    let skill = project.path().join(".claude/skills/vibevm/SKILL.md");
+    assert!(settings.is_file());
+    assert!(skill.is_file());
+
+    // Uninstall (default --what is "both" — no flag needed).
+    let out = vibe()
+        .arg("--json")
+        .arg("mcp")
+        .arg("uninstall")
+        .arg("--path")
+        .arg(project.path())
+        .arg("--agent")
+        .arg("claude")
+        .arg("--scope")
+        .arg("project")
+        .output()
+        .unwrap();
+    assert!(out.status.success(), "stderr: {}", String::from_utf8_lossy(&out.stderr));
+    let v: serde_json::Value = serde_json::from_slice(&out.stdout).unwrap();
+    assert_eq!(v["command"], "mcp:uninstall");
+
+    let claude_mcp = v["results"]
+        .as_array()
+        .unwrap()
+        .iter()
+        .find(|r| r["agent"] == "claude")
+        .unwrap();
+    assert_eq!(claude_mcp["status"], "removed");
+    let claude_skill = v["skill_results"]
+        .as_array()
+        .unwrap()
+        .iter()
+        .find(|r| r["agent"] == "claude")
+        .unwrap();
+    assert_eq!(claude_skill["status"], "removed");
+
+    // Verify on-disk state: vibevm-block gone, settings.json still exists.
+    assert!(settings.is_file(), "settings.json should remain (other keys preserved)");
+    let parsed: serde_json::Value =
+        serde_json::from_str(&fs::read_to_string(&settings).unwrap()).unwrap();
+    assert!(
+        parsed["mcpServers"].get("vibevm").is_none(),
+        "expected vibevm key removed; got {parsed}"
+    );
+    // Skill file gone, parent dir cleaned up.
+    assert!(!skill.exists(), "SKILL.md should be deleted");
+    assert!(
+        !skill.parent().unwrap().exists(),
+        "parent vibevm/ skill dir should be cleaned"
+    );
+}
+
+#[test]
+fn mcp_uninstall_preserves_foreign_keys() {
+    let project = tempfile::tempdir().unwrap();
+    init_project(project.path());
+    fs::create_dir_all(project.path().join(".claude")).unwrap();
+
+    // Plant a config with both vibevm and another server.
+    let settings = project.path().join(".claude/settings.json");
+    fs::write(
+        &settings,
+        r#"{
+          "preexisting": "keep-me",
+          "mcpServers": {
+            "vibevm": { "command": "vibe", "args": ["mcp", "serve"] },
+            "other": { "command": "other-bin", "args": [] }
+          }
+        }"#,
+    )
+    .unwrap();
+
+    vibe()
+        .arg("mcp")
+        .arg("uninstall")
+        .arg("--path")
+        .arg(project.path())
+        .arg("--agent")
+        .arg("claude")
+        .arg("--scope")
+        .arg("project")
+        .arg("--config-only")
+        .assert()
+        .success();
+
+    let parsed: serde_json::Value =
+        serde_json::from_str(&fs::read_to_string(&settings).unwrap()).unwrap();
+    assert_eq!(parsed["preexisting"], "keep-me");
+    assert!(parsed["mcpServers"].get("vibevm").is_none());
+    assert_eq!(parsed["mcpServers"]["other"]["command"], "other-bin");
+}
+
+#[test]
+fn mcp_uninstall_dry_run_does_not_delete() {
+    let project = tempfile::tempdir().unwrap();
+    init_project(project.path());
+    fs::create_dir_all(project.path().join(".claude")).unwrap();
+    vibe()
+        .arg("mcp")
+        .arg("install")
+        .arg("--path")
+        .arg(project.path())
+        .arg("--agent")
+        .arg("claude")
+        .arg("--scope")
+        .arg("project")
+        .arg("--what")
+        .arg("both")
+        .assert()
+        .success();
+    let settings = project.path().join(".claude/settings.json");
+    let skill = project.path().join(".claude/skills/vibevm/SKILL.md");
+    let pre_settings = fs::read_to_string(&settings).unwrap();
+    let pre_skill = fs::read_to_string(&skill).unwrap();
+
+    vibe()
+        .arg("mcp")
+        .arg("uninstall")
+        .arg("--path")
+        .arg(project.path())
+        .arg("--agent")
+        .arg("claude")
+        .arg("--scope")
+        .arg("project")
+        .arg("--dry-run")
+        .assert()
+        .success();
+
+    assert_eq!(fs::read_to_string(&settings).unwrap(), pre_settings);
+    assert_eq!(fs::read_to_string(&skill).unwrap(), pre_skill);
+    assert!(skill.exists());
+}
+
+#[test]
+fn mcp_uninstall_reports_not_installed_when_block_absent() {
+    let project = tempfile::tempdir().unwrap();
+    init_project(project.path());
+    fs::create_dir_all(project.path().join(".claude")).unwrap();
+
+    let out = vibe()
+        .arg("--json")
+        .arg("mcp")
+        .arg("uninstall")
+        .arg("--path")
+        .arg(project.path())
+        .arg("--agent")
+        .arg("claude")
+        .arg("--scope")
+        .arg("project")
+        .output()
+        .unwrap();
+    assert!(out.status.success());
+    let v: serde_json::Value = serde_json::from_slice(&out.stdout).unwrap();
+    let claude_mcp = v["results"]
+        .as_array()
+        .unwrap()
+        .iter()
+        .find(|r| r["agent"] == "claude")
+        .unwrap();
+    assert_eq!(claude_mcp["status"], "not-installed");
+}
+
+#[test]
+fn mcp_uninstall_skill_only_keeps_mcp_block() {
+    let project = tempfile::tempdir().unwrap();
+    init_project(project.path());
+    fs::create_dir_all(project.path().join(".claude")).unwrap();
+    vibe()
+        .arg("mcp")
+        .arg("install")
+        .arg("--path")
+        .arg(project.path())
+        .arg("--agent")
+        .arg("claude")
+        .arg("--scope")
+        .arg("project")
+        .arg("--what")
+        .arg("both")
+        .assert()
+        .success();
+
+    vibe()
+        .arg("mcp")
+        .arg("uninstall")
+        .arg("--path")
+        .arg(project.path())
+        .arg("--agent")
+        .arg("claude")
+        .arg("--scope")
+        .arg("project")
+        .arg("--skill-only")
+        .assert()
+        .success();
+
+    let settings = project.path().join(".claude/settings.json");
+    let parsed: serde_json::Value =
+        serde_json::from_str(&fs::read_to_string(&settings).unwrap()).unwrap();
+    // mcp block kept
+    assert_eq!(parsed["mcpServers"]["vibevm"]["command"], "vibe");
+    // skill file removed
+    assert!(!project.path().join(".claude/skills/vibevm/SKILL.md").exists());
+}
+
+#[test]
 fn mcp_status_reports_per_agent_state() {
     let project = tempfile::tempdir().unwrap();
     init_project(project.path());

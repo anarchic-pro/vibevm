@@ -505,6 +505,14 @@ pub enum McpSubcommand {
     /// upgrade) to pull the new SKILL.md / wire shape into agents
     /// that already had vibevm wired.
     Upgrade(McpUpgradeArgs),
+
+    /// Remove vibevm MCP integration from one or more agents. Drops
+    /// the `vibevm` key from each agent's MCP config (foreign keys
+    /// preserved) and deletes the SKILL.md file (and its parent
+    /// `vibevm/` skill dir if it becomes empty). Same scope axis as
+    /// install / upgrade: project, user, both. Wizard-driven without
+    /// flags; fully scriptable with `--scope` / `--what` / `--agent`.
+    Uninstall(McpUninstallArgs),
 }
 
 #[derive(Debug, clap::Args)]
@@ -567,6 +575,44 @@ pub struct McpStatusArgs {
     /// Project root with `vibe.toml`. Defaults to current directory.
     #[arg(long, default_value = ".")]
     pub path: PathBuf,
+}
+
+#[derive(Debug, clap::Args)]
+pub struct McpUninstallArgs {
+    /// Project root with `vibe.toml`. Defaults to current directory.
+    /// Project-scope walks require it; user-scope works anywhere.
+    #[arg(long, default_value = ".")]
+    pub path: PathBuf,
+
+    /// Where to remove from. `project` (only project files), `user`
+    /// (only user-level), `both` (default — wipe project AND user).
+    /// In wizard mode this is the first prompt.
+    #[arg(long)]
+    pub scope: Option<String>,
+
+    /// Restrict to one or more agents. Same vocabulary as install:
+    /// `all`, `claude`, `claude-desktop`, `cursor`, `opencode`,
+    /// `codex`. Default: all five.
+    #[arg(long)]
+    pub agent: Option<String>,
+
+    /// Restrict to MCP-config files only (keep SKILL.md). Default:
+    /// remove both.
+    #[arg(long = "config-only", conflicts_with = "skill_only")]
+    pub config_only: bool,
+
+    /// Restrict to SKILL.md files only (keep MCP server entry).
+    /// Default: remove both.
+    #[arg(long = "skill-only")]
+    pub skill_only: bool,
+
+    /// Print the removal plan and exit without writing.
+    #[arg(long)]
+    pub dry_run: bool,
+
+    /// Skip the apply confirm prompt. Useful in CI / cron.
+    #[arg(long)]
+    pub yes: bool,
 }
 
 #[derive(Debug, clap::Args)]

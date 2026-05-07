@@ -49,7 +49,8 @@ use vibe_core::manifest::ProjectManifest;
 use vibe_mcp::{Server, ServerContext};
 
 use crate::cli::{
-    McpArgs, McpInstallArgs, McpServeArgs, McpStatusArgs, McpSubcommand, McpUpgradeArgs,
+    McpArgs, McpInstallArgs, McpServeArgs, McpStatusArgs, McpSubcommand, McpUninstallArgs,
+    McpUpgradeArgs,
 };
 use crate::output;
 
@@ -65,6 +66,7 @@ pub fn run(ctx: &output::Context, args: McpArgs) -> Result<()> {
         McpSubcommand::Install(sub) => run_install(ctx, sub),
         McpSubcommand::Status(sub) => run_status(ctx, sub),
         McpSubcommand::Upgrade(sub) => run_upgrade(ctx, sub),
+        McpSubcommand::Uninstall(sub) => run_uninstall(ctx, sub),
     }
 }
 
@@ -1032,6 +1034,312 @@ fn print_upgrade_results(
         let prefix = match r.status {
             "unchanged" => "✓",
             "would-update" | "updated" => if dry_run { "would" } else { "updated" },
+            "not-installed" => "·",
+            other => other,
+        };
+        let note = r.note.as_deref().map(|n| format!(" ({n})")).unwrap_or_default();
+        let path_str = r.path.as_deref().unwrap_or("(no skill loader)");
+        ctx.step(&format!(
+            "{} skill   {} ({}) → {}{note}",
+            prefix, r.agent, r.scope, path_str
+        ));
+    }
+}
+
+// ---------------------------------------------------------------------------
+// uninstall — scan + remove vibevm entries / SKILL.md
+// ---------------------------------------------------------------------------
+
+#[derive(Debug, Serialize)]
+struct UninstallReport {
+    ok: bool,
+    command: &'static str,
+    project: Option<String>,
+    scope: &'static str,
+    what: &'static str,
+    /// Per-(agent, scope) MCP-config removal outcomes. Status:
+    /// `removed`, `would-remove`, `not-installed`, `skipped`.
+    results: Vec<AgentInstallReport>,
+    /// Per-(agent, scope) skill removal outcomes. Same status set.
+    skill_results: Vec<SkillInstallReport>,
+    dry_run: bool,
+}
+
+fn run_uninstall(ctx: &output::Context, args: McpUninstallArgs) -> Result<()> {
+    let scope = if let Some(s) = &args.scope {
+        Scope::parse(s)?
+    } else {
+        Scope::Both
+    };
+    let what = if args.config_only {
+        What::Mcp
+    } else if args.skill_only {
+        What::Skill
+    } else {
+        What::Both
+    };
+
+    let project_root: Option<PathBuf> = args
+        .path
+        .canonicalize()
+        .ok()
+        .map(super::init::strip_unc_public)
+        .filter(|p| p.join(ProjectManifest::FILENAME).exists());
+
+    if scope == Scope::Project && project_root.is_none() {
+        bail!(
+            "no `vibe.toml` in `{}`; uninstall with --scope project requires a project. \
+             Pass `--scope user` to remove user-level installs only.",
+            args.path.display()
+        );
+    }
+
+    let agents: Vec<Agent> = if let Some(filter) = &args.agent {
+        Agent::parse_filter(filter)?
+    } else {
+        Agent::ALL.to_vec()
+    };
+
+    let mut results: Vec<AgentInstallReport> = Vec::new();
+    let mut skill_results: Vec<SkillInstallReport> = Vec::new();
+
+    for agent in &agents {
+        for concrete_scope in scope.expand() {
+            if concrete_scope == Scope::Project && project_root.is_none() {
+                continue;
+            }
+
+            // ---- MCP entry ----
+            if what.includes_mcp() {
+                let path = agent.config_path(concrete_scope, project_root.as_deref())?;
+                if let Some(path) = path {
+                    let outcome =
+                        uninstall_mcp_entry(*agent, concrete_scope, &path, args.dry_run)?;
+                    results.push(outcome);
+                }
+            }
+
+            // ---- SKILL.md ----
+            if what.includes_skill() {
+                let outcome = uninstall_skill(
+                    *agent,
+                    concrete_scope,
+                    project_root.as_deref(),
+                    args.dry_run,
+                )?;
+                if let Some(o) = outcome {
+                    skill_results.push(o);
+                }
+            }
+        }
+    }
+
+    let report = UninstallReport {
+        ok: true,
+        command: "mcp:uninstall",
+        project: project_root.as_ref().map(|p| p.display().to_string()),
+        scope: scope.as_str(),
+        what: what.as_str(),
+        results: results.clone(),
+        skill_results: skill_results.clone(),
+        dry_run: args.dry_run,
+    };
+
+    if ctx.is_json() {
+        ctx.emit_json(&report)?;
+        return Ok(());
+    }
+    if ctx.is_quiet() {
+        let removed = results
+            .iter()
+            .filter(|r| matches!(r.status, "would-remove" | "removed"))
+            .count()
+            + skill_results
+                .iter()
+                .filter(|r| matches!(r.status, "would-remove" | "removed"))
+                .count();
+        let verb = if args.dry_run { "previewed" } else { "removed" };
+        ctx.summary(&format!("vibe mcp uninstall: {removed} entr{} {verb}",
+            if removed == 1 { "y" } else { "ies" }));
+        return Ok(());
+    }
+
+    print_uninstall_results(ctx, args.dry_run, &results, &skill_results);
+    Ok(())
+}
+
+/// Remove the `vibevm` block from an MCP-config file. Foreign keys
+/// preserved; if the section becomes empty after removal, it stays as
+/// `{}` / `[section]` rather than being deleted (we don't trim other
+/// people's containers).
+fn uninstall_mcp_entry(
+    agent: Agent,
+    scope: Scope,
+    config_path: &Path,
+    dry_run: bool,
+) -> Result<AgentInstallReport> {
+    if !config_path.exists() {
+        return Ok(AgentInstallReport {
+            agent: agent.as_str().to_string(),
+            scope: scope.as_str(),
+            config_path: config_path.display().to_string().replace('\\', "/"),
+            status: "not-installed",
+            note: Some("config file does not exist".into()),
+        });
+    }
+    let section = agent.mcp_section_key();
+    let has_block = match agent.config_format() {
+        ConfigFormat::Json => {
+            read_json(config_path)?
+                .get(section)
+                .and_then(|v| v.get(SERVER_NAME))
+                .is_some()
+        }
+        ConfigFormat::Toml => {
+            read_toml(config_path)?
+                .get(section)
+                .and_then(|v| v.as_table())
+                .and_then(|t| t.get(SERVER_NAME))
+                .is_some()
+        }
+    };
+    if !has_block {
+        return Ok(AgentInstallReport {
+            agent: agent.as_str().to_string(),
+            scope: scope.as_str(),
+            config_path: config_path.display().to_string().replace('\\', "/"),
+            status: "not-installed",
+            note: Some(format!("no `{SERVER_NAME}` entry in {section}")),
+        });
+    }
+
+    if dry_run {
+        return Ok(AgentInstallReport {
+            agent: agent.as_str().to_string(),
+            scope: scope.as_str(),
+            config_path: config_path.display().to_string().replace('\\', "/"),
+            status: "would-remove",
+            note: Some(format!("drop `{SERVER_NAME}` from {section}")),
+        });
+    }
+
+    match agent.config_format() {
+        ConfigFormat::Json => {
+            let stripped = strip_json_entry(config_path, section, SERVER_NAME)?;
+            let serialized = serde_json::to_string_pretty(&stripped)
+                .with_context(|| "serializing stripped JSON config")?;
+            fs::write(config_path, serialized + "\n")
+                .with_context(|| format!("writing `{}`", config_path.display()))?;
+        }
+        ConfigFormat::Toml => {
+            let stripped = strip_toml_entry(config_path, section, SERVER_NAME)?;
+            let serialized = toml::to_string_pretty(&stripped)
+                .with_context(|| "serializing stripped TOML config")?;
+            fs::write(config_path, serialized)
+                .with_context(|| format!("writing `{}`", config_path.display()))?;
+        }
+    }
+    Ok(AgentInstallReport {
+        agent: agent.as_str().to_string(),
+        scope: scope.as_str(),
+        config_path: config_path.display().to_string().replace('\\', "/"),
+        status: "removed",
+        note: Some(format!("dropped `{SERVER_NAME}` from {section}")),
+    })
+}
+
+fn uninstall_skill(
+    agent: Agent,
+    scope: Scope,
+    project_root: Option<&Path>,
+    dry_run: bool,
+) -> Result<Option<SkillInstallReport>> {
+    let Some(path) = agent.skill_path(scope, project_root)? else {
+        return Ok(None);
+    };
+    if !path.exists() {
+        return Ok(Some(SkillInstallReport {
+            agent: agent.as_str().to_string(),
+            scope: scope.as_str(),
+            path: Some(path.display().to_string().replace('\\', "/")),
+            status: "not-installed",
+            note: Some("SKILL.md does not exist".into()),
+        }));
+    }
+    if dry_run {
+        return Ok(Some(SkillInstallReport {
+            agent: agent.as_str().to_string(),
+            scope: scope.as_str(),
+            path: Some(path.display().to_string().replace('\\', "/")),
+            status: "would-remove",
+            note: Some("delete SKILL.md (and parent vibevm/ dir if empty)".into()),
+        }));
+    }
+    fs::remove_file(&path)
+        .with_context(|| format!("removing SKILL.md `{}`", path.display()))?;
+    // Try to remove the parent `vibevm/` skill dir if it became empty.
+    // Best-effort — don't fail uninstall if the dir has stragglers.
+    if let Some(parent) = path.parent() {
+        let _ = fs::remove_dir(parent);
+    }
+    Ok(Some(SkillInstallReport {
+        agent: agent.as_str().to_string(),
+        scope: scope.as_str(),
+        path: Some(path.display().to_string().replace('\\', "/")),
+        status: "removed",
+        note: None,
+    }))
+}
+
+fn strip_json_entry(
+    config_path: &Path,
+    section_key: &str,
+    server_name: &str,
+) -> Result<JsonValue> {
+    let mut existing = read_json(config_path)?;
+    if let Some(obj) = existing.as_object_mut()
+        && let Some(servers) = obj.get_mut(section_key).and_then(|v| v.as_object_mut())
+    {
+        servers.remove(server_name);
+    }
+    Ok(existing)
+}
+
+fn strip_toml_entry(
+    config_path: &Path,
+    section_key: &str,
+    server_name: &str,
+) -> Result<toml::Value> {
+    let mut existing = read_toml(config_path)?;
+    if let Some(root) = existing.as_table_mut()
+        && let Some(servers) = root.get_mut(section_key).and_then(|v| v.as_table_mut())
+    {
+        servers.remove(server_name);
+    }
+    Ok(existing)
+}
+
+fn print_uninstall_results(
+    ctx: &output::Context,
+    dry_run: bool,
+    results: &[AgentInstallReport],
+    skill_results: &[SkillInstallReport],
+) {
+    for r in results {
+        let prefix = match r.status {
+            "removed" | "would-remove" => if dry_run { "would" } else { "removed" },
+            "not-installed" => "·",
+            other => other,
+        };
+        let note = r.note.as_deref().map(|n| format!(" ({n})")).unwrap_or_default();
+        ctx.step(&format!(
+            "{} mcp     {} ({}) → {}{note}",
+            prefix, r.agent, r.scope, r.config_path
+        ));
+    }
+    for r in skill_results {
+        let prefix = match r.status {
+            "removed" | "would-remove" => if dry_run { "would" } else { "removed" },
             "not-installed" => "·",
             other => other,
         };
