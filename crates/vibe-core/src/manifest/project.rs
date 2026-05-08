@@ -154,6 +154,8 @@ impl From<ProjectManifestWire> for ProjectManifest {
                 url: l.url,
                 r#ref: l.r#ref,
                 naming: NamingConvention::KindName,
+                auth: AuthKind::None,
+                token_env: None,
             }],
         };
         ProjectManifest {
@@ -199,7 +201,8 @@ pub struct LlmSection {
 }
 
 /// A single entry in `[[registry]]` — an organization-root URL plus the
-/// naming convention that maps pkgrefs to per-package repos under it.
+/// naming convention that maps pkgrefs to per-package repos under it,
+/// plus the authentication regime to use when fetching from it.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(deny_unknown_fields)]
 pub struct RegistrySection {
@@ -221,6 +224,126 @@ pub struct RegistrySection {
     /// under `url`.
     #[serde(default, skip_serializing_if = "NamingConvention::is_default")]
     pub naming: NamingConvention,
+
+    /// Authentication regime for fetching from this registry. See
+    /// [PROP-002 §2.2.1](../../../spec/modules/vibe-registry/PROP-002-decentralized-registry.md#registry-auth).
+    /// Default `none` preserves every pre-this-feature `vibe.toml`
+    /// behaviour: public read, no credential prompts in scripted runs,
+    /// 401 → walk to next registry.
+    #[serde(default, skip_serializing_if = "AuthKind::is_default")]
+    pub auth: AuthKind,
+
+    /// Override env-var name for `auth = "token-env"`. Default
+    /// (when omitted) is derived from the registry host —
+    /// `VIBEVM_REGISTRY_TOKEN_<HOST_UPPER>` with dots and hyphens
+    /// converted to underscores. Operators set this explicitly when
+    /// they want a stable env-var across host migrations.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub token_env: Option<String>,
+}
+
+/// Authentication regime per `[[registry]]`. See PROP-002 §2.2.1 for
+/// the full semantics matrix; this enum is the schema-level encoding.
+#[derive(Debug, Clone, Copy, Default, PartialEq, Eq, Serialize, Deserialize)]
+pub enum AuthKind {
+    /// Public read-only. No credentials sent. In non-TTY / `--unattended`
+    /// runs, credential helpers and terminal prompts are silenced so a
+    /// 401 / 403 response classifies as `UnknownPackage` and the walk
+    /// continues to the next registry. Default.
+    #[default]
+    #[serde(rename = "none")]
+    None,
+    /// Token from env-var (default name derived from host, override via
+    /// `token_env`). Token is injected into the URL as
+    /// `https://x-access-token:<TOKEN>@host/...` for the duration of
+    /// each git invocation; never logged, never written to lockfile.
+    #[serde(rename = "token-env")]
+    TokenEnv,
+    /// Opt-in: respect the system git `credential.helper` / `core.askPass`.
+    /// On an interactive TTY without `--unattended` a GUI prompt (GCM,
+    /// keychain, etc.) may appear; in scripted runs this collapses to
+    /// the same behaviour as `None`.
+    #[serde(rename = "credential-helper")]
+    CredentialHelper,
+    /// SSH-based fetch — URL must be ssh-form (`git@host:org`,
+    /// `ssh://...`). Authentication delegated to ssh-agent / system
+    /// keys; vibe does not touch ssh config.
+    #[serde(rename = "ssh")]
+    Ssh,
+}
+
+impl AuthKind {
+    pub fn is_default(&self) -> bool {
+        matches!(self, AuthKind::None)
+    }
+
+    pub fn as_str(self) -> &'static str {
+        match self {
+            AuthKind::None => "none",
+            AuthKind::TokenEnv => "token-env",
+            AuthKind::CredentialHelper => "credential-helper",
+            AuthKind::Ssh => "ssh",
+        }
+    }
+}
+
+impl RegistrySection {
+    /// Resolve the env-var name vibe should consult for the token under
+    /// `auth = "token-env"`. Per PROP-002 §2.2.1: explicit `token_env`
+    /// wins; otherwise the name is derived from the registry's host —
+    /// `VIBEVM_REGISTRY_TOKEN_<HOST_UPPER>` with `.` and `-` mapped to
+    /// `_`. Returns `None` when the URL has no parseable host (e.g.
+    /// `file://` registries don't carry tokens). Pure function;
+    /// caller is free to call regardless of the configured `auth`
+    /// regime — the result is meaningful only when `auth ==
+    /// AuthKind::TokenEnv`.
+    pub fn resolve_token_env_name(&self) -> Option<String> {
+        if let Some(explicit) = &self.token_env {
+            return Some(explicit.clone());
+        }
+        let host = registry_host(&self.url)?;
+        let mut sanitised = String::with_capacity(host.len());
+        for ch in host.chars() {
+            match ch {
+                '.' | '-' => sanitised.push('_'),
+                other if other.is_ascii_alphanumeric() || other == '_' => {
+                    sanitised.push(other.to_ascii_uppercase());
+                }
+                _ => {
+                    // Non-ascii or unsupported char in host: bail and
+                    // force the operator to provide an explicit
+                    // `token_env`. Hosts like punycode IDN should be
+                    // handled via the override.
+                    return None;
+                }
+            }
+        }
+        Some(format!("VIBEVM_REGISTRY_TOKEN_{sanitised}"))
+    }
+}
+
+/// Best-effort host extraction from a registry URL. Handles both
+/// `https://host/path` / `ssh://host/path` (URL-shape) and
+/// `git@host:path` (scp-shape). Returns `None` for shapes we can't
+/// extract a host from (e.g. `file://`), which is what the
+/// token-env-name derivation falls through on.
+fn registry_host(url: &str) -> Option<&str> {
+    for prefix in ["https://", "http://", "ssh://", "git+ssh://"] {
+        if let Some(rest) = url.strip_prefix(prefix) {
+            return rest.split('/').next()?.split('@').next_back();
+        }
+    }
+    // scp-shape: git@host:path
+    if let Some(at_idx) = url.find('@')
+        && let Some(colon_idx) = url[at_idx..].find(':')
+    {
+        let host_start = at_idx + 1;
+        let host_end = at_idx + colon_idx;
+        if host_end > host_start {
+            return Some(&url[host_start..host_end]);
+        }
+    }
+    None
 }
 
 /// Convention for mapping a pkgref to a package repository name under a
@@ -670,6 +793,162 @@ url = "git@host:org"
 bogus = 1
 "#;
         assert!(toml::from_str::<ProjectManifest>(raw).is_err());
+    }
+
+    #[test]
+    fn auth_field_defaults_to_none_and_is_skipped_on_serialize() {
+        // Back-compat: a `vibe.toml` with no `auth` field on its
+        // `[[registry]]` entries — every pre-this-feature project —
+        // parses cleanly with auth = None. Round-tripping a
+        // None-auth registry must not introduce an `auth = "none"`
+        // line: that would create spurious diffs against unchanged
+        // manifests.
+        let raw = r#"
+[project]
+name = "demo"
+version = "0.1.0"
+
+[[registry]]
+name = "default"
+url  = "https://github.com/vibespecs"
+"#;
+        let m: ProjectManifest = toml::from_str(raw).unwrap();
+        assert_eq!(m.registries[0].auth, AuthKind::None);
+        assert_eq!(m.registries[0].token_env, None);
+        let rendered = toml::to_string_pretty(&m).unwrap();
+        // Match the actual key — "auth =" — not the bare word, to
+        // avoid false-positives with `[project].authors` which always
+        // serialises here.
+        assert!(
+            !rendered.contains("auth ="),
+            "default `auth = none` must skip on serialize:\n{rendered}"
+        );
+        assert!(!rendered.contains("token_env"));
+    }
+
+    #[test]
+    fn auth_token_env_roundtrips() {
+        let raw = r#"
+[project]
+name = "demo"
+version = "0.1.0"
+
+[[registry]]
+name      = "internal"
+url       = "https://gitlab.company.com/vibespecs"
+auth      = "token-env"
+token_env = "VIBEVM_REGISTRY_TOKEN_INTERNAL"
+"#;
+        let m: ProjectManifest = toml::from_str(raw).unwrap();
+        assert_eq!(m.registries[0].auth, AuthKind::TokenEnv);
+        assert_eq!(
+            m.registries[0].token_env.as_deref(),
+            Some("VIBEVM_REGISTRY_TOKEN_INTERNAL")
+        );
+        let rendered = toml::to_string_pretty(&m).unwrap();
+        assert!(rendered.contains("auth = \"token-env\""), "rendered:\n{rendered}");
+        assert!(rendered.contains("token_env = \"VIBEVM_REGISTRY_TOKEN_INTERNAL\""));
+        let back: ProjectManifest = toml::from_str(&rendered).unwrap();
+        assert_eq!(m, back);
+    }
+
+    #[test]
+    fn auth_credential_helper_and_ssh_roundtrip() {
+        for (raw_value, expected) in [
+            ("credential-helper", AuthKind::CredentialHelper),
+            ("ssh", AuthKind::Ssh),
+        ] {
+            let raw = format!(
+                r#"
+[project]
+name = "demo"
+version = "0.1.0"
+
+[[registry]]
+name = "r"
+url  = "https://example.com/vibespecs"
+auth = "{raw_value}"
+"#
+            );
+            let m: ProjectManifest = toml::from_str(&raw).unwrap();
+            assert_eq!(m.registries[0].auth, expected);
+            let rendered = toml::to_string_pretty(&m).unwrap();
+            let back: ProjectManifest = toml::from_str(&rendered).unwrap();
+            assert_eq!(m, back);
+        }
+    }
+
+    #[test]
+    fn auth_rejects_unknown_value() {
+        let raw = r#"
+[project]
+name = "demo"
+version = "0.1.0"
+
+[[registry]]
+name = "r"
+url  = "https://example.com/vibespecs"
+auth = "bogus"
+"#;
+        assert!(toml::from_str::<ProjectManifest>(raw).is_err());
+    }
+
+    #[test]
+    fn resolve_token_env_name_derives_from_host() {
+        let r = RegistrySection {
+            name: "r".into(),
+            url: "https://gitlab.company.com/vibespecs".into(),
+            r#ref: "main".into(),
+            naming: NamingConvention::KindName,
+            auth: AuthKind::TokenEnv,
+            token_env: None,
+        };
+        assert_eq!(
+            r.resolve_token_env_name().as_deref(),
+            Some("VIBEVM_REGISTRY_TOKEN_GITLAB_COMPANY_COM")
+        );
+    }
+
+    #[test]
+    fn resolve_token_env_name_honours_explicit_override() {
+        let r = RegistrySection {
+            name: "r".into(),
+            url: "https://gitlab.company.com/vibespecs".into(),
+            r#ref: "main".into(),
+            naming: NamingConvention::KindName,
+            auth: AuthKind::TokenEnv,
+            token_env: Some("MY_CUSTOM_TOKEN".to_string()),
+        };
+        assert_eq!(r.resolve_token_env_name().as_deref(), Some("MY_CUSTOM_TOKEN"));
+    }
+
+    #[test]
+    fn resolve_token_env_name_handles_scp_form() {
+        let r = RegistrySection {
+            name: "r".into(),
+            url: "git@gitlab.company.com:vibespecs".into(),
+            r#ref: "main".into(),
+            naming: NamingConvention::KindName,
+            auth: AuthKind::Ssh,
+            token_env: None,
+        };
+        assert_eq!(
+            r.resolve_token_env_name().as_deref(),
+            Some("VIBEVM_REGISTRY_TOKEN_GITLAB_COMPANY_COM")
+        );
+    }
+
+    #[test]
+    fn resolve_token_env_name_returns_none_for_file_url() {
+        let r = RegistrySection {
+            name: "r".into(),
+            url: "file:///tmp/registry".into(),
+            r#ref: "main".into(),
+            naming: NamingConvention::KindName,
+            auth: AuthKind::TokenEnv,
+            token_env: None,
+        };
+        assert!(r.resolve_token_env_name().is_none());
     }
 
     #[test]

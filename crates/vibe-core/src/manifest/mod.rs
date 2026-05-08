@@ -25,7 +25,7 @@ pub use package::{
     WritesSection,
 };
 pub use project::{
-    ActiveSection, DEFAULT_REGISTRY_GITVERSE_NAME, DEFAULT_REGISTRY_GITVERSE_URL,
+    ActiveSection, AuthKind, DEFAULT_REGISTRY_GITVERSE_NAME, DEFAULT_REGISTRY_GITVERSE_URL,
     DEFAULT_REGISTRY_NAME, DEFAULT_REGISTRY_REF, DEFAULT_REGISTRY_URL, LlmSection, MirrorSection,
     NamingConvention, OverrideSection, ProjectManifest, ProjectSection, RegistrySection,
 };
