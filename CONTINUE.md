@@ -1,51 +1,58 @@
 # CONTINUE — cold-resume checkpoint
 
-_Written: 2026-05-07 (slice 5 land). Owner-readable, self-contained. Pick this up with zero prior context._
+_Written: 2026-05-08 session-end. Owner-readable, self-contained. Pick this up with zero prior context._
 
 ---
 
 ## TL;DR (executive summary)
 
-**M1.7 slice 5 landed end-to-end — vibevm now ships a bootstrap-capable, scope-aware, lifecycle-complete MCP integration**. Six commits this session on top of the slice-4 foundation, all pushed to `origin/main`. Working tree clean.
+**The 2026-05-08 push closed three full milestones — M1.12, M1.13, and M1.14 (with three half-step closers: M1.14.1 / .2 / .3) — across 25 commits.** Together they make `vibe`'s package-management surface ready for v0.1.0: cargo-shape version constraints, `[requires]` declaration in `vibe.toml`, full registry-auth runtime (public + private), `--unattended` posture, comment-preserving manifest writes, MCP confirm-prompts wired correctly, and the `--auth-required` / `--exact` flags reaching every command they should.
 
-What changed (and why slice 5 was needed):
+Workspace state at HEAD `8ab5c9c`:
+- vibe-cli e2e: **89 hermetic + 3 ignored**.
+- vibe-core: **115 hermetic** (+5 toml_edit merge tests, +8 auth schema, +2 schema round-trip from earlier).
+- vibe-registry: **94 hermetic** (+12 from M1.14 — classifier patterns, inject_token edges, MissingToken precheck, bootstrap-with-scrub end-to-end, resolver walk-vs-halt rules, strict-auth halt, aggregated walk attempts).
+- vibe-cli bin: **93 hermetic** (+9 from `--unattended` resolver tests, schema lock-tests for env-vars).
+- `cargo test --workspace` all green; `cargo clippy --workspace --all-targets -- -D warnings` clean; `vibe check --path . --quiet` 0/0/0.
 
-The slice-4 SKILL.md assumed the agent was always inside an existing vibevm project. Skill installation required `vibe.toml`, project-scope was the only first-class path, and an agent invited to "create a vibevm project" had no actionable guidance — exactly the chicken-and-egg slice 5 closes. Now:
-
-1. **Two axes for everything** — `--scope project|user|both` × `--what mcp|skill|both`. Every install / upgrade / uninstall is a (scope, what) decision matrix. Wizard asks the three questions (Scope / What / Agents); explicit flags skip what's already known.
-2. **User-scope is the bootstrap path.** `vibe mcp install --scope user` works without `vibe.toml`. Writes user-level MCP config and (optionally) user-level SKILL.md. The MCP entry omits `--path` so the server resolves CWD per invocation — one global config serves every project the operator ever opens.
-3. **Two-state SKILL.md.** Vendored body has Section A (bootstrap, no project — run `vibe init`, install starter packages, transition to Section B) + Section B (inside existing project, follow boot protocol) + Common (MCP tools, `--invoked-by`, `vibe --help` discipline, four rules). Frontmatter description triggers on bootstrap intents too.
-4. **Lifecycle complete.** `vibe mcp upgrade` refreshes stale installs to current binary (does NOT create new ones). `vibe mcp uninstall` removes vibevm with foreign-key preservation. `vibe mcp status` extended with skill-drift report.
-
-End-to-end demo (the slice-5 contract): operator runs `vibe mcp install --auto --scope user` once on a clean machine, then in any directory says to opencode "create a vibevm hello-world project". opencode's loaded skill recognises Section A, runs `vibe init`, installs `flow:wal`, materialises hello-world artefacts, updates `spec/WAL.md` per the WAL protocol — all without the operator re-explaining vibevm.
-
-Workspace state at HEAD (`f068a21` for code, plus `35cad9f` SKILL.md, `55d22d9` docs, plus C10 commits this final pass):
-
-- **vibe-cli at 174 hermetic + 3 ignored** (+16 since slice 4's 158).
-- `cargo test --workspace` all green across all crates (services/vibe-index included).
-- `cargo clippy --workspace --all-targets -- -D warnings` clean.
-- `vibe check --path . --quiet` reports `0 errors, 0 warnings, 0 info` (self-host).
-- Working tree clean.
-
-Push to `git@gitverse.ru:anarchic/vibevm.git` is current after this session-end commit.
+Working tree is clean. `origin/main` is at `8ab5c9c`. No active blockers. Three deferred enhancements (aggregated JSON-mode error report, inline-comment preservation inside `[[registry]]` blocks, `vibe registry test` diagnostic) are all listed at the bottom of `spec/WAL.md` — none load-bearing.
 
 ---
 
 ## Where we are right now
 
 - **Branch:** `main`. Working tree clean.
-- **Latest commits this session (slice 5, newest first):**
+- **Latest commits this session (newest-first; full session was 25 commits):**
 
   ```
-  55d22d9 docs(commands,guides): refresh mcp-* docs + opencode quickstart for slice 5
-  35cad9f docs(vibe-cli/mcp): SKILL.md two-state — bootstrap + inside-project
-  3c7fced feat(vibe-cli/mcp): vibe mcp status — include skill drift report
-  08f8260 feat(vibe-cli/mcp): vibe mcp uninstall — drop vibevm block + delete SKILL.md
-  f068a21 feat(vibe-cli/mcp): vibe mcp upgrade — refresh stale installs to current
-  3f0e517 feat(vibe-cli/mcp): scope=project|user|both + what + bootstrap mode
+  8ab5c9c docs(roadmap,changelog): catch up on M1.12 / M1.13 / M1.14 milestones
+  a915b12 docs(commands,wal): surface-consistency closing slice
+  1f58e71 feat(vibe-cli): surface consistency — MCP --yes wired, --auth-required + --exact reach
+  5c2b504 docs(commands,wal): closing-slice landings — strict-auth, aggregated report, comment preservation
+  cac03fe feat(vibe-core): toml_edit-based comment-preserving writes for vibe.toml
+  d7bf8bb feat(vibe-registry,vibe-cli): --auth-required + aggregated per-registry error report
+  bf4111d docs(registry-auth,wal): user-facing reference + production-ready checkpoint
+  1210268 feat(vibe-registry): per-auth walk-vs-halt + auth plumbing in resolver
+  8942ee7 feat(vibe-registry): token injection + bootstrap-with-scrub for auth=token-env
+  6dc8747 feat(vibe-registry): classifier + GitBackend::set_remote_url
+  41efc0c feat(vibe-registry): TTY-aware credential helper silencing
+  e65c73e feat(vibe-cli): --auth and --token-env on `vibe registry add`
+  97753f7 feat(vibe-core): AuthKind enum + RegistrySection.auth/token_env
+  5f296d9 docs(spec): per-registry auth axis (PROP-002 §2.2.1) + 401 classifier rules
+  c9c18d7 docs(commands): document --unattended flag for scripted runs
+  8420df5 feat(vibe-cli): --unattended global flag + VIBE_UNATTENDED env-var
+  1572a11 docs(commands/mcp-install): provisioning recipe + best-effort `--scope both`
+  b4cdcd7 feat(vibe-cli/mcp): --scope both is best-effort on the project leg
+  01c5531 docs(versions): user-facing version-syntax reference
+  8e84b6b docs(spec,commands,roadmap,wal): cargo-shape version syntax + --exact
+  7992bca feat(vibe-cli/install): caret default constraint + --exact flag
+  a158475 refactor(vibe-core,vibe-resolver): bare semver follows Cargo (caret) not exact
+  d719457 feat(vibe-cli/search): hint that install bypasses index when search is empty
+  e41a478 docs(vibe-cli/mcp): SKILL.md happy-path + --assume-yes + search/registry guards
+  1697f5a docs(commands,roadmap,wal): refresh install/uninstall + checkpoint
   ```
 
-- **Active blocker:** none. Slice 5 landed clean; tests + clippy + self-host check all green.
+- **Active blocker:** none.
 
 ---
 
@@ -53,82 +60,90 @@ Push to `git@gitverse.ru:anarchic/vibevm.git` is current after this session-end 
 
 Pick whichever matches the owner's interest:
 
-### Option 1 — walk the new opencode quickstart on a clean sandbox
+### Option 1 — walk a real-world install against a private registry
 
-`docs/guides/agent-mcp-quickstart-opencode.md` was rewritten under the slice-5 bootstrap flow. The acceptance checklist now pins user-scope MCP without `--path`, two-state SKILL.md with explicit Section A/B headers, agent self-running `vibe init` from a Section-A prompt. Walking it confirms: bootstrap works, agent uses MCP autonomously, lifecycle commands wire correctly.
+The headline feature of this push is end-to-end private-registry support. The natural validation walk:
 
-This is the lowest-risk first step — confirms slice 5 health AND that the documented contract holds.
+1. Stand up a small test registry on GitLab / Gitea / forgejo with one package repo + a tag.
+2. `vibe registry add internal "https://<host>/<org>" --auth token-env` (let it derive the env-var name).
+3. `export VIBEVM_REGISTRY_TOKEN_<HOST>=<PAT>` with read scope.
+4. `vibe install <kind>:<name> --assume-yes` — should resolve, fetch via credentialed URL, and `git remote -v` inside the cloned cache should show the **plain** URL (token scrubbed).
+5. `grep -r x-access-token ~/.vibe/registries/` — must come up empty (the hard token-discipline invariant).
+6. `vibe install` again — should be `unchanged` everywhere.
 
-### Option 2 — plan-preview + apply-confirm prompt
+Reference: `docs/registry-auth.md` covers every regime. If anything goes off-script, the symptom narrows the slice (classifier? token injection? walk-vs-halt? scrub?).
 
-Currently the install wizard runs through Scope → What → Agents and proceeds straight to apply. The slice-5 flag set has `--yes` defined but no opposite "ask before apply" interactive step yet. Would-be flow: after wizard answers + agent detection, render a plan summary (table of what would land where), then `dialoguer::Confirm` apply prompt. Skip with `--yes` / `--auto`. Same shape as the (currently planned but not yet wired) upgrade / uninstall plan-preview flows.
+### Option 2 — `vibe registry test` diagnostic command
 
-Code anchor: `crates/vibe-cli/src/commands/mcp.rs` `run_install` after step 5 (the `for agent in &targeted` loop), before the actual `apply_install_mcp` calls.
+Read-only `git ls-remote` against each `[[registry]]`, prints per-registry status (reachable / auth-ok / auth-required / unreachable). Hour or so of work; very useful when first wiring a private registry. Code anchor: a new subcommand under `crates/vibe-cli/src/commands/registry.rs` next to `list` / `sync` / `vendor`.
 
-### Option 3 — `query_capabilities` / `list_subskills` MCP tools
+### Option 3 — JSON-mode aggregated error report
 
-The vibe-mcp server exposes three tools (`query_package`, `read_subskill`, `materialise_subskill`). PROP-004 §5.1 also calls out `query_capabilities` and `list_subskills`. Wiring is straightforward, pattern after existing tools at `crates/vibe-mcp/src/tools.rs`. Update SKILL.md template (`crates/vibe-cli/src/commands/skill_template.md`) to mention the new tools so the agent learns to use them.
+Currently `RegistryError::PackageNotFoundEverywhere` carries a pre-formatted `summary: String` that flows through `Display` for text mode. JSON envelope still serialises through generic `Other(String)`. To structure it: extend `DepProviderError::UnknownPackage` with `attempts: Vec<RegistryAttempt>` (or a new variant), thread through resolver → install error → `emit_report`. Cross-crate API change in vibe-resolver; medium effort, narrow scope. WAL deferred-list calls this out explicitly.
 
-### Option 4 — extend agent matrix to Gemini / Copilot
+### Option 4 — Inline-comment preservation inside `[[registry]]` blocks
 
-`Agent` enum in `crates/vibe-cli/src/commands/mcp.rs:178` has the per-agent profile slot ready. Add new variants the same way slice 4 added Claude Desktop / OpenCode / Codex:
+Current `toml_edit`-merge in `vibe-core::manifest::write_toml` preserves three layers (header / per-table prefix / document trailing). What it doesn't preserve: comments **inside** a table (between `name = ...` and `url = ...`). Operators rarely write those, but if a case surfaces, the fix is per-key decor copy across the schema-paired keys. Same pattern as the existing per-table prefix copy.
 
-1. Add the variant to enum + `Agent::ALL`.
-2. Fill in all per-agent methods including `config_path(scope, project_root)` for both project and user scopes (or `None` if a scope has no surface).
-3. Add presence markers + host_present probe.
-4. Mirror unit-test patterns (look at `opencode_user_scope_entry_uses_command_array_without_path`, `codex_user_scope_entry_returns_toml_table_without_path`).
-5. Update `docs/commands/mcp-install.md` agent matrix table.
-6. Add a sibling guide `docs/guides/agent-mcp-quickstart-gemini.md`.
+### Option 5 — M1.5 (LLM generation)
 
-### Option 5 — comment-preserving Codex TOML edits via `toml_edit`
+The next major milestone per ROADMAP. Non-routine — needs explicit owner sign-off before starting. M1.5 is what makes vibevm "produce software" rather than "manage specs."
 
-Currently `merge_toml` and `strip_toml_entry` use `toml = "0.9"` round-trip via `toml::Value`. This loses comments in handcrafted `~/.codex/config.toml`. If a Codex operator complains, swap to `toml_edit` — it's a permissive-licensed crate that preserves whitespace + comments.
+### Option 6 — CHANGELOG / ROADMAP further refinement
 
-### Option 6 — Manual smoke walk
-
-`manual-tests/M1.7-mcp-claude-code-smoke.md` was envisioned in M1.7 ROADMAP but never written. With slice 5 closed, the ground truth is `docs/guides/agent-mcp-quickstart-opencode.md` — its acceptance checklist serves as the smoke. Decide whether a separate manual-test file adds value beyond the guide.
+CHANGELOG `[Unreleased]` block now covers M1.12 / M1.13 / M1.14. Whenever v0.1.0 actually tags, that block migrates to a numbered `[0.1.0]` section. Same for ROADMAP — when a future release closes the v0.1 surface, M1.x entries can be lifted into a "Released" group.
 
 ---
 
-## Non-obvious findings from slice 5
+## Non-obvious findings from this session
 
 These cost time / hit edge cases — write them down so a future session does not re-derive.
 
-### `dialoguer::Select`/`MultiSelect::items` accepts owned arrays, not slice references
+### Rust 2024 edition forbids `unsafe` env-var mutation; tests need a workaround
 
-Clippy under `-D warnings` flags `&["a", "b"]` syntax. Use array literals directly: `.items(["a", "b"])`. Caught me mid-C1.
+`#![forbid(unsafe_code)]` at the crate level (which `vibe-registry` and `vibe-cli` both carry) blocks `std::env::set_var` because Rust 2024 marks it `unsafe`. Tests that mutate process env to exercise env-var-driven code paths cannot use `set_var` directly. Two approaches in this codebase:
 
-### `--what` is install/upgrade-only; uninstall uses `--config-only` / `--skill-only`
+1. **`Mutex<()>`-serialised env tests** in `vibe-cli::output::tests` — `INVOKED_BY_LOCK` and `UNATTENDED_LOCK` static `Mutex<()>` ensure parallel tests don't observe each other's transient env writes; inside the lock, tests use `EnvGuard` / `UnattendedGuard` RAII patterns wrapping `unsafe { ... set_var ... }` blocks. The crate must allow `unsafe_code` at the test scope for this to work.
+2. **Test-only doc-hidden constructors** — `GitPackageRegistry::open_with_explicit_token` takes the resolved token directly (`Option<String>`) instead of reading an env-var. Production code calls `open_with_auth` (env-driven); tests call the explicit-token sibling. This avoids env mutation entirely. Cleaner; preferred when feasible.
 
-Tried to use `--what mcp` in uninstall tests — clap rejected it. Decided to keep uninstall's `--config-only` / `--skill-only` (mutually exclusive booleans) instead of duplicating `--what`. The orthogonal toggle reads naturally for the "remove only X" intent ("uninstall the skill but keep the MCP server connection"). Install kept `--what` because "install only X" is a more declarative phrasing.
+If a future test needs to drive env-var resolution and neither approach fits, opening a test-only API like `open_with_explicit_token` is the path of least resistance.
 
-### Scope::Both is internal-only; expand before per-agent calls
+### `apply_common_env` order matters: env BEFORE args
 
-`Agent::config_path(Scope::Both, ...)` and `Agent::skill_path(Scope::Both, ...)` both `bail!` — Both is a wizard / CLI surface, not a per-agent concept. The walker in `run_install` / `run_upgrade` / `run_uninstall` calls `scope.expand()` first, which yields `[Project, User]` for Both and `[s]` for the others, then iterates per concrete scope. Keeps the per-agent methods tight (always concrete) without losing the Both-mode UX.
+`ShellGit::run` prepends `-c credential.helper= -c core.askPass=` flags via `apply_common_env`. Those are global git options that **must** come before the subcommand name (`git -c k=v ls-remote ...`, not `git ls-remote -c k=v`). Every callsite of `Command::new("git")` followed by `apply_common_env(&mut cmd)` followed by `cmd.args(args)` needs that exact order. The ShellGit private methods (`run`, `run_raw`, `preflight`) and the test helper `run_or_panic` were all reordered in commit `41efc0c`; if a new git-spawning callsite is added, it must follow the same order or git will refuse the args as sub-command parameters.
 
-### User-scope MCP entry MUST omit `--path`
+### `GIT_ASKPASS=""` (empty value) confuses git's startup probe on some platforms
 
-Slice-4 mistake replicated would have hardcoded `--path <whatever was in args.path at install time>` into user-level configs. That's wrong: user-level config should serve every project the agent ever opens, not the directory where install ran. `Agent::build_mcp_entry(Scope::User, _)` builds `["mcp", "serve"]` (no `--path`). The MCP server's `--path` defaults to `.` so it resolves CWD per invocation. Per-agent test pins this contract for each (agent, scope) combination.
+Setting `GIT_ASKPASS` to an empty string on Windows can produce a `cmd /C ""` invocation that git interprets as "askpass available, exec it" → fails the startup. Solution: don't set `GIT_ASKPASS` at all when silencing — `core.askPass=` (empty value via `-c`) plus `GIT_TERMINAL_PROMPT=0` plus `credential.helper=` is sufficient. The original silencing block tried `cmd.env("GIT_ASKPASS", "")`, hit this exact failure on every git invocation in the test suite, and was reverted to "leave GIT_ASKPASS alone."
 
-### `Agent::config_path` returns `Option<PathBuf>`, not `Result<PathBuf>`, when the scope has no surface
+### Token must NOT persist in `.git/config` after bootstrap
 
-User-only agents (Claude Desktop, Codex) return `None` for `Scope::Project`. Project-only walks must filter on the `is_some()` to skip — the walker in `run_install` does this. The Both-mode walker emits a `skipped` row for the missing leg so JSON consumers see what was attempted. **Don't** treat `None` as an error — it's an expected "this combination is undefined" signal.
+The token-discipline invariant is "token never on disk via vibevm-controlled paths." A naive `bootstrap(credentialed_url)` saves the credentialed URL into `<dest>/.git/config` as `remote.origin.url = https://x-access-token:<TOKEN>@...`, which violates the invariant. The fix in `update_clone_at_ref` is to immediately call `backend.set_remote_url(clone_dir, "origin", plain_url)` after a successful bootstrap — git `remote set-url` is a config write, not a network operation, and overwrites the credentialed URL with the plain one. Subsequent `update` calls hit the plain origin; if it returns 401 (still-private host), `ensure_clone_against_sources` wipes and re-bootstraps. Slight perf cost on stale-cache-against-private-host paths; acceptable trade.
 
-### `vibe mcp install --auto` without `--scope` auto-resolves from `vibe.toml` presence
+### bare semver in Cargo crate IS caret, not exact
 
-`--auto` alone (no other flags) walks: scope=project if `vibe.toml` in `--path`, else scope=user; what=both; agents=detected. The "auto-resolves to whatever makes sense" behaviour is what makes `vibe mcp install --auto` the safe one-line bootstrap on a clean machine. Without this, scripts would have to either always pass `--scope user` (clunky for inside-project operators) or always pass `--scope project` (breaks bootstrap).
+This was the reason for the M1.13 parser collapse. `semver::VersionReq::parse("0.3.0")` returns a caret-comparator, not an exact one. The pre-this-session vibevm parser explicitly converted bare semver to `=0.3.0` via `format!("={version}")` — that wrapper made vibevm diverge from cargo / npm / Poetry. Removing the wrapper (commit `a158475`) brought us in line. Pre-1.0 caret semantics are tighter than post-1.0 (`^0.3.0` matches only `0.3.x`, not `0.4.0`); since every vibevm package today is `0.x.y`, this is the intended behaviour.
 
-### Output env-guard tests still flake under parallel `cargo test`
+### `vibe.toml` is mutated by `vibe install` / `uninstall` / `registry add` (M1.12+)
 
-Slice-4 known issue, persisted into slice 5: `output::tests::resolve_treats_empty_*_as_absent` set / unset `VIBE_INVOKED_BY` env-var without coordination. Under parallel test execution they sometimes observe each other's transient mutations. `--test-threads=1` makes them deterministic; standard `cargo test` usually passes (race rare in practice). If it flakes in CI, run with `RUST_TEST_THREADS=1` for the output module specifically — or migrate to a process-isolated test harness.
+Pre-M1.12 `vibe.toml` was append-once: `vibe init` wrote it, the operator hand-edited it, no command rewrote it. M1.12 introduced `[requires].packages` writes from `vibe install` and `vibe uninstall`. M1.14.1 added `vibe registry add --auth ...` write. M1.14.2 layered `toml_edit` on top to preserve comments. Future commands that need to mutate `vibe.toml` should use the same `ProjectManifest::write` path — it goes through the comment-preserving merge automatically.
 
-### `mcp upgrade` distinguishes `not-installed` from `unchanged` deliberately
+### Public-401 walk-past + GitVerse policy
 
-A naive upgrade would treat "vibevm-block absent" as a candidate for install. Slice-5 explicitly separates this — `not-installed` is a hint to use `vibe mcp install`, not an action to take. Keeps cron-style `vibe mcp upgrade --yes` safe: it never auto-promotes installs into agents the operator deliberately skipped.
+GitVerse returns 401 (not 404) for missing public repos. Without the M1.14 walk-past rule, vibevm would halt the first time it hit a non-existent package against a project that has `vibespecs-gitverse` (the default GitVerse registry). PROP-002 §2.3.1 reclassifies "401 against `auth = "none"`" as `UnknownPackage` so the resolver walks to the next registry. `--auth-required` flips this back to halt-on-public-401 for CI / cron use cases where a public substitute would be wrong.
 
-### Detection in upgrade is best-effort, not all-or-nothing
+### MCP commands are TTY-confirm, NOT non-TTY-confirm
 
-`vibe mcp upgrade --scope both` with no `vibe.toml` in CWD silently skips the project leg (rather than erroring out as install would). Refresh should be best-effort: if you have user-level installs and project-level installs in different repos, you can run upgrade from anywhere and refresh whichever scope has surfaces here. Install is stricter because creating new installations is a destructive opt-in.
+The M1.14.3 closer wires MCP `--yes` to a real apply-confirm prompt — but ONLY on a TTY. Non-TTY callers (CI / opencode) get the pre-existing zero-confirm behaviour preserved. Operators on a TTY without an explicit skip-flag now see `[y/N]` before any MCP-config / SKILL.md write. The TTY-gate condition is:
+
+```rust
+if args.yes || ctx.is_unattended() || args.auto || ctx.is_json()
+   || !console::user_attended() {
+    // approved, no prompt
+}
+```
+
+The `!console::user_attended()` short-circuit at the bottom is what preserves CI-script compat. If a future change wants to make MCP commands strictly confirm in non-TTY too, that condition is the one place to touch.
 
 ---
 
@@ -138,17 +153,43 @@ A naive upgrade would treat "vibevm-block absent" as a candidate for install. Sl
 vibevm/
 ├── CLAUDE.md / AGENTS.md / GEMINI.md   # Three identical copies of the four rules.
 ├── CONTINUE.md                          # This file. Cold-resume snapshot.
-├── ROADMAP.md                           # Milestone-oriented plan; M1.7 closed via slice 5.
+├── ROADMAP.md                           # Milestone-oriented plan; M1.14 closed via this push.
+├── CHANGELOG.md                         # Milestone chronicle; [Unreleased] holds M1.12/M1.13/M1.14.
 ├── VIBEVM-SPEC.md                       # Owner-frozen spec; do not edit without explicit instruction.
 ├── DEV-GUIDE.md / RUNTIME-GUIDE.md      # Per-machine setup docs.
 ├── crates/
 │   ├── vibe-cli/                        # `vibe` binary entry point. clap dispatch + per-subcommand modules.
 │   │   └── src/commands/
-│   │       ├── mcp.rs                   # Slices 4+5 home: 5-agent matrix, scope/what axes, install/upgrade/uninstall/status, JSON+TOML mergers, install_skill writer.
-│   │       └── skill_template.md        # Vendored two-state SKILL.md (Section A bootstrap + B inside-project + Common).
-│   ├── vibe-core/                       # Manifests (vibe.toml, vibe-package.toml), lockfile schema v3, user_config.
+│   │       ├── install.rs               # Resolve+plan+apply pipeline. M1.12 [requires] writes,
+│   │       │                            # M1.13 caret-default + --exact, M1.14 --auth-required.
+│   │       ├── update.rs                # Re-resolve+diff+apply. M1.14.3 --exact + --auth-required reach.
+│   │       ├── uninstall.rs             # Symmetric to install. M1.12 [requires] cleanup.
+│   │       ├── outdated.rs              # Read-only upstream-newer probe. M1.14.3 --auth-required reach.
+│   │       ├── mcp.rs                   # Five-agent matrix; install/upgrade/uninstall/status/serve.
+│   │       │                            # M1.14.3: walk_install/upgrade/uninstall extracted +
+│   │       │                            # TTY-gated confirm prompt + --assume-yes alias.
+│   │       ├── registry.rs              # add (with --auth/--token-env) / remove / list / set-mirror /
+│   │       │                            # sync / vendor / publish.
+│   │       ├── search.rs                # PROP-005 index-aware discovery; auth-naive (read-only).
+│   │       └── skill_template.md        # Vendored two-state SKILL.md (Section A bootstrap + B + Common).
+│   ├── vibe-core/                       # Manifests, lockfile schema v3, AuthKind, version_spec.
+│   │   └── src/manifest/
+│   │       ├── project.rs               # ProjectManifest + RegistrySection.auth/token_env (M1.14.1).
+│   │       ├── package.rs               # PackageManifest (vibe-package.toml) + Requires/Provides.
+│   │       ├── lockfile.rs              # vibe.lock schema v3 with full provenance.
+│   │       └── mod.rs                   # write_toml() — comment-preserving via toml_edit (M1.14.2).
 │   ├── vibe-graph/                      # In-memory dep graph helpers.
-│   ├── vibe-registry/                   # GitPackageRegistry, mirrors, MultiRegistryResolver, IndexClient.
+│   ├── vibe-registry/                   # The big crate — git_backend, GitPackageRegistry,
+│   │   │                                # MultiRegistryResolver. Auth runtime lives here.
+│   │   └── src/
+│   │       ├── git_backend/
+│   │       │   ├── mod.rs               # GitBackend trait + set_remote_url method (M1.14).
+│   │       │   └── shell.rs             # ShellGit + apply_common_env (TTY-aware silencing).
+│   │       ├── git_package_registry.rs  # Per-registry instance with auth + effective_token +
+│   │       │                            # token_env_name; bootstrap-with-scrub flow.
+│   │       ├── multi_registry_resolver.rs # Walk + per-auth walk-vs-halt + strict_auth gate.
+│   │       └── lib.rs                   # RegistryError including MissingToken +
+│   │                                    # PackageNotFoundEverywhere variants.
 │   ├── vibe-resolver/                   # Feature expansion + activation evaluation (PROP-003).
 │   ├── vibe-install/                    # Install pipeline: plan_install → apply → register.
 │   ├── vibe-llm/                        # LLM provider abstraction. Skeleton — real impls land in M1.5.
@@ -157,18 +198,23 @@ vibevm/
 │   ├── vibe-publish/                    # GitHubCreator / GitVerseCreator / DirectGitCreator publishers.
 │   └── vibe-wire/                       # JTD-codegen'd wire types.
 ├── services/
-│   └── vibe-index/                      # Standalone PROP-005 utility: per-org package index. Own Cargo workspace.
+│   └── vibe-index/                      # Standalone PROP-005 utility: per-org package index. Own workspace.
 ├── spec/
 │   ├── boot/{00-core,90-user}.md        # Read at every session start.
-│   ├── WAL.md                           # Living checkpoint of project state. Authoritative if it diverges from this file.
+│   ├── WAL.md                           # Living checkpoint of project state. Authoritative if it
+│   │                                    # diverges from this file.
 │   ├── common/PROP-000…PROP-006         # Foundation policy + operating modes.
 │   ├── modules/                         # Per-crate PROPs.
+│   │   └── vibe-registry/PROP-002       # §2.2.1 (auth axis), §2.3.1 (failure classifier).
 │   └── research/PROP-004                # Tessl comparative research.
 ├── docs/
-│   ├── README.md                        # User-doc index.
+│   ├── README.md                        # User-doc index; gained "Version syntax" + "Registry auth".
 │   ├── architecture.md / lockfile-format.md / glossary.md / troubleshooting.md
-│   ├── commands/                        # Per-subcommand reference. mcp-install/upgrade/uninstall/status/serve.md.
-│   ├── guides/                          # Long-form walkthroughs. agent-mcp-quickstart-opencode.md (slice-5 rewrite).
+│   ├── version-syntax.md                # NEW (M1.13) — operator reference for semver constraints.
+│   ├── registry-auth.md                 # NEW (M1.14) — operator reference for the four auth regimes.
+│   ├── commands/                        # Per-subcommand reference. install / update / mcp-* / registry-*
+│   │                                    # all updated with --auth-required / --exact / --unattended notes.
+│   ├── guides/                          # Long-form walkthroughs.
 │   └── authoring-{flow,feat,stack}.md
 ├── manual-tests/                        # Runnable smoke protocols.
 ├── fixtures/registry/                   # Hermetic per-package registry fixtures.
@@ -194,50 +240,66 @@ In rough order of how often they bite a fresh contributor:
 
 4. **Language: Rust.** Permissive licenses only. `dependency weight is not a decision factor` per PROP-000 §15.
 
-5. **Manifest format: TOML for human-edited; JTD+codegen for wire contracts.**
+5. **Manifest format: TOML** for human-edited; **JTD+codegen** for wire contracts.
 
 6. **Identity: `(kind, name, version, content_hash)`.** URL is informational.
 
-7. **Token secrecy** (PROP-000 §20). Never printed in any vibevm-produced output.
+7. **Token secrecy** (PROP-000 §20). Never printed in any vibevm-produced output. Modern git (≥ 2.31) auto-redacts; vibevm relies on that as the second line of defence.
 
-8. **Repository hosts.** vibevm source = GitVerse. Package registry = GitHub `vibespecs`.
+8. **Repository hosts.** vibevm source = GitVerse. Package registry = GitHub `vibespecs` (primary) + GitVerse `vibespecs` (secondary).
 
 9. **User-owned files** (vibevm install/uninstall NEVER touches): `spec/boot/00-core.md`, `spec/boot/90-user.md`, `spec/WAL.md`, `VIBEVM-SPEC.md`, `refs/book/**`.
 
 10. **PROP-006 codewords.** `«move fast and break things»` is the first; never overrides the four rules.
 
-11. **Slice 5 MCP integration model.** `--scope project|user|both` × `--what mcp|skill|both` is the canonical UX. `--scope user` is the bootstrap path that does NOT require `vibe.toml`. Install creates new installations; upgrade refreshes existing only; uninstall removes with foreign-key preservation. SKILL.md is two-state (Section A bootstrap, Section B inside-project) so the global / user-scope skill works in both contexts.
+11. **Cargo-shape version syntax** (M1.13). Bare semver `0.3.0` = caret `^0.3.0`. Use `=0.3.0` for strict equal.
+
+12. **`[requires]` is the source of truth for declared deps** (M1.12). `vibe.toml` carries the human's input list (constraints); `vibe.lock` carries the resolved materialisation (exact pins + content hashes). `meta.root_dependencies` in the lockfile is a mirror, not authoritative.
+
+13. **Per-registry `auth` axis** (M1.14, PROP-002 §2.2.1). Four regimes: `none` (default, public read-only) / `token-env` (PAT from env-var) / `credential-helper` (system git helpers, opt-in) / `ssh` (delegated to ssh-agent).
+
+14. **Auth-aware 401 classifier** (PROP-002 §2.3.1). 401 on `auth = "none"` walks past as `UnknownPackage`; 401 on authenticated registries halts. `--auth-required` flips public-401 to halt for strict CI gating.
+
+15. **Token never on disk via vibevm-controlled paths** (M1.14). Tokens loaded once at registry-open from env-var, held in memory only, scrubbed from `.git/config` immediately after `bootstrap` via `set_remote_url(.., "origin", plain_url)`.
+
+16. **TTY-aware credential silencing** (M1.14). `apply_common_env` silences GCM / `credential.helper` / `core.askPass` in non-TTY / `--unattended` runs. Interactive TTY without `--unattended` leaves them alone — operator might genuinely want a one-off password prompt.
+
+17. **`--unattended` global flag** + `VIBE_UNATTENDED` env-var (truthy: `1`, `true`, `yes`, `on`). Implies skip-confirm everywhere; refuses to open wizards in MCP install; stamps `unattended: true` on every JSON envelope.
+
+18. **MCP command confirm-prompt is TTY-gated** (M1.14.3). Non-TTY callers see the pre-this-version zero-confirm behaviour preserved; TTY callers see a real `[y/N]` summary unless they pass `--yes` / `--unattended` / `--auto` / `--json`.
+
+19. **comment-preserving `vibe.toml` writes** (M1.14.2). Three layers via `toml_edit`: header comments, per-table prefix, document trailing. Inline-comments inside tables not yet preserved (deferred enhancement).
 
 ---
 
-## Recent commit chain (last 25, newest first — slice 5 + slice-4 tail)
+## Recent commit chain (last 25, newest first)
 
 ```
-55d22d9 docs(commands,guides): refresh mcp-* docs + opencode quickstart for slice 5
-35cad9f docs(vibe-cli/mcp): SKILL.md two-state — bootstrap + inside-project
-3c7fced feat(vibe-cli/mcp): vibe mcp status — include skill drift report
-08f8260 feat(vibe-cli/mcp): vibe mcp uninstall — drop vibevm block + delete SKILL.md
-f068a21 feat(vibe-cli/mcp): vibe mcp upgrade — refresh stale installs to current
-3f0e517 feat(vibe-cli/mcp): scope=project|user|both + what + bootstrap mode
-bc26131 docs(wal): session-end checkpoint — slice 4 + opencode quickstart guide
-492cbb2 docs(continue): cold-resume checkpoint at 2026-05-07 session-end
-3bf2462 docs(guides): opencode + vibevm hello-world quickstart + acceptance gate
-7cb1f33 docs(commands,roadmap,wal): M1.7 slice 4 — multi-agent + skill + invoked-by
-71229eb feat(vibe-cli/mcp): interactive install + --auto + --with/without-skill
-d384a96 feat(vibe-cli/mcp): vibevm SKILL.md template + per-agent writer
-2eaf544 feat(vibe-cli): --invoked-by global flag + VIBE_INVOKED_BY env
-05ce2e4 feat(vibe-cli/mcp): claude-desktop, opencode, codex + JSON/TOML mergers
-8ce7b6a docs(commands): refresh vibe search reference for purl/full-scan/cache
-e4000c3 feat(vibe-cli): vibe search --purl + --full-scan + persistent cache
-7745b19 feat(vibe-registry): IndexClient::lookup_purl + Serialize on results
-c585437 docs(commands): vibe search reference
-506dcf2 feat(vibe-cli): vibe search command (ROADMAP §M2.10)
-622ea55 feat(vibe-registry): IndexClient::search via /v1/packages?q=
-c54fa51 docs(wal): rate-limiter slice + parked §9 open questions
-039bd96 feat(services/vibe-index): per-token + per-IP rate limiter
-ae990ae docs(wal): PROP-005 trailing-fixup slices 16–19
-867ab97 feat(services/vibe-index): structured stub envelope for --from-gitverse
-6e7487d feat(services/vibe-index): init writes README.md + .gitignore
+8ab5c9c docs(roadmap,changelog): catch up on M1.12 / M1.13 / M1.14 milestones
+a915b12 docs(commands,wal): surface-consistency closing slice
+1f58e71 feat(vibe-cli): surface consistency — MCP --yes wired, --auth-required + --exact reach
+5c2b504 docs(commands,wal): closing-slice landings — strict-auth, aggregated report, comment preservation
+cac03fe feat(vibe-core): toml_edit-based comment-preserving writes for vibe.toml
+d7bf8bb feat(vibe-registry,vibe-cli): --auth-required + aggregated per-registry error report
+bf4111d docs(registry-auth,wal): user-facing reference + production-ready checkpoint
+1210268 feat(vibe-registry): per-auth walk-vs-halt + auth plumbing in resolver
+8942ee7 feat(vibe-registry): token injection + bootstrap-with-scrub for auth=token-env
+6dc8747 feat(vibe-registry): classifier + GitBackend::set_remote_url
+41efc0c feat(vibe-registry): TTY-aware credential helper silencing
+e65c73e feat(vibe-cli): --auth and --token-env on `vibe registry add`
+97753f7 feat(vibe-core): AuthKind enum + RegistrySection.auth/token_env
+5f296d9 docs(spec): per-registry auth axis (PROP-002 §2.2.1) + 401 classifier rules
+c9c18d7 docs(commands): document --unattended flag for scripted runs
+8420df5 feat(vibe-cli): --unattended global flag + VIBE_UNATTENDED env-var
+1572a11 docs(commands/mcp-install): provisioning recipe + best-effort `--scope both`
+b4cdcd7 feat(vibe-cli/mcp): --scope both is best-effort on the project leg
+01c5531 docs(versions): user-facing version-syntax reference
+8e84b6b docs(spec,commands,roadmap,wal): cargo-shape version syntax + --exact
+7992bca feat(vibe-cli/install): caret default constraint + --exact flag
+a158475 refactor(vibe-core,vibe-resolver): bare semver follows Cargo (caret) not exact
+d719457 feat(vibe-cli/search): hint that install bypasses index when search is empty
+e41a478 docs(vibe-cli/mcp): SKILL.md happy-path + --assume-yes + search/registry guards
+1697f5a docs(commands,roadmap,wal): refresh install/uninstall + checkpoint
 ```
 
 ---
@@ -256,14 +318,21 @@ cargo run -p vibe-cli -- check --path . --quiet
 # Or one-shot via the bundled script.
 bash tools/self-check.sh
 
-# Install vibe into ~/.cargo/bin/ (recommended for any agent integration walk).
+# Install vibe into ~/.cargo/bin/.
 cargo install --path crates/vibe-cli --locked
 
-# Slice-5 bootstrap demo: from any directory, no project needed.
-vibe mcp install --auto --scope user --invoked-by manual-bootstrap
-# Then in a fresh empty directory:
-opencode    # tell it: "create a vibevm hello-world project"
-# See docs/guides/agent-mcp-quickstart-opencode.md for full walk.
+# Three signature recipes from this push:
+
+# Public install, scripted, no prompts ever:
+vibe --unattended install flow:wal
+
+# Private registry on a fresh user account, one-time setup:
+vibe registry add internal "https://gitlab.example/vibespecs" --auth token-env
+export VIBEVM_REGISTRY_TOKEN_GITLAB_EXAMPLE=ghp_...
+vibe --unattended install flow:internal-helper
+
+# MCP provisioning (no project yet — Section A in SKILL.md):
+vibe --unattended mcp install --agent opencode --scope both --what both
 ```
 
 ---
