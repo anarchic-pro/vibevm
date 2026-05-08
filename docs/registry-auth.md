@@ -157,6 +157,34 @@ vibe registry add corporate "https://corp.example.com/vibespecs" --auth credenti
 
 `--token-env` paired with anything other than `--auth token-env` is rejected — that combination has no meaning.
 
+## Strict-auth posture (`--auth-required`)
+
+The default walk-past-public-401 rule (PROP-002 §2.3.1) is the
+right behaviour for most projects: GitVerse-style 401-on-missing-public-repo
+no longer halts your install when the package is reachable from
+another registry. But sometimes you want the inverse: in CI / cron
+you might know that a particular install is meant to come from your
+private registry, and a fall-through to a public registry would
+silently install a different package — a security or correctness
+hazard.
+
+`vibe install --auth-required` flips the rule for that invocation:
+401 / 403 against any registry (public or private) halts. Per-registry
+`auth = "token-env"` / `"credential-helper"` already halt on 401 by
+default; `--auth-required` only changes the public-401 walk-past
+behaviour.
+
+```bash
+# CI run: refuse to fall back to a public registry on auth-failure.
+vibe install --unattended --auth-required flow:internal-helper
+```
+
+Or via env-var equivalence (M1.14.1 lookup convention):
+
+```bash
+VIBE_UNATTENDED=1 vibe install --auth-required flow:internal-helper
+```
+
 ## How vibevm walks the registry list under different `auth`
 
 PROP-002 §2.3.1 lays out the failure-mode classifier; here is the operator-facing summary.

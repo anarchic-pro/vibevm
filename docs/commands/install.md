@@ -39,6 +39,7 @@ A package reference is `<kind>:<name>[@<version>]`. Version syntax follows Cargo
 | `--json` | Emit two structured documents: the plan (command `"install:plan"`) before confirmation, the report (command `"install"`) after apply. Schemas: [`schemas/install_plan.jtd.json`](../../schemas/install_plan.jtd.json), [`schemas/install_report.jtd.json`](../../schemas/install_report.jtd.json). When `--json` is set, confirmation is auto-approved (the assumption is the consumer is a script). | off |
 | `--quiet` | One-line summary after apply. Conflicts with `--json`. | off |
 | `--exact` | Pin the resolved version exactly (`=x.y.z`) in `vibe.toml` `[requires].packages` instead of the default caret. Same shape as npm's `--save-exact`. Overrides whatever constraint the CLI form carried. | off |
+| `--auth-required` | Strict authentication gate: a 401 / 403 against an `auth = "none"` (public) registry halts the install instead of walking to the next registry. Useful in CI / cron where the operator wants to gate "private install must come from the private registry; if its 401 leaks through to a public fallback, fail loudly." Per-registry `auth = "token-env"` / `"credential-helper"` halts on 401 regardless of this flag. See [`registry-auth.md`](../registry-auth.md). | off |
 
 ## Pipeline
 
