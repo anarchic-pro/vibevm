@@ -8,9 +8,9 @@ Spec: [PROP-004 §5.1](../../spec/research/PROP-004-tessl-comparative-research.m
 
 Every install can land at one of three places:
 
-- **`--scope project`** — files in the project tree (`<proj>/.<agent>/...`), committed to git, every clone gets the same setup. The MCP server entry hardcodes `--path <abs-project>` so the server always serves this project.
+- **`--scope project`** — files in the project tree (`<proj>/.<agent>/...`), committed to git, every clone gets the same setup. The MCP server entry hardcodes `--path <abs-project>` so the server always serves this project. Strictly requires `vibe.toml` in `--path` — bails out if absent.
 - **`--scope user`** — global home / config dirs (`~/.<agent>/...`), machine-local, works in every directory. The MCP server entry omits `--path` so the server resolves CWD per invocation. **Bootstrap-mode** — does NOT require `vibe.toml` in `--path`.
-- **`--scope both`** — write to project AND user simultaneously. For agents with no project surface (Claude Desktop, Codex), Both collapses to user with a `skipped` row in the project results.
+- **`--scope both`** — write to project AND user simultaneously. **Best-effort** for the project leg: when `vibe.toml` is missing in `--path`, the project leg is silently skipped (a `note:` line in text mode flags it) and the user leg runs as normal. Same model as `vibe mcp upgrade` / `vibe mcp uninstall` — designed so first-time-user provisioning scripts can run unattended on a fresh machine before any vibevm project exists. For agents with no project surface (Claude Desktop, Codex), Both collapses to user with a `skipped` row in the project results.
 
 Without `--scope`, the wizard asks. Default in wizard: `project` if `vibe.toml` is present in `--path`, else `user`.
 
@@ -54,7 +54,7 @@ Without flags, drops into a 3-question wizard (TTY required): pick scope, pick w
 
 | Flag | Description | Default |
 | --- | --- | --- |
-| `--path <dir>` | Project root for project-scope walks. Required only when scope is `project` or `both`. With `--scope user`, runs without a project. | `.` |
+| `--path <dir>` | Project root for project-scope walks. Strictly required only when scope is `project`. `--scope both` is best-effort — if `vibe.toml` is missing, the project leg is silently skipped and only the user leg runs. `--scope user` ignores `--path`. | `.` |
 | `--agent <FILTER>` | One of `all`, `claude`, `claude-desktop`, `cursor`, `opencode`, `codex`. Conflicts with `--auto`. | (interactive) |
 | `--auto` | Detect every supported agent and install in all of them. No prompts (except apply confirm — pass `--yes` to skip). Conflicts with `--agent`. Auto-resolves: scope = `project` if `vibe.toml` in `--path`, else `user`; what = `both`. | off |
 | `--scope project|user|both` | See [Two scopes](#two-scopes--project-vs-user). | (interactive / auto-resolved under `--auto`) |
@@ -101,6 +101,25 @@ vibe mcp install --agent opencode --scope project --what skill
 # (works when opencode starts outside the project too).
 vibe mcp install --scope both --auto
 ```
+
+### Provisioning a fresh user account (no project yet)
+
+A setup script that runs once per user — before any vibevm project
+exists on the machine — wires up MCP + SKILL.md at the user level
+for a specific agent without prompting and without `--auto`:
+
+```bash
+vibe mcp install \
+    --agent opencode \
+    --scope both \
+    --what both \
+    --yes \
+    --invoked-by setup
+```
+
+The project leg is silently skipped (no `vibe.toml` here yet); the
+user leg writes once and applies in every directory the operator
+opens later. Re-runs are idempotent — entries become `unchanged`.
 
 ### Pre-flight diff before applying
 
@@ -241,6 +260,7 @@ The exact body is `crates/vibe-cli/src/commands/skill_template.md`, vendored at 
 - **No agents detected, no `--force`.** Empty `targeted` list; the run succeeds with a "no supported agents detected" summary.
 - **Non-TTY without `--auto` / `--agent` / `--scope`.** The wizard refuses with a hint pointing at `--scope`/`--auto` rather than panicking inside dialoguer.
 - **`--scope project` without `vibe.toml`.** Hard error with a hint pointing at `--scope user` for bootstrap-mode.
+- **`--scope both` without `vibe.toml`.** Soft skip: the project leg is silently dropped, the user leg runs as normal, and a `note:` line in text mode flags what happened. Exit 0. Use this from first-time-user provisioning scripts that run before any vibevm project exists.
 - **Stale skill content.** `install --what skill` overwrites stale on-disk SKILL.md with the current template — the contract is set by the binary. For "refresh after vibe upgrade" use [`vibe mcp upgrade`](mcp-upgrade.md).
 - **Foreign keys.** The JSON / TOML mergers preserve every key outside the `mcpServers` / `mcp` / `mcp_servers` block.
 - **User-level `--scope user` writes touch `~/`.** Claude Desktop and Codex configs live in the operator's home / config dir, not the project tree. `--auto` will mutate them when their parent dir exists. `--dry-run` is the safe preview path.
