@@ -585,6 +585,32 @@ fn run_install(ctx: &output::Context, args: McpInstallArgs) -> Result<()> {
         InstallMode::Interactive
     };
 
+    // Under `--unattended` (or `VIBE_UNATTENDED`), no wizard may
+    // open. The operator is in a script and a hung dialoguer prompt
+    // would deadlock CI. Detect missing dimensions early and bail
+    // with a concrete, actionable hint rather than letting the
+    // interactive branches below try to prompt.
+    if ctx.is_unattended() && !args.auto {
+        let mut missing: Vec<&'static str> = Vec::new();
+        if args.scope.is_none() {
+            missing.push("--scope");
+        }
+        if args.what.is_none() {
+            missing.push("--what");
+        }
+        if args.agent.is_none() {
+            missing.push("--agent");
+        }
+        if !missing.is_empty() {
+            bail!(
+                "unattended mode requires every wizard dimension to be explicit; missing: {}. \
+                 Either supply the missing flag(s), or use `--auto` to detect every \
+                 dimension automatically.",
+                missing.join(", ")
+            );
+        }
+    }
+
     // 1. Resolve scope.
     let scope = if let Some(s) = &args.scope {
         Scope::parse(s)?

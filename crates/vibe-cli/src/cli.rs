@@ -36,6 +36,20 @@ pub struct Cli {
     #[arg(long = "invoked-by", global = true, value_name = "AGENT")]
     pub invoked_by: Option<String>,
 
+    /// Run unattended — skip every confirmation prompt and refuse to
+    /// open any interactive wizard. Equivalent to passing
+    /// `--assume-yes` (`vibe install` / `vibe uninstall`) or `--yes`
+    /// (`vibe mcp install` / `upgrade` / `uninstall`) to whichever
+    /// subcommand needs it. Falls back to the `VIBE_UNATTENDED`
+    /// environment variable (truthy values: `1`, `true`, `yes`,
+    /// `on` — case-insensitive); flag wins on conflict. Stamps
+    /// `"unattended": true` on every JSON envelope so log
+    /// aggregators can tell scripted runs from interactive ones.
+    /// Designed for first-time-user provisioning, CI, and other
+    /// fully scripted environments.
+    #[arg(long, global = true)]
+    pub unattended: bool,
+
     #[command(subcommand)]
     pub command: Command,
 }

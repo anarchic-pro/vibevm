@@ -2308,6 +2308,102 @@ fn mcp_install_scope_project_without_vibe_toml_errors() {
     );
 }
 
+/// `--unattended` is the human-readable shape for "I am in a
+/// script, no TTY, no prompts." Provisioning recipe straight out
+/// of the docs: opencode, scope both, what both, no `--yes`, no
+/// `--invoked-by` placeholder. Must succeed without a vibe.toml
+/// (project leg silently skipped) and stamp `unattended: true` on
+/// the JSON envelope.
+#[test]
+fn mcp_install_unattended_replaces_yes_for_provisioning_recipe() {
+    let project = tempfile::tempdir().unwrap();
+    // No init_project — fresh user, no vibevm project on the machine.
+
+    let out = vibe()
+        .arg("--json")
+        .arg("--unattended")
+        .arg("mcp")
+        .arg("install")
+        .arg("--path")
+        .arg(project.path())
+        .arg("--agent")
+        .arg("opencode")
+        .arg("--scope")
+        .arg("both")
+        .arg("--what")
+        .arg("both")
+        .arg("--dry-run")
+        .arg("--force")
+        .output()
+        .unwrap();
+    assert!(
+        out.status.success(),
+        "expected --unattended to drive a successful provisioning install; stderr: {}",
+        String::from_utf8_lossy(&out.stderr)
+    );
+    let v: serde_json::Value = serde_json::from_slice(&out.stdout).unwrap();
+    assert_eq!(v["unattended"], true, "expected unattended:true stamped on envelope: {v}");
+    assert_eq!(v["scope"], "both");
+    assert!(v["project"].is_null());
+    let scopes: std::collections::HashSet<&str> = v["results"]
+        .as_array()
+        .unwrap()
+        .iter()
+        .map(|r| r["scope"].as_str().unwrap())
+        .collect();
+    assert!(scopes.contains("user") && !scopes.contains("project"));
+}
+
+/// `--unattended` without enough flags must fail loudly with a hint
+/// pointing at the missing dimensions, instead of opening a wizard
+/// that would deadlock a script.
+#[test]
+fn mcp_install_unattended_bails_when_wizard_dimensions_missing() {
+    let project = tempfile::tempdir().unwrap();
+    init_project(project.path());
+
+    let out = vibe()
+        .arg("--unattended")
+        .arg("mcp")
+        .arg("install")
+        .arg("--path")
+        .arg(project.path())
+        .arg("--scope")
+        .arg("user")
+        // Deliberately no --agent, no --what.
+        .output()
+        .unwrap();
+    assert!(!out.status.success(), "expected failure; stdout: {}", String::from_utf8_lossy(&out.stdout));
+    let stderr = String::from_utf8_lossy(&out.stderr);
+    assert!(
+        stderr.contains("unattended") && stderr.contains("--agent") && stderr.contains("--what"),
+        "expected the bail to name the missing flags; got: {stderr}"
+    );
+}
+
+/// `vibe install <pkg> --unattended` skips the apply confirm prompt,
+/// same as `--assume-yes`. Lets a single global flag drive both the
+/// package CLI surface and the MCP CLI surface.
+#[test]
+fn install_unattended_skips_confirm_like_assume_yes() {
+    let project = tempfile::tempdir().unwrap();
+    init_project(project.path());
+
+    vibe()
+        .arg("--unattended")
+        .arg("install")
+        .arg("flow:wal")
+        .arg("--path")
+        .arg(project.path())
+        .arg("--registry")
+        .arg(fixture_registry())
+        .assert()
+        .success();
+
+    // The fixture's install must have written the canonical files.
+    assert!(project.path().join("spec/flows/wal/WAL-PROTOCOL.md").is_file());
+}
+
 #[test]
 fn mcp_install_scope_both_without_vibe_toml_does_user_leg_only() {
     // First-time-user provisioning scenario: a setup script runs on

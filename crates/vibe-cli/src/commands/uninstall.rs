@@ -35,7 +35,7 @@ pub fn run(ctx: &output::Context, args: UninstallArgs) -> Result<()> {
         println!();
     }
 
-    let approved = if args.assume_yes || ctx.is_json() {
+    let approved = if args.assume_yes || ctx.is_unattended() || ctx.is_json() {
         true
     } else if !console::user_attended() {
         bail!(

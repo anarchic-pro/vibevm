@@ -47,7 +47,12 @@ fn main() -> ExitCode {
     promote_user_config_env();
     init_tracing();
 
-    let ctx = output::Context::from_flags(cli.quiet, cli.json, cli.invoked_by.as_deref());
+    let ctx = output::Context::from_flags(
+        cli.quiet,
+        cli.json,
+        cli.invoked_by.as_deref(),
+        cli.unattended,
+    );
 
     let result = match cli.command {
         Command::Init(args) => commands::init::run(&ctx, args),

@@ -375,7 +375,7 @@ pub fn run(ctx: &output::Context, args: InstallArgs) -> Result<()> {
     present_plans(ctx, &project_root, &plans);
 
     // Confirm (unless --assume-yes or --json or not a TTY).
-    let approved = if args.assume_yes || ctx.is_json() {
+    let approved = if args.assume_yes || ctx.is_unattended() || ctx.is_json() {
         true
     } else if !console::user_attended() {
         // No TTY → refuse to apply without explicit --assume-yes. This matches

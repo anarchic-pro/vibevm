@@ -61,6 +61,28 @@ pub fn resolve_invoked_by(cli_flag: Option<&str>) -> (Option<String>, InvokedByP
     (None, InvokedByProvenance::Default)
 }
 
+/// Read the `VIBE_UNATTENDED` env-var. Truthy values are `1`,
+/// `true`, `yes`, `on` (case-insensitive, leading/trailing
+/// whitespace ignored). Anything else — including the empty
+/// string and unset — resolves to `false`. The deliberately small
+/// vocabulary matches what cloud-init / systemd-style provisioning
+/// scripts already speak.
+fn env_unattended() -> bool {
+    std::env::var("VIBE_UNATTENDED")
+        .ok()
+        .map(|s| s.trim().to_ascii_lowercase())
+        .is_some_and(|s| matches!(s.as_str(), "1" | "true" | "yes" | "on"))
+}
+
+/// Resolve the unattended posture: CLI flag wins; otherwise consult
+/// the env-var. There is no provenance enum for this — the value is
+/// boolean and the source rarely matters in practice (logs carry
+/// the resolved value plus an `unattended: true` stamp on every
+/// JSON envelope).
+pub fn resolve_unattended(cli_flag: bool) -> bool {
+    cli_flag || env_unattended()
+}
+
 pub struct Context {
     pub mode: Mode,
     pub tick: Style,
@@ -75,11 +97,22 @@ pub struct Context {
     /// Where `invoked_by` came from. Surfaced via [`Context::invoked_by_provenance`]
     /// to drive `vibe show config`.
     invoked_by_provenance: InvokedByProvenance,
+    /// Resolved unattended posture — `--unattended` flag OR
+    /// `VIBE_UNATTENDED` env-var truthy. Implies skip-all-confirms
+    /// for every mutating subcommand and stamps the JSON envelope
+    /// with `"unattended": true`.
+    unattended: bool,
 }
 
 impl Context {
-    pub fn from_flags(quiet: bool, json: bool, invoked_by_cli: Option<&str>) -> Self {
+    pub fn from_flags(
+        quiet: bool,
+        json: bool,
+        invoked_by_cli: Option<&str>,
+        unattended_cli: bool,
+    ) -> Self {
         let (invoked_by, invoked_by_provenance) = resolve_invoked_by(invoked_by_cli);
+        let unattended = resolve_unattended(unattended_cli);
         let mode = match (quiet, json) {
             (_, true) => Mode::Json,
             (true, false) => Mode::HumanQuiet,
@@ -97,6 +130,7 @@ impl Context {
             bold: styled(Style::new().bold()),
             invoked_by,
             invoked_by_provenance,
+            unattended,
         }
     }
 
@@ -114,6 +148,14 @@ impl Context {
 
     pub fn invoked_by_provenance(&self) -> InvokedByProvenance {
         self.invoked_by_provenance
+    }
+
+    /// True when `--unattended` was passed on the CLI or
+    /// `VIBE_UNATTENDED` resolves truthy in the environment. Mutating
+    /// subcommands treat this as an implicit "yes" for every
+    /// confirmation prompt and refuse to open any interactive wizard.
+    pub fn is_unattended(&self) -> bool {
+        self.unattended
     }
 
     pub fn heading(&self, text: &str) {
@@ -176,6 +218,7 @@ impl Context {
                     "error": format!("{err:#}"),
                 });
                 self.stamp_invoked_by(&mut payload);
+                self.stamp_unattended(&mut payload);
                 eprintln!("{payload}");
             }
         }
@@ -197,6 +240,22 @@ impl Context {
         }
     }
 
+    /// Stamp `"unattended": true` on the top-level JSON object when
+    /// the resolved context is unattended. Skipped (not stamped at
+    /// all) when the run is interactive — log aggregators see the
+    /// field only on scripted runs, which is what they want for
+    /// filtering. Same flatten semantics as `stamp_invoked_by`: a
+    /// caller-supplied value on the inner payload wins.
+    fn stamp_unattended(&self, payload: &mut Value) {
+        if !self.unattended {
+            return;
+        }
+        if let Value::Object(map) = payload {
+            map.entry("unattended".to_string())
+                .or_insert(Value::Bool(true));
+        }
+    }
+
     pub fn emit_json<T: Serialize>(&self, value: &T) -> anyhow::Result<()> {
         if !self.is_json() {
             return Ok(());
@@ -206,12 +265,14 @@ impl Context {
         Ok(())
     }
 
-    /// Build the JSON string we'd print, with `invoked_by` stamped
-    /// onto the top-level object. Pulled out of `emit_json` so tests
-    /// can assert the payload shape without capturing stdout.
+    /// Build the JSON string we'd print, with `invoked_by` and
+    /// `unattended` stamped onto the top-level object. Pulled out of
+    /// `emit_json` so tests can assert the payload shape without
+    /// capturing stdout.
     pub fn render_json<T: Serialize>(&self, value: &T) -> anyhow::Result<String> {
         let mut v = serde_json::to_value(value)?;
         self.stamp_invoked_by(&mut v);
+        self.stamp_unattended(&mut v);
         Ok(serde_json::to_string_pretty(&v)?)
     }
 }
@@ -219,6 +280,13 @@ impl Context {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    /// Serialises every test that mutates `VIBE_INVOKED_BY`. Sister
+    /// of `UNATTENDED_LOCK`; same rationale (parallel writes flake
+    /// the resolver assertions). Tests that mutate both env-vars
+    /// hold both locks; hold UNATTENDED_LOCK first to keep the
+    /// ordering consistent and avoid potential deadlocks.
+    static INVOKED_BY_LOCK: std::sync::Mutex<()> = std::sync::Mutex::new(());
 
     /// Reset live `VIBE_INVOKED_BY` before/after each test so the
     /// resolver sees a clean environment regardless of how the test
@@ -273,6 +341,7 @@ mod tests {
 
     #[test]
     fn resolve_returns_default_when_neither_flag_nor_env() {
+        let _lock = INVOKED_BY_LOCK.lock().unwrap_or_else(|e| e.into_inner());
         let _g = EnvGuard::new();
         let (v, p) = resolve_invoked_by(None);
         assert_eq!(v, None);
@@ -281,6 +350,7 @@ mod tests {
 
     #[test]
     fn resolve_uses_env_when_flag_absent() {
+        let _lock = INVOKED_BY_LOCK.lock().unwrap_or_else(|e| e.into_inner());
         let _g = EnvGuard::new();
         EnvGuard::set("opencode");
         let (v, p) = resolve_invoked_by(None);
@@ -290,6 +360,7 @@ mod tests {
 
     #[test]
     fn resolve_flag_wins_over_env() {
+        let _lock = INVOKED_BY_LOCK.lock().unwrap_or_else(|e| e.into_inner());
         let _g = EnvGuard::new();
         EnvGuard::set("opencode");
         let (v, p) = resolve_invoked_by(Some("claude-code"));
@@ -299,6 +370,7 @@ mod tests {
 
     #[test]
     fn resolve_treats_empty_flag_as_absent() {
+        let _lock = INVOKED_BY_LOCK.lock().unwrap_or_else(|e| e.into_inner());
         let _g = EnvGuard::new();
         EnvGuard::set("opencode");
         let (v, p) = resolve_invoked_by(Some("   "));
@@ -308,6 +380,7 @@ mod tests {
 
     #[test]
     fn resolve_treats_empty_env_as_absent() {
+        let _lock = INVOKED_BY_LOCK.lock().unwrap_or_else(|e| e.into_inner());
         let _g = EnvGuard::new();
         EnvGuard::set("");
         let (v, p) = resolve_invoked_by(None);
@@ -317,8 +390,9 @@ mod tests {
 
     #[test]
     fn render_json_stamps_invoked_by_on_object_payloads() {
+        let _lock = INVOKED_BY_LOCK.lock().unwrap_or_else(|e| e.into_inner());
         let _g = EnvGuard::new();
-        let ctx = Context::from_flags(false, true, Some("codex"));
+        let ctx = Context::from_flags(false, true, Some("codex"), false);
         let payload = serde_json::json!({ "ok": true, "command": "demo" });
         let rendered = ctx.render_json(&payload).unwrap();
         let parsed: Value = serde_json::from_str(&rendered).unwrap();
@@ -329,18 +403,143 @@ mod tests {
 
     #[test]
     fn render_json_omits_invoked_by_when_unset() {
+        let _lock = INVOKED_BY_LOCK.lock().unwrap_or_else(|e| e.into_inner());
         let _g = EnvGuard::new();
-        let ctx = Context::from_flags(false, true, None);
+        let ctx = Context::from_flags(false, true, None, false);
         let payload = serde_json::json!({ "ok": true });
         let rendered = ctx.render_json(&payload).unwrap();
         let parsed: Value = serde_json::from_str(&rendered).unwrap();
         assert!(parsed.get("invoked_by").is_none());
     }
 
+    /// Serialises every test that mutates `VIBE_UNATTENDED`. Without
+    /// it parallel tests in this module observe each other's
+    /// transient writes and the truthy-vs-falsy assertions flake.
+    /// `EnvGuard` for `VIBE_INVOKED_BY` has the same race (known
+    /// issue, tracked in CONTINUE.md); we just avoid hitting it by
+    /// holding this lock around the unattended writes.
+    static UNATTENDED_LOCK: std::sync::Mutex<()> = std::sync::Mutex::new(());
+
+    /// Same shape as `EnvGuard` but for `VIBE_UNATTENDED`. Kept
+    /// separate so tests that want to control both env-vars can
+    /// hold one of each without clobbering.
+    struct UnattendedGuard {
+        prev: Option<String>,
+    }
+
+    impl UnattendedGuard {
+        fn new() -> Self {
+            let prev = std::env::var("VIBE_UNATTENDED").ok();
+            Self::clear();
+            UnattendedGuard { prev }
+        }
+
+        fn set(value: &str) {
+            #[allow(unsafe_code)]
+            unsafe {
+                std::env::set_var("VIBE_UNATTENDED", value);
+            }
+        }
+
+        fn clear() {
+            #[allow(unsafe_code)]
+            unsafe {
+                std::env::remove_var("VIBE_UNATTENDED");
+            }
+        }
+    }
+
+    impl Drop for UnattendedGuard {
+        fn drop(&mut self) {
+            match &self.prev {
+                Some(v) => {
+                    let v = v.clone();
+                    Self::set(&v);
+                }
+                None => Self::clear(),
+            }
+        }
+    }
+
+    #[test]
+    fn unattended_default_false_with_no_flag_no_env() {
+        let _lock = UNATTENDED_LOCK.lock().unwrap_or_else(|e| e.into_inner());
+        let _g = UnattendedGuard::new();
+        assert!(!resolve_unattended(false));
+    }
+
+    #[test]
+    fn unattended_cli_flag_true_wins() {
+        let _lock = UNATTENDED_LOCK.lock().unwrap_or_else(|e| e.into_inner());
+        let _g = UnattendedGuard::new();
+        assert!(resolve_unattended(true));
+    }
+
+    #[test]
+    fn unattended_env_truthy_values() {
+        let _lock = UNATTENDED_LOCK.lock().unwrap_or_else(|e| e.into_inner());
+        for raw in ["1", "true", "TRUE", " yes ", "On", "yes"] {
+            let _g = UnattendedGuard::new();
+            UnattendedGuard::set(raw);
+            assert!(
+                resolve_unattended(false),
+                "VIBE_UNATTENDED={raw:?} must resolve to true"
+            );
+        }
+    }
+
+    #[test]
+    fn unattended_env_falsy_values_or_empty_or_unset() {
+        let _lock = UNATTENDED_LOCK.lock().unwrap_or_else(|e| e.into_inner());
+        for raw in ["", "0", "false", "no", "off", "garbage", "  "] {
+            let _g = UnattendedGuard::new();
+            UnattendedGuard::set(raw);
+            assert!(
+                !resolve_unattended(false),
+                "VIBE_UNATTENDED={raw:?} must resolve to false"
+            );
+        }
+    }
+
+    #[test]
+    fn unattended_cli_flag_overrides_falsy_env() {
+        let _lock = UNATTENDED_LOCK.lock().unwrap_or_else(|e| e.into_inner());
+        let _g = UnattendedGuard::new();
+        UnattendedGuard::set("0");
+        // Flag is true, env is falsy → resolved is true (flag wins by OR).
+        assert!(resolve_unattended(true));
+    }
+
+    #[test]
+    fn render_json_stamps_unattended_when_true() {
+        let _lock = UNATTENDED_LOCK.lock().unwrap_or_else(|e| e.into_inner());
+        let _g_inv = EnvGuard::new();
+        let _g_un = UnattendedGuard::new();
+        let ctx = Context::from_flags(false, true, None, true);
+        let payload = serde_json::json!({ "ok": true, "command": "demo" });
+        let rendered = ctx.render_json(&payload).unwrap();
+        let parsed: Value = serde_json::from_str(&rendered).unwrap();
+        assert_eq!(parsed["unattended"], true);
+        assert_eq!(parsed["ok"], true);
+    }
+
+    #[test]
+    fn render_json_omits_unattended_when_false() {
+        let _lock = UNATTENDED_LOCK.lock().unwrap_or_else(|e| e.into_inner());
+        let _g_inv = EnvGuard::new();
+        let _g_un = UnattendedGuard::new();
+        let ctx = Context::from_flags(false, true, None, false);
+        let payload = serde_json::json!({ "ok": true });
+        let rendered = ctx.render_json(&payload).unwrap();
+        let parsed: Value = serde_json::from_str(&rendered).unwrap();
+        assert!(parsed.get("unattended").is_none());
+    }
+
     #[test]
     fn render_json_preserves_caller_supplied_invoked_by() {
+        let _lock = INVOKED_BY_LOCK.lock().unwrap_or_else(|e| e.into_inner());
         let _g = EnvGuard::new();
-        let ctx = Context::from_flags(false, true, Some("opencode"));
+        let ctx = Context::from_flags(false, true, Some("opencode"), false);
         let payload = serde_json::json!({
             "ok": true,
             "invoked_by": "explicit-override"
