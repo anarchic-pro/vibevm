@@ -2309,6 +2309,65 @@ fn mcp_install_scope_project_without_vibe_toml_errors() {
 }
 
 #[test]
+fn mcp_install_scope_both_without_vibe_toml_does_user_leg_only() {
+    // First-time-user provisioning scenario: a setup script runs on
+    // a fresh machine before any vibevm project exists, and asks
+    // for `--scope both --agent opencode` so the user-level config
+    // lands and the project-leg is silently skipped. Symmetric with
+    // `vibe mcp upgrade` / `vibe mcp uninstall`. Uses --dry-run so
+    // the test does not touch real user configs.
+    let project = tempfile::tempdir().unwrap();
+    // Deliberately no init_project — no vibe.toml.
+
+    let out = vibe()
+        .arg("--json")
+        .arg("mcp")
+        .arg("install")
+        .arg("--path")
+        .arg(project.path())
+        .arg("--agent")
+        .arg("opencode")
+        .arg("--scope")
+        .arg("both")
+        .arg("--what")
+        .arg("both")
+        .arg("--yes")
+        .arg("--dry-run")
+        .arg("--force")
+        .output()
+        .unwrap();
+    assert!(
+        out.status.success(),
+        "expected --scope both to succeed without vibe.toml (best-effort project leg); stderr: {}",
+        String::from_utf8_lossy(&out.stderr)
+    );
+    let v: serde_json::Value = serde_json::from_slice(&out.stdout).unwrap();
+    assert_eq!(v["scope"], "both");
+    // No project resolved → envelope reports project as null.
+    assert!(v["project"].is_null(), "project should be null when vibe.toml absent: {v}");
+    // Walker emitted only user-leg rows; project leg silently skipped.
+    let results = v["results"].as_array().unwrap();
+    let scopes: std::collections::HashSet<&str> =
+        results.iter().map(|r| r["scope"].as_str().unwrap()).collect();
+    assert!(
+        scopes.contains("user"),
+        "expected at least one user-scope row in results: {results:#?}"
+    );
+    assert!(
+        !scopes.contains("project"),
+        "project-scope rows must NOT appear when vibe.toml is missing: {results:#?}"
+    );
+    // SKILL.md leg also walks user-only.
+    let skills = v["skill_results"].as_array().unwrap();
+    let skill_scopes: std::collections::HashSet<&str> =
+        skills.iter().map(|r| r["scope"].as_str().unwrap()).collect();
+    assert!(
+        !skill_scopes.contains("project"),
+        "skill project-scope rows must NOT appear when vibe.toml is missing: {skills:#?}"
+    );
+}
+
+#[test]
 fn mcp_install_scope_both_writes_to_project_and_user_for_claude() {
     let project = tempfile::tempdir().unwrap();
     init_project(project.path());

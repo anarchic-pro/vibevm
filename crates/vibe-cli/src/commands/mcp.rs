@@ -131,10 +131,17 @@ impl Scope {
         }
     }
 
-    /// Whether installing under this scope requires a `vibe.toml` in
-    /// the working directory. Project + Both — yes; User — no.
+    /// Whether installing under this scope **requires** a `vibe.toml`
+    /// in the working directory. Only `Project` — operator explicitly
+    /// asked for project-only and there's no project to write into,
+    /// so refuse. `User` doesn't need one (writes to home /
+    /// `<config-dir>`); `Both` is best-effort — the user-leg always
+    /// runs, the project-leg is silently skipped when no `vibe.toml`
+    /// is present (matches the same model in `vibe mcp upgrade` /
+    /// `vibe mcp uninstall` and supports the unattended-provisioning
+    /// workflow on a fresh machine).
     pub fn requires_vibe_toml(self) -> bool {
-        matches!(self, Scope::Project | Scope::Both)
+        matches!(self, Scope::Project)
     }
 }
 
@@ -592,16 +599,27 @@ fn run_install(ctx: &output::Context, args: McpInstallArgs) -> Result<()> {
         interactive_ask_scope(&args.path)?
     };
 
-    // 2. Resolve project_root if scope requires it.
+    // 2. Resolve project_root. Two policies, mirroring the model in
+    //    `vibe mcp upgrade` / `vibe mcp uninstall`:
+    //
+    //    - `Scope::requires_vibe_toml()` (only `Project`) → bail when
+    //      `vibe.toml` is missing. The operator was explicit and
+    //      there is nothing to write into.
+    //    - Otherwise (`User` or `Both`) → best-effort: read the
+    //      project_root only if `vibe.toml` exists; leave it as
+    //      `None` if not. The walker below skips the project-leg
+    //      when project_root is None, so the user-leg of `Both`
+    //      runs unattended even on a fresh machine. This is what
+    //      makes `--scope both` usable from first-time-user
+    //      provisioning scripts.
     let project_root: Option<PathBuf> = if scope.requires_vibe_toml() {
         Some(resolve_project_root_required(&args.path)?)
     } else {
-        // User-only — project is irrelevant. Try canonicalising for
-        // logging clarity but don't fail.
         args.path
             .canonicalize()
             .ok()
             .map(super::init::strip_unc_public)
+            .filter(|p| p.join(ProjectManifest::FILENAME).exists())
     };
 
     // 3. Resolve what.
@@ -636,11 +654,20 @@ fn run_install(ctx: &output::Context, args: McpInstallArgs) -> Result<()> {
 
     // 5. Walk: for each agent × each concrete scope under `scope`, do
     //    the install (or skip when the agent has no surface for that
-    //    scope).
+    //    scope, or when `Both` was selected without a `vibe.toml`
+    //    making the project-leg unreachable).
+    let project_leg_skipped_no_manifest = scope == Scope::Both && project_root.is_none();
     let mut results: Vec<AgentInstallReport> = Vec::new();
     let mut skill_results: Vec<SkillInstallReport> = Vec::new();
     for agent in &targeted {
         for concrete_scope in scope.expand() {
+            // `Both` without `vibe.toml`: the user-leg runs as
+            // normal, the project-leg is silently skipped. Symmetric
+            // with `vibe mcp upgrade` / `vibe mcp uninstall`.
+            if concrete_scope == Scope::Project && project_root.is_none() {
+                continue;
+            }
+
             // ---- MCP entry ----
             if what.includes_mcp() {
                 let path = agent.config_path(concrete_scope, project_root.as_deref())?;
@@ -710,6 +737,14 @@ fn run_install(ctx: &output::Context, args: McpInstallArgs) -> Result<()> {
         return Ok(());
     }
     print_install_results(ctx, args.dry_run, &results, &skill_results);
+    if project_leg_skipped_no_manifest {
+        ctx.step(&format!(
+            "note: --scope both was requested but `{}` carries no `vibe.toml`; \
+             project-scope leg skipped, only user-level installs were written. \
+             Run `vibe init` here first if you want both legs.",
+            args.path.display()
+        ));
+    }
     Ok(())
 }
 
@@ -1808,9 +1843,16 @@ mod tests {
     }
 
     #[test]
-    fn scope_requires_vibe_toml_only_for_project_or_both() {
+    fn scope_requires_vibe_toml_only_for_project() {
+        // Only the explicit `Project` choice hard-requires a project.
+        // `Both` is best-effort: the user-leg always runs and the
+        // project-leg is silently skipped when no `vibe.toml` is
+        // present. This is what makes `--scope both` usable from a
+        // first-time-user provisioning script that runs before any
+        // project exists on the machine. Same model as `mcp upgrade`
+        // and `mcp uninstall`.
         assert!(Scope::Project.requires_vibe_toml());
-        assert!(Scope::Both.requires_vibe_toml());
+        assert!(!Scope::Both.requires_vibe_toml());
         assert!(!Scope::User.requires_vibe_toml());
     }
 
