@@ -130,7 +130,11 @@ fn merge_preserving_comments(existing: &str, new_rendered: &str) -> String {
 
     // 2. Per-table decoration. `Item::Table` carries its own
     //    leading decor; `Item::ArrayOfTables` carries decoration
-    //    on each element (`[[registry]]`).
+    //    on each element (`[[registry]]`). Inside each preserved
+    //    table, `copy_inline_kv_decor` walks the (key, Value)
+    //    pairs and copies prefix / suffix decoration on
+    //    matching keys — that's how `# inline note` comments
+    //    inside a `[[registry]]` block survive a write.
     for (key, existing_item) in existing_root.iter() {
         let Some(new_item) = new_doc.as_table_mut().get_mut(key) else {
             continue;
@@ -140,6 +144,7 @@ fn merge_preserving_comments(existing: &str, new_rendered: &str) -> String {
                 if let Some(prefix) = et.decor().prefix() {
                     nt.decor_mut().set_prefix(prefix.clone());
                 }
+                copy_inline_kv_decor(et, nt);
             }
             (toml_edit::Item::ArrayOfTables(eaot), toml_edit::Item::ArrayOfTables(naot)) => {
                 // Copy element-level decor up to the shorter of the
@@ -149,10 +154,11 @@ fn merge_preserving_comments(existing: &str, new_rendered: &str) -> String {
                 // approximation.
                 let pair_count = eaot.len().min(naot.len());
                 for i in 0..pair_count {
-                    if let (Some(et), Some(nt)) = (eaot.get(i), naot.get_mut(i))
-                        && let Some(prefix) = et.decor().prefix()
-                    {
-                        nt.decor_mut().set_prefix(prefix.clone());
+                    if let (Some(et), Some(nt)) = (eaot.get(i), naot.get_mut(i)) {
+                        if let Some(prefix) = et.decor().prefix() {
+                            nt.decor_mut().set_prefix(prefix.clone());
+                        }
+                        copy_inline_kv_decor(et, nt);
                     }
                 }
             }
@@ -177,6 +183,65 @@ fn merge_preserving_comments(existing: &str, new_rendered: &str) -> String {
     new_doc.set_trailing(trailing);
 
     new_doc.to_string()
+}
+
+/// Copy per-key inline decoration (the prefix / suffix attached
+/// to a `Value`'s `Decor`) from `existing` onto matching keys in
+/// `new`. This is what preserves comments and blank-line padding
+/// **inside** a `[[registry]]` block — between
+/// `name = "internal"` and `url = "..."`, for example.
+///
+/// The pairing is by string-equal key. Keys that exist only in
+/// one side fall through with their default decoration (a
+/// brand-new `[requires]` written by `vibe install` doesn't try
+/// to inherit decor from anywhere).
+///
+/// Does not recurse into nested tables; deeper nesting is
+/// unusual in `vibe.toml` (the schema is mostly flat) and
+/// adding recursion would extend correctness obligations
+/// without a corresponding payoff. If a future schema grows
+/// nested tables and an operator's inline comments matter, this
+/// helper extends naturally.
+fn copy_inline_kv_decor(existing: &toml_edit::Table, new: &mut toml_edit::Table) {
+    // toml_edit splits per-key decor across two surfaces:
+    //
+    //   - the **Key** carries the leading whitespace + comments
+    //     up to the `=` (where `# host migrated…` between two
+    //     entries actually lives).
+    //   - the **Value** carries the post-`=` decoration plus any
+    //     same-line trailing comment (`name = "x"  # this`).
+    //
+    // Both must be cloned for full inline-preservation. We
+    // collect the read side first, then apply mutably — the
+    // borrow checker doesn't allow holding an immutable iter
+    // open while we mutate via `get_mut`.
+    use toml_edit::Decor;
+    let mut updates: Vec<(String, Option<Decor>, Option<Decor>)> = Vec::new();
+    for (key, _) in new.iter() {
+        let key_str = key.to_string();
+        let key_decor = existing
+            .key(&key_str)
+            .map(|k| k.leaf_decor().clone());
+        let val_decor = match existing.get(&key_str) {
+            Some(toml_edit::Item::Value(v)) => Some(v.decor().clone()),
+            _ => None,
+        };
+        if key_decor.is_some() || val_decor.is_some() {
+            updates.push((key_str, key_decor, val_decor));
+        }
+    }
+    for (key_str, key_decor, val_decor) in updates {
+        if let Some(decor) = key_decor
+            && let Some(mut k) = new.key_mut(&key_str)
+        {
+            *k.leaf_decor_mut() = decor;
+        }
+        if let Some(decor) = val_decor
+            && let Some(toml_edit::Item::Value(nv)) = new.get_mut(&key_str)
+        {
+            *nv.decor_mut() = decor;
+        }
+    }
 }
 
 #[cfg(test)]
@@ -265,6 +330,46 @@ version = \"0.0.2\"
             "trailing comment must survive:\n{merged}"
         );
         assert!(merged.contains("version = \"0.0.2\""));
+    }
+
+    #[test]
+    fn inline_kv_comments_survive_inside_array_of_tables() {
+        // The headline use case for inline-decor preservation:
+        // operator hand-edited a comment between `name` and `url`
+        // inside a `[[registry]]` block. A subsequent
+        // `vibe install` re-renders the manifest; the inline
+        // comment must not be wiped out.
+        let existing = "\
+[project]
+name = \"demo\"
+version = \"0.0.1\"
+
+[[registry]]
+name = \"vibespecs\"
+# host migrated from GitVerse on 2026-04-29 — keep this in sync.
+url = \"https://github.com/vibespecs\"
+";
+        // `vibe install`-shape rewrite: same registry, but with a
+        // freshly-added `[requires]` block at the bottom.
+        let new_rendered = "\
+[project]
+name = \"demo\"
+version = \"0.0.1\"
+
+[[registry]]
+name = \"vibespecs\"
+url = \"https://github.com/vibespecs\"
+
+[requires]
+packages = [\"flow:wal@^0.1.0\"]
+";
+        let merged = merge_preserving_comments(existing, new_rendered);
+        assert!(
+            merged.contains("# host migrated from GitVerse on 2026-04-29 — keep this in sync."),
+            "inline comment between name and url must survive:\n{merged}"
+        );
+        assert!(merged.contains("[requires]"));
+        assert!(merged.contains("flow:wal@^0.1.0"));
     }
 
     #[test]
