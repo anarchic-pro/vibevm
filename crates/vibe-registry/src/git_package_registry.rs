@@ -88,6 +88,13 @@ pub struct GitPackageRegistry {
     /// fetch/clone path stays primary-only until cross-source
     /// `content_hash` verification lands.
     mirror_urls: Vec<String>,
+    /// When `Some`, this registry holds **exactly one package** at the
+    /// given URL — `package_repo_url(kind, name)` returns this verbatim
+    /// without applying `naming` to compose `<org>/<kind>-<name>.git`.
+    /// Used for git-source declarations from `[requires.packages]`
+    /// table-form (PROP-002 §2.4.1). When `None`, this is a normal
+    /// multi-package registry and naming applies as before.
+    single_package_url: Option<String>,
     /// Optional upstream index — when set, `list_versions` queries
     /// it before falling back to `git ls-remote`. PROP-005 §2.10
     /// slice 10. The fetch path is unaffected: `content_hash` is
@@ -221,6 +228,7 @@ impl GitPackageRegistry {
             cache_root: cache_root_owned,
             canonical_hash,
             mirror_urls,
+            single_package_url: None,
             index_client: None,
             freshness_secs,
         })
@@ -294,9 +302,55 @@ impl GitPackageRegistry {
             cache_root: cache_root_owned,
             canonical_hash,
             mirror_urls,
+            single_package_url: None,
             index_client: None,
             freshness_secs,
         })
+    }
+
+    /// Open a registry that holds **exactly one package** at `repo_url`.
+    /// Used for git-source declarations from `[requires.packages]`
+    /// table-form (PROP-002 §2.4.1) — the consumer's `vibe.toml`
+    /// declares `"flow:internal" = { git = "...", tag = "..." }` and
+    /// the resolver synthesises a `GitPackageRegistry` pointing
+    /// directly at that URL, bypassing the org-level `naming`-driven
+    /// URL composition.
+    ///
+    /// Differences from `open_with_auth`:
+    /// - `repo_url` is the per-package URL (not an org URL).
+    /// - `naming` is irrelevant — the synthetic registry stores
+    ///   `KindName` as a placeholder; `package_repo_url(kind, name)`
+    ///   returns `repo_url` verbatim.
+    /// - `mirror_urls` are empty (mirrors are an org-level concept;
+    ///   git-source has no mirror chain — see PROP-002 §2.4.1
+    ///   "Out of scope").
+    /// - `name` is a synthetic local label such as
+    ///   `"git-source-flow-internal"` — not a registry org name.
+    #[allow(clippy::too_many_arguments)]
+    pub fn open_single_package(
+        synthetic_name: &str,
+        repo_url: &str,
+        repo_ref: &str,
+        cache_root: &Path,
+        backend: Arc<dyn GitBackend>,
+        freshness_secs: u64,
+        auth: vibe_core::manifest::AuthKind,
+        token_env_name: Option<&str>,
+    ) -> Result<Self, RegistryError> {
+        let mut reg = Self::open_with_auth(
+            synthetic_name,
+            repo_url,
+            repo_ref,
+            NamingConvention::KindName,
+            Vec::new(),
+            cache_root,
+            backend,
+            freshness_secs,
+            auth,
+            token_env_name,
+        )?;
+        reg.single_package_url = Some(repo_url.to_string());
+        Ok(reg)
     }
 
     /// Attach an [`IndexClient`](crate::index_client::IndexClient) to
@@ -333,17 +387,29 @@ impl GitPackageRegistry {
         self.cache_root.join(&self.canonical_hash)
     }
 
-    /// Compose the per-package repo URL — `<org_url>/<naming(kind, name)>.git`.
-    /// Trailing slashes on `org_url` are tolerated. **No credentials are
-    /// embedded** — this URL is safe to record in the lockfile, log, or
-    /// surface to humans. For URLs that drive git invocations
-    /// (`ls-remote` / `clone` / `fetch`) under
-    /// `auth = AuthKind::TokenEnv`, callers reach for
-    /// [`Self::credentialed_url`] instead.
+    /// Compose the per-package repo URL — `<org_url>/<naming(kind, name)>.git`
+    /// for normal multi-package registries, or the verbatim single-package
+    /// URL for git-source registries (PROP-002 §2.4.1). Trailing slashes
+    /// on `org_url` are tolerated. **No credentials are embedded** —
+    /// this URL is safe to record in the lockfile, log, or surface to
+    /// humans. For URLs that drive git invocations (`ls-remote` /
+    /// `clone` / `fetch`) under `auth = AuthKind::TokenEnv`, callers
+    /// reach for [`Self::credentialed_url`] instead.
     pub fn package_repo_url(&self, kind: PackageKind, name: &str) -> String {
+        if let Some(url) = &self.single_package_url {
+            return url.clone();
+        }
         let repo_name = self.naming.repo_name(kind, name);
         let trimmed = self.org_url.trim_end_matches('/');
         format!("{trimmed}/{repo_name}.git")
+    }
+
+    /// True when this registry was constructed via `open_single_package`
+    /// — used by callers (e.g. `MultiRegistryResolver`) to skip features
+    /// that don't apply to single-package registries (mirror chains,
+    /// org-level index lookups).
+    pub fn is_single_package(&self) -> bool {
+        self.single_package_url.is_some()
     }
 
     /// The `auth` regime the registry was opened with — read by
@@ -506,8 +572,13 @@ impl GitPackageRegistry {
     /// All URLs to try for a `(kind, name)` lookup, primary first.
     /// Mirrors are composed using the same naming convention as the
     /// primary, since the mirror is meant to be a transparent
-    /// alternative to the primary's content.
+    /// alternative to the primary's content. Single-package registries
+    /// (PROP-002 §2.4.1) return a single-element vec with the verbatim
+    /// URL — mirrors do not apply.
     fn package_urls(&self, kind: PackageKind, name: &str) -> Vec<String> {
+        if let Some(url) = &self.single_package_url {
+            return vec![url.clone()];
+        }
         let repo_name = self.naming.repo_name(kind, name);
         let mut urls = Vec::with_capacity(1 + self.mirror_urls.len());
         urls.push(format!(
@@ -1601,6 +1672,56 @@ mod tests {
             r.package_repo_url(PackageKind::Stack, "rust-cli"),
             "https://gitverse.ru/vibespecs/stack-rust-cli.git"
         );
+    }
+
+    #[test]
+    fn single_package_url_returned_verbatim() {
+        // M1.15 git-source: a single-package registry has its full URL
+        // declared up front, naming is bypassed.
+        let cache = tempdir().unwrap();
+        let fake: Arc<dyn GitBackend> = Arc::new(FakeBackend::default());
+        let r = GitPackageRegistry::open_single_package(
+            "git-source-flow-internal",
+            "https://github.com/me/flow-internal",
+            "v0.1.0",
+            cache.path(),
+            fake,
+            DEFAULT_FRESHNESS_SECS,
+            vibe_core::manifest::AuthKind::None,
+            None,
+        )
+        .unwrap();
+        assert!(r.is_single_package());
+        // The repo URL is the URL we passed, regardless of (kind, name).
+        assert_eq!(
+            r.package_repo_url(PackageKind::Flow, "internal"),
+            "https://github.com/me/flow-internal"
+        );
+        // (kind, name) does not even matter — naming is skipped.
+        assert_eq!(
+            r.package_repo_url(PackageKind::Stack, "totally-different"),
+            "https://github.com/me/flow-internal"
+        );
+    }
+
+    #[test]
+    fn single_package_skips_mirror_chain() {
+        let cache = tempdir().unwrap();
+        let fake: Arc<dyn GitBackend> = Arc::new(FakeBackend::default());
+        let r = GitPackageRegistry::open_single_package(
+            "git-source",
+            "https://github.com/me/flow-internal",
+            "v1.0",
+            cache.path(),
+            fake,
+            DEFAULT_FRESHNESS_SECS,
+            vibe_core::manifest::AuthKind::None,
+            None,
+        )
+        .unwrap();
+        let urls = r.package_urls(PackageKind::Flow, "internal");
+        assert_eq!(urls.len(), 1, "single-package URL list should have one entry");
+        assert_eq!(urls[0], "https://github.com/me/flow-internal");
     }
 
     #[test]
