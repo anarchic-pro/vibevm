@@ -72,7 +72,8 @@ pub fn run(ctx: &output::Context, args: UpdateArgs) -> Result<()> {
         &manifest.overrides,
     )
     .context("opening multi-registry resolver")?
-    .with_strict_auth(args.auth_required);
+    .with_strict_auth(args.auth_required)
+    .with_git_packages(manifest.requires.git_packages.clone());
 
     // 1. Decide which packages to update. `--all` walks every entry
     // in the lockfile (roots + any transitives). Named pkgrefs walk

@@ -77,7 +77,8 @@ pub fn run(ctx: &output::Context, args: OutdatedArgs) -> Result<()> {
         &manifest.overrides,
     )
     .context("opening multi-registry resolver")?
-    .with_strict_auth(args.auth_required);
+    .with_strict_auth(args.auth_required)
+    .with_git_packages(manifest.requires.git_packages.clone());
 
     let mut entries: Vec<OutdatedEntry> = Vec::with_capacity(lockfile.packages.len());
     let mut update_available = 0usize;

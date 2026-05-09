@@ -69,6 +69,7 @@ pub fn run(ctx: &output::Context, args: InstallArgs) -> Result<()> {
 
     let roots: Vec<PackageRef> = if cli_roots.is_empty() {
         if manifest.requires.packages.is_empty()
+            && manifest.requires.git_packages.is_empty()
             && !lockfile.meta.root_dependencies.is_empty()
         {
             ctx.step(&format!(
@@ -84,14 +85,21 @@ pub fn run(ctx: &output::Context, args: InstallArgs) -> Result<()> {
             // does not lose the snapshot we just inferred.
             manifest.write(project_root.join(ProjectManifest::FILENAME))?;
         }
-        if manifest.requires.packages.is_empty() {
+        if manifest.requires.packages.is_empty() && manifest.requires.git_packages.is_empty() {
             bail!(
                 "no packages to install. Pass `<kind>:<name>[@<version>] …` on the command \
                  line, or add entries to `[requires].packages` in `{}/vibe.toml`.",
                 project_root.display()
             );
         }
-        manifest.requires.packages.clone()
+        // Combine registry-resolved + git-source declarations into one
+        // root set. Resolver dispatches each pkgref through the right
+        // path internally (override > git-source > registry-walk).
+        let mut all = manifest.requires.packages.clone();
+        for g in &manifest.requires.git_packages {
+            all.push(PackageRef::new(g.kind, g.name.clone(), VersionSpec::Latest)?);
+        }
+        all
     } else {
         cli_roots.clone()
     };
@@ -752,7 +760,8 @@ pub(crate) fn build_install_resolver(
         &manifest.overrides,
     )
     .context("opening multi-registry resolver")?
-    .with_strict_auth(args.auth_required);
+    .with_strict_auth(args.auth_required)
+    .with_git_packages(manifest.requires.git_packages.clone());
     Ok(InstallResolver::Multi(mrr))
 }
 
