@@ -1,10 +1,23 @@
 # CONTINUE — cold-resume checkpoint
 
-_Written: 2026-05-09 session-end. Owner-readable, self-contained. Pick this up with zero prior context._
+_Written: 2026-05-10 mid-session (M1.15 implementation landed; production smoke walk + final docs pending). Owner-readable, self-contained. Pick this up with zero prior context._
 
 ---
 
 ## TL;DR (executive summary)
+
+**The 2026-05-10 push lands the full M1.15 implementation — git-source dependencies, the Cargo / npm / Poetry / Bundler-style "whole repo = one package" affordance.** Six commits across vibe-core (schema), vibe-registry (single-package constructor + resolver dispatch), vibe-install (lockfile `source_kind`), vibe-cli (CLI flags + wiring). Wire-form changes from `packages = ["flow:wal@^0.3"]` (legacy array) to `[requires.packages] "flow:wal" = "^0.3"` (modern map) — both parse forever, only the map form is written. Inline-table values declare git-source: `"flow:internal" = { git = "...", tag = "v0.1.0" }`. The earlier 2026-05-09 push closed the M1.14 deferred-list and validated the full registry-auth runtime against a live private GitHub repo; that work remains live.
+
+**Six M1.15 implementation commits this session (newest-first; on top of the 2 PROPOSED spec commits from yesterday):**
+
+```
+90bf10b feat(vibe-cli): vibe install --git/--tag/--branch/--rev for git-source declarations
+a7dce7f feat(vibe-core,vibe-registry,vibe-install): lockfile source_kind field for git/override discriminant
+153f3a2 feat(vibe-cli): wire git-source declarations through install/update/outdated
+161b7b1 feat(vibe-registry): MultiRegistryResolver dispatches to git-source declarations
+c313ebd feat(vibe-registry): GitPackageRegistry::open_single_package for git-source
+2544d76 feat(vibe-core): [requires.packages] table-form schema with git-source slot
+```
 
 **The 2026-05-09 push closed the entire M1.14 deferred-list and validated the full registry-auth runtime against a live private GitHub repo.** Three commits land on top of yesterday's M1.12 + M1.13 + M1.14 (.1 / .2 / .3) push: a new `vibe registry test` diagnostic command, a structured-JSON error envelope for "package not found in any registry" failures (`error_kind` + `attempts` array), and the corner-case finish on inline-comment preservation inside `[[registry]]` blocks. Plus the production walk against `olegchir/vibevm-private-probe` (private GitHub repo) confirmed end-to-end that `auth = "token-env"` works, `MissingToken` precheck fires, `vibe registry test` correctly classifies token states, and the token never lands on disk in `.git/config` after a clone. The full M1.14 surface is feature-complete for v0.
 
