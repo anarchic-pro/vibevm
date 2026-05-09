@@ -216,6 +216,47 @@ grep -r x-access-token ~/.vibe/registries/
 
 If the second command finds anything, that's a vibevm bug — please file an issue.
 
+## Diagnosing reachability before an install
+
+When you suspect a private registry is misconfigured — wrong env-var name, expired token, network can't reach the host — `vibe registry test` is the cheapest diagnostic to run. It probes every `[[registry]]` with a single `git ls-remote` and reports per-registry status: `reachable`, `auth-required`, `missing-token`, or `unreachable`. No clone, no package download.
+
+```bash
+vibe registry test
+# or, machine-readable:
+vibe registry test --json | jq '.registries[] | select(.status != "reachable")'
+```
+
+This is the right command to run before `vibe install` in CI — exit code is non-zero when anything is broken, so it's a clean precondition gate. Full reference: [`commands/registry-test.md`](commands/registry-test.md).
+
+## Machine-readable resolution failures
+
+When `vibe install --json` cannot find a package in any registry, the JSON envelope carries structured detail beyond the human-mode error string. Downstream tooling can dispatch on `error_kind` and inspect the `attempts` array to attribute the failure to a specific registry.
+
+```json
+{
+  "ok": false,
+  "error": "package_not_found: flow:internal-helper not found in any of 2 registries...",
+  "error_kind": "package_not_found_everywhere",
+  "package": { "kind": "flow", "name": "internal-helper" },
+  "attempts": [
+    {
+      "registry_name": "vibespecs",
+      "url": "https://github.com/vibespecs",
+      "status": "not-found",
+      "detail": null
+    },
+    {
+      "registry_name": "internal",
+      "url": "https://gitlab.company.com/vibespecs",
+      "status": "auth-required",
+      "detail": "remote: HTTP 401 ..."
+    }
+  ]
+}
+```
+
+`status` is one of `reachable` / `not-found` / `auth-required` / `missing-token` / `unreachable` — the same discriminator surface as `vibe registry test`. The legacy `error` field (single human-readable string) is preserved for backward compatibility; new tooling should parse `error_kind` and `attempts` instead.
+
 ## Troubleshooting
 
 ### "GUI popup keeps appearing in CI"
