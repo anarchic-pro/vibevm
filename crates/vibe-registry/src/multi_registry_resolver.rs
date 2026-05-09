@@ -95,20 +95,23 @@ pub struct MultiRegistryResolver {
 }
 
 /// One row in the aggregated "tried these registries" report
-/// surfaced via `RegistryError::PackageNotFoundEverywhere`. Captured
-/// per-registry during the walk in [`MultiRegistryResolver::resolve`]
-/// and pre-formatted into the error's `summary` string before
-/// raising. Public so test fixtures can assert on the shape.
-#[derive(Debug, Clone)]
-struct RegistryWalkAttempt {
-    name: String,
-    url: String,
-    auth: vibe_core::manifest::AuthKind,
-    status: WalkAttemptStatus,
+/// surfaced via [`RegistryError::PackageNotFoundEverywhere`].
+/// Captured per-registry during the walk in
+/// [`MultiRegistryResolver::resolve`]; carried through the
+/// `DepProvider` error chain into `vibe-cli`'s install-error
+/// JSON envelope so machine-readable consumers can branch on the
+/// per-registry status without parsing prose.
+#[derive(Debug, Clone, serde::Serialize)]
+pub struct RegistryWalkAttempt {
+    pub name: String,
+    pub url: String,
+    pub auth: vibe_core::manifest::AuthKind,
+    pub status: WalkAttemptStatus,
 }
 
-#[derive(Debug, Clone, Copy)]
-enum WalkAttemptStatus {
+#[derive(Debug, Clone, Copy, serde::Serialize)]
+#[serde(rename_all = "kebab-case")]
+pub enum WalkAttemptStatus {
     /// Registry's `resolve` returned `UnknownPackage` — the
     /// registry was reachable, manifest parsed, just no version
     /// matching the pkgref.
@@ -123,7 +126,7 @@ enum WalkAttemptStatus {
 }
 
 impl WalkAttemptStatus {
-    fn as_label(&self) -> &'static str {
+    pub fn as_label(&self) -> &'static str {
         match self {
             WalkAttemptStatus::NotFound => "not found",
             WalkAttemptStatus::Public401 => "access denied (401, walked past — auth=none)",
@@ -408,10 +411,12 @@ impl MultiRegistryResolver {
                 name: pkgref.name.clone(),
             });
         }
+        let summary = format_walk_attempts(&attempts);
         Err(RegistryError::PackageNotFoundEverywhere {
             kind: pkgref.kind,
             name: pkgref.name.clone(),
-            summary: format_walk_attempts(&attempts),
+            summary,
+            attempts,
         })
     }
 
@@ -992,7 +997,9 @@ mod tests {
                 kind,
                 name,
                 summary,
+                attempts,
             } => {
+                assert_eq!(attempts.len(), 2, "expected 2 walk attempts: {attempts:?}");
                 assert_eq!(kind, vibe_core::PackageKind::Flow);
                 assert_eq!(name, "ghost");
                 assert!(

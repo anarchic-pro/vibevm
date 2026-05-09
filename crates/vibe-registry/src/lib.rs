@@ -42,7 +42,7 @@ pub use index_client::{
 };
 pub use multi_registry_resolver::{
     DEFAULT_OVERRIDE_REF, MultiRegistryResolver, MultiResolution, RefreshReport, RefreshedEntry,
-    RefreshedVia, SkippedEntry,
+    RefreshedVia, RegistryWalkAttempt, SkippedEntry, WalkAttemptStatus,
 };
 
 #[derive(Debug, Error)]
@@ -97,11 +97,14 @@ pub enum RegistryError {
     /// none had a satisfying answer, and at least one walked-past
     /// 401 / 403 (auth=none) needs surfacing so the operator sees
     /// per-registry status. `summary` is the pre-formatted
-    /// multi-line block that `Display` renders verbatim. Returned
-    /// only when at least one registry was walked; the
-    /// no-registries-at-all path still returns the simpler
-    /// `UnknownPackage` variant for back-compat with downstream
-    /// consumers that match on it.
+    /// multi-line block that `Display` renders verbatim;
+    /// `attempts` carries the same information in structured form
+    /// so `vibe-cli`'s install-error JSON envelope can ship a
+    /// machine-readable per-registry array without the consumer
+    /// having to parse prose. Returned only when at least one
+    /// registry was walked; the no-registries-at-all path still
+    /// returns the simpler `UnknownPackage` variant for back-compat
+    /// with downstream consumers that match on it.
     #[error(
         "package `{kind}:{name}` not found in any configured registry.\nTried:\n{summary}"
     )]
@@ -109,6 +112,7 @@ pub enum RegistryError {
         kind: PackageKind,
         name: String,
         summary: String,
+        attempts: Vec<crate::multi_registry_resolver::RegistryWalkAttempt>,
     },
 
     #[error("I/O error on `{path}`")]

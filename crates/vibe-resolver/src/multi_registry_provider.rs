@@ -47,6 +47,21 @@ impl<'a> DepProvider for MultiRegistryProvider<'a> {
                 name,
                 constraint: req,
             }),
+            // Preserve the structured per-registry attempts so the
+            // downstream install-error JSON envelope can ship them
+            // verbatim. The summary string carries the same data
+            // for prose-only consumers (text mode + `Display`).
+            Err(RegistryError::PackageNotFoundEverywhere {
+                kind,
+                name,
+                summary,
+                attempts,
+            }) => Err(DepProviderError::AggregateNotFound {
+                kind,
+                name,
+                summary,
+                attempts,
+            }),
             Err(other) => Err(DepProviderError::Other(other.to_string())),
         }
     }

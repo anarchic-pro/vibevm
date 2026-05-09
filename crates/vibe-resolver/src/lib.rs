@@ -144,6 +144,23 @@ pub enum DepProviderError {
         constraint: String,
     },
 
+    /// Aggregate-walk variant of `UnknownPackage` — same "not
+    /// available" verdict, but with structured per-registry
+    /// `attempts` for downstream JSON / programmatic consumers.
+    /// `vibe-cli` `install`'s error renderer downcasts through the
+    /// anyhow chain to this variant, attaching `attempts` to the
+    /// JSON error envelope when present. The text-mode
+    /// `Display` carries the same multi-line summary the
+    /// underlying `RegistryError::PackageNotFoundEverywhere`
+    /// produces, so prose-only consumers see no regression.
+    #[error("{summary}")]
+    AggregateNotFound {
+        kind: PackageKind,
+        name: String,
+        summary: String,
+        attempts: Vec<vibe_registry::RegistryWalkAttempt>,
+    },
+
     #[error("{0}")]
     Other(String),
 }

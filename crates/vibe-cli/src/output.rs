@@ -217,9 +217,66 @@ impl Context {
                     "ok": false,
                     "error": format!("{err:#}"),
                 });
+                self.stamp_structured_error(&mut payload, err);
                 self.stamp_invoked_by(&mut payload);
                 self.stamp_unattended(&mut payload);
                 eprintln!("{payload}");
+            }
+        }
+    }
+
+    /// When the anyhow chain carries a known structured error variant,
+    /// surface its fields as machine-readable extras alongside the
+    /// stringified `error` field. Today the only well-known variant is
+    /// `DepProviderError::AggregateNotFound` (registry walk-failure
+    /// with per-registry `attempts`); future structured variants
+    /// extend this match. JSON consumers (CI, monitoring pipelines)
+    /// can branch on `error_kind` and read `attempts` without parsing
+    /// the prose.
+    fn stamp_structured_error(&self, payload: &mut Value, err: &anyhow::Error) {
+        // Walk the anyhow chain looking for a known structured error
+        // variant. Today the only match is
+        // `DepProviderError::AggregateNotFound` (registry walk
+        // failure with per-registry attempts), but it can be reached
+        // through two surfaces:
+        //
+        //   - directly as a `DepProviderError` (some call sites
+        //     return it without a `SolveError` wrapper);
+        //   - wrapped in `SolveError::Provider(...)` when the
+        //     depsolver propagates it. `#[error(transparent)]` on
+        //     that variant forwards Display but, in practice,
+        //     anyhow's `chain()` does NOT walk through the wrapper
+        //     to the inner — so we destructure manually here rather
+        //     than rely on chain depth.
+        for cause in err.chain() {
+            let candidate: Option<&vibe_resolver::DepProviderError> =
+                if let Some(d) = cause.downcast_ref::<vibe_resolver::DepProviderError>() {
+                    Some(d)
+                } else if let Some(vibe_resolver::SolveError::Provider(d)) =
+                    cause.downcast_ref::<vibe_resolver::SolveError>()
+                {
+                    Some(d)
+                } else {
+                    None
+                };
+            let Some(provider_err) = candidate else { continue };
+            if let vibe_resolver::DepProviderError::AggregateNotFound {
+                kind,
+                name,
+                attempts,
+                ..
+            } = provider_err
+                && let Value::Object(map) = payload
+            {
+                map.entry("error_kind".to_string())
+                    .or_insert_with(|| Value::String("package_not_found_everywhere".into()));
+                map.entry("package".to_string()).or_insert_with(|| {
+                    serde_json::json!({ "kind": kind.as_str(), "name": name })
+                });
+                if let Ok(serialised) = serde_json::to_value(attempts) {
+                    map.entry("attempts".to_string()).or_insert(serialised);
+                }
+                return;
             }
         }
     }
