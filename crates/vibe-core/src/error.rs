@@ -32,6 +32,9 @@ pub enum Error {
         source: semver::Error,
     },
 
+    #[error("invalid dependency declaration for `{input}`: {reason}")]
+    BadDependencyDecl { input: String, reason: String },
+
     #[error("failed to read file at {path}")]
     Read {
         path: PathBuf,

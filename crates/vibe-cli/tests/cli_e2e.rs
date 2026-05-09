@@ -257,15 +257,15 @@ fn install_writes_caret_pkgref_to_vibe_toml_requires() {
         "flow:wal@^0.1.0",
         "expected caret-default constraint, got: {recorded}"
     );
-    // Rendered TOML carries the section header + the caret string
-    // verbatim so humans see it in code review without parsing.
+    // M1.15 wire shape: `[requires.packages]` map-form table with the key
+    // being the bare pkgref and the value being the constraint string.
     assert!(
-        toml_text.contains("[requires]"),
-        "expected [requires] header in rendered vibe.toml:\n{toml_text}"
+        toml_text.contains("[requires.packages]"),
+        "expected [requires.packages] header in rendered vibe.toml:\n{toml_text}"
     );
     assert!(
-        toml_text.contains("\"flow:wal@^0.1.0\""),
-        "expected `flow:wal@^0.1.0` literal in rendered vibe.toml:\n{toml_text}"
+        toml_text.contains("\"flow:wal\" = \"^0.1.0\""),
+        "expected `\"flow:wal\" = \"^0.1.0\"` row in rendered vibe.toml:\n{toml_text}"
     );
 }
 

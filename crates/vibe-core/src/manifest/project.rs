@@ -967,11 +967,19 @@ capabilities = []
         assert_eq!(m.requires.packages[0].qualified_name(), "flow:wal");
         assert_eq!(m.requires.packages[1].qualified_name(), "stack:rust-cli");
         assert_eq!(m.requires.packages[2].qualified_name(), "feat:welcome-page");
-        // Round-trip through write — the modern shape comes back.
+        // Round-trip through write — the modern map-form comes back
+        // (M1.15 wire shape; legacy array form is read-only).
         let rendered = toml::to_string_pretty(&m).unwrap();
-        assert!(rendered.contains("[requires]"), "expected [requires] in:\n{rendered}");
+        assert!(
+            rendered.contains("[requires.packages]"),
+            "expected [requires.packages] in:\n{rendered}"
+        );
         let back: ProjectManifest = toml::from_str(&rendered).unwrap();
-        assert_eq!(m, back);
+        // Map-form does not preserve input order (BTreeMap is keyed). Compare
+        // by serialised idempotency: re-rendering `back` produces the same
+        // bytes — write is stable after the first round-trip.
+        let rendered2 = toml::to_string_pretty(&back).unwrap();
+        assert_eq!(rendered, rendered2);
     }
 
     #[test]

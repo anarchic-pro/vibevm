@@ -21,10 +21,11 @@ use std::path::{Path, PathBuf};
 use serde::{Deserialize, Serialize};
 
 use crate::capability_ref::CapabilityRef;
-use crate::error::Result;
+use crate::error::{Error, Result};
 use crate::package_ref::{PackageKind, PackageRef, VersionSpec};
 
 use super::i18n::I18nDecl;
+use super::project::AuthKind;
 use super::purl::Purl;
 use super::{read_toml, write_toml};
 
@@ -172,18 +173,384 @@ impl Provides {
 }
 
 /// `[requires]` — concrete package pkgrefs plus capability requirements.
+///
+/// Wire form (what lands in TOML on disk) accepts two shapes for the
+/// `packages` field:
+///
+/// 1. **Legacy array of pkgref strings** — `packages = ["flow:wal@^0.3"]`.
+///    The pre-M1.15 shape; still parses for back-compat.
+/// 2. **Modern table** — `[requires.packages]` with each key a bare pkgref
+///    (`<kind>:<name>` without `@version`) and the value either:
+///    - a constraint string (`"^0.3"`, `"=1.0"`, `"*"`) — registry-resolved,
+///    - or an inline-table — registry-resolved with options
+///      (`{ version = "..." }`) **or** git-source dependency declaration
+///      (`{ git = "...", tag = "..." }` etc., per PROP-002 §2.4.1).
+///
+/// Round-trip writes the modern table form. Both shapes parse forever; the
+/// array form is just never produced on write. Manifests that mix git-source
+/// and registry-resolved declarations require the modern table form.
 #[derive(Debug, Clone, Default, PartialEq, Eq, Serialize, Deserialize)]
-#[serde(deny_unknown_fields)]
+#[serde(into = "RequiresWire", try_from = "RequiresWire")]
 pub struct Requires {
-    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    /// Registry-resolved package dependencies (legacy or modern shape).
     pub packages: Vec<PackageRef>,
-    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    /// Abstract capability requirements (RPM-family `Requires:` semantics).
     pub capabilities: Vec<CapabilityRef>,
+    /// Git-source package dependencies — one git repository = one package
+    /// (PROP-002 §2.4.1). Stored separately from `packages` so existing
+    /// downstream code that iterates registry-resolved roots stays
+    /// untouched; resolver and CLI code paths consult both fields when
+    /// they need the full root set.
+    pub git_packages: Vec<GitPackageDep>,
 }
 
 impl Requires {
     pub fn is_empty(&self) -> bool {
-        self.packages.is_empty() && self.capabilities.is_empty()
+        self.packages.is_empty() && self.capabilities.is_empty() && self.git_packages.is_empty()
+    }
+
+    /// Return every root pkgref (registry-resolved + git-source) in a
+    /// single iterator. Order: `packages` first (insertion order),
+    /// `git_packages` after, matching the wire-form serialization order
+    /// when both are non-empty.
+    pub fn iter_pkgrefs(&self) -> impl Iterator<Item = (PackageKind, &str)> {
+        self.packages
+            .iter()
+            .map(|p| (p.kind, p.name.as_str()))
+            .chain(
+                self.git_packages
+                    .iter()
+                    .map(|g| (g.kind, g.name.as_str())),
+            )
+    }
+}
+
+/// `[requires.packages.<pkgref>]` inline-table value when the package is
+/// sourced from an arbitrary git repository instead of a registry.
+///
+/// Spec: PROP-002 §2.4.1.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct GitPackageDep {
+    pub kind: PackageKind,
+    pub name: String,
+    /// Full git URL of the single-package repository.
+    pub url: String,
+    /// Exactly one of `tag`, `branch`, `rev` — wire-grammar enforced.
+    pub ref_kind: GitRefKind,
+    /// Optional verification constraint. After resolving the package
+    /// version from `ref_kind`, the constraint must be satisfied; mismatch
+    /// is `VersionMismatch` at install time. `None` = accept whatever.
+    pub version: Option<VersionSpec>,
+    /// Per-source authentication regime (default `none`).
+    pub auth: AuthKind,
+    /// Env-var name when `auth = "token-env"`. `None` = derive from URL host.
+    pub token_env: Option<String>,
+}
+
+/// Which kind of git ref the operator declared on a `[requires.packages.*]`
+/// git-source entry. Exactly one of the three is required at parse time.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum GitRefKind {
+    Tag(String),
+    Branch(String),
+    Rev(String),
+}
+
+impl GitRefKind {
+    pub fn as_str(&self) -> &str {
+        match self {
+            Self::Tag(s) | Self::Branch(s) | Self::Rev(s) => s.as_str(),
+        }
+    }
+
+    pub fn label(&self) -> &'static str {
+        match self {
+            Self::Tag(_) => "tag",
+            Self::Branch(_) => "branch",
+            Self::Rev(_) => "rev",
+        }
+    }
+}
+
+// ---------------------------------------------------------------------------
+// Wire types for `Requires` — private; reached only via Serialize / Deserialize.
+// ---------------------------------------------------------------------------
+
+#[derive(Debug, Serialize, Deserialize)]
+#[serde(deny_unknown_fields)]
+struct RequiresWire {
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    packages: Option<RequiresPackagesWire>,
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    capabilities: Vec<CapabilityRef>,
+}
+
+#[derive(Debug, Serialize)]
+#[serde(untagged)]
+enum RequiresPackagesWire {
+    /// Legacy: `packages = ["flow:wal@^0.3", ...]`.
+    LegacyArray(Vec<PackageRef>),
+    /// Modern: `[requires.packages]` table.
+    ModernMap(BTreeMap<String, RequiresPackageEntryWire>),
+}
+
+// Manual `Deserialize` so that the inner `BadPackageRef` error from
+// pkgref parsing surfaces directly instead of being wrapped in a
+// generic "data did not match any variant of untagged enum" — TOML
+// distinguishes array from table at parse time, so we can dispatch on
+// that without trial-and-error.
+impl<'de> Deserialize<'de> for RequiresPackagesWire {
+    fn deserialize<D>(deserializer: D) -> std::result::Result<Self, D::Error>
+    where
+        D: serde::Deserializer<'de>,
+    {
+        struct Visitor;
+        impl<'de> serde::de::Visitor<'de> for Visitor {
+            type Value = RequiresPackagesWire;
+            fn expecting(&self, f: &mut std::fmt::Formatter) -> std::fmt::Result {
+                f.write_str(
+                    "an array of `<kind>:<name>[@<version>]` strings (legacy) \
+                     or a table mapping `<kind>:<name>` to a constraint string \
+                     or an inline-table",
+                )
+            }
+            fn visit_seq<A>(self, seq: A) -> std::result::Result<Self::Value, A::Error>
+            where
+                A: serde::de::SeqAccess<'de>,
+            {
+                let v = Vec::<PackageRef>::deserialize(
+                    serde::de::value::SeqAccessDeserializer::new(seq),
+                )?;
+                Ok(RequiresPackagesWire::LegacyArray(v))
+            }
+            fn visit_map<A>(self, map: A) -> std::result::Result<Self::Value, A::Error>
+            where
+                A: serde::de::MapAccess<'de>,
+            {
+                let m = BTreeMap::<String, RequiresPackageEntryWire>::deserialize(
+                    serde::de::value::MapAccessDeserializer::new(map),
+                )?;
+                Ok(RequiresPackagesWire::ModernMap(m))
+            }
+        }
+        deserializer.deserialize_any(Visitor)
+    }
+}
+
+#[derive(Debug, Serialize, Deserialize)]
+#[serde(untagged)]
+enum RequiresPackageEntryWire {
+    /// Bare constraint string: `"^0.3"`, `"=1.0"`, `"*"`.
+    Constraint(String),
+    /// Inline-table: registry-resolved with options OR git-source.
+    Inline(InlinePackageDepWire),
+}
+
+#[derive(Debug, Serialize, Deserialize, Default)]
+#[serde(deny_unknown_fields)]
+struct InlinePackageDepWire {
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    version: Option<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    git: Option<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    tag: Option<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    branch: Option<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    rev: Option<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    auth: Option<AuthKind>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    token_env: Option<String>,
+}
+
+impl From<Requires> for RequiresWire {
+    fn from(r: Requires) -> Self {
+        let mut map: BTreeMap<String, RequiresPackageEntryWire> = BTreeMap::new();
+        for p in &r.packages {
+            let key = format!("{}:{}", p.kind, p.name);
+            let value =
+                RequiresPackageEntryWire::Constraint(version_spec_to_constraint_str(&p.version));
+            map.insert(key, value);
+        }
+        for g in &r.git_packages {
+            let key = format!("{}:{}", g.kind, g.name);
+            let inline = InlinePackageDepWire {
+                version: g.version.as_ref().map(version_spec_to_constraint_str),
+                git: Some(g.url.clone()),
+                tag: match &g.ref_kind {
+                    GitRefKind::Tag(s) => Some(s.clone()),
+                    _ => None,
+                },
+                branch: match &g.ref_kind {
+                    GitRefKind::Branch(s) => Some(s.clone()),
+                    _ => None,
+                },
+                rev: match &g.ref_kind {
+                    GitRefKind::Rev(s) => Some(s.clone()),
+                    _ => None,
+                },
+                auth: if g.auth == AuthKind::None {
+                    None
+                } else {
+                    Some(g.auth)
+                },
+                token_env: g.token_env.clone(),
+            };
+            map.insert(key, RequiresPackageEntryWire::Inline(inline));
+        }
+        let packages = if map.is_empty() {
+            None
+        } else {
+            Some(RequiresPackagesWire::ModernMap(map))
+        };
+        RequiresWire {
+            packages,
+            capabilities: r.capabilities,
+        }
+    }
+}
+
+impl TryFrom<RequiresWire> for Requires {
+    type Error = String;
+
+    fn try_from(w: RequiresWire) -> std::result::Result<Self, Self::Error> {
+        let mut packages: Vec<PackageRef> = Vec::new();
+        let mut git_packages: Vec<GitPackageDep> = Vec::new();
+        match w.packages {
+            None => {}
+            Some(RequiresPackagesWire::LegacyArray(arr)) => packages = arr,
+            Some(RequiresPackagesWire::ModernMap(map)) => {
+                for (key, entry) in map {
+                    let (kind, name) = parse_pkgref_key(&key).map_err(|e| e.to_string())?;
+                    match entry {
+                        RequiresPackageEntryWire::Constraint(spec_str) => {
+                            let version =
+                                VersionSpec::parse(&spec_str).map_err(|e| e.to_string())?;
+                            packages.push(
+                                PackageRef::new(kind, name, version).map_err(|e| e.to_string())?,
+                            );
+                        }
+                        RequiresPackageEntryWire::Inline(inline) => {
+                            if inline.git.is_some() {
+                                git_packages.push(
+                                    inline_to_git_dep(kind, name, inline)
+                                        .map_err(|e| e.to_string())?,
+                                );
+                            } else {
+                                packages.push(
+                                    inline_to_registry_pkgref(kind, name, inline)
+                                        .map_err(|e| e.to_string())?,
+                                );
+                            }
+                        }
+                    }
+                }
+            }
+        }
+        // Reject duplicate (kind, name) across packages and git_packages —
+        // the resolver would otherwise have to pick one arbitrarily.
+        for g in &git_packages {
+            if packages.iter().any(|p| p.kind == g.kind && p.name == g.name) {
+                return Err(format!(
+                    "dependency `{}:{}` declared as both registry-resolved and git-source",
+                    g.kind, g.name
+                ));
+            }
+        }
+        Ok(Requires {
+            packages,
+            capabilities: w.capabilities,
+            git_packages,
+        })
+    }
+}
+
+fn parse_pkgref_key(key: &str) -> Result<(PackageKind, String)> {
+    if key.contains('@') {
+        return Err(Error::BadDependencyDecl {
+            input: key.to_string(),
+            reason: "version constraint must be the value, not part of the key".to_string(),
+        });
+    }
+    // PackageRef::parse handles `<kind>:<name>` and yields VersionSpec::Latest
+    // for keys without `@`. We've just rejected `@`, so this is safe.
+    let pr = PackageRef::parse(key)?;
+    Ok((pr.kind, pr.name))
+}
+
+fn inline_to_registry_pkgref(
+    kind: PackageKind,
+    name: String,
+    inline: InlinePackageDepWire,
+) -> Result<PackageRef> {
+    let key_for_err = format!("{kind}:{name}");
+    if inline.tag.is_some() || inline.branch.is_some() || inline.rev.is_some() {
+        return Err(Error::BadDependencyDecl {
+            input: key_for_err,
+            reason: "registry-resolved dep cannot specify `tag`/`branch`/`rev` without `git`"
+                .to_string(),
+        });
+    }
+    if inline.auth.is_some() || inline.token_env.is_some() {
+        return Err(Error::BadDependencyDecl {
+            input: key_for_err,
+            reason: "registry-resolved dep cannot specify `auth`/`token_env` without `git`"
+                .to_string(),
+        });
+    }
+    let version = match inline.version.as_deref() {
+        Some(s) => VersionSpec::parse(s)?,
+        None => VersionSpec::Latest,
+    };
+    PackageRef::new(kind, name, version)
+}
+
+fn inline_to_git_dep(
+    kind: PackageKind,
+    name: String,
+    inline: InlinePackageDepWire,
+) -> Result<GitPackageDep> {
+    let key_for_err = format!("{kind}:{name}");
+    let url = inline.git.expect("caller checked git is Some");
+    let ref_kind = match (inline.tag, inline.branch, inline.rev) {
+        (Some(t), None, None) => GitRefKind::Tag(t),
+        (None, Some(b), None) => GitRefKind::Branch(b),
+        (None, None, Some(r)) => GitRefKind::Rev(r),
+        (None, None, None) => {
+            return Err(Error::BadDependencyDecl {
+                input: key_for_err,
+                reason: "git-source requires exactly one of `tag`, `branch`, `rev`".to_string(),
+            });
+        }
+        _ => {
+            return Err(Error::BadDependencyDecl {
+                input: key_for_err,
+                reason: "git-source must specify exactly one of `tag`/`branch`/`rev`, not several"
+                    .to_string(),
+            });
+        }
+    };
+    let version = match inline.version.as_deref() {
+        Some(s) => Some(VersionSpec::parse(s)?),
+        None => None,
+    };
+    Ok(GitPackageDep {
+        kind,
+        name,
+        url,
+        ref_kind,
+        version,
+        auth: inline.auth.unwrap_or_default(),
+        token_env: inline.token_env,
+    })
+}
+
+fn version_spec_to_constraint_str(spec: &VersionSpec) -> String {
+    match spec {
+        VersionSpec::Latest => "*".to_string(),
+        VersionSpec::Req(req) => req.to_string(),
     }
 }
 
@@ -524,7 +891,13 @@ version = "0.0.1"
         let rendered = toml::to_string_pretty(&m).unwrap();
         // After normalization + write, the legacy `[dependencies]` table is gone.
         assert!(!rendered.contains("[dependencies]"));
-        assert!(rendered.contains("[requires]"));
+        // M1.15: `[requires]` packages now serialise as a map-form table
+        // `[requires.packages]`. The bare `[requires]` heading no longer
+        // appears unless capabilities are non-empty.
+        assert!(
+            rendered.contains("[requires.packages]") || rendered.contains("[requires]"),
+            "expected [requires.packages] or [requires] in:\n{rendered}"
+        );
         assert!(rendered.contains("[conflicts]"));
         // And a re-read is byte-identical to the already-normalized state.
         let back: PackageManifest = toml::from_str(&rendered).unwrap();
@@ -644,5 +1017,192 @@ capabilities = ["no-colon-here"]
         let err = toml::from_str::<PackageManifest>(raw).unwrap_err();
         let msg = err.to_string();
         assert!(msg.contains("invalid capability reference") || msg.contains("missing `:`"));
+    }
+
+    // ---------------------------------------------------------------
+    // M1.15 — git-source `[requires.packages]` map-form tests.
+    // ---------------------------------------------------------------
+
+    fn pkg_req_from_toml(raw: &str) -> Requires {
+        // Wrap a `[requires]` body into a minimal valid `vibe-package.toml`
+        // so we can exercise the manifest-level parser directly.
+        let prefix = r#"
+[package]
+name = "p"
+kind = "flow"
+version = "0.1.0"
+
+"#;
+        let manifest: PackageManifest = toml::from_str(&format!("{prefix}{raw}")).unwrap();
+        manifest.requires
+    }
+
+    #[test]
+    fn map_form_bare_constraint_parses() {
+        let r = pkg_req_from_toml(
+            r#"[requires.packages]
+"flow:wal" = "^0.3"
+"feat:auth" = "*"
+"#,
+        );
+        assert_eq!(r.packages.len(), 2);
+        assert!(r.git_packages.is_empty());
+        // BTreeMap ordering: feat:auth < flow:wal alphabetically.
+        assert_eq!(r.packages[0].qualified_name(), "feat:auth");
+        assert_eq!(r.packages[1].qualified_name(), "flow:wal");
+    }
+
+    #[test]
+    fn map_form_inline_table_with_version_parses() {
+        let r = pkg_req_from_toml(
+            r#"[requires.packages]
+"flow:wal" = { version = "^0.3" }
+"#,
+        );
+        assert_eq!(r.packages.len(), 1);
+        assert_eq!(r.packages[0].qualified_name(), "flow:wal");
+        assert!(r.git_packages.is_empty());
+    }
+
+    #[test]
+    fn git_source_with_tag_parses() {
+        let r = pkg_req_from_toml(
+            r#"[requires.packages]
+"flow:internal" = { git = "https://github.com/me/flow-internal", tag = "v0.1.0" }
+"#,
+        );
+        assert!(r.packages.is_empty());
+        assert_eq!(r.git_packages.len(), 1);
+        let g = &r.git_packages[0];
+        assert_eq!(g.kind, PackageKind::Flow);
+        assert_eq!(g.name, "internal");
+        assert_eq!(g.url, "https://github.com/me/flow-internal");
+        assert!(matches!(&g.ref_kind, GitRefKind::Tag(t) if t == "v0.1.0"));
+        assert_eq!(g.ref_kind.label(), "tag");
+        assert!(g.version.is_none());
+        assert_eq!(g.auth, AuthKind::None);
+    }
+
+    #[test]
+    fn git_source_with_branch_parses() {
+        let r = pkg_req_from_toml(
+            r#"[requires.packages]
+"flow:experimental" = { git = "https://github.com/x/y", branch = "main" }
+"#,
+        );
+        assert_eq!(r.git_packages.len(), 1);
+        assert!(matches!(&r.git_packages[0].ref_kind, GitRefKind::Branch(b) if b == "main"));
+    }
+
+    #[test]
+    fn git_source_with_rev_parses() {
+        let r = pkg_req_from_toml(
+            r#"[requires.packages]
+"flow:fork" = { git = "https://github.com/x/y", rev = "abc12345" }
+"#,
+        );
+        assert_eq!(r.git_packages.len(), 1);
+        assert!(matches!(&r.git_packages[0].ref_kind, GitRefKind::Rev(r) if r == "abc12345"));
+    }
+
+    #[test]
+    fn git_source_with_auth_parses() {
+        let r = pkg_req_from_toml(
+            r#"[requires.packages]
+"flow:secret" = { git = "https://gitlab.acme.example/x/y", tag = "v1.0", auth = "token-env", token_env = "MY_TOKEN" }
+"#,
+        );
+        let g = &r.git_packages[0];
+        assert_eq!(g.auth, AuthKind::TokenEnv);
+        assert_eq!(g.token_env.as_deref(), Some("MY_TOKEN"));
+    }
+
+    #[test]
+    fn git_source_with_version_constraint_parses() {
+        let r = pkg_req_from_toml(
+            r#"[requires.packages]
+"flow:checked" = { git = "https://x/y", tag = "v0.1.0", version = "^0.1" }
+"#,
+        );
+        assert!(r.git_packages[0].version.is_some());
+    }
+
+    #[test]
+    fn git_source_rejects_no_ref() {
+        let raw = r#"[requires.packages]
+"flow:bad" = { git = "https://x/y" }
+"#;
+        let err = toml::from_str::<PackageManifest>(&format!(
+            "[package]\nname = \"p\"\nkind = \"flow\"\nversion = \"0.1.0\"\n\n{raw}"
+        ))
+        .unwrap_err();
+        let msg = err.to_string();
+        assert!(
+            msg.contains("requires exactly one of `tag`, `branch`, `rev`"),
+            "expected ref-required message, got: {msg}"
+        );
+    }
+
+    #[test]
+    fn git_source_rejects_multiple_refs() {
+        let raw = r#"[requires.packages]
+"flow:bad" = { git = "https://x/y", tag = "v1", branch = "main" }
+"#;
+        let err = toml::from_str::<PackageManifest>(&format!(
+            "[package]\nname = \"p\"\nkind = \"flow\"\nversion = \"0.1.0\"\n\n{raw}"
+        ))
+        .unwrap_err();
+        assert!(err.to_string().contains("exactly one of"));
+    }
+
+    #[test]
+    fn registry_inline_rejects_git_fields() {
+        let raw = r#"[requires.packages]
+"flow:bad" = { version = "^0.3", tag = "v1" }
+"#;
+        let err = toml::from_str::<PackageManifest>(&format!(
+            "[package]\nname = \"p\"\nkind = \"flow\"\nversion = \"0.1.0\"\n\n{raw}"
+        ))
+        .unwrap_err();
+        assert!(err.to_string().contains("without `git`"));
+    }
+
+    #[test]
+    fn rejects_at_in_key() {
+        // Keys are bare pkgrefs `<kind>:<name>`; version goes in the value.
+        let raw = r#"[requires.packages]
+"flow:wal@^0.3" = "*"
+"#;
+        let err = toml::from_str::<PackageManifest>(&format!(
+            "[package]\nname = \"p\"\nkind = \"flow\"\nversion = \"0.1.0\"\n\n{raw}"
+        ))
+        .unwrap_err();
+        assert!(err.to_string().contains("must be the value, not part of the key"));
+    }
+
+    // Note: duplicate `(kind, name)` between `packages` and `git_packages`
+    // is **structurally impossible** through the TOML wire form — both land
+    // in the same `[requires.packages]` table, and TOML grammar rejects
+    // duplicate keys at parse time. The defensive check inside
+    // `TryFrom<RequiresWire>` exists as defence-in-depth in case the wire
+    // form ever switches to a Vec-of-pairs shape; it is intentionally
+    // unreachable from any valid `vibe.toml`.
+
+    #[test]
+    fn git_source_round_trips_through_serialize() {
+        let original = pkg_req_from_toml(
+            r#"[requires.packages]
+"flow:internal" = { git = "https://github.com/me/flow-internal", tag = "v0.1.0", auth = "token-env", token_env = "MY" }
+"flow:wal" = "^0.3"
+"#,
+        );
+        // Wrap into a manifest, render, re-parse, verify shape identical.
+        let mut m: PackageManifest = toml::from_str(FIXTURE_MINIMAL).unwrap();
+        m.requires = original.clone();
+        let rendered = toml::to_string_pretty(&m).unwrap();
+        let back: PackageManifest = toml::from_str(&rendered).unwrap();
+        assert_eq!(back.requires.packages.len(), 1);
+        assert_eq!(back.requires.git_packages.len(), 1);
+        assert_eq!(back.requires.git_packages[0].name, "internal");
     }
 }
