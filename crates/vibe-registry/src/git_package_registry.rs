@@ -412,6 +412,48 @@ impl GitPackageRegistry {
         self.single_package_url.is_some()
     }
 
+    /// Fetch `vibe-package.toml` at an arbitrary git ref (tag, branch,
+    /// or commit SHA) — used by the git-source resolver path
+    /// (PROP-002 §2.4.1) where the operator declared `tag = "..."` /
+    /// `branch = "..."` / `rev = "..."` and we cannot enumerate
+    /// versions through `list_versions` (which is tag-shaped).
+    ///
+    /// Same auth / token-injection discipline as
+    /// [`Self::fetch_dep_manifest`]: token from env at construction,
+    /// credentialed URL only for the spawned `git archive`, plain
+    /// URL recorded in error messages.
+    pub fn fetch_manifest_at_ref(
+        &self,
+        kind: PackageKind,
+        name: &str,
+        refname: &str,
+    ) -> Result<PackageManifest, RegistryError> {
+        self.ensure_token_loaded()?;
+        let plain_url = self.package_repo_url(kind, name);
+        let fetch_url = self.credentialed_url(&plain_url);
+        let bytes = self
+            .backend
+            .fetch_file_at_ref(&fetch_url, refname, PackageManifest::FILENAME)
+            .map_err(RegistryError::from)?;
+        let text = String::from_utf8(bytes).map_err(|e| RegistryError::MalformedMeta {
+            path: PathBuf::from(format!(
+                "{plain_url}@{refname}:{}",
+                PackageManifest::FILENAME
+            )),
+            reason: format!("invalid UTF-8: {e}"),
+        })?;
+        let mut m: PackageManifest =
+            toml::from_str(&text).map_err(|e| RegistryError::MalformedMeta {
+                path: PathBuf::from(format!(
+                    "{plain_url}@{refname}:{}",
+                    PackageManifest::FILENAME
+                )),
+                reason: e.to_string(),
+            })?;
+        m.normalize_legacy_deps();
+        Ok(m)
+    }
+
     /// The `auth` regime the registry was opened with — read by
     /// `MultiRegistryResolver` to decide between walk-to-next-registry
     /// (on `AuthKind::None` + 401) and halt-with-actionable-error

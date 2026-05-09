@@ -41,7 +41,7 @@ use std::sync::Arc;
 
 use vibe_core::PackageRef;
 use vibe_core::manifest::{
-    Lockfile, MirrorSection, OverrideSection, PackageManifest, RegistrySection,
+    GitPackageDep, Lockfile, MirrorSection, OverrideSection, PackageManifest, RegistrySection,
 };
 
 use crate::git_backend::{GitBackend, ShellGit};
@@ -63,14 +63,20 @@ pub const DEFAULT_OVERRIDE_REF: &str = "main";
 pub struct MultiResolution {
     pub resolved: ResolvedPackage,
     /// Name of the `[[registry]]` that served this package. `None` for
-    /// override-resolved entries.
+    /// override-resolved and git-source entries.
     pub registry_name: Option<String>,
     /// What goes into lockfile `source_url`.
     pub source_url: String,
     /// What goes into lockfile `source_ref` — typically the version tag
-    /// (`v0.3.0`) for registry resolutions, or the override's ref.
+    /// (`v0.3.0`) for registry resolutions, or the override's / git-source
+    /// `tag`/`branch`/`rev` value.
     pub source_ref: Option<String>,
     pub overridden: bool,
+    /// True when this package was resolved via a `[requires.packages]`
+    /// git-source declaration (PROP-002 §2.4.1) rather than through
+    /// the registry walk or `[[override]]`. Lockfile maps this to
+    /// `source_kind = "git"`.
+    pub is_git_source: bool,
 }
 
 /// Resolver coordinating an ordered set of [`GitPackageRegistry`]
@@ -80,6 +86,10 @@ pub struct MultiRegistryResolver {
     registries: Vec<Arc<GitPackageRegistry>>,
     mirrors: Vec<MirrorSection>,
     overrides: HashMap<String, OverrideSection>,
+    /// Git-source declarations from `[requires.packages]` table-form
+    /// (PROP-002 §2.4.1), keyed by `<kind>:<name>`. Resolution order
+    /// (resolve()): override > git-source > registry-walk.
+    git_packages: HashMap<String, GitPackageDep>,
     backend: Arc<dyn GitBackend>,
     cache_root: PathBuf,
     /// Strict-auth posture — when `true`, a 401 / 403 against a
@@ -194,10 +204,28 @@ impl MultiRegistryResolver {
             registries,
             mirrors,
             overrides,
+            git_packages: HashMap::new(),
             backend,
             cache_root,
             strict_auth: false,
         }
+    }
+
+    /// Plumb in the git-source declarations from `vibe.toml`'s
+    /// `[requires.packages]` table-form (PROP-002 §2.4.1). Builder-style
+    /// so existing call-sites of `from_manifest` / `open` / `new` that
+    /// don't yet thread git-source deps stay source-compatible.
+    pub fn with_git_packages(mut self, deps: Vec<GitPackageDep>) -> Self {
+        self.git_packages = deps
+            .into_iter()
+            .map(|d| (format!("{}:{}", d.kind, d.name), d))
+            .collect();
+        self
+    }
+
+    /// Read-only view of the registered git-source declarations.
+    pub fn git_packages(&self) -> &HashMap<String, GitPackageDep> {
+        &self.git_packages
     }
 
     /// Toggle strict-auth posture (see field docs / PROP-002 §2.3.1
@@ -331,6 +359,15 @@ impl MultiRegistryResolver {
             return self.resolve_override(pkgref, ovr);
         }
 
+        // Step 1.5: git-source short-circuit (PROP-002 §2.4.1).
+        // `[requires.packages]` table-form may declare a dep as
+        // `{ git = "...", tag/branch/rev = "..." }`; the resolver
+        // bypasses the `[[registry]]` walk for that pkgref entirely
+        // and fetches directly from the declared URL.
+        if let Some(dep) = self.git_packages.get(&pkgref.qualified_name()) {
+            return self.resolve_git_source(pkgref, dep);
+        }
+
         // Step 2: priority-ordered registry walk. PROP-002 §2.3.1
         // failure-mode discriminator:
         //
@@ -363,6 +400,7 @@ impl MultiRegistryResolver {
                         source_url: url,
                         source_ref: Some(source_ref),
                         overridden: false,
+                        is_git_source: false,
                     });
                 }
                 Err(RegistryError::UnknownPackage { .. }) => {
@@ -454,7 +492,96 @@ impl MultiRegistryResolver {
             source_url: ovr.source_url.clone(),
             source_ref: Some(refname),
             overridden: true,
+            is_git_source: false,
         })
+    }
+
+    /// Resolve a `[requires.packages]` git-source declaration
+    /// (PROP-002 §2.4.1). Synthesises a single-package
+    /// `GitPackageRegistry` pointing at `dep.url`, fetches
+    /// `vibe-package.toml` at the declared `tag`/`branch`/`rev`,
+    /// verifies `(kind, name)` matches and the optional `version`
+    /// constraint is satisfied, returns a `MultiResolution` with
+    /// `is_git_source = true`.
+    fn resolve_git_source(
+        &self,
+        pkgref: &PackageRef,
+        dep: &GitPackageDep,
+    ) -> Result<MultiResolution, RegistryError> {
+        let synthetic_name = format!("git-source-{}-{}", dep.kind, dep.name);
+        let refname = dep.ref_kind.as_str().to_string();
+        let reg = GitPackageRegistry::open_single_package(
+            &synthetic_name,
+            &dep.url,
+            &refname,
+            &self.cache_root,
+            Arc::clone(&self.backend),
+            DEFAULT_FRESHNESS_SECS,
+            dep.auth,
+            dep.token_env.as_deref(),
+        )?;
+        let manifest = reg.fetch_manifest_at_ref(dep.kind, &dep.name, &refname)?;
+        // Sanity: the declaration says (kind, name) but the repo's
+        // manifest declares some other identity. Refuse to install —
+        // pulling code under a misnamed slot would silently misroute
+        // on disk and confuse downstream commands.
+        if manifest.package.kind != pkgref.kind || manifest.package.name != pkgref.name {
+            return Err(RegistryError::MalformedMeta {
+                path: PathBuf::from(format!(
+                    "{}@{}:{}",
+                    dep.url,
+                    refname,
+                    PackageManifest::FILENAME
+                )),
+                reason: format!(
+                    "git-source `{}:{}` points at a manifest declaring `{}:{}` — refusing to install",
+                    pkgref.kind, pkgref.name, manifest.package.kind, manifest.package.name
+                ),
+            });
+        }
+        // Verify the optional version constraint, if the operator declared one.
+        if let Some(spec) = &dep.version
+            && !spec.matches(&manifest.package.version)
+        {
+            return Err(RegistryError::MalformedMeta {
+                path: PathBuf::from(format!(
+                    "{}@{}:{}",
+                    dep.url,
+                    refname,
+                    PackageManifest::FILENAME
+                )),
+                reason: format!(
+                    "git-source `{}:{}@{}` declares version `{}`, which does not satisfy the constraint `{}`",
+                    pkgref.kind, pkgref.name, refname, manifest.package.version, spec
+                ),
+            });
+        }
+        let resolved = ResolvedPackage {
+            kind: pkgref.kind,
+            name: pkgref.name.clone(),
+            version: manifest.package.version.clone(),
+            source_dir: self.git_source_clone_dir(pkgref.kind, &pkgref.name),
+        };
+        Ok(MultiResolution {
+            resolved,
+            registry_name: None,
+            source_url: dep.url.clone(),
+            source_ref: Some(refname),
+            overridden: false,
+            is_git_source: true,
+        })
+    }
+
+    /// Where git-source clones live —
+    /// `<cache_root>/__git_sources__/<kind>-<name>/clone/`. Distinct
+    /// from registry-served clones and from override clones so a
+    /// package that flips between resolution modes does not share
+    /// state across modes.
+    fn git_source_clone_dir(&self, kind: vibe_core::PackageKind, name: &str) -> PathBuf {
+        self.cache_root
+            .join("__git_sources__")
+            .join(format!("{}-{}", kind, name))
+            .join("clone")
     }
 
     fn read_override_manifest(
@@ -515,6 +642,9 @@ impl MultiRegistryResolver {
     ) -> Result<CachedPackage, RegistryError> {
         if resolution.overridden {
             return self.fetch_override(resolution, project_cache);
+        }
+        if resolution.is_git_source {
+            return self.fetch_git_source(resolution, project_cache, expected_hash);
         }
         let registry_name =
             resolution
@@ -585,6 +715,96 @@ impl MultiRegistryResolver {
             source_ref: Some(refname),
             resolved_commit: None,
             overridden: true,
+        })
+    }
+
+    /// Fetch a git-source-resolved package into the per-project cache.
+    /// Same shape as `fetch_override` but threads `dep.auth` /
+    /// `dep.token_env` through so private targets get token injection
+    /// and the M1.14 scrub-from-`.git/config` discipline applies.
+    fn fetch_git_source(
+        &self,
+        resolution: &MultiResolution,
+        project_cache: &Path,
+        _expected_hash: Option<&str>,
+    ) -> Result<CachedPackage, RegistryError> {
+        let kind = resolution.resolved.kind;
+        let name = resolution.resolved.name.as_str();
+        let qualified = format!("{kind}:{name}");
+        let dep = self.git_packages.get(&qualified).ok_or_else(|| {
+            RegistryError::UnknownPackage {
+                kind,
+                name: name.to_string(),
+            }
+        })?;
+        let refname = resolution
+            .source_ref
+            .clone()
+            .unwrap_or_else(|| dep.ref_kind.as_str().to_string());
+
+        // Synthesise a single-package registry just to leverage its
+        // `package_repo_url` / `credentialed_url` plumbing for token
+        // injection + scrub. The synthetic registry's clone path is
+        // not used here — we clone into our own `__git_sources__`
+        // sub-tree so the cache stays organised by resolution mode.
+        let synthetic_name = format!("git-source-{kind}-{name}");
+        let reg = GitPackageRegistry::open_single_package(
+            &synthetic_name,
+            &dep.url,
+            &refname,
+            &self.cache_root,
+            Arc::clone(&self.backend),
+            DEFAULT_FRESHNESS_SECS,
+            dep.auth,
+            dep.token_env.as_deref(),
+        )?;
+        let plain_url = reg.package_repo_url(kind, name);
+        let credentialed = reg.credentialed_url(&plain_url);
+
+        let clone_dir = self.git_source_clone_dir(kind, name);
+        ensure_clone_at(self.backend.as_ref(), &credentialed, &refname, &clone_dir)?;
+        // Token-discipline (M1.14): scrub any credentialed URL from
+        // the freshly-bootstrapped `.git/config` so the token does not
+        // persist on disk. Best-effort — if the backend has no
+        // `set_remote_url` impl, the default is a no-op (the
+        // credentialed URL was only ever in-memory anyway for
+        // backends that don't write a `.git/config`).
+        if credentialed != plain_url {
+            self.backend
+                .set_remote_url(&clone_dir, "origin", &plain_url)
+                .ok();
+        }
+
+        let dest = project_cache
+            .join(kind.as_str())
+            .join(name)
+            .join(format!("v{}", resolution.resolved.version));
+        if dest.exists() {
+            std::fs::remove_dir_all(&dest).map_err(|source| RegistryError::Io {
+                path: dest.clone(),
+                source,
+            })?;
+        }
+        copy_dir_excluding_git(&clone_dir, &dest)?;
+        let manifest_path = dest.join(PackageManifest::FILENAME);
+        let manifest = PackageManifest::read(&manifest_path)?;
+        let content_hash = compute_content_hash(&dest)?;
+
+        Ok(CachedPackage {
+            resolved: ResolvedPackage {
+                kind,
+                name: name.to_string(),
+                version: resolution.resolved.version.clone(),
+                source_dir: clone_dir,
+            },
+            cache_dir: dest,
+            manifest,
+            content_hash,
+            source_uri: plain_url,
+            registry_name: None,
+            source_ref: Some(refname),
+            resolved_commit: None,
+            overridden: false,
         })
     }
 
@@ -913,6 +1133,83 @@ mod tests {
             DEFAULT_FRESHNESS_SECS,
         )
         .unwrap()
+    }
+
+    #[test]
+    fn resolve_dispatches_to_git_source_short_circuiting_registries() {
+        // M1.15: a `[requires.packages]` git-source declaration bypasses
+        // the registry walk for that pkgref. The resolver synthesises a
+        // single-package registry pointing at `dep.url`, fetches the
+        // manifest at the declared ref, returns
+        // `MultiResolution { is_git_source: true, ... }`.
+        let cache = tempdir().unwrap();
+        let fake = Arc::new(FakeBackend::default());
+        // Registry has nothing — would fail without git-source dispatch.
+        // git-source URL has the manifest at v0.3.0 tag.
+        let url = "git@host:owner/flow-internal.git";
+        fake.seed_file(
+            url,
+            "v0.3.0",
+            "vibe-package.toml",
+            manifest_text("internal", "flow", "0.3.0").into_bytes(),
+        );
+
+        let dep = vibe_core::manifest::GitPackageDep {
+            kind: vibe_core::PackageKind::Flow,
+            name: "internal".to_string(),
+            url: url.to_string(),
+            ref_kind: vibe_core::manifest::GitRefKind::Tag("v0.3.0".to_string()),
+            version: None,
+            auth: vibe_core::manifest::AuthKind::None,
+            token_env: None,
+        };
+        let r = build_resolver(cache.path(), vec![], vec![], vec![], fake)
+            .with_git_packages(vec![dep]);
+
+        let p = PackageRef::parse("flow:internal").unwrap();
+        let m = r.resolve(&p).expect("git-source resolution must succeed");
+        assert!(m.is_git_source);
+        assert!(!m.overridden);
+        assert_eq!(m.registry_name, None);
+        assert_eq!(m.source_url, url);
+        assert_eq!(m.source_ref.as_deref(), Some("v0.3.0"));
+        assert_eq!(m.resolved.version.to_string(), "0.3.0");
+    }
+
+    #[test]
+    fn resolve_git_source_rejects_kind_name_mismatch() {
+        // The repo's `vibe-package.toml` says feat:something-else, but
+        // the consumer's `[requires.packages]` declared flow:internal
+        // pointing at this URL. Refuse — pulling code under the wrong
+        // pkgref slot would silently misroute on disk.
+        let cache = tempdir().unwrap();
+        let fake = Arc::new(FakeBackend::default());
+        let url = "git@host:owner/wrong-pkg.git";
+        fake.seed_file(
+            url,
+            "v0.1.0",
+            "vibe-package.toml",
+            manifest_text("something-else", "feat", "0.1.0").into_bytes(),
+        );
+        let dep = vibe_core::manifest::GitPackageDep {
+            kind: vibe_core::PackageKind::Flow,
+            name: "internal".to_string(),
+            url: url.to_string(),
+            ref_kind: vibe_core::manifest::GitRefKind::Tag("v0.1.0".to_string()),
+            version: None,
+            auth: vibe_core::manifest::AuthKind::None,
+            token_env: None,
+        };
+        let r = build_resolver(cache.path(), vec![], vec![], vec![], fake)
+            .with_git_packages(vec![dep]);
+
+        let p = PackageRef::parse("flow:internal").unwrap();
+        let err = r.resolve(&p).unwrap_err();
+        let msg = err.to_string();
+        assert!(
+            msg.contains("refusing to install"),
+            "expected identity-mismatch refusal, got: {msg}"
+        );
     }
 
     #[test]

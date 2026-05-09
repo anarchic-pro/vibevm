@@ -20,9 +20,9 @@ pub use lockfile::{
     VirtualCapabilityRecord,
 };
 pub use package::{
-    BootSnippet, Compatibility, ConditionalTarget, ConflictsList, FeaturesTable, Obsoletes,
-    PackageDependencies, PackageManifest, PackageMeta, Provides, Requires, RequiresAny,
-    WritesSection,
+    BootSnippet, Compatibility, ConditionalTarget, ConflictsList, FeaturesTable, GitPackageDep,
+    GitRefKind, Obsoletes, PackageDependencies, PackageManifest, PackageMeta, Provides, Requires,
+    RequiresAny, WritesSection,
 };
 pub use project::{
     ActiveSection, AuthKind, DEFAULT_REGISTRY_GITVERSE_NAME, DEFAULT_REGISTRY_GITVERSE_URL,
