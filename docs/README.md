@@ -51,6 +51,10 @@ End-to-end walkthroughs that compose multiple commands into a real scenario. Eac
 
 [`git-source-dependencies.md`](git-source-dependencies.md) — declare a dep as `{ git = "...", tag = "..." }` in `[requires.packages]` and the resolver fetches the package directly from that git repo, bypassing `[[registry]]`. Use when a single private/internal package doesn't justify a multi-package registry org. Cargo / npm / Poetry / Bundler shape. Spec: [PROP-002 §2.4.1](../spec/modules/vibe-registry/PROP-002-decentralized-registry.md#git-source).
 
+## Registry redirect (delegated package via stub repo)
+
+[`registry-redirect.md`](registry-redirect.md) — a registry org's stub repo carries `vibe-redirect.toml` pointing at an external git repo where the package's actual content lives. Org owner keeps namespace control while delegating hosting / PRs / permissions to a different team. Resolver follows the marker transparently; consumers see no difference from a direct registry-resolved package. Closest analogue: Linux distro virtual `Provides:` records. Spec: [PROP-002 §2.4.2](../spec/modules/vibe-registry/PROP-002-decentralized-registry.md#redirect).
+
 ## Registry authentication
 
 [`registry-auth.md`](registry-auth.md) — how to authenticate against private registries. Four `auth` regimes (`none` / `token-env` / `credential-helper` / `ssh`), env-var conventions, what happens on 401 / 403 per regime (walk-vs-halt), token discipline, troubleshooting. Read this if you have a private vibespecs org or are seeing GUI credential popups during installs.
