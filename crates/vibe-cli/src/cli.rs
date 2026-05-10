@@ -148,11 +148,110 @@ pub enum RegistrySubcommand {
     /// a private registry to confirm credentials line up.
     Test(RegistryTestArgs),
 
+    /// Create a registry stub that delegates a package to an external
+    /// target URL (PROP-002 §2.4.2). Makes the configured `[[registry]]`
+    /// org host a stub repo carrying `vibe-redirect.toml` instead of the
+    /// package content. Consumers `vibe install <pkgref>` resolve through
+    /// the stub transparently; the resolver follows the marker to the
+    /// target. Maintainers only — needs the same publish token used by
+    /// `vibe registry publish`.
+    Redirect(RegistryRedirectArgs),
+
+    /// Mirror target tags into a registry stub (PROP-002 §2.4.2,
+    /// `pass-through-tag` policy). Reads the stub's `vibe-redirect.toml`,
+    /// enumerates target tags, and pushes the missing ones into the stub
+    /// so consumers `vibe install <pkgref>@<ver>` see the same versions
+    /// the target offers. Pinned-policy stubs have nothing to sync —
+    /// command refuses with a clear message.
+    RedirectSync(RegistryRedirectSyncArgs),
+
     /// Generate a local mirror directory containing every package
     /// referenced by `vibe.lock`, suitable for use as a
     /// `[[mirror]] url = "file:///<abs-path>"` for offline / air-gapped
     /// installs.
     Vendor(RegistryVendorArgs),
+}
+
+#[derive(Debug, clap::Args)]
+pub struct RegistryRedirectArgs {
+    /// Pkgref (`<kind>:<name>`) to delegate. The version part of the
+    /// pkgref is ignored — stubs live on `(kind, name)` and any version
+    /// gating is done via stub tags later.
+    pub pkgref: String,
+
+    /// Target git URL where the package's actual content lives. Any
+    /// git URL `git` accepts (`git@host:org/repo`, `ssh://...`,
+    /// `https://...`).
+    #[arg(long = "to")]
+    pub to: String,
+
+    /// Name of the `[[registry]]` whose org will host the stub. Defaults
+    /// to the first registry in `vibe.toml`.
+    #[arg(long = "registry")]
+    pub registry: Option<String>,
+
+    /// Ref policy for the stub. `pass-through-tag` (default): consumer's
+    /// resolved stub tag passes through to the target. `pinned`: every
+    /// consumer resolves to `--pinned-ref` regardless of stub tag.
+    #[arg(long = "ref-policy", default_value = "pass-through-tag")]
+    pub ref_policy: String,
+
+    /// Required when `--ref-policy pinned`. Tag, branch, or commit on
+    /// the target URL that every consumer pins to.
+    #[arg(long = "pinned-ref")]
+    pub pinned_ref: Option<String>,
+
+    /// Target-side authentication regime for the redirect. Mirrors the
+    /// registry-level auth axis (PROP-002 §2.2.1): `none` (default),
+    /// `token-env`, `credential-helper`, `ssh`. Stored in the stub's
+    /// `[redirect].auth`.
+    #[arg(long = "target-auth")]
+    pub target_auth: Option<String>,
+
+    /// Override the env-var name used by `--target-auth token-env`.
+    /// Default is derived from the target URL's host.
+    #[arg(long = "target-token-env")]
+    pub target_token_env: Option<String>,
+
+    /// Free-form text recorded in `[redirect].description` and surfaced
+    /// to operators via `vibe show <pkgref>`. Use this to publish
+    /// out-of-band contact info for the delegate.
+    #[arg(long = "description")]
+    pub description: Option<String>,
+
+    /// Mirror current target tags into the freshly-created stub
+    /// immediately after creation. Equivalent to running
+    /// `vibe registry redirect-sync <pkgref>` once the stub exists.
+    /// No-op for `--ref-policy pinned`.
+    #[arg(long = "sync")]
+    pub sync: bool,
+
+    /// Project root with `vibe.toml`. Defaults to current directory.
+    #[arg(long, default_value = ".")]
+    pub path: PathBuf,
+
+    /// Describe what would happen but make no API calls or pushes.
+    #[arg(long = "dry-run")]
+    pub dry_run: bool,
+}
+
+#[derive(Debug, clap::Args)]
+pub struct RegistryRedirectSyncArgs {
+    /// Pkgref (`<kind>:<name>`) of an existing stub to sync.
+    pub pkgref: String,
+
+    /// Name of the `[[registry]]` hosting the stub. Defaults to the
+    /// first registry in `vibe.toml`.
+    #[arg(long = "registry")]
+    pub registry: Option<String>,
+
+    /// Project root with `vibe.toml`. Defaults to current directory.
+    #[arg(long, default_value = ".")]
+    pub path: PathBuf,
+
+    /// Describe what would happen but make no API calls or pushes.
+    #[arg(long = "dry-run")]
+    pub dry_run: bool,
 }
 
 #[derive(Debug, clap::Args)]

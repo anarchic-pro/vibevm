@@ -27,10 +27,10 @@ use vibe_publish::{
 use vibe_registry::{MultiRegistryResolver, RefreshedVia};
 
 use crate::cli::{
-    RegistryAddArgs, RegistryArgs, RegistryListArgs, RegistryPublishArgs,
-    RegistryRemoveArgs, RegistryRemoveMirrorArgs, RegistryRemoveRegistryArgs,
-    RegistryRemoveTarget, RegistrySetMirrorArgs, RegistrySubcommand, RegistrySyncArgs,
-    RegistryTestArgs, RegistryVendorArgs,
+    RegistryAddArgs, RegistryArgs, RegistryListArgs, RegistryPublishArgs, RegistryRedirectArgs,
+    RegistryRedirectSyncArgs, RegistryRemoveArgs, RegistryRemoveMirrorArgs,
+    RegistryRemoveRegistryArgs, RegistryRemoveTarget, RegistrySetMirrorArgs, RegistrySubcommand,
+    RegistrySyncArgs, RegistryTestArgs, RegistryVendorArgs,
 };
 use crate::output;
 
@@ -44,6 +44,8 @@ pub fn run(ctx: &output::Context, args: RegistryArgs) -> Result<()> {
         RegistrySubcommand::Remove(sub) => run_remove(ctx, sub),
         RegistrySubcommand::Vendor(sub) => run_vendor(ctx, sub),
         RegistrySubcommand::Test(sub) => run_test(ctx, sub),
+        RegistrySubcommand::Redirect(sub) => run_redirect(ctx, sub),
+        RegistrySubcommand::RedirectSync(sub) => run_redirect_sync(ctx, sub),
     }
 }
 
@@ -1797,15 +1799,670 @@ fn run_test(ctx: &output::Context, args: RegistryTestArgs) -> Result<()> {
     Ok(())
 }
 
+// ---------------------------------------------------------------------------
+// vibe registry redirect / redirect-sync (PROP-002 §2.4.2)
+// ---------------------------------------------------------------------------
+
+#[derive(Debug, Serialize)]
+struct RedirectReport {
+    ok: bool,
+    command: &'static str,
+    registry: String,
+    pkgref: String,
+    stub_url: String,
+    target_url: String,
+    ref_policy: &'static str,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pinned_ref: Option<String>,
+    target_auth: &'static str,
+    created_repo: bool,
+    dry_run: bool,
+    /// `Some` when `--sync` is passed and the sync leg ran. `None` when
+    /// the operator did not request sync, when the policy is `pinned`
+    /// (sync is meaningless), or when this is a dry-run.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    sync: Option<RedirectSyncReport>,
+}
+
+#[derive(Debug, Serialize)]
+struct RedirectSyncReport {
+    ok: bool,
+    command: &'static str,
+    registry: String,
+    pkgref: String,
+    stub_url: String,
+    target_url: String,
+    /// Tags pushed into the stub on this run. Empty on a no-op sync
+    /// (target and stub already agree).
+    pushed_tags: Vec<String>,
+    /// Tags already present in the stub before this run (informational —
+    /// helps a CI run that aggregates sync output across many stubs).
+    already_present: Vec<String>,
+    dry_run: bool,
+}
+
+fn parse_target_auth(s: Option<&str>) -> Result<vibe_core::manifest::AuthKind> {
+    match s {
+        None | Some("none") => Ok(vibe_core::manifest::AuthKind::None),
+        Some("token-env") => Ok(vibe_core::manifest::AuthKind::TokenEnv),
+        Some("credential-helper") => Ok(vibe_core::manifest::AuthKind::CredentialHelper),
+        Some("ssh") => Ok(vibe_core::manifest::AuthKind::Ssh),
+        Some(other) => bail!(
+            "unknown --target-auth `{other}` — must be `none`, `token-env`, `credential-helper`, or `ssh`"
+        ),
+    }
+}
+
+/// Resolve the registry to act on for a redirect / redirect-sync command.
+fn resolve_target_registry<'m>(
+    manifest: &'m ProjectManifest,
+    requested: Option<&str>,
+    manifest_path: &Path,
+) -> Result<&'m RegistrySection> {
+    if manifest.registries.is_empty() {
+        bail!(
+            "no `[[registry]]` entries in `{}`. `vibe registry redirect` needs a registry org \
+             where the stub will be created.",
+            manifest_path.display()
+        );
+    }
+    match requested {
+        Some(name) => manifest.registry_by_name(name).ok_or_else(|| {
+            anyhow!(
+                "no `[[registry]]` named `{name}` in `{}`",
+                manifest_path.display()
+            )
+        }),
+        None => manifest
+            .primary_registry()
+            .ok_or_else(|| anyhow!("no `[[registry]]` configured")),
+    }
+}
+
+fn run_redirect(ctx: &output::Context, args: RegistryRedirectArgs) -> Result<()> {
+    use vibe_core::PackageRef;
+    use vibe_core::manifest::{AuthKind, RedirectFile, RefPolicy};
+
+    let project_root = resolve_project_root(&args.path)?;
+    let manifest_path = project_root.join(ProjectManifest::FILENAME);
+    if !manifest_path.exists() {
+        bail!(
+            "no `vibe.toml` in `{}`; run `vibe init` first",
+            project_root.display()
+        );
+    }
+    let manifest = ProjectManifest::read(&manifest_path)
+        .with_context(|| format!("reading `{}`", manifest_path.display()))?;
+
+    let pkgref = PackageRef::parse(&args.pkgref)
+        .with_context(|| format!("parsing pkgref `{}`", args.pkgref))?;
+
+    let registry_section = resolve_target_registry(&manifest, args.registry.as_deref(), &manifest_path)?;
+
+    // Validate URL shape early — before any side-effecting work — so the
+    // operator gets a fast actionable error instead of a network failure.
+    let host = extract_host_segment(&registry_section.url)
+        .map_err(|e| anyhow!("registry URL `{}`: {e}", registry_section.url))?;
+    let org_segment = extract_org_segment(&registry_section.url)
+        .map_err(|e| anyhow!("registry URL `{}`: {e}", registry_section.url))?;
+
+    // Validate target URL shape — must at least have a scheme git accepts.
+    if args.to.trim().is_empty() {
+        bail!("--to must be a non-empty git URL");
+    }
+
+    // Validate ref-policy + pinned-ref combination.
+    let (ref_policy, pinned_ref) = match args.ref_policy.as_str() {
+        "pass-through-tag" => {
+            if args.pinned_ref.is_some() {
+                bail!(
+                    "--pinned-ref is only meaningful with --ref-policy pinned; drop it or \
+                     change to --ref-policy pinned"
+                );
+            }
+            (RefPolicy::PassThroughTag, None)
+        }
+        "pinned" => {
+            let r = args.pinned_ref.as_deref().ok_or_else(|| {
+                anyhow!(
+                    "--ref-policy pinned requires --pinned-ref <tag/branch/rev>"
+                )
+            })?;
+            (RefPolicy::Pinned, Some(r.to_string()))
+        }
+        other => bail!(
+            "unknown --ref-policy `{other}` — must be `pass-through-tag` (default) or `pinned`"
+        ),
+    };
+
+    let target_auth = parse_target_auth(args.target_auth.as_deref())?;
+    if matches!(target_auth, AuthKind::TokenEnv) && args.target_token_env.is_none() {
+        tracing::debug!(
+            target: "vibe_cli::registry::redirect",
+            "target-auth=token-env without explicit --target-token-env; will derive from host on resolve"
+        );
+    }
+    if args.target_token_env.is_some() && !matches!(target_auth, AuthKind::TokenEnv) {
+        bail!(
+            "--target-token-env is only meaningful with --target-auth token-env; got --target-auth {:?}",
+            target_auth.as_str()
+        );
+    }
+
+    // Compute the stub repo name from naming convention.
+    let stub_repo_name = registry_section
+        .naming
+        .repo_name(pkgref.kind, &pkgref.name);
+    // Stub URL surfaced in JSON / human output. Construction mirrors what
+    // [`MultiRegistryResolver`] does at resolve time.
+    let stub_url = format!(
+        "{}/{}",
+        registry_section.url.trim_end_matches('/'),
+        stub_repo_name
+    );
+
+    // Build the stub source dir — `vibe-redirect.toml` + README.
+    let stub_section = vibe_core::manifest::RedirectSection {
+        target_url: args.to.clone(),
+        ref_policy,
+        pinned_ref: pinned_ref.clone(),
+        auth: target_auth,
+        token_env: args.target_token_env.clone(),
+        description: args.description.clone(),
+    };
+    let stub_file = RedirectFile {
+        redirect: stub_section,
+    };
+
+    let staging = tempfile::tempdir().context("creating stub staging dir")?;
+    let stub_marker_path = staging.path().join(RedirectFile::FILENAME);
+    stub_file.write(&stub_marker_path).with_context(|| {
+        format!("writing `{}`", stub_marker_path.display())
+    })?;
+
+    // README — operator-friendly summary so a human visiting the stub
+    // repo on the host's web UI understands what they're looking at
+    // without needing to read the marker file.
+    let readme = build_redirect_readme(&pkgref.qualified_name(), &args.to, args.description.as_deref());
+    std::fs::write(staging.path().join("README.md"), readme).with_context(|| {
+        format!(
+            "writing README into stub staging dir `{}`",
+            staging.path().display()
+        )
+    })?;
+
+    ctx.heading(&format!(
+        "Creating redirect stub: {} → {}{}",
+        pkgref.qualified_name(),
+        args.to,
+        if args.dry_run { " [dry-run]" } else { "" }
+    ));
+
+    if args.dry_run {
+        ctx.step(&format!(
+            "Would create repository `{stub_repo_name}` on `{host}` (org `{org_segment}`)"
+        ));
+        ctx.step(&format!(
+            "Would write `{}` and README; would push to `{stub_url}`",
+            RedirectFile::FILENAME
+        ));
+        let report = RedirectReport {
+            ok: true,
+            command: "registry:redirect",
+            registry: registry_section.name.clone(),
+            pkgref: pkgref.qualified_name(),
+            stub_url: stub_url.clone(),
+            target_url: args.to.clone(),
+            ref_policy: match ref_policy {
+                RefPolicy::PassThroughTag => "pass-through-tag",
+                RefPolicy::Pinned => "pinned",
+            },
+            pinned_ref,
+            target_auth: target_auth.as_str(),
+            created_repo: false,
+            dry_run: true,
+            sync: None,
+        };
+        if ctx.is_json() {
+            ctx.emit_json(&report)?;
+        } else {
+            ctx.summary(
+                "\nvibe registry redirect [dry-run]: re-run without `--dry-run` to create the stub.",
+            );
+        }
+        return Ok(());
+    }
+
+    // GitVerse publish path is a stub today (PROP-002 §2.10 — GitVerse
+    // does not expose org-scoped repo creation). Refuse early with the
+    // same shape as `vibe registry publish`.
+    let host_lower = host.to_ascii_lowercase();
+    if host_lower == "gitverse.ru" || host_lower.ends_with(".gitverse.ru") {
+        bail!(
+            "GitVerse publish is not implemented yet — the GitVerse public API does not expose \
+             org-scoped repository creation. Use a GitHub `[[registry]]` for redirect stubs, or \
+             create the stub repo by hand and `vibe registry publish --repo-url` content into it."
+        );
+    }
+
+    let token = load_token_for_host(&host).context("loading publish token")?;
+    ctx.step(&format!(
+        "Loaded publish token from {} (value redacted)",
+        match token.source() {
+            vibe_publish::TokenSource::Explicit => "explicit argument".to_string(),
+            vibe_publish::TokenSource::EnvVar(name) => format!("$ {name}"),
+            vibe_publish::TokenSource::File(p) => p.display().to_string(),
+        }
+    ));
+    let creator = creator_for_url(&registry_section.url, org_segment.clone(), token)
+        .map_err(|e| anyhow!("{e}"))?;
+
+    // Refuse to clobber an existing stub — operators who want to update
+    // a stub's marker file should hand-edit it (the M1.16 v0 surface).
+    let exists = creator
+        .repo_exists(&org_segment, &stub_repo_name)
+        .map_err(|e| anyhow!("{e}"))?;
+    if exists {
+        bail!(
+            "stub repository `{stub_repo_name}` already exists in `{org_segment}` on `{host}`. \
+             Editing an existing redirect stub is a manual procedure for v0 — clone it, edit \
+             `{}`, push back. `vibe registry redirect` only handles fresh-stub creation.",
+            RedirectFile::FILENAME
+        );
+    }
+
+    let opts = vibe_publish::CreateOpts {
+        description: Some(format!(
+            "vibevm registry stub for {} (delegated to {})",
+            pkgref.qualified_name(),
+            args.to
+        )),
+        default_branch: Some("main".to_string()),
+        homepage: None,
+    };
+    let _info = creator
+        .create_repo(&org_segment, &stub_repo_name, &opts)
+        .map_err(|e| anyhow!("{e}"))?;
+    ctx.step(&format!(
+        "Created repository `{stub_repo_name}` on `{host}`"
+    ));
+
+    // Push the stub contents to `main`. Token embedded only at the
+    // moment of git invocation; never in stdout / stderr / logs.
+    let push_url = creator.push_url(&org_segment, &stub_repo_name);
+    let commit_msg = format!(
+        "stub: delegate {} to {}",
+        pkgref.qualified_name(),
+        args.to
+    );
+    vibe_publish::git_publish::push_initial(staging.path(), &push_url, &commit_msg)
+        .map_err(|e| anyhow!("{e}"))?;
+    ctx.step(&format!("Pushed stub `{}` to `main`", RedirectFile::FILENAME));
+
+    // Optional: sync target tags into the stub immediately.
+    let sync_report = if args.sync && matches!(ref_policy, RefPolicy::PassThroughTag) {
+        ctx.step("Synchronising target tags into the freshly-created stub");
+        Some(do_redirect_sync(
+            ctx,
+            registry_section,
+            &pkgref.qualified_name(),
+            &stub_url,
+            &args.to,
+            &push_url,
+            args.dry_run,
+        )?)
+    } else if args.sync && matches!(ref_policy, RefPolicy::Pinned) {
+        ctx.step(
+            "Skipping --sync: pinned-policy stubs do not pass through target tags (every \
+             consumer resolves to --pinned-ref regardless of stub tag)",
+        );
+        None
+    } else {
+        None
+    };
+
+    let report = RedirectReport {
+        ok: true,
+        command: "registry:redirect",
+        registry: registry_section.name.clone(),
+        pkgref: pkgref.qualified_name(),
+        stub_url: stub_url.clone(),
+        target_url: args.to.clone(),
+        ref_policy: match ref_policy {
+            RefPolicy::PassThroughTag => "pass-through-tag",
+            RefPolicy::Pinned => "pinned",
+        },
+        pinned_ref,
+        target_auth: target_auth.as_str(),
+        created_repo: true,
+        dry_run: false,
+        sync: sync_report,
+    };
+
+    if ctx.is_json() {
+        ctx.emit_json(&report)?;
+        return Ok(());
+    }
+    ctx.summary(&format!(
+        "\nvibe registry redirect: stub `{stub_url}` delegates `{}` → `{}`. Consumers \
+         resolving `{}` will be redirected to the target transparently. Tag the stub with \
+         `git tag vX.Y.Z && git push origin vX.Y.Z` to surface a target version, or run \
+         `vibe registry redirect-sync {}` to mirror the target's tag list.",
+        pkgref.qualified_name(),
+        args.to,
+        pkgref.qualified_name(),
+        pkgref.qualified_name(),
+    ));
+    Ok(())
+}
+
+fn build_redirect_readme(pkgref: &str, target_url: &str, description: Option<&str>) -> String {
+    let desc_block = description
+        .map(|d| format!("\n> {d}\n"))
+        .unwrap_or_default();
+    format!(
+        "# {pkgref} — registry stub\n\n\
+         This repository is a vibevm registry stub that redirects consumers to\n\
+         the canonical home of `{pkgref}`:\n\n\
+         > {target_url}\n\
+         {desc_block}\n\
+         Operators reach this package via `vibe install {pkgref}` through the\n\
+         org's `[[registry]]` configuration; vibevm follows the\n\
+         `vibe-redirect.toml` marker transparently. The actual package content\n\
+         (`vibe-package.toml`, spec files, etc.) lives at the target URL above.\n\n\
+         See [PROP-002 §2.4.2](https://example.invalid/spec) for the redirect\n\
+         protocol and [`docs/registry-redirect.md`](https://example.invalid/docs)\n\
+         for the operator reference.\n"
+    )
+}
+
+fn run_redirect_sync(ctx: &output::Context, args: RegistryRedirectSyncArgs) -> Result<()> {
+    use vibe_core::PackageRef;
+
+    let project_root = resolve_project_root(&args.path)?;
+    let manifest_path = project_root.join(ProjectManifest::FILENAME);
+    if !manifest_path.exists() {
+        bail!(
+            "no `vibe.toml` in `{}`; run `vibe init` first",
+            project_root.display()
+        );
+    }
+    let manifest = ProjectManifest::read(&manifest_path)
+        .with_context(|| format!("reading `{}`", manifest_path.display()))?;
+
+    let pkgref = PackageRef::parse(&args.pkgref)
+        .with_context(|| format!("parsing pkgref `{}`", args.pkgref))?;
+    let registry_section = resolve_target_registry(&manifest, args.registry.as_deref(), &manifest_path)?;
+    let host = extract_host_segment(&registry_section.url)
+        .map_err(|e| anyhow!("registry URL `{}`: {e}", registry_section.url))?;
+    let org_segment = extract_org_segment(&registry_section.url)
+        .map_err(|e| anyhow!("registry URL `{}`: {e}", registry_section.url))?;
+    let stub_repo_name = registry_section
+        .naming
+        .repo_name(pkgref.kind, &pkgref.name);
+    let stub_url = format!(
+        "{}/{}",
+        registry_section.url.trim_end_matches('/'),
+        stub_repo_name
+    );
+
+    ctx.heading(&format!(
+        "Syncing target tags into stub: {}{}",
+        pkgref.qualified_name(),
+        if args.dry_run { " [dry-run]" } else { "" }
+    ));
+
+    // Load token + build push URL using the same path as `vibe registry
+    // redirect`. Read access does not strictly require a token for
+    // public registries, but using the credentialed URL when available
+    // (e.g. when the registry is `auth = "token-env"`) lets us read
+    // private stubs symmetrically.
+    let token = load_token_for_host(&host).context("loading publish token")?;
+    let creator = creator_for_url(&registry_section.url, org_segment.clone(), token)
+        .map_err(|e| anyhow!("{e}"))?;
+    let push_url = creator.push_url(&org_segment, &stub_repo_name);
+
+    // Probe stub existence so we fail fast with a clear message.
+    let exists = creator
+        .repo_exists(&org_segment, &stub_repo_name)
+        .map_err(|e| anyhow!("{e}"))?;
+    if !exists {
+        bail!(
+            "stub repository `{stub_repo_name}` does not exist in `{org_segment}` on `{host}`. \
+             Run `vibe registry redirect {} --to <target-url>` first to create it.",
+            pkgref.qualified_name()
+        );
+    }
+
+    let report = do_redirect_sync(
+        ctx,
+        registry_section,
+        &pkgref.qualified_name(),
+        &stub_url,
+        "<read-from-stub>",
+        &push_url,
+        args.dry_run,
+    )?;
+
+    if ctx.is_json() {
+        ctx.emit_json(&report)?;
+        return Ok(());
+    }
+    if report.pushed_tags.is_empty() {
+        ctx.summary(&format!(
+            "\nvibe registry redirect-sync: `{}` is in sync with target. {} tag{} already \
+             present on stub.",
+            pkgref.qualified_name(),
+            report.already_present.len(),
+            if report.already_present.len() == 1 { "" } else { "s" }
+        ));
+    } else {
+        ctx.summary(&format!(
+            "\nvibe registry redirect-sync: pushed {} tag{} into stub `{}`. {} tag{} were \
+             already present.",
+            report.pushed_tags.len(),
+            if report.pushed_tags.len() == 1 { "" } else { "s" },
+            pkgref.qualified_name(),
+            report.already_present.len(),
+            if report.already_present.len() == 1 { "" } else { "s" }
+        ));
+    }
+    Ok(())
+}
+
+/// Inner sync logic — shared by `vibe registry redirect --sync` and
+/// `vibe registry redirect-sync`. Reads the stub's `vibe-redirect.toml`,
+/// enumerates target tags, pushes the missing ones into the stub.
+fn do_redirect_sync(
+    ctx: &output::Context,
+    registry_section: &RegistrySection,
+    pkgref_qualified: &str,
+    stub_url: &str,
+    target_url_hint: &str,
+    push_url: &str,
+    dry_run: bool,
+) -> Result<RedirectSyncReport> {
+    use vibe_core::manifest::{RedirectFile, RefPolicy};
+    use vibe_publish::git_publish;
+
+    // Step 1: shallow-clone the stub so we can read the marker file
+    // and have a working tree to anchor new tags onto.
+    let stub_clone = git_publish::shallow_clone(push_url).map_err(|e| anyhow!("{e}"))?;
+    let marker_path = stub_clone.path().join(RedirectFile::FILENAME);
+    if !marker_path.exists() {
+        bail!(
+            "stub at `{stub_url}` does not carry `{}` at HEAD — is this actually a redirect \
+             stub? `vibe registry redirect-sync` only operates on stub repos.",
+            RedirectFile::FILENAME
+        );
+    }
+    let stub_file = RedirectFile::read(&marker_path).with_context(|| {
+        format!(
+            "parsing `{}` from stub `{stub_url}`",
+            RedirectFile::FILENAME
+        )
+    })?;
+
+    // Pinned policy — stub tags don't pass through, so syncing is a
+    // semantic mistake.
+    if matches!(stub_file.redirect.ref_policy, RefPolicy::Pinned) {
+        bail!(
+            "stub `{stub_url}` uses `ref_policy = \"pinned\"` — every consumer resolves to \
+             `pinned_ref = {:?}` regardless of stub tag, so there is nothing to sync. Edit \
+             `{}` to change the policy if you want pass-through behaviour.",
+            stub_file.redirect.pinned_ref.as_deref().unwrap_or(""),
+            RedirectFile::FILENAME
+        );
+    }
+
+    let target_url = stub_file.redirect.target_url.clone();
+    if target_url_hint != "<read-from-stub>" && target_url_hint != target_url {
+        // The CLI surface (`--to`) only matches the stub on `redirect`
+        // since `redirect-sync` reads from the stub itself. The hint
+        // disagreeing is a sanity check, not a hard error — log it.
+        tracing::debug!(
+            target: "vibe_cli::registry::redirect_sync",
+            "target_url hint `{target_url_hint}` disagrees with stub-stored `{target_url}`; using stub"
+        );
+    }
+
+    // Step 2: build a target-side fetch URL with credentials if the
+    // stub declares `auth = "token-env"`. Public targets need no token.
+    let target_fetch_url = build_target_fetch_url(&target_url, &stub_file.redirect)?;
+
+    // Step 3: list tags on both sides.
+    let target_tags = git_publish::ls_remote_tags(&target_fetch_url).map_err(|e| anyhow!("{e}"))?;
+    // For listing stub tags we use `git ls-remote` directly so we do
+    // not depend on the shallow clone having all refs (it does, by
+    // virtue of `--single-branch`, but ls-remote is the source of truth).
+    let stub_tags = git_publish::ls_remote_tags(push_url).map_err(|e| anyhow!("{e}"))?;
+
+    // Step 4: classify.
+    let mut to_push: Vec<String> = Vec::new();
+    let mut already: Vec<String> = Vec::new();
+    for t in &target_tags {
+        if stub_tags.iter().any(|s| s == t) {
+            already.push(t.clone());
+        } else {
+            to_push.push(t.clone());
+        }
+    }
+    to_push.sort();
+    already.sort();
+
+    if dry_run {
+        for t in &to_push {
+            ctx.step(&format!("Would push tag `{t}` (target has it; stub does not)"));
+        }
+        for t in &already {
+            ctx.skipped(&format!("tag `{t}`"), "already present on stub");
+        }
+        return Ok(RedirectSyncReport {
+            ok: true,
+            command: "registry:redirect-sync",
+            registry: registry_section.name.clone(),
+            pkgref: pkgref_qualified.to_string(),
+            stub_url: stub_url.to_string(),
+            target_url,
+            pushed_tags: to_push,
+            already_present: already,
+            dry_run: true,
+        });
+    }
+
+    // Step 5: push the missing tags. Each tag is annotated, anchored
+    // at the stub's `main` commit. Stubs are flat — tag → marker file
+    // — so the commit is identical regardless of which target tag the
+    // stub tag fronts.
+    for t in &to_push {
+        git_publish::push_tag_only(stub_clone.path(), push_url, t).map_err(|e| anyhow!("{e}"))?;
+        ctx.step(&format!("Pushed tag `{t}` into stub"));
+    }
+    for t in &already {
+        ctx.skipped(&format!("tag `{t}`"), "already present on stub");
+    }
+
+    Ok(RedirectSyncReport {
+        ok: true,
+        command: "registry:redirect-sync",
+        registry: registry_section.name.clone(),
+        pkgref: pkgref_qualified.to_string(),
+        stub_url: stub_url.to_string(),
+        target_url,
+        pushed_tags: to_push,
+        already_present: already,
+        dry_run: false,
+    })
+}
+
+/// Build a fetch URL for the target side of a redirect, applying
+/// `[redirect].auth` if it asks for token-based auth. For `auth = "none"`
+/// this returns the URL verbatim; for `auth = "token-env"` it injects
+/// the resolved token using the same shape M1.14 plumbing applies
+/// (`https://x-access-token:<TOKEN>@host/...`). Other auth regimes
+/// (`credential-helper`, `ssh`) trust the local git's auth path.
+fn build_target_fetch_url(
+    target_url: &str,
+    redirect: &vibe_core::manifest::RedirectSection,
+) -> Result<String> {
+    use vibe_core::manifest::AuthKind;
+    match redirect.auth {
+        AuthKind::None | AuthKind::CredentialHelper | AuthKind::Ssh => Ok(target_url.to_string()),
+        AuthKind::TokenEnv => {
+            let env_name = redirect
+                .token_env
+                .clone()
+                .or_else(|| derive_target_token_env(target_url))
+                .ok_or_else(|| {
+                    anyhow!(
+                        "target URL `{target_url}` declares auth = \"token-env\" but no \
+                         `token_env` is set and the host cannot be derived for a default \
+                         env-var name"
+                    )
+                })?;
+            let value = std::env::var(&env_name).map_err(|_| {
+                anyhow!(
+                    "target URL `{target_url}` declares auth = \"token-env\" with env-var \
+                     `{env_name}` but the variable is unset or empty in this shell"
+                )
+            })?;
+            Ok(inject_token_into_url(target_url, &value))
+        }
+    }
+}
+
+fn derive_target_token_env(target_url: &str) -> Option<String> {
+    let host = extract_host_segment(target_url).ok()?;
+    let upper = host
+        .to_ascii_uppercase()
+        .replace(['.', '-'], "_");
+    Some(format!("VIBEVM_TARGET_TOKEN_{upper}"))
+}
+
+fn inject_token_into_url(url: &str, token: &str) -> String {
+    if !url.starts_with("https://") {
+        // SSH-form / file:// — token has nowhere to land; pass through.
+        return url.to_string();
+    }
+    let rest = &url[8..]; // past "https://"
+    if rest.contains('@') {
+        // Already credentialed — caller's choice; do not double-inject.
+        return url.to_string();
+    }
+    format!("https://x-access-token:{token}@{rest}")
+}
+
 #[cfg(test)]
 mod tests {
     use super::{
-        adapter_for_host, bare_clone_from_clone, file_url_for_dir, parse_naming,
+        adapter_for_host, bare_clone_from_clone, build_redirect_readme, build_target_fetch_url,
+        derive_target_token_env, file_url_for_dir, inject_token_into_url, parse_naming,
+        parse_target_auth,
     };
     use std::fs;
     use std::path::PathBuf;
     use tempfile::tempdir;
-    use vibe_core::manifest::NamingConvention;
+    use vibe_core::manifest::{AuthKind, NamingConvention, RedirectSection, RefPolicy};
 
     #[test]
     fn adapter_for_host_picks_github() {
@@ -1932,5 +2589,120 @@ mod tests {
         // prefix; the helper drops that so the URL is portable.
         let url = file_url_for_dir(&PathBuf::from(r"\\?\C:\Users\foo\vendor"));
         assert_eq!(url, "file:///C:/Users/foo/vendor");
+    }
+
+    // -----------------------------------------------------------------
+    // redirect / redirect-sync helpers (PROP-002 §2.4.2)
+    // -----------------------------------------------------------------
+
+    #[test]
+    fn parse_target_auth_canonical_spellings() {
+        assert!(matches!(parse_target_auth(None).unwrap(), AuthKind::None));
+        assert!(matches!(
+            parse_target_auth(Some("none")).unwrap(),
+            AuthKind::None
+        ));
+        assert!(matches!(
+            parse_target_auth(Some("token-env")).unwrap(),
+            AuthKind::TokenEnv
+        ));
+        assert!(matches!(
+            parse_target_auth(Some("credential-helper")).unwrap(),
+            AuthKind::CredentialHelper
+        ));
+        assert!(matches!(
+            parse_target_auth(Some("ssh")).unwrap(),
+            AuthKind::Ssh
+        ));
+    }
+
+    #[test]
+    fn parse_target_auth_rejects_unknown() {
+        let err = parse_target_auth(Some("oauth")).unwrap_err();
+        assert!(err.to_string().contains("unknown --target-auth"));
+    }
+
+    #[test]
+    fn build_redirect_readme_includes_pkgref_and_target() {
+        let r = build_redirect_readme(
+            "flow:internal-helper",
+            "https://gitlab.acme.example/flows/internal-helper",
+            None,
+        );
+        assert!(r.contains("flow:internal-helper"));
+        assert!(r.contains("https://gitlab.acme.example/flows/internal-helper"));
+        assert!(r.contains("vibe-redirect.toml"));
+    }
+
+    #[test]
+    fn build_redirect_readme_includes_description_when_present() {
+        let r = build_redirect_readme(
+            "flow:x",
+            "https://example.invalid/x",
+            Some("delegated to acme-corp"),
+        );
+        assert!(r.contains("delegated to acme-corp"));
+    }
+
+    #[test]
+    fn derive_target_token_env_uppercase_and_underscore() {
+        assert_eq!(
+            derive_target_token_env("https://gitlab.acme.example/x").as_deref(),
+            Some("VIBEVM_TARGET_TOKEN_GITLAB_ACME_EXAMPLE")
+        );
+        assert_eq!(
+            derive_target_token_env("https://gitverse.ru/y").as_deref(),
+            Some("VIBEVM_TARGET_TOKEN_GITVERSE_RU")
+        );
+    }
+
+    #[test]
+    fn inject_token_passes_through_ssh_form() {
+        let url = "git@github.com:vibespecs/flow-wal.git";
+        assert_eq!(inject_token_into_url(url, "secret"), url);
+    }
+
+    #[test]
+    fn inject_token_skips_already_credentialed_https() {
+        let url = "https://existing:cred@github.com/x/y";
+        assert_eq!(inject_token_into_url(url, "newtoken"), url);
+    }
+
+    #[test]
+    fn inject_token_embeds_into_https() {
+        let url = "https://github.com/vibespecs/flow-wal.git";
+        let out = inject_token_into_url(url, "abc123");
+        assert_eq!(
+            out,
+            "https://x-access-token:abc123@github.com/vibespecs/flow-wal.git"
+        );
+    }
+
+    #[test]
+    fn build_target_fetch_url_none_passes_through() {
+        let section = RedirectSection {
+            target_url: "https://example.invalid/x".into(),
+            ref_policy: RefPolicy::PassThroughTag,
+            pinned_ref: None,
+            auth: AuthKind::None,
+            token_env: None,
+            description: None,
+        };
+        let out = build_target_fetch_url("https://example.invalid/x", &section).unwrap();
+        assert_eq!(out, "https://example.invalid/x");
+    }
+
+    #[test]
+    fn build_target_fetch_url_token_env_demands_var_set() {
+        let section = RedirectSection {
+            target_url: "https://example.invalid/x".into(),
+            ref_policy: RefPolicy::PassThroughTag,
+            pinned_ref: None,
+            auth: AuthKind::TokenEnv,
+            token_env: Some("VIBEVM_TEST_DEFINITELY_UNSET_TOKEN_VAR".into()),
+            description: None,
+        };
+        let err = build_target_fetch_url("https://example.invalid/x", &section).unwrap_err();
+        assert!(err.to_string().contains("VIBEVM_TEST_DEFINITELY_UNSET_TOKEN_VAR"));
     }
 }
