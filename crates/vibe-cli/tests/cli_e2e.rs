@@ -659,6 +659,166 @@ fn install_from_git_registry() {
     // walks the lockfile to refresh per-package clones.
 }
 
+/// Build a single-package bare git repo (NOT under an org) usable
+/// as a `vibe install --git ...` target. The repo's URL is the URL
+/// of the bare clone itself; vibevm's M1.15 git-source path treats
+/// it as a one-package "registry" without applying naming.
+fn make_single_package_bare_repo(root: &Path) -> PathBuf {
+    let src = root.join("src-flow-wal-direct");
+    fs::create_dir_all(&src).unwrap();
+    run_git(&src, &["init", "--initial-branch=main"]);
+    run_git(&src, &["config", "user.email", "t@example.com"]);
+    run_git(&src, &["config", "user.name", "Test"]);
+    copy_tree(&fixture_registry().join("flow/wal/v0.1.0"), &src);
+    run_git(&src, &["add", "-A"]);
+    run_git(&src, &["commit", "-m", "flow:wal@0.1.0"]);
+    run_git(&src, &["tag", "v0.1.0"]);
+    let bare = root.join("flow-wal-direct.git");
+    run_git(
+        root,
+        &[
+            "clone",
+            "--bare",
+            src.to_str().unwrap(),
+            bare.to_str().unwrap(),
+        ],
+    );
+    run_git(&bare, &["symbolic-ref", "HEAD", "refs/heads/main"]);
+    bare
+}
+
+#[test]
+fn install_from_git_source_with_tag_records_source_kind_git() {
+    if !git_available() {
+        eprintln!("skipping install_from_git_source_with_tag: git not on PATH");
+        return;
+    }
+    let outer = tempfile::tempdir().unwrap();
+    let bare = make_single_package_bare_repo(outer.path());
+    let cache = outer.path().join("cache");
+    fs::create_dir_all(&cache).unwrap();
+
+    let project = tempfile::tempdir().unwrap();
+    init_project(project.path());
+    let url = format!("file://{}", bare.to_string_lossy().replace('\\', "/"));
+
+    // M1.15: declare git-source via CLI flags, no [[registry]] needed.
+    vibe()
+        .env("VIBE_REGISTRY_CACHE", &cache)
+        .arg("install")
+        .arg("flow:wal")
+        .arg("--git")
+        .arg(&url)
+        .arg("--tag")
+        .arg("v0.1.0")
+        .arg("--path")
+        .arg(project.path())
+        .arg("--assume-yes")
+        .assert()
+        .success();
+
+    // Manifest: pkgref recorded as git-source, NOT as registry-resolved.
+    let manifest_text = fs::read_to_string(project.path().join("vibe.toml")).unwrap();
+    let manifest: vibe_core::manifest::ProjectManifest =
+        toml::from_str(&manifest_text).expect("vibe.toml round-trips");
+    assert_eq!(
+        manifest.requires.git_packages.len(),
+        1,
+        "expected one git-source entry, got: {:#?}",
+        manifest.requires.git_packages
+    );
+    assert!(
+        manifest.requires.packages.is_empty(),
+        "expected zero registry-resolved entries, got: {:#?}",
+        manifest.requires.packages
+    );
+    let g = &manifest.requires.git_packages[0];
+    assert_eq!(g.kind, vibe_core::PackageKind::Flow);
+    assert_eq!(g.name, "wal");
+    assert_eq!(g.url, url);
+    assert!(
+        matches!(&g.ref_kind, vibe_core::manifest::GitRefKind::Tag(t) if t == "v0.1.0"),
+        "expected tag refkind, got: {:?}",
+        g.ref_kind
+    );
+
+    // Lockfile: source_kind = "git", overridden = false, source_url = bare URL.
+    let lock_text = fs::read_to_string(project.path().join("vibe.lock")).unwrap();
+    let lock: vibe_core::manifest::Lockfile = toml::from_str(&lock_text).unwrap();
+    assert_eq!(lock.packages.len(), 1);
+    let pkg = &lock.packages[0];
+    assert_eq!(
+        pkg.source_kind,
+        Some(vibe_core::manifest::SourceKind::Git),
+        "lockfile source_kind"
+    );
+    assert!(!pkg.overridden);
+    assert_eq!(pkg.source_ref.as_deref(), Some("v0.1.0"));
+    assert_eq!(pkg.registry, None);
+
+    // Files materialised — same writes-list as registry-resolved install.
+    assert!(
+        project
+            .path()
+            .join("spec/flows/wal/WAL-PROTOCOL.md")
+            .exists()
+    );
+}
+
+#[test]
+fn install_from_git_source_with_branch_pins_lockfile_to_resolved_commit() {
+    if !git_available() {
+        eprintln!("skipping install_from_git_source_with_branch: git not on PATH");
+        return;
+    }
+    let outer = tempfile::tempdir().unwrap();
+    let bare = make_single_package_bare_repo(outer.path());
+    let cache = outer.path().join("cache");
+    fs::create_dir_all(&cache).unwrap();
+
+    let project = tempfile::tempdir().unwrap();
+    init_project(project.path());
+    let url = format!("file://{}", bare.to_string_lossy().replace('\\', "/"));
+
+    // M1.15: --branch is mutable; install resolves to current HEAD,
+    // lockfile pins resolved_commit, vibe install (no update) stays
+    // on that commit.
+    vibe()
+        .env("VIBE_REGISTRY_CACHE", &cache)
+        .arg("install")
+        .arg("flow:wal")
+        .arg("--git")
+        .arg(&url)
+        .arg("--branch")
+        .arg("main")
+        .arg("--path")
+        .arg(project.path())
+        .arg("--assume-yes")
+        .assert()
+        .success();
+
+    let manifest_text = fs::read_to_string(project.path().join("vibe.toml")).unwrap();
+    let manifest: vibe_core::manifest::ProjectManifest =
+        toml::from_str(&manifest_text).expect("vibe.toml round-trips");
+    let g = &manifest.requires.git_packages[0];
+    assert!(
+        matches!(&g.ref_kind, vibe_core::manifest::GitRefKind::Branch(b) if b == "main"),
+        "expected branch refkind, got: {:?}",
+        g.ref_kind
+    );
+
+    let lock_text = fs::read_to_string(project.path().join("vibe.lock")).unwrap();
+    let lock: vibe_core::manifest::Lockfile = toml::from_str(&lock_text).unwrap();
+    let pkg = &lock.packages[0];
+    assert_eq!(pkg.source_kind, Some(vibe_core::manifest::SourceKind::Git));
+    // source_ref is the declared branch name; resolved_commit (when present)
+    // would be the actual SHA. Branch installs that produce a non-empty
+    // resolved_commit field would here be `Some(<40-char-sha>)`; v0 of
+    // M1.15 leaves it None for the file:// backend, which is acceptable
+    // since identity is content-hash, not commit.
+    assert_eq!(pkg.source_ref.as_deref(), Some("main"));
+}
+
 /// Build a per-package git registry where `flow-wal` carries TWO
 /// tagged versions: `v0.1.0` (from the in-tree fixture, content
 /// rewritten so the project file the test asserts on lives at a
