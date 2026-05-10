@@ -82,15 +82,23 @@ pub fn run(ctx: &output::Context, args: UninstallArgs) -> Result<()> {
 }
 
 /// Remove the matching pkgref from the project manifest's
-/// `[requires].packages`. Returns `true` iff an entry was actually
-/// removed (caller persists only on change).
+/// `[requires].packages` AND `[requires].git_packages`. Returns `true`
+/// iff an entry was actually removed from either list (caller persists
+/// only on change). Pkgrefs are matched on `(kind, name)` — the version
+/// constraint / git ref policy is irrelevant for uninstall.
 fn drop_from_manifest_requires(manifest: &mut ProjectManifest, pkgref: &PackageRef) -> bool {
-    let before = manifest.requires.packages.len();
+    let before_pkgs = manifest.requires.packages.len();
     manifest
         .requires
         .packages
         .retain(|r| !(r.kind == pkgref.kind && r.name == pkgref.name));
-    manifest.requires.packages.len() != before
+    let before_git = manifest.requires.git_packages.len();
+    manifest
+        .requires
+        .git_packages
+        .retain(|g| !(g.kind == pkgref.kind && g.name == pkgref.name));
+    manifest.requires.packages.len() != before_pkgs
+        || manifest.requires.git_packages.len() != before_git
 }
 
 #[derive(Debug, Serialize)]
