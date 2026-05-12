@@ -1,12 +1,33 @@
 # CONTINUE — cold-resume checkpoint
 
-_Written: 2026-05-10 finalisation (M1.15 + M1.16 ship-complete with hermetic e2e + production smoke walks). Owner-readable, self-contained. Pick this up with zero prior context._
+_Written: 2026-05-12 test-fixture re-homing (live e2e and smoke artefacts moved out of canonical `vibespecs` org into dedicated test orgs). Owner-readable, self-contained. Pick this up with zero prior context._
 
 ---
 
 ## TL;DR (executive summary)
 
-**The 2026-05-10 finalisation push closes M1.16 from "resolver wired" to "ship-complete with operator UX + hermetic e2e + production smoke walks against real GitHub."** Seven commits on top of `3cf3b01` deliver the two missing CLI helpers (`vibe registry redirect`, `vibe registry redirect-sync`), four hermetic redirect e2e tests + four git-source corner-case e2e tests, two bug fixes that surfaced during the production walks, and the operator-facing reference (commands docs + manual-tests recipes + CHANGELOG / ROADMAP flips).
+**The 2026-05-12 push relocates every live-e2e and manual-smoke test fixture out of the canonical `vibespecs` org (and `olegchir` personal namespace) into three dedicated test orgs**, so the canonical orgs stay populated with real installable packages only.
+
+Test-org map:
+
+- `https://github.com/vibespecstest1` — registry-side test fixtures (`flow-vibevm-github-smoke` for live-e2e GitHub leg; `feat-helper` for M1.16 redirect stub).
+- `https://github.com/vibespecstest2` — external-author / target-side test fixtures (`vibevm-m1-smoke-flow-internal` for M1.15 git-source target; `vibevm-m1-smoke-feat-helper` for M1.16 redirect target; `vibevm-private-probe` for M1.14.4 private smoke target, kept private).
+- `https://gitverse.ru/vibespecstest3` — GitVerse-side test fixtures (`vibevm-direct-push-smoke` for live-e2e GitVerse leg). Reached over SSH from the live tests — GitVerse demands credentials over HTTPS for new orgs.
+
+Migration was clone-mirror + push-mirror for five GitHub repos (four public, one private) plus `vibe registry publish --repo-url` from a local fixture for one GitVerse repo. The `feat-helper` redirect stub's marker was rewritten (clone, edit, commit, force-retag `v0.1.0`, push) so it now points at `vibespecstest2/vibevm-m1-smoke-feat-helper`. `cli_live_e2e.rs` updated to overwrite `vibe.toml` with explicit test-org `[[registry]]` blocks after `vibe init`; both `manual-tests/M1.15-git-source-smoke.md` and `M1.16-redirect-smoke.md` rewritten to provision under `/orgs/vibespecstest2/repos` and reference `vibespecstest1` for the stub registry. All three live e2e tests pass; full workspace `cargo test --workspace` and clippy `-D warnings` clean.
+
+**Old smoke artefacts still pending deletion** (not yet removed this session — cleanup is the next safe step):
+
+- GitHub: `vibespecs/feat-helper`, `vibespecs/flow-vibevm-github-smoke`, `olegchir/vibevm-m1-smoke-feat-helper`, `olegchir/vibevm-m1-smoke-flow-internal`, `olegchir/vibevm-private-probe`.
+- GitVerse: owner-side delete only (CLI has no DELETE; ask).
+
+**Earlier checkpoints below** describe the 2026-05-10 M1.15 + M1.16 implementation; that work is unchanged.
+
+---
+
+## TL;DR (2026-05-10 finalisation, prior checkpoint)
+
+**The 2026-05-10 finalisation push closed M1.16 from "resolver wired" to "ship-complete with operator UX + hermetic e2e + production smoke walks against real GitHub."** Seven commits on top of `3cf3b01` deliver the two missing CLI helpers (`vibe registry redirect`, `vibe registry redirect-sync`), four hermetic redirect e2e tests + four git-source corner-case e2e tests, two bug fixes that surfaced during the production walks, and the operator-facing reference (commands docs + manual-tests recipes + CHANGELOG / ROADMAP flips).
 
 The session also closes M1.15's deferred production smoke walk against `olegchir/vibevm-m1-smoke-flow-internal`. Both M1.15 (git-source dependencies) and M1.16 (registry redirect via stub repo) are now feature-complete with hermetic tests + production smoke walks; they are flipped to `✅ SHIPPED (2026-05-10)` in `ROADMAP.md`.
 
@@ -22,11 +43,14 @@ a1dc2b3 fix(vibe-registry): archive→clone fall-back in fetch_manifest_at_ref
 5b9a2dc fix(vibe-cli/uninstall): drop git-source declarations on uninstall
 ```
 
-**Production smoke walk artefacts left on GitHub** (safe to delete, recreatable from `manual-tests/`):
+**Production smoke walk artefacts** (after the 2026-05-12 re-home; safe to delete, recreatable from `manual-tests/`):
 
-- `https://github.com/olegchir/vibevm-m1-smoke-flow-internal` — M1.15 git-source smoke target.
-- `https://github.com/olegchir/vibevm-m1-smoke-feat-helper` — M1.16 redirect smoke target.
-- `https://github.com/vibespecs/feat-helper` — M1.16 redirect stub.
+- `https://github.com/vibespecstest2/vibevm-m1-smoke-flow-internal` — M1.15 git-source smoke target.
+- `https://github.com/vibespecstest2/vibevm-m1-smoke-feat-helper` — M1.16 redirect smoke target.
+- `https://github.com/vibespecstest2/vibevm-private-probe` — M1.14.4 private-probe smoke target (private).
+- `https://github.com/vibespecstest1/feat-helper` — M1.16 redirect stub.
+- `https://github.com/vibespecstest1/flow-vibevm-github-smoke` — live-e2e GitHub leg.
+- `https://gitverse.ru/vibespecstest3/vibevm-direct-push-smoke` — live-e2e GitVerse leg.
 
 **Workspace state** at HEAD (after the seven commits above):
 
@@ -79,9 +103,9 @@ CHANGELOG `[Unreleased]` carries M1.12 / M1.13 / M1.14 / M1.15 / M1.16. ROADMAP 
 
 Useful as a smoke test whenever the auth pipeline or the git-source / redirect resolution path changes. Recipes:
 
-- `manual-tests/M1.14-…` — original M1.14.4 private-probe walk against `olegchir/vibevm-private-probe` (still up).
-- `manual-tests/M1.15-git-source-smoke.md` — git-source against `olegchir/vibevm-m1-smoke-flow-internal`.
-- `manual-tests/M1.16-redirect-smoke.md` — redirect through `vibespecs/feat-helper` to `olegchir/vibevm-m1-smoke-feat-helper`.
+- `manual-tests/M1.14-…` — original M1.14.4 private-probe walk; target now lives at `vibespecstest2/vibevm-private-probe`.
+- `manual-tests/M1.15-git-source-smoke.md` — git-source against `vibespecstest2/vibevm-m1-smoke-flow-internal`.
+- `manual-tests/M1.16-redirect-smoke.md` — redirect through `vibespecstest1/feat-helper` to `vibespecstest2/vibevm-m1-smoke-feat-helper`.
 
 ### Option 4 — A fresh full-project audit
 

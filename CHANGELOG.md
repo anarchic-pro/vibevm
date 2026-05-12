@@ -8,6 +8,16 @@ Format roughly follows [Keep a Changelog](https://keepachangelog.com/), grouped 
 
 ## [Unreleased]
 
+### Test fixture re-homing (2026-05-12)
+
+End-to-end and smoke fixtures moved out of the canonical `vibespecs` org (and `olegchir` personal namespace) into dedicated test orgs. The canonical orgs now host only real, installable packages.
+
+- **GitHub `vibespecstest1`** — registry-side test fixtures. Holds `flow-vibevm-github-smoke` (used by `cli_live_e2e::install_github_smoke_alone`) and `feat-helper` (M1.16 redirect stub).
+- **GitHub `vibespecstest2`** — external-author / target-side test fixtures. Holds `vibevm-m1-smoke-flow-internal` (M1.15 git-source target), `vibevm-m1-smoke-feat-helper` (M1.16 redirect target), `vibevm-private-probe` (M1.14.4 private-probe smoke target, kept private).
+- **GitVerse `vibespecstest3`** — GitVerse-side test fixtures. Holds `vibevm-direct-push-smoke` (used by `cli_live_e2e::install_gitverse_smoke_alone`). Reached over SSH; the live test uses `git@gitverse.ru:vibespecstest3` to bypass GitVerse's HTTPS-requires-auth posture on test repos.
+- **`cli_live_e2e.rs`** — `init_project` now overwrites `vibe.toml` with `[[registry]]` blocks pointing at the test orgs. Asserts updated: `registry = "vibespecstest1"` and `"vibespecstest3"` instead of the canonical names. All three live tests still pass.
+- **`manual-tests/M1.15-git-source-smoke.md`** / **M1.16-redirect-smoke.md** — recipes rewritten to provision repos via `POST /orgs/vibespecstest2/repos` (instead of `/user/repos` under `olegchir`); install steps write `[[registry]] url = "https://github.com/vibespecstest1"` after `vibe init` so the consumer routes through the test org.
+
 ### M1.15 — Git-source dependencies (2026-05-10)
 
 The Cargo / npm / Poetry / Bundler / Go-modules-style affordance — declare a dep as `{ git = "https://...", tag = "v0.1.0" }` instead of resolving it through `[[registry]]`. Spec: [PROP-002 §2.4.1](spec/modules/vibe-registry/PROP-002-decentralized-registry.md#git-source).
@@ -18,7 +28,7 @@ The Cargo / npm / Poetry / Bundler / Go-modules-style affordance — declare a d
 - **`vibe install` flags** — `--git <url>`, `--tag/--branch/--rev`, `--git-auth`, `--git-token-env` add a git-source declaration without hand-editing `vibe.toml`.
 - **Lockfile** — new `source_kind = "registry" | "git" | "override"` discriminant per `[[package]]`. Wire-compatible — `Option<SourceKind>` defaults to `None` for pre-M1.15 lockfiles.
 - **Hermetic e2e** in `vibe-cli/tests/cli_e2e.rs` — install with `--tag`, install with `--branch`, repeat install rejection, uninstall removal from both `requires.packages` and `requires.git_packages`.
-- **Production smoke walk** documented at `manual-tests/M1.15-git-source-smoke.md`. Validated against `https://github.com/olegchir/vibevm-m1-smoke-flow-internal` — `git archive --remote` → shallow-clone fall-back exercised on the GitHub case.
+- **Production smoke walk** documented at `manual-tests/M1.15-git-source-smoke.md`. Validated against `https://github.com/vibespecstest2/vibevm-m1-smoke-flow-internal` — `git archive --remote` → shallow-clone fall-back exercised on the GitHub case. Smoke fixtures live in dedicated test orgs (`vibespecstest1/2/3`) so the canonical `vibespecs` org stays populated with real packages only.
 - **Bug fix** along the way: `fetch_manifest_at_ref` (used by git-source path) now falls back to `refresh_package` when the host refuses `upload-archive`, matching `fetch_dep_manifest`. Without this, GitHub-hosted git-source targets failed at resolution time.
 - **Bug fix**: `vibe uninstall <pkgref>` now removes the entry from BOTH `requires.packages` and `requires.git_packages` (was a one-list-only walk).
 - Docs: new `docs/git-source-dependencies.md` operator reference (in M1.15 spec landing); `docs/commands/install.md` extended with the new flags.
@@ -36,7 +46,7 @@ The Linux-distro-style virtual-package mechanism — a registry org's stub repo 
 - **`vibe registry redirect-sync <pkgref>`** — mirrors target tags into the stub. Reads stub's `vibe-redirect.toml`, lists target tags, pushes the missing ones. Refuses for `pinned`-policy stubs (semantically meaningless to sync).
 - **Lockfile** — `via_redirect` field per `[[package]]` records the stub URL; `source_url` carries the target URL; `source_kind = "registry"` (redirect-resolved packages came through a registry stub, just delegated).
 - **Hermetic e2e** in `vibe-cli/tests/cli_e2e.rs` — pass-through-tag install, pinned-policy install, identity-mismatch reject, hop-limit chain reject. Plus 9 helper unit tests for `parse_target_auth`, `build_redirect_readme`, `derive_target_token_env`, `inject_token_into_url`, `build_target_fetch_url`.
-- **Production smoke walk** documented at `manual-tests/M1.16-redirect-smoke.md`. Validated against a `vibespecs/feat-helper` stub → `olegchir/vibevm-m1-smoke-feat-helper` target pair on real GitHub: `vibe registry redirect`, `vibe registry redirect-sync`, then `vibe install feat:helper@^0.1` resolving through the stub. Lockfile records `via_redirect = "https://github.com/vibespecs/feat-helper.git"` and `source_url = "https://github.com/olegchir/..."`.
+- **Production smoke walk** documented at `manual-tests/M1.16-redirect-smoke.md`. Validated against a `vibespecstest1/feat-helper` stub → `vibespecstest2/vibevm-m1-smoke-feat-helper` target pair on real GitHub: `vibe registry redirect`, `vibe registry redirect-sync`, then `vibe install feat:helper@^0.1` resolving through the stub. Lockfile records `via_redirect = "https://github.com/vibespecstest1/feat-helper.git"` and `source_url = "https://github.com/vibespecstest2/..."`. Smoke fixtures live in dedicated test orgs so the canonical `vibespecs` org stays populated with real packages only.
 - Docs: new `docs/commands/registry-redirect.md` and `docs/commands/registry-redirect-sync.md`; `docs/registry-redirect.md` updated with the CLI workflow (manual procedure kept as a fallback section).
 
 ### v0.1.0-ready package-management bundle — 2026-05-08

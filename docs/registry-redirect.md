@@ -12,6 +12,8 @@ Distinct from `[requires.packages]` git-source ([git-source-dependencies.md](git
 
 A stub repo at `<org>/<kind>-<name>` carries `vibe-redirect.toml` at the repo root **instead of** `vibe-package.toml`. Both files in the same repo at the same ref is rejected by the resolver as `AmbiguousStub`.
 
+The canonical `vibespecs` org reserves its slots for real, installable packages — redirect stubs and live end-to-end smoke artefacts live in dedicated test orgs (`vibespecstest1` on GitHub for registry-side fixtures, `vibespecstest2` for external-target hosts, `vibespecstest3` on GitVerse). The wire grammar below is identical regardless of which org hosts the stub.
+
 ```toml
 # vibe-redirect.toml at the root of the stub repo
 
