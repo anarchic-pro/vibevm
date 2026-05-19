@@ -46,7 +46,7 @@ Token secrecy invariants are identical to `vibe registry publish` (PROP-000 §20
 2. Resolve the target registry from `vibe.toml`.
 3. Build the stub source dir in a tempdir: `vibe-redirect.toml` carrying the `[redirect]` block + a small README explaining the delegation.
 4. Load the publish token for the registry's host.
-5. Probe `repo_exists` for the stub slot. If the repo already exists, the command refuses — editing an existing stub is a manual procedure for v0 (clone, edit `vibe-redirect.toml`, push back).
+5. Probe `repo_exists` for the stub slot. If the repo already exists, the command refuses — use [`vibe registry redirect-update`](registry-redirect-update.md) to mutate an existing stub.
 6. `POST /orgs/<org>/repos` to create the empty stub repo.
 7. Initialise a fresh git tree in the staging dir, commit, push to `main`. Token is embedded into the push URL only for that single invocation.
 8. (Optional `--sync`) Mirror target tags into the stub — see [`registry-redirect-sync.md`](registry-redirect-sync.md).
@@ -82,10 +82,11 @@ vibe registry redirect flow:internal-helper \
 - **`--pinned-ref` set with `--ref-policy pass-through-tag`** — same. Either drop the flag or change the policy.
 - **`--target-token-env` paired with `--target-auth` other than `token-env`** — refused.
 - **GitVerse `[[registry]]`** — refused early (GitVerse public API does not expose org-scoped repository creation; same shape as `vibe registry publish`). Use a GitHub registry, or run the manual procedure documented in [`docs/registry-redirect.md`](../registry-redirect.md).
-- **Stub repo already exists** — refused. Updating an existing stub's marker is a manual `git clone` / edit / push procedure for v0.
+- **Stub repo already exists** — refused. Use [`vibe registry redirect-update`](registry-redirect-update.md) to rewrite an existing stub's marker file.
 
 ## Related
 
+- [`vibe registry redirect-update`](registry-redirect-update.md) — rewrite an existing stub's marker (retarget, switch policy, edit description).
 - [`vibe registry redirect-sync`](registry-redirect-sync.md) — mirror target tags into an existing stub.
 - [`docs/registry-redirect.md`](../registry-redirect.md) — operator reference for the redirect protocol (wire grammar, resolver behaviour, identity rules, lockfile shape).
 - [PROP-002 §2.4.2](../../spec/modules/vibe-registry/PROP-002-decentralized-registry.md#redirect) — the architectural decision and contract.

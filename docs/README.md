@@ -26,6 +26,7 @@ The `vibe` binary is the single entry point for every operation. Global flags `-
 | [`vibe registry publish`](commands/registry-publish.md) | Maintainer-side: publish a package directory as a tagged release. |
 | [`vibe registry redirect`](commands/registry-redirect.md) | Maintainer-side: create a registry stub that delegates a package to an external target URL (PROP-002 §2.4.2). |
 | [`vibe registry redirect-sync`](commands/registry-redirect-sync.md) | Maintainer-side: mirror target tags into an existing redirect stub. |
+| [`vibe registry redirect-update`](commands/registry-redirect-update.md) | Maintainer-side: rewrite an existing stub's `vibe-redirect.toml` (retarget, switch policy, edit description). |
 | [`vibe mcp install`](commands/mcp-install.md) | Wire vibevm into a coding agent (Claude Code, Claude Desktop, Cursor, OpenCode, Codex) — writes per-agent MCP config + optional `vibevm` SKILL.md. Scope axes: project / user / both. Wizard-driven without flags; fully scriptable. |
 | [`vibe mcp upgrade`](commands/mcp-upgrade.md) | Refresh existing vibevm integrations to the version shipped in this binary. Scans installed places, rewrites only the diverged ones; never creates new installations. |
 | [`vibe mcp uninstall`](commands/mcp-uninstall.md) | Remove vibevm from one or more agents — drops the `vibevm` MCP block and deletes SKILL.md, foreign keys preserved. |

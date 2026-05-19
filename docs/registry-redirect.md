@@ -148,6 +148,25 @@ vibe registry redirect flow:internal-helper \
 
 The command writes `vibe-redirect.toml` (and a small README explaining the delegation) into the stub repo, then pushes to the registry org's `<kind>-<name>` slot. By default no tags are added — surface a target version via `vibe registry redirect-sync` (below) or by hand.
 
+### Rewriting an existing stub's marker — `vibe registry redirect-update`
+
+The marker file is not immutable. Operators retarget a stub (external author migrated their hosting, redirect description needs an update, target switched from pass-through to pinned policy, etc.) via:
+
+```bash
+# Description-only update. Operator-side metadata; no trust flag needed.
+vibe registry redirect-update flow:internal-helper \
+  --description "Delegated to forgejo-corp; contact ops@forgejo.example"
+
+# External author moved hosting from GitLab to Forgejo. The target URL
+# change requires --trust-redirect — see PROP-002 §2.4.2 trust model.
+vibe registry redirect-update flow:internal-helper \
+  --to https://forgejo.example/internal-helper \
+  --trust-redirect \
+  --resync
+```
+
+Every flag is optional — fields not specified retain their current value. The command refuses with `no changes requested` if the computed marker is byte-identical to the current one, and refuses with a pointer at `--trust-redirect` if any change would alter resolution outcomes for consumers (`target_url`, `ref_policy`, or `pinned_ref`). Full reference: [`docs/commands/registry-redirect-update.md`](commands/registry-redirect-update.md).
+
 ### Surfacing target tags into the stub — `vibe registry redirect-sync`
 
 In `pass-through-tag` policy, the stub's tags determine which target versions the org's namespace exposes. Mirror them across in one command:
@@ -224,7 +243,6 @@ The key distinction between **stub** and **mirror** is *who controls the indirec
 - **Signed redirect markers** — cryptographic attestation that `target_url` is approved by the org owner. Plain text + content-hash for v0.
 - **Auto-deprecation forwarding** (`[redirect.deprecated] new_pkgref = "..."` to forward consumers to a renamed package). Separate feature, separate PROP.
 - **`[[mirror]]` against a stub repo** — undefined behaviour for v0; the resolver follows redirect first, mirror semantics apply to the target URL.
-- **Editing an existing stub via the CLI**. `vibe registry redirect` only creates fresh stubs; updating the marker file (e.g. to change `target_url`) is a manual `git clone` / edit / push procedure for v0.
 
 ## Related
 

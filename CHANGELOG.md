@@ -8,6 +8,20 @@ Format roughly follows [Keep a Changelog](https://keepachangelog.com/), grouped 
 
 ## [Unreleased]
 
+### M1.16 closer — `vibe registry redirect-update` (2026-05-19)
+
+Closes the v0 manual-procedure gap surfaced in the M1.16 ship-complete WAL: editing an existing stub's marker used to require a hand-driven `git clone` / edit / `git commit` / `git push` recipe. The new CLI command automates it.
+
+- **`vibe registry redirect-update <pkgref>`** — partial-update CLI for an existing stub's `vibe-redirect.toml`. Each flag is optional; omitted fields retain their current value. Flags: `--to`, `--ref-policy`, `--pinned-ref`, `--target-auth`, `--target-token-env`, `--description`, `--clear-description`, `--registry`, `--trust-redirect`, `--resync`, `--path`, `--dry-run`. Refuses with `no changes requested` if the computed marker is byte-identical to the existing one — never records an empty commit on the stub's history.
+- **Trust model.** Per PROP-002 §2.4.2, changes that alter what content consumers materialise (`target_url`, `ref_policy`, `pinned_ref`) require `--trust-redirect`. Operator-side metadata (`auth`, `token_env`, `description`) does not. Without `--trust-redirect` for a content-affecting change, the command bails with the list of trust-required fields detected and a pointer at the flag. Mirrors the `--trust-mirror` shape on `vibe install` / `vibe update`.
+- **Auto-clearing cross-field invariants.** Switching `auth` away from `token-env` clears `token_env` automatically (otherwise the marker would fail to re-parse). Switching `ref_policy` to `pass-through-tag` clears `pinned_ref` automatically. Switching `ref_policy` to `pinned` without `--pinned-ref` (and without an existing pinned_ref to preserve) is a hard error.
+- **JSON envelope.** `--json` emits `{ ok, command, registry, pkgref, stub_url, target_url, ref_policy, target_auth, changes: [{field, before, after}], trust_required, dry_run, sync? }`. The `changes` array is the canonical per-field diff (target_url, ref_policy, pinned_ref, auth, token_env, description). `trust_required` is `true` when any change in the diff touches a trust-gated field — CI gating can decide on manual review from this alone.
+- **`vibe-publish::git_publish::commit_and_push`** — new helper for committing in-place on an existing clone and fast-forward-pushing `main` to a remote. Symmetric to `push_initial` but for the "existing clone" path: refuses to record an empty commit if `git status --porcelain` is empty after `git add -A`. 2 unit tests against a local bare origin.
+- **15 new unit tests** for `compute_updated_redirect_section` + helpers: partial-update detection, clear-description, switch-to-pinned with and without explicit ref, switch-to-pass-through clears pinned_ref, auth flip clears token_env, all rejection paths (empty `--to`, `--pinned-ref` on pass-through, `--target-token-env` without matching auth, switching to pinned with no ref). 4 new hermetic e2e tests for args-level guard rails: `--help` flag coverage, `--description` + `--clear-description` mutual exclusion, invalid pkgref, missing `vibe.toml`.
+- Docs: new `docs/commands/registry-redirect-update.md` (full operator reference). `docs/registry-redirect.md` gains a "Rewriting an existing stub's marker" section pointing at the new command; "Out of scope for v0" no longer lists this item. `docs/commands/registry-redirect.md` "Error surface" + pipeline references the new command instead of the manual procedure. `docs/README.md` index gets a new row.
+
+The M1.16 deferred-list is now empty.
+
 ### Test fixture re-homing (2026-05-12)
 
 End-to-end and smoke fixtures moved out of the canonical `vibespecs` org (and `olegchir` personal namespace) into dedicated test orgs. The canonical orgs now host only real, installable packages.
