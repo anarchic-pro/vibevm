@@ -533,6 +533,38 @@ hash/source/ref lines in the lockfile).
 
 ---
 
+### M1.17 — Workspace (multi-package projects) — DRAFT design
+
+**Thesis.** Bring vibevm in line with cargo `[workspace]` / Maven multi-module: a project decomposes into modules, each published independently — or not at all — with the whole structure declared in one manifest. Design lock: [PROP-007](spec/modules/vibe-workspace/PROP-007-workspace.md).
+
+**Scope (requirements locked 2026-05-20; implementation pending).**
+
+- `[workspace] members = [...]` section; one unified `vibe.toml` per node (retires `vibe-package.toml`); recursive nesting to arbitrary depth.
+- Single `vibe.lock` at the absolute root — unified resolution; commands inside a member bubble up to the root.
+- `path`-source cross-member deps with dual-form (`{ path, version }`); resolution priority `override > path > git-source > registry`.
+- `[workspace.versions]` named placeholders, resolved recursively (matryoshka).
+- Selective publish (`[package].publish`); `vibe workspace publish` topological walk.
+- Published-package-repository signalling (`[origin]` marker, "do not contribute here" banners, optional `--archive`).
+- `vibe.lock` schema v4 (`source_kind = "path"`); `VIBEVM-SPEC.md` §4.2 / §7.3–7.5 edits under owner sanction.
+
+**Order.** PROP-007 has no dependency on the index and can land before M1.18. It delivers the bulk of the multi-package request on its own.
+
+### M1.18 — Qualified package naming — DRAFT design
+
+**Thesis.** Replace the flat `<kind>:<name>` namespace with reverse-FQDN `group` qualification (Maven `groupId` shape), keeping short names as CLI sugar. Design lock: [PROP-008](spec/modules/vibe-registry/PROP-008-qualified-naming.md).
+
+**Scope (requirements locked 2026-05-20; implementation pending).**
+
+- Mandatory `[package].group`; identity tuple becomes `(group, name, version, content_hash)`; `kind` leaves identity, stays metadata.
+- pkgref grammar `[kind:][group/]name[@version]` — `kind` prefix optional, validated when present.
+- `naming = "fqdn"` repo names (`org.vibevm.wal`); `kind` leaves the repository name.
+- Index-backed short-name resolution (depends on PROP-005 being implemented); collision detection with new exit code `7`.
+- Migration of the three canonical packages to `group = "org.vibevm"`; lockfile schema v4 (shared bump with M1.17).
+
+**Order.** Depends on [PROP-005](spec/modules/vibe-index/PROP-005-package-index.md) implementation for short-name resolution. Sequence: M1.17 → PROP-005 impl → M1.18.
+
+---
+
 ## M1.5 — Generation
 
 **Thesis.** vibevm earns its tagline — "the disciplined runtime for
@@ -741,6 +773,16 @@ M2 decisions keep these futures open rather than foreclosing them.
 - **Hosted registry.** Replace git-as-registry with a proper package
   registry server: metadata index, search, signed publishes, a web
   UI. Only worth building if the community shape signals it.
+- **vibevm registry explorer.** A browsable visualisation over the
+  per-org index (PROP-005): a reverse-FQDN group tree with drill-down,
+  Maven-Central-style — and richer. Beyond Maven Central: filter by
+  `kind`, a capability graph (`[provides]`/`[requires]`),
+  `describes`/PURL links to upstream libraries, redirect-stub
+  delegation, the full dependency DAG, and workspace provenance
+  ("sub-package of X", from PROP-007's `[origin]` marker). A separate
+  optional layer over the index — PROP-005 §2.10 already reserves the
+  hook (`vibe-index serve`, CORS-open read endpoints). Recorded in
+  [PROP-008 §2.9](spec/modules/vibe-registry/PROP-008-qualified-naming.md).
 
 ### M3.1 — Security review threat model (research-only)
 
