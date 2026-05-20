@@ -3,6 +3,7 @@
 **Milestone:** design proposal; targets a new `M1.17` ([`ROADMAP.md`](../../../ROADMAP.md)). Not implementation-locked.
 **Status:** DRAFT 2026-05-20 — requirements locked in an owner design session; implementation pending.
 **Related:** [`VIBEVM-SPEC.md` §4.2 / §7 / §8](../../../VIBEVM-SPEC.md); [PROP-002](../vibe-registry/PROP-002-decentralized-registry.md) (identity, registry, git-source, override); [PROP-008](../vibe-registry/PROP-008-qualified-naming.md) (qualified naming — companion document, same design session); [PROP-003 §2.5](../vibe-resolver/PROP-003-dep-evolution.md) (subskills — a *distinct* concept, see §4); [PROP-005](../vibe-index/PROP-005-package-index.md) (index).
+**Design rationale:** [`spec/design/workspace-and-qualified-naming.md`](../../design/workspace-and-qualified-naming.md) — the *why* and the lore behind this PROP: the owner's mental model, the fork-by-fork decision record, the Cargo-vs-Maven precedents. Non-normative; this PROP is the contract.
 **Owner sanction:** the owner granted (2026-05-20) explicit sanction to edit any specification — including the owner-frozen `VIBEVM-SPEC.md` — for this refactor. PROP-007 + PROP-008 are the requirements record; the `VIBEVM-SPEC.md` edits (§4.2 layout, §7.3–7.5 schemas) land at implementation time.
 
 ---

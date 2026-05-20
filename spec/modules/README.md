@@ -4,6 +4,9 @@ Per-crate specifications (PROP / FEAT) land here as work progresses.
 Foundation decisions that cross every crate live in
 [`spec/common/`](../common/). Comparative research and threat-model
 backgrounder documents live in [`spec/research/`](../research/).
+Non-normative design rationale — the *why* and the lore behind these
+PROPs — lives in [`spec/design/`](../design/); a PROP that has a
+rationale document links to it from its `Related` header.
 
 ## Index
 
