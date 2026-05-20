@@ -1,5 +1,5 @@
 # WAL — Project Continuation State
-_Updated: 2026-05-21 (M1.17 — Workspace: Phases 1–5 shipped on branch `m1.17-workspace`)_
+_Updated: 2026-05-21 (session-end — M1.17 Workspace, Phases 1–5 shipped on branch `m1.17-workspace`)_
 
 ## Current phase
 
@@ -17,6 +17,8 @@ _Updated: 2026-05-21 (M1.17 — Workspace: Phases 1–5 shipped on branch `m1.17
 **Known environment issue (unchanged, not a code bug):** `cargo test -p vibe-install` fails on this machine with `os error 740` — Windows Defender blocks the unsigned test binary. `vibe-install` was touched this milestone (the `SourceKind::Path` lockfile mapping) but verified via `cargo build -p vibe-install --tests` (clean).
 
 **Next — the remaining M1.17 piece.** Wire `vibe install` / `vibe build` to discover the workspace and run unified multi-member resolution (PROP-007 §6 question 3). It is gated on a per-member **materialisation-target** decision PROP-007 §2.4 / §3 leaves open — a genuine spec fork that wants owner input (when a dependency is resolved for member M, which member's `spec/` does its content land in?). The path-source resolver capability it builds on is already implemented and tested. Also deferred: `version = { workspace = true }` member-version inheritance (PROP-007 §6 q4) and the `--archive` publish lockdown. Then: merge `m1.17-workspace` to `main`; M1.18 (PROP-008, qualified naming) follows, after PROP-005 (index).
+
+**Owner attention (M1.17).** Three items want the owner: (1) `spec/boot/00-core.md` line 38 still reads `package manifest = vibe-package.toml` — factually stale after Phase 1, but it is a user-owned boot file vibevm tooling must not edit; the owner should change it to `vibe.toml`. (2) Branch `m1.17-workspace` is local — not pushed to origin, not merged to `main`; it awaits review. (3) The materialisation-target decision (PROP-007 §6 q3) gates workspace-aware `vibe install`.
 
 **Outstanding manual step (owner-only, carried from 2026-05-12):** delete `https://gitverse.ru/vibespecs/vibevm-direct-push-smoke` via the GitVerse web UI (no API DELETE endpoint). Not blocking.
 
