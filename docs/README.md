@@ -27,6 +27,7 @@ The `vibe` binary is the single entry point for every operation. Global flags `-
 | [`vibe registry redirect`](commands/registry-redirect.md) | Maintainer-side: create a registry stub that delegates a package to an external target URL (PROP-002 §2.4.2). |
 | [`vibe registry redirect-sync`](commands/registry-redirect-sync.md) | Maintainer-side: mirror target tags into an existing redirect stub. |
 | [`vibe registry redirect-update`](commands/registry-redirect-update.md) | Maintainer-side: rewrite an existing stub's `vibe-redirect.toml` (retarget, switch policy, edit description). |
+| [`vibe workspace publish`](commands/workspace-publish.md) | Maintainer-side: publish a multi-package workspace's self-publishing members, each as its own repository, in dependency order (PROP-007 §2.7). |
 | [`vibe mcp install`](commands/mcp-install.md) | Wire vibevm into a coding agent (Claude Code, Claude Desktop, Cursor, OpenCode, Codex) — writes per-agent MCP config + optional `vibevm` SKILL.md. Scope axes: project / user / both. Wizard-driven without flags; fully scriptable. |
 | [`vibe mcp upgrade`](commands/mcp-upgrade.md) | Refresh existing vibevm integrations to the version shipped in this binary. Scans installed places, rewrites only the diverged ones; never creates new installations. |
 | [`vibe mcp uninstall`](commands/mcp-uninstall.md) | Remove vibevm from one or more agents — drops the `vibevm` MCP block and deletes SKILL.md, foreign keys preserved. |
@@ -64,7 +65,7 @@ End-to-end walkthroughs that compose multiple commands into a real scenario. Eac
 
 ## Lockfile reference
 
-[`lockfile-format.md`](lockfile-format.md) — exhaustive reference for `vibe.lock` v2. Field-by-field semantics, identity model, v1 → v2 migration, tooling examples (jq snippets), worked example.
+[`lockfile-format.md`](lockfile-format.md) — exhaustive reference for `vibe.lock` v4. Field-by-field semantics, identity model, schema versioning, tooling examples (jq snippets), worked example.
 
 ## Troubleshooting
 

@@ -10,7 +10,7 @@ Distinct from `[requires.packages]` git-source ([git-source-dependencies.md](git
 
 ## Marker file
 
-A stub repo at `<org>/<kind>-<name>` carries `vibe-redirect.toml` at the repo root **instead of** `vibe-package.toml`. Both files in the same repo at the same ref is rejected by the resolver as `AmbiguousStub`.
+A stub repo at `<org>/<kind>-<name>` carries `vibe-redirect.toml` at the repo root **instead of** the package manifest `vibe.toml`. Both files in the same repo at the same ref is rejected by the resolver as `AmbiguousStub`.
 
 The canonical `vibespecs` org reserves its slots for real, installable packages — redirect stubs and live end-to-end smoke artefacts live in dedicated test orgs (`vibespecstest1` on GitHub for registry-side fixtures, `vibespecstest2` for external-target hosts, `vibespecstest3` on GitVerse). The wire grammar below is identical regardless of which org hosts the stub.
 
@@ -52,13 +52,13 @@ description = "Delegated to acme-corp; contact maintainers@acme.example"
 
 When fetching a package manifest at `<stub_url>@<tag>`:
 
-1. The resolver first probes `vibe-package.toml`. If found, normal resolution proceeds.
+1. The resolver first probes `vibe.toml`. If found (and it carries a `[package]` table), normal resolution proceeds.
 2. If absent, it probes `vibe-redirect.toml` at the same ref. The file is small (a few hundred bytes), the probe is one extra `git archive` call only when the registry-walk leg succeeded.
 3. Marker found → parse it, compute `target_ref`:
    - `ref_policy = "pass-through-tag"` (default): `target_ref = <tag>` (same tag name on target).
    - `ref_policy = "pinned"`: `target_ref = pinned_ref`.
 4. Apply `[redirect].auth` to fetch from `target_url`.
-5. Re-enter the standard resolution path against `target_url` at `target_ref`. Fetch `vibe-package.toml`, compute content-hash over target content, fetch package files for install via the same `GitPackageRegistry` machinery used elsewhere.
+5. Re-enter the standard resolution path against `target_url` at `target_ref`. Fetch `vibe.toml`, compute content-hash over target content, fetch package files for install via the same `GitPackageRegistry` machinery used elsewhere.
 6. **Hop limit = 1.** If the target's content-root is itself a stub (carries `vibe-redirect.toml`), the resolver refuses with `RedirectChainNotAllowed`. Stubs are flat indirection, not a redirect graph.
 
 ## Tag visibility
@@ -71,7 +71,7 @@ The fact that stub-tags exist independently of target-tags is the key affordance
 
 `content_hash` is computed over the **target** package content, not over the stub. The stub repo carries only `vibe-redirect.toml` and (optionally) human-readable companion files; nothing in the stub ships into the consumer project. A force-pushed target tag is detected exactly as it would be for a non-redirected package: hash mismatch on the next install raises `IntegrityError`.
 
-The pkgref `<kind>:<name>` declared on the consumer side and the stub URL slot must match what the target's `vibe-package.toml` declares. Mismatch — e.g. `<org>/flow-internal` redirects to a target whose manifest declares `feat:something-else` — is rejected as `PackageIdentityMismatch` ("refusing to install"). This means a malicious target cannot impersonate `flow:wal` if its manifest declares it as `feat:auth`.
+The pkgref `<kind>:<name>` declared on the consumer side and the stub URL slot must match what the target's `vibe.toml` `[package]` table declares. Mismatch — e.g. `<org>/flow-internal` redirects to a target whose manifest declares `feat:something-else` — is rejected as `PackageIdentityMismatch` ("refusing to install"). This means a malicious target cannot impersonate `flow:wal` if its manifest declares it as `feat:auth`.
 
 ## Lockfile
 

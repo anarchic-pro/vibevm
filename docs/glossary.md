@@ -60,11 +60,11 @@ One of `flow`, `feat`, `stack`, `tool`. Closed enum; adding a fifth is a spec ch
 
 ### lockfile
 
-`vibe.lock` at the project root. Records exactly what is installed, with full provenance (registry name, source URL, source ref, resolved commit, content hash, transitive deps, override flag). Schema v2 today. Reference: [`docs/lockfile-format.md`](lockfile-format.md).
+`vibe.lock` at the project root. Records exactly what is installed, with full provenance (registry name, source kind, source URL, source ref, resolved commit, content hash, transitive deps, override flag). Schema v4 today. Reference: [`docs/lockfile-format.md`](lockfile-format.md).
 
 ### manifest
 
-The TOML schema describing a single package or project. Three kinds: `vibe-package.toml` (package), `vibe.toml` (project), `vibe.lock` (lockfile). Schemas: [`VIBEVM-SPEC.md` §7](../VIBEVM-SPEC.md), Rust source: [`crates/vibe-core/src/manifest/`](../crates/vibe-core/src/manifest).
+The TOML schema describing a vibevm node. Every node carries one `vibe.toml`; its role is set by which sections it carries — `[project]` (a consumer), `[package]` (a publishable artifact), `[workspace]` (a coordinator). The lockfile `vibe.lock` is the third TOML schema. Schemas: [`VIBEVM-SPEC.md` §7](../VIBEVM-SPEC.md), Rust source: [`crates/vibe-core/src/manifest/`](../crates/vibe-core/src/manifest).
 
 ### mirror
 
@@ -143,17 +143,17 @@ A dep the solver pulled in because some other dep declared it, not because the u
 
 Files vibevm-managed commands NEVER write or remove: `spec/boot/00-core.md`, `spec/boot/90-user.md`, `spec/WAL.md`, `VIBEVM-SPEC.md`, `refs/book/**`, any `00-` or `90-` boot file. The boundary that separates "owned by the project" from "owned by vibevm tooling". Pinned at [`vibe-install::USER_OWNED_PATHS`](../crates/vibe-install/src/lib.rs).
 
-### vibe-package.toml
+### `[package]` (manifest table)
 
-The package manifest. Lives at the root of every per-package repo and at every `<root>/<kind>/<name>/v<version>/` directory in a M0 / fixture-shape registry. Schema: [`VIBEVM-SPEC.md` §7.3](../VIBEVM-SPEC.md), Rust source: [`crates/vibe-core/src/manifest/package.rs`](../crates/vibe-core/src/manifest/package.rs).
+The table in a node's `vibe.toml` that marks it as a publishable artifact. Present at the root of every per-package repo and at every `<root>/<kind>/<name>/v<version>/` directory in a M0 / fixture-shape registry. A node carries `[package]` XOR `[project]`. Schema: [`VIBEVM-SPEC.md` §7.3](../VIBEVM-SPEC.md), Rust source: [`crates/vibe-core/src/manifest/package.rs`](../crates/vibe-core/src/manifest/package.rs).
 
 ### vibe.lock
 
-The project lockfile. Schema v2 today (v1 reads transparently). Reference: [`docs/lockfile-format.md`](lockfile-format.md).
+The project lockfile. Schema v4 today; an older schema version is rejected, not migrated. Reference: [`docs/lockfile-format.md`](lockfile-format.md).
 
 ### vibe.toml
 
-The project manifest. Carries `[project]`, `[active]`, `[llm]`, `[[registry]]`, `[[mirror]]`, `[[override]]` sections. Schema: [`VIBEVM-SPEC.md` §7.5](../VIBEVM-SPEC.md), Rust source: [`crates/vibe-core/src/manifest/project.rs`](../crates/vibe-core/src/manifest/project.rs).
+The single manifest file every vibevm node carries. Its role is set by which tables it carries: `[project]` (a non-publishable consumer) XOR `[package]` (a publishable artifact); `[workspace]` composes with either or neither. Other sections: `[active]`, `[llm]`, `[[registry]]`, `[[mirror]]`, `[[override]]`, `[requires.packages]`, `[origin]`. Schema: [`VIBEVM-SPEC.md` §7.5](../VIBEVM-SPEC.md), Rust source: [`crates/vibe-core/src/manifest/project.rs`](../crates/vibe-core/src/manifest/project.rs).
 
 ### `vibevm`
 

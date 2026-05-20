@@ -61,7 +61,7 @@ A `[boot_snippet]` rename (e.g. `10-flow-wal.md` → `10-flow-wal-v2.md`) lands 
 
 ## Lockfile
 
-The lockfile entry for the updated package is rewritten in place. Its on-disk shape is the standard schema v2 (see [`docs/lockfile-format.md`](../lockfile-format.md)). Notable: `content_hash` shifts when the new payload differs from the old, and `dependencies` is **preserved** byte-for-byte (the dep-shape gate refuses to plan when it would change).
+The lockfile entry for the updated package is rewritten in place. Its on-disk shape is the standard schema v4 (see [`docs/lockfile-format.md`](../lockfile-format.md)). Notable: `content_hash` shifts when the new payload differs from the old, and `dependencies` is **preserved** byte-for-byte (the dep-shape gate refuses to plan when it would change).
 
 `[meta].generated_at` is bumped to the apply timestamp; `[meta].root_dependencies` is unchanged — `vibe update` is a version bump, not a constraint change.
 
@@ -99,4 +99,4 @@ vibe update --all --assume-yes --quiet
 - [`vibe install`](install.md) — initial install pipeline; `vibe update` re-uses its resolver and lockfile shape.
 - [`vibe registry sync`](registry-sync.md) — refresh registry clones; useful before `vibe update` to ensure the freshest tag list.
 - [`vibe uninstall`](uninstall.md) — the consciously-discard-edits-and-rebuild path when `vibe update` refuses on `UserEditedFile`.
-- [PROP-002 §2.7](../../spec/modules/vibe-registry/PROP-002-decentralized-registry.md#lockfile) — lockfile schema v2; `vibe update` writes back into the same shape.
+- [PROP-002 §2.7](../../spec/modules/vibe-registry/PROP-002-decentralized-registry.md#lockfile) — lockfile schema v4; `vibe update` writes back into the same shape.

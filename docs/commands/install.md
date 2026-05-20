@@ -56,7 +56,7 @@ A package reference is `<kind>:<name>[@<version>]`. Version syntax follows Cargo
 
 ## What gets written
 
-Per package, every entry in the package's `vibe-package.toml` `[writes].files` list is materialised verbatim under the project root (mirror layout — see [`VIBEVM-SPEC.md` §13.1](../../VIBEVM-SPEC.md)). The optional `[boot_snippet]` lands at `spec/boot/<filename>`.
+Per package, every entry in the package's `vibe.toml` `[writes].files` list is materialised verbatim under the project root (mirror layout — see [`VIBEVM-SPEC.md` §13.1](../../VIBEVM-SPEC.md)). A publishable package's `vibe.toml` carries a `[package]` table; that is what marks it as an installable artifact. The optional `[boot_snippet]` lands at `spec/boot/<filename>`.
 
 User-owned files (`spec/boot/00-core.md`, `spec/boot/90-user.md`, `spec/WAL.md`, `VIBEVM-SPEC.md`, `refs/book/**`, any `00-` or `90-` boot file) are never written. Any package whose declared writes target a user-owned path is rejected at plan time with exit code `3`.
 
@@ -70,12 +70,12 @@ After a successful apply, `vibe install` writes:
   - `--exact` flag set → always `=<resolved-version>`, overriding both above.
 
   A repeat install with a new constraint replaces the old entry. A no-arguments install (install-from-manifest mode) leaves the section untouched — the manifest was already authoritative for that input.
-- `vibe.lock` — schema v2 shape ([`VIBEVM-SPEC.md` §7.4](../../VIBEVM-SPEC.md)):
-  - `[meta].schema_version = 2`
+- `vibe.lock` — schema v4 shape ([`VIBEVM-SPEC.md` §7.4](../../VIBEVM-SPEC.md)):
+  - `[meta].schema_version = 4`
   - `[meta].root_dependencies` mirrors `vibe.toml` `[requires].packages` so the lockfile is a self-contained snapshot of the solve state.
-  - Per `[[package]]`: `kind`, `name`, `version`, `registry` (matching `[[registry]].name`), `source_url`, `source_ref`, `resolved_commit`, `content_hash` (the *identity* of the install), `boot_snippet`, `files_written`, `dependencies`, `overridden`.
+  - Per `[[package]]`: `kind`, `name`, `version`, `registry` (matching `[[registry]].name`), `source_kind` (one of `registry`, `git`, `override`, `path`), `source_url`, `source_ref`, `resolved_commit`, `content_hash` (the *identity* of the install), `boot_snippet`, `files_written`, `dependencies`, `overridden`.
 
-A v1 lockfile from a pre-M1.1-revision install is read transparently (serde aliasing) and rewritten in v2 shape on the next apply. A pre-`[requires]` `vibe.toml` (manifest predates the section) is migrated automatically: when a no-arguments install finds an empty `[requires]` but a non-empty `meta.root_dependencies`, the manifest is seeded from the lockfile snapshot before resolving.
+`Lockfile::read` accepts only `schema_version = 4`; an older lockfile (schema 1, 2, or 3) is rejected rather than migrated — regenerate it with `vibe install`. vibevm is pre-release, so there is no on-disk migration path and none is needed.
 
 ## Examples
 

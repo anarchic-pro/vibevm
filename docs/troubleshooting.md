@@ -209,7 +209,7 @@ Never edit `vibe.lock` by hand to silence this — that defeats the integrity ch
 
 **What.** The version tag already exists in the per-package repo. `vibe registry publish` never force-pushes.
 
-**Action.** Bump the version in `vibe-package.toml` and re-publish. If you genuinely need to overwrite a published version (almost always wrong — consumers may have lockfile-pinned content_hash), do it manually with `git push --force` and accept that downstream consumers will hit `ContentDrift`.
+**Action.** Bump the version in the package's `vibe.toml` `[package]` table and re-publish. If you genuinely need to overwrite a published version (almost always wrong — consumers may have lockfile-pinned content_hash), do it manually with `git push --force` and accept that downstream consumers will hit `ContentDrift`.
 
 ### `publish refused: no push access to `…``
 
@@ -225,9 +225,9 @@ Never edit `vibe.lock` by hand to silence this — that defeats the integrity ch
 
 ### `publish refused: source directory `…` does not look like a vibevm package — …`
 
-**What.** The directory you pointed at doesn't have a parseable `vibe-package.toml`.
+**What.** The directory you pointed at doesn't have a parseable `vibe.toml` carrying a `[package]` table.
 
-**Action.** `cat <source>/vibe-package.toml` and verify it parses; check it's the package directory (with the manifest at root), not a directory of packages.
+**Action.** `cat <source>/vibe.toml` and verify it parses and carries a `[package]` table; check it's the package directory (with the manifest at root), not a directory of packages.
 
 ### `publish refused: cannot derive an organization segment from `…`.`
 
@@ -265,7 +265,7 @@ Never edit `vibe.lock` by hand to silence this — that defeats the integrity ch
 
 **What.** A `feat` (typically) declares a capability requirement (`[requires].capabilities = ["ui:landing-page-host@^0.1"]`), and no package in the resolved graph provides it.
 
-**Action.** Install a stack package whose `[provides].capabilities` matches. The requirer's `vibe-package.toml` typically lists candidate stacks in `[[requires_any]]`; install one of those. If you've already installed the stack and still see this, check the version match — `^0.1` won't accept a `0.2.x` provider.
+**Action.** Install a stack package whose `[provides].capabilities` matches. The requirer's `vibe.toml` typically lists candidate stacks in `[[requires_any]]`; install one of those. If you've already installed the stack and still see this, check the version match — `^0.1` won't accept a `0.2.x` provider.
 
 ### `all alternatives in `[[requires_any]]` declared by `…` failed to resolve`
 

@@ -1,6 +1,6 @@
 # Version syntax in vibevm
 
-Everywhere a vibevm command takes a package reference (`vibe install <pkgref>`, `[requires].packages` in `vibe.toml`, `[provides].capabilities` in `vibe-package.toml`, `[[override]] pkgref = ...`), the version part follows **Cargo / npm / Poetry conventions**. If you've used any of those, the syntax here is identical. If not, this doc covers everything you need.
+Everywhere a vibevm command takes a package reference (`vibe install <pkgref>`, `[requires.packages]` in `vibe.toml`, `[provides].capabilities` in a package's `vibe.toml`, `[[override]] pkgref = ...`), the version part follows **Cargo / npm / Poetry conventions**. If you've used any of those, the syntax here is identical. If not, this doc covers everything you need.
 
 ## TL;DR
 
@@ -104,8 +104,8 @@ vibe install flow:wal --assume-yes
 Resolver picks `0.1.0` (latest stable). Manifest gets:
 
 ```toml
-[requires]
-packages = ["flow:wal@^0.1.0"]
+[requires.packages]
+"flow:wal" = "^0.1.0"
 ```
 
 This is the **default**, and matches `cargo add` / `npm install` / `poetry add`.
@@ -119,18 +119,18 @@ vibe install flow:wal@^0.1 --assume-yes
 Manifest stores exactly what was typed:
 
 ```toml
-[requires]
-packages = ["flow:wal@^0.1"]
+[requires.packages]
+"flow:wal" = "^0.1"
 ```
 
 We don't tighten `^0.1` to `^0.1.0`, even though the resolver produces a concrete patch. The operator's wider declaration wins. Same for tilde, equal, and ranges:
 
 | You typed | Manifest stores |
 | --- | --- |
-| `flow:wal@^0.1` | `flow:wal@^0.1` |
-| `flow:wal@~0.1.0` | `flow:wal@~0.1.0` |
-| `flow:wal@=0.1.0` | `flow:wal@=0.1.0` |
-| `flow:wal@>=0.1, <0.3` | `flow:wal@>=0.1, <0.3` |
+| `flow:wal@^0.1` | `"flow:wal" = "^0.1"` |
+| `flow:wal@~0.1.0` | `"flow:wal" = "~0.1.0"` |
+| `flow:wal@=0.1.0` | `"flow:wal" = "=0.1.0"` |
+| `flow:wal@>=0.1, <0.3` | `"flow:wal" = ">=0.1, <0.3"` |
 
 ### Rule 3 — `--exact` overrides everything
 
@@ -147,8 +147,8 @@ vibe install flow:wal@^0.1 --exact --assume-yes
 Manifest pins to `=<resolved>`, regardless of CLI form:
 
 ```toml
-[requires]
-packages = ["flow:wal@=0.1.0"]
+[requires.packages]
+"flow:wal" = "=0.1.0"
 ```
 
 `--exact` is npm's `--save-exact` shape. Use it when you want strict reproducibility from the moment of install and don't want a later `vibe update` to wander.

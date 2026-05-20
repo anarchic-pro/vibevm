@@ -1,6 +1,6 @@
 # `vibe registry publish` — publish a package directory
 
-Maintainer-side command. Takes a directory containing a `vibe-package.toml` and publishes it as a tagged release in the configured registry's organization. Creates the per-package repo (or reuses an existing one), pushes contents, tags the version. Mechanical only — no semantic / LLM-backed review (that's reserved for v2+ per [`VIBEVM-SPEC.md` §8.5](../../VIBEVM-SPEC.md)).
+Maintainer-side command. Takes a directory containing a `vibe.toml` with a `[package]` table and publishes it as a tagged release in the configured registry's organization. Creates the per-package repo (or reuses an existing one), pushes contents, tags the version. Mechanical only — no semantic / LLM-backed review (that's reserved for v2+ per [`VIBEVM-SPEC.md` §8.5](../../VIBEVM-SPEC.md)).
 
 ## Usage
 
@@ -12,7 +12,7 @@ vibe registry publish <source> [--registry <name>] [--path <project>]
 
 ## Arguments
 
-- `<source>` — path to the package directory. Must contain a `vibe-package.toml` at its root, with the package content laid out per the mirror convention ([`VIBEVM-SPEC.md` §13.1](../../VIBEVM-SPEC.md)).
+- `<source>` — path to the package directory. Must contain a `vibe.toml` carrying a `[package]` table at its root, with the package content laid out per the mirror convention ([`VIBEVM-SPEC.md` §13.1](../../VIBEVM-SPEC.md)).
 
 ## Flags
 
@@ -49,7 +49,7 @@ Token must be issued by the host and must have `repo:create` permission in the t
 
 ## Pipeline
 
-1. **Read manifest** at `<source>/vibe-package.toml`. Legacy `[dependencies]` form is migrated transparently to modern `[requires]` / `[conflicts]` shape (the published manifest is always modern).
+1. **Read manifest** at `<source>/vibe.toml`. It must carry a `[package]` table and use the current `[requires]` / `[conflicts]` shape — there is no legacy `[dependencies]` form, and a manifest using one is a hard parse error.
 2. **Compute repo name** under the org via the registry's `naming` convention. Default `kind-name` produces `<kind>-<name>`; alternatives are `name` or `kind/name` per [PROP-002 §2.2](../../spec/modules/vibe-registry/PROP-002-decentralized-registry.md#registry-model).
 3. **Pick host adapter** from the registry URL's host. Loads the appropriate token via the precedence above.
 4. **Check or create repo.** `GET /repos/{org}/{repo}` (or the host's analogue) probes existence; if missing, `POST /orgs/{org}/repos` creates it with `auto_init = false` (we push our own initial commit). On hosts that don't expose org-scoped creation (current GitVerse), the operator pre-creates the empty repo via the web UI; the publisher then takes the `repo_exists() == true` path and proceeds straight to push.

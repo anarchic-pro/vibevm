@@ -15,7 +15,7 @@ A stack is **feat-agnostic at authoring time** — the same `stack:rust-cli` sho
 
 ```
 stack-<name>/
-├── vibe-package.toml
+├── vibe.toml                        # manifest, carries a [package] table
 ├── README.md
 ├── boot/
 │   └── <prefix>-stack-<name>.md       # optional — surfaces the active stack at boot
@@ -57,7 +57,9 @@ Concrete sections:
 
 A consumer who installs your stack and reads STACK.md should know how to add a hand-written file that fits the stack's conventions, even before the build LLM ships.
 
-## Manifest: `vibe-package.toml`
+## Manifest: `vibe.toml`
+
+A publishable package carries a `vibe.toml` with a `[package]` table.
 
 ```toml
 [package]
@@ -100,8 +102,11 @@ capabilities = [
 # flow (e.g. a coding-discipline flow) every project using this stack
 # is expected to follow.
 [requires]
-packages     = ["flow:atomic-commits@^0.1"]
 capabilities = []
+
+# [requires.packages] is a table: pkgref → constraint string.
+[requires.packages]
+"flow:atomic-commits" = "^0.1"
 ```
 
 The `[provides].capabilities` list is the stack's most important manifest entry. Every capability listed here is a contract the stack promises to satisfy at build time, so any feat that requires the same capability can be paired with this stack.

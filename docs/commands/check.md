@@ -29,7 +29,7 @@ vibe check [--path <dir>]
 
 | Check id | Severity | What it does |
 | --- | --- | --- |
-| `manifest_validity` | error | `vibe.toml` is present and parses; `vibe.lock` (if present) parses. Both must match the v2 schema in `vibe-core::manifest`. Missing `vibe.toml` is an error; missing `vibe.lock` is fine (empty project). |
+| `manifest_validity` | error | `vibe.toml` is present and parses; `vibe.lock` (if present) parses. Both must match the current schema in `vibe-core::manifest` — the lockfile at schema v4. Missing `vibe.toml` is an error; missing `vibe.lock` is fine (empty project). |
 | `wal_freshness` | warning | `spec/WAL.md` modification time is within `--wal-max-age-hours`. Older → warning. Future-dated mtime (clock skew) → info. |
 | `wal_wellformed` | warning | WAL has the canonical `## current phase`, `## constraints`, `## done`, `## next`, `## known issues` top-level sections. Matching is case-insensitive and tolerates parenthetical suffixes (e.g. `## Constraints (do not violate without discussion)`). |
 | `boot_directory` | error / warning | Every file in `spec/boot/` matches `NN-name.md` (NN = two ASCII digits). No two files share the same `NN` prefix. Non-markdown files in `spec/boot/` warn. |
@@ -117,6 +117,6 @@ vibe --json check | jq -e '.summary.error == 0'
 ## Related
 
 - [`VIBEVM-SPEC.md` §12](../../VIBEVM-SPEC.md) — full ten-check catalogue (six implemented in v0).
-- [PROP-002 §2.7](../../spec/modules/vibe-registry/PROP-002-decentralized-registry.md#lockfile) — lockfile schema v2; `manifest_validity` and `lockfile_files` consume the same parser.
+- [PROP-002 §2.7](../../spec/modules/vibe-registry/PROP-002-decentralized-registry.md#lockfile) — lockfile schema v4; `manifest_validity` and `lockfile_files` consume the same parser.
 - [`vibe install`](install.md) — produces the lockfile that `lockfile_files` validates.
 - [`vibe update`](update.md) — touches the same files; running `vibe check` after a `vibe update` pass is a useful smoke step.

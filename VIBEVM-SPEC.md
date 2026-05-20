@@ -227,6 +227,8 @@ project-root/
 
 The `spec/` directory is *the* spec directory. Always. Do not allow this to be configurable in v1. Every other location can be conventional; this one is fixed.
 
+A **multi-package project** — a workspace — nests member packages as subdirectories, each carrying its own `vibe.toml`; the single `vibe.lock` stays at the workspace's absolute root. The layout and the workspace model are specified in §7.6.
+
 ### 4.3 Workflows
 
 A **workflow** is a named sequence of work that the user invokes via the CLI. Each workflow is defined as a subgraph of the project's task graph (see Section 5). v1 ships with these workflows:
@@ -814,6 +816,78 @@ auth   = "none"                           # public read-only — default; no cre
 **Two-file model.** `vibe.toml` is the **declaration** (what the human asked for, in semver-constraint form: `^0.3`, `~1.2`, exact `=0.3.0`, or bare `flow:wal` meaning Latest). `vibe.lock` is the **materialisation** (one resolved version per package, with content-hash, source URL, exact transitive graph). Same shape as Cargo (`Cargo.toml` ↔ `Cargo.lock`), npm (`package.json` ↔ `package-lock.json`), Bundler, Poetry, Go modules. The lockfile mirrors `[requires].packages` into `[meta].root_dependencies` so the lockfile is a self-contained snapshot of the solve state, but the source of truth for *what the user wants* is `vibe.toml`.
 
 This is the difference that makes `vibe install` (no arguments) meaningful: the manifest carries the input list, the resolver produces the lockfile from it. Cloning a vibevm project from git and running `vibe install` reproduces the project's package set without re-typing every pkgref. `vibe install <pkgref>` is sugar for "append to `[requires]`, then sync"; `vibe uninstall <pkgref>` is sugar for "drop from `[requires]`, then sync".
+
+### 7.6 Workspaces — multi-package projects
+
+A project may decompose into several packages — the cargo-`[workspace]` /
+Maven-multi-module shape. The model and its rationale are specified in
+[`spec/modules/vibe-workspace/PROP-007-workspace.md`](spec/modules/vibe-workspace/PROP-007-workspace.md);
+this section is the schema summary.
+
+**`[workspace]`.** A `vibe.toml` carrying a `[workspace]` table coordinates
+member packages:
+
+```toml
+[workspace]
+members = ["packages/flow-wal", "packages/feat-auth", "packages/stack-*"]
+
+[workspace.versions]            # named version placeholders (optional)
+core = "0.0.1"
+```
+
+- `members` — directories relative to this manifest; glob patterns are
+  permitted. Each member is a directory carrying its own `vibe.toml`.
+  Membership is explicit — there is no auto-discovery.
+- A member may itself carry `[workspace]`; nesting recurses to arbitrary
+  depth. Nesting is hierarchical grouping, not an independent resolution
+  domain — the single `vibe.lock` always lives at the **absolute root** of
+  the workspace tree, and resolution is unified across every member.
+- `[workspace]` composes with `[project]`, with `[package]` (a publishable
+  root, cargo-style), or with neither (a virtual coordinator).
+
+**`[workspace.versions]`.** Named version-constraint placeholders — Maven's
+`<properties>` shape. A member references one from a `[requires.packages]`
+entry as `"flow:wal" = { version.var = "core" }`. The placeholder resolves
+bottom-up: the nearest enclosing `[workspace.versions]`, then its parent,
+up to the absolute root — first hit wins.
+
+**Path-source dependencies.** A `[requires.packages]` entry may point at a
+local directory — typically a sibling member — instead of a registry:
+
+```toml
+[requires.packages]
+"flow:wal" = { path = "../flow-wal", version = "^0.1" }
+```
+
+`path` drives local development; the optional `version` is the constraint
+the published copy uses once the consuming node is itself published.
+Resolution priority is `[[override]]` > path > git-source > registry-walk.
+In `vibe.lock` a path-source entry carries `source_kind = "path"` and a
+`source_url` that is the member's path relative to the workspace root.
+
+**Selective publish.** Each publishable node declares its posture in
+`[package]`:
+
+```toml
+[package]
+publish = false                 # workspace-internal, never published
+# publish = true                # default — published to every registry
+# publish = ["vibespecs"]       # published only to the named registries
+```
+
+`vibe workspace publish` walks the self-publishing members in
+dependency-first order and publishes each as its own repository. The
+development tree stays a single monorepo; publishing copies a member's
+content into a separate registry repository. The published copy carries an
+`[origin]` provenance marker (`upstream`, `path`, `generated_by`,
+`generated_at`) and a README banner directing contribution back upstream.
+
+**Status.** As of M1.17 the workspace data model, discovery, path-source
+resolution, `[workspace.versions]`, and `vibe workspace publish` are
+implemented. Wiring `vibe install` / `vibe build` to discover the workspace
+and run unified multi-member resolution is a follow-up milestone — it turns
+on a per-member materialisation decision that PROP-007 §2.4 / §3 leaves to
+implementation time.
 
 ---
 

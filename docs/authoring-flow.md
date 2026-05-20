@@ -13,7 +13,7 @@ A flow is *content*. There is no executable component, no LLM call, no build art
 
 ```
 flow-<name>/                 # the per-package repo on the registry
-├── vibe-package.toml        # required; manifest
+├── vibe.toml                # required; manifest, carries a [package] table
 ├── README.md                # required; human-readable description
 ├── boot/
 │   └── <prefix>-flow-<name>.md   # the boot-snippet content
@@ -52,9 +52,9 @@ Pick a prefix that doesn't clash with anything you intend to install alongside. 
 
 `vibe install` rejects with exit code `3` if two installs would land at the same `NN-` prefix.
 
-## Manifest: `vibe-package.toml`
+## Manifest: `vibe.toml`
 
-Minimal:
+A publishable package carries a `vibe.toml` with a `[package]` table. Minimal:
 
 ```toml
 [package]

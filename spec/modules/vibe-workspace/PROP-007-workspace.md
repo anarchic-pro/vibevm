@@ -1,7 +1,7 @@
 # PROP-007: Workspace — multi-package projects, recursive nesting, selective publish {#root}
 
 **Milestone:** design proposal; targets a new `M1.17` ([`ROADMAP.md`](../../../ROADMAP.md)). Not implementation-locked.
-**Status:** DRAFT 2026-05-20 — requirements locked in an owner design session; implementation pending.
+**Status:** M1.17 Phases 1–5 implemented 2026-05-21 — the workspace data model, the `vibe-workspace` discovery engine, path-source dependencies, `[workspace.versions]` placeholders, and `vibe workspace publish` are shipped (clippy-clean, fully tested). Workspace-aware `vibe install` is the remaining piece — see §6 and §8.
 **Related:** [`VIBEVM-SPEC.md` §4.2 / §7 / §8](../../../VIBEVM-SPEC.md); [PROP-002](../vibe-registry/PROP-002-decentralized-registry.md) (identity, registry, git-source, override); [PROP-008](../vibe-registry/PROP-008-qualified-naming.md) (qualified naming — companion document, same design session); [PROP-003 §2.5](../vibe-resolver/PROP-003-dep-evolution.md) (subskills — a *distinct* concept, see §4); [PROP-005](../vibe-index/PROP-005-package-index.md) (index).
 **Design rationale:** [`spec/design/workspace-and-qualified-naming.md`](../../design/workspace-and-qualified-naming.md) — the *why* and the lore behind this PROP: the owner's mental model, the fork-by-fork decision record, the Cargo-vs-Maven precedents. Non-normative; this PROP is the contract.
 **Owner sanction:** the owner granted (2026-05-20) explicit sanction to edit any specification — including the owner-frozen `VIBEVM-SPEC.md` — for this refactor. PROP-007 + PROP-008 are the requirements record; the `VIBEVM-SPEC.md` edits (§4.2 layout, §7.3–7.5 schemas) land at implementation time.
@@ -227,10 +227,16 @@ A workspace member is a package. A subskill is content granularity within a pack
 
 ## 6. Open questions {#open}
 
-1. Exact field set of `[origin]` (§2.8) — `commit` of the source monorepo too, for full provenance?
-2. `vibe.lock` v4 — the precise on-disk shape of a path-member reference (§2.5). To be pinned during implementation.
-3. `vibe build` semantics inside a workspace (`-p`, whole-workspace) — depends on M1.5 landing first.
-4. Whether `[workspace.dependencies]` (§2.6) ships alongside named placeholders or is deferred until a concrete need surfaces.
+**Resolved during M1.17 implementation:**
+
+1. `[origin]` field set (§2.8) — **resolved**: `upstream`, `path`, `commit` (optional — present when the monorepo is a git repo), `generated_by`, `generated_at`.
+2. `vibe.lock` v4 path-member shape (§2.5) — **resolved**: `source_kind = "path"`, with `source_url` carrying the member's path relative to the workspace root. No separate `workspace_member` field — the relative path is portable and one field suffices.
+
+**Open:**
+
+3. **Workspace-aware `vibe install` / `vibe build`.** The remaining M1.17 milestone. §2.4 / §3 sketch the intent — bubble to the absolute root, unified multi-member resolution, `-p <member>` — but the concrete behaviour turns on a per-member **materialisation target**: when a dependency is resolved for member M, which member's `spec/` does its content land in? That decision is unspecified and wants explicit owner input. The path-source resolver capability this builds on is already implemented and tested (Phase 3).
+4. `version = { workspace = true }` member-version inheritance (§2.6) — **deferred**. §2.6 names it but defines no source for the inherited version: cargo reads `[workspace.package].version`, a table PROP-007 does not specify. Needs an explicit spec decision before implementation. The `[workspace.versions]` named placeholders (shipped) cover the owner's stated "write the version once" use case.
+5. Whether `[workspace.dependencies]` (§2.6) ships alongside named placeholders or is deferred until a concrete need surfaces.
 
 ---
 
@@ -245,3 +251,4 @@ PROP-007 (workspace) has **no dependency on the index** and can be implemented f
 ## 8. Version history {#history}
 
 - **2026-05-20 — draft 1.** Initial proposal. Requirements locked in an owner design session (decisions on workspace shape, recursive nesting, unified manifest, path-source, version placeholders, selective publish, published-repo signalling). Open for review.
+- **2026-05-21 — Phases 1–5 implemented (M1.17).** The unified `vibe.toml` manifest (all legacy removed), the `vibe-workspace` discovery crate (`Workspace::discover`, recursive nesting, glob, cycle detection), path-source dependencies with `vibe.lock` schema v4, `[workspace.versions]` recursive placeholders, and `vibe workspace publish` — each shipped clippy-clean and fully tested. Workspace-aware `vibe install` (§6 question 3) remains.

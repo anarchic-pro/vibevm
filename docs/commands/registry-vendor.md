@@ -30,7 +30,7 @@ For each entry in the lockfile:
 | --- | --- |
 | `registry: Some(name)` and `overridden: false` | The `[[registry]]` named here is looked up in `vibe.toml`. The per-package clone is refreshed via the registry's mirror-aware `refresh_package` (so vendor still works when the canonical primary is unreachable as long as some `[[mirror]]` URL is). The clone's `.git/` is then copied into `<out>/<repo>.git/` where `<repo>` follows the registry's `naming` convention. |
 | `overridden: true` | **Skipped.** `[[override]]`-served packages have no mirror concept — the override is the authoritative source by design. Vendor a fork manually if you need offline coverage of it. |
-| `registry: None` and `overridden: false` | **Skipped.** Local-directory installs (`--registry <path>`) and legacy v1 lockfile entries don't have a registry-attributed source to mirror. |
+| `registry: None` and `overridden: false` | **Skipped.** Local-directory installs (`--registry <path>`) don't have a registry-attributed source to mirror. |
 
 The bare repo carries the same refs and tags the per-package clone holds — at minimum the lockfile-pinned tag, plus whatever else the upstream had at the time of the most recent `refresh_package`. Identity is preserved end-to-end: `git ls-remote <out>/<repo>.git` and `git clone <out>/<repo>.git` produce content with the same `content_hash` the lockfile pinned, so the cross-source verification gate in `vibe install` accepts it.
 

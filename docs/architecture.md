@@ -18,7 +18,7 @@ Everything below is plumbing connecting these three concepts.
 
 | Crate | What lives here | Depends on |
 | --- | --- | --- |
-| `vibe-core` | Manifest schemas (`PackageManifest`, `ProjectManifest`, `Lockfile`), package identity (`PackageRef`, `CapabilityRef`, `VersionSpec`, `PackageKind`), error types. The shared vocabulary every other crate speaks. | (no internal deps) |
+| `vibe-core` | Manifest schemas (one `vibe.toml` per node, parsed into `PackageManifest` / `ProjectManifest` / workspace shapes, plus `Lockfile`), package identity (`PackageRef`, `CapabilityRef`, `VersionSpec`, `PackageKind`), error types. The shared vocabulary every other crate speaks. | (no internal deps) |
 | `vibe-graph` | Task-graph builder and sequential runner. Drives the `install` and (eventually M1.5) `build` workflows. | `vibe-core` |
 | `vibe-registry` | Git operations behind the `GitBackend` trait (`ShellGit` impl). `LocalRegistry`, `GitRegistry` (legacy monorepo, retired), `GitPackageRegistry` (per-package, current), `MultiRegistryResolver`. The `Registry` trait + `CachedPackage` value type. | `vibe-core` |
 | `vibe-resolver` | `DepProvider` / `DepSolver` traits. `NaiveDepSolver` (DFS, no backtracking) is today's impl; resolvo / libsolv slots reserved. `MultiRegistryProvider` and `LocalRegistryProvider` adapt the registry layer for the solver. | `vibe-core`, `vibe-registry` |
@@ -54,12 +54,12 @@ Methods:
 `list_versions` / `resolve` / `fetch`. Three implementations:
 
 - **`LocalRegistry`** — M0 local-directory layout (`<root>/<kind>/<name>/v<ver>/...`). Used by `--registry <path>` and the in-tree `fixtures/registry/` for hermetic e2e tests.
-- **`GitRegistry`** (legacy) — clones one big monorepo, treats its working tree as a `LocalRegistry`. M1.1-shipping. Retired in favour of `GitPackageRegistry`; kept around until consumer lockfiles in v1 schema have all migrated.
+- **`GitRegistry`** (legacy) — clones one big monorepo, treats its working tree as a `LocalRegistry`. M1.1-shipping. Retired in favour of `GitPackageRegistry`.
 - **`GitPackageRegistry`** (current) — one repo per package under an organization URL. Versions are git tags. Cache layout `<bucket>/packages/<kind>-<name>/clone/`.
 
 ### `MultiRegistryResolver` ([`vibe-registry::multi_registry_resolver`](../crates/vibe-registry/src/multi_registry_resolver.rs))
 
-Sits on top of an ordered set of `GitPackageRegistry` instances and threads `[[mirror]]` and `[[override]]` resolution. `resolve(pkgref)` returns a `MultiResolution` with provenance (which registry served, source URL, source ref, override flag). `fetch(&MultiResolution)` materialises a `CachedPackage` with the full lockfile-v2 provenance fields filled. `refresh_lockfile_clones` drives `vibe registry sync`.
+Sits on top of an ordered set of `GitPackageRegistry` instances and threads `[[mirror]]` and `[[override]]` resolution. `resolve(pkgref)` returns a `MultiResolution` with provenance (which registry served, source URL, source ref, override flag). `fetch(&MultiResolution)` materialises a `CachedPackage` with the full lockfile provenance fields filled. `refresh_lockfile_clones` drives `vibe registry sync`.
 
 ### `DepProvider` / `DepSolver` ([`vibe-resolver`](../crates/vibe-resolver/src/lib.rs))
 
@@ -141,7 +141,7 @@ for each plan:
     ▼
 [Publisher::publish(config)]
     │
-    ├─ [PackageManifest::read]                  ← legacy [dependencies] migrates inline
+    ├─ [PackageManifest::read]                  ← reads the package's vibe.toml ([package] table)
     │
     ├─ [extract_org_segment(org_url)]           ← strips git+ prefix, ssh shorthand, scheme
     │
@@ -197,7 +197,7 @@ for each lockfile entry:
 
 | Format | Where |
 | --- | --- |
-| **TOML** for human-edited configs: [`vibe.toml`](../VIBEVM-SPEC.md), [`vibe.lock`](../VIBEVM-SPEC.md), [`vibe-package.toml`](../VIBEVM-SPEC.md). Schemas in `VIBEVM-SPEC.md` §7; serde-driven via `vibe-core::manifest`. |
+| **TOML** for human-edited configs: [`vibe.toml`](../VIBEVM-SPEC.md) (the single manifest — `[project]` for a consumer, `[package]` for a publishable artifact, `[workspace]` for a coordinator) and [`vibe.lock`](../VIBEVM-SPEC.md). Schemas in `VIBEVM-SPEC.md` §7; serde-driven via `vibe-core::manifest`. |
 | **JTD** for machine-to-machine wire contracts: every CLI `--json` output, every HTTP API request/response, future LLM provider wrappers, future telemetry. Schemas committed under [`schemas/`](../schemas/); generated Rust under `crates/vibe-wire/src/generated/` once `jtd-codegen` is installed. |
 
 The split is deliberate per [PROP-000 §16](../spec/common/PROP-000.md#jtd) — TOML for humans, JTD for machines.
@@ -223,7 +223,7 @@ Per-project, under `<project>/.vibe/cache/`:
 └── <kind>/
     └── <name>/
         └── v<version>/                        # materialised package contents (no .git)
-            ├── vibe-package.toml
+            ├── vibe.toml
             └── …
 ```
 

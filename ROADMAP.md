@@ -533,21 +533,22 @@ hash/source/ref lines in the lockfile).
 
 ---
 
-### M1.17 — Workspace (multi-package projects) — DRAFT design
+### M1.17 — Workspace (multi-package projects) — 🚧 Phases 1–5 shipped (2026-05-21)
 
 **Thesis.** Bring vibevm in line with cargo `[workspace]` / Maven multi-module: a project decomposes into modules, each published independently — or not at all — with the whole structure declared in one manifest. Design lock: [PROP-007](spec/modules/vibe-workspace/PROP-007-workspace.md).
 
-**Scope (requirements locked 2026-05-20; implementation pending).**
+**Shipped (2026-05-21)** — the workspace data model and tooling, in six phases:
 
-- `[workspace] members = [...]` section; one unified `vibe.toml` per node (retires `vibe-package.toml`); recursive nesting to arbitrary depth.
-- Single `vibe.lock` at the absolute root — unified resolution; commands inside a member bubble up to the root.
-- `path`-source cross-member deps with dual-form (`{ path, version }`); resolution priority `override > path > git-source > registry`.
-- `[workspace.versions]` named placeholders, resolved recursively (matryoshka).
-- Selective publish (`[package].publish`); `vibe workspace publish` topological walk.
-- Published-package-repository signalling (`[origin]` marker, "do not contribute here" banners, optional `--archive`).
-- `vibe.lock` schema v4 (`source_kind = "path"`); `VIBEVM-SPEC.md` §4.2 / §7.3–7.5 edits under owner sanction.
+- **Phase 1** — one unified `vibe.toml` per node (`vibe-package.toml` retired); `[project]` ⊕ `[package]`; `[workspace]` / `[origin]` / `[package].publish` parsed; all manifest legacy deleted.
+- **Phase 2** — the `vibe-workspace` crate: `Workspace::discover` (bubble to the absolute root), recursive nesting, glob members, cycle detection.
+- **Phase 3** — `path`-source cross-member deps with dual-form `{ path, version }`; resolution priority `override > path > git-source > registry`; `vibe.lock` schema v4 (`source_kind = "path"`; legacy readers removed).
+- **Phase 4** — `[workspace.versions]` named placeholders, resolved recursively (matryoshka, nearest wins).
+- **Phase 5** — selective publish (`[package].publish`); `vibe workspace publish` — topological walk, `[origin]` marker, "contribute upstream" signalling.
+- **Phase 6** — `VIBEVM-SPEC.md` §4.2 / §7.6 workspace documentation; docs sweep.
 
-**Order.** PROP-007 has no dependency on the index and can land before M1.18. It delivers the bulk of the multi-package request on its own.
+**Remaining.** Wiring `vibe install` / `vibe build` to discover the workspace and run unified multi-member resolution — a follow-up milestone, gated on a per-member materialisation decision PROP-007 §2.4 / §3 leaves open; the path-source resolver it builds on is already implemented and tested. Smaller deferrals: `version = { workspace = true }` member-version inheritance (PROP-007 §2.6 names no source table) and the `--archive` host-API publish lockdown.
+
+**Order.** PROP-007 has no dependency on the index and landed before M1.18. It delivers the bulk of the multi-package request on its own.
 
 ### M1.18 — Qualified package naming — DRAFT design
 

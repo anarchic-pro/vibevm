@@ -14,7 +14,7 @@ A feat is **stack-agnostic at authoring time**. The same `feat:welcome-page` is 
 
 ```
 feat-<name>/
-├── vibe-package.toml
+├── vibe.toml                       # manifest, carries a [package] table
 ├── README.md
 ├── boot/
 │   └── <prefix>-feat-<name>.md     # optional — only if the feat needs front-page mention
@@ -55,7 +55,9 @@ Two consumers: a human reading SPEC.md should be able to design tests for the fe
 
 `acceptance.md` is a checklist of observable outcomes that prove the feat works. Frame each as Given / When / Then or as a numbered behavioural rule. Treat it like a test plan written before the test code exists — `vibe build` will use it to generate the test code itself.
 
-## Manifest: `vibe-package.toml`
+## Manifest: `vibe.toml`
+
+A publishable package carries a `vibe.toml` with a `[package]` table.
 
 ```toml
 [package]
@@ -90,9 +92,10 @@ files = [
 capabilities = []   # feats rarely provide; they consume
 
 [requires]
-packages     = []
-# Common pattern: declare a generic capability the feat needs and let
-# the stack provide it. The depsolver pairs them up at install time.
+# No package requirements here — an empty [requires.packages] table is
+# simply omitted. Common pattern: declare a generic capability the feat
+# needs and let the stack provide it. The depsolver pairs them up at
+# install time.
 capabilities = ["ui:landing-page-host@^0.1"]
 
 # Use [[requires_any]] when several stacks could host the feat.
