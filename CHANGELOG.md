@@ -8,6 +8,16 @@ Format roughly follows [Keep a Changelog](https://keepachangelog.com/), grouped 
 
 ## [Unreleased]
 
+### M1.17 Phase 1 — unified `vibe.toml` manifest (2026-05-21)
+
+First phase of the workspace refactor ([PROP-007](spec/modules/vibe-workspace/PROP-007-workspace.md)). The two manifest files — `vibe.toml` (consumer project) and `vibe-package.toml` (publishable package) — collapse into **one file, `vibe.toml`**, carried by every node. A node's role is set by which sections it carries.
+
+- **One `Manifest` type** in `vibe-core` replaces `ProjectManifest` + `PackageManifest`. Sections are optional; `Manifest::validate` enforces the role rules: `[project]` and `[package]` are mutually exclusive, at least one role section (`[project]` / `[package]` / `[workspace]`) must be present, and package-role sections (`[writes]`, `[provides]`, `[boot_snippet]`, …) require a `[package]` table. New `[workspace]` and `[origin]` sections and the `[package].publish` posture are parsed now and consumed by later M1.17 phases.
+- **Hard compatibility break — all manifest legacy removed.** vibevm is pre-release; there is no migration path and none is needed. Gone: the `vibe-package.toml` filename, the legacy `[dependencies]` section, the legacy array-form `packages = ["…"]`, the legacy singleton `[registry]` table. Only the modern table-form `[requires.packages]` and the `[[registry]]` array survive. Reading a manifest that uses a removed form is a hard parse error.
+- **~190 call-site edits** across `vibe-registry`, `vibe-resolver`, `vibe-install`, `vibe-publish`, `vibe-check`, `vibe-cli`, `vibe-mcp`, and the `vibe-index` service migrate to the unified type. `CachedPackage.manifest` is now a `Manifest` with a `package_meta()` accessor. All eight registry / manual-test fixtures renamed `vibe-package.toml` → `vibe.toml`.
+- `VIBEVM-SPEC.md` §7 rewritten for the one-file model; §5.1 / §8.2 / §8.3 / §13 / §15 brought into line. The full directory-layout (§4.2) and the workspace surface land in later M1.17 phases.
+- Gate green: `cargo build --workspace`, `cargo clippy --workspace --all-targets -- -D warnings`, every crate's test suite, and `vibe check` 0/0/0.
+
 ### M1.16 closer — `vibe registry redirect-update` (2026-05-19)
 
 Closes the v0 manual-procedure gap surfaced in the M1.16 ship-complete WAL: editing an existing stub's marker used to require a hand-driven `git clone` / edit / `git commit` / `git push` recipe. The new CLI command automates it.

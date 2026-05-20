@@ -300,7 +300,7 @@ This section specifies the internal model. Most users never see it; plugin autho
 
 When the user invokes any workflow, the CLI:
 1. Reads `vibe.toml` and `vibe.lock`.
-2. Reads each installed package's manifest from `.vibe/cache/<package>/<version>/vibe-package.toml`.
+2. Reads each installed package's manifest from `.vibe/cache/<package>/<version>/vibe.toml`.
 3. Reads any user-overridden manifests in the project itself.
 4. Constructs a graph by:
    a. Instantiating built-in nodes (load:*, build:plan, etc.).
@@ -560,14 +560,24 @@ In CLI commands, version is optional and defaults to "latest stable". The versio
 ### 7.2 Package contents
 
 A package is a directory containing:
-- `vibe-package.toml` — the package manifest (required).
+- `vibe.toml` — the manifest, carrying a `[package]` table (required).
 - `README.md` — human-readable description (required).
 - Other content files referenced by the manifest (e.g., boot snippets, spec files).
 
-### 7.3 Package manifest schema
+### 7.3 The manifest schema
+
+vibevm uses **one manifest file — `vibe.toml`** — for every node: a consumer
+project, a publishable package, a workspace coordinator. The node's role is
+expressed by which sections are present; `[project]` and `[package]` are
+mutually exclusive. The unified-manifest and workspace model is specified in
+[`spec/modules/vibe-workspace/PROP-007-workspace.md`](spec/modules/vibe-workspace/PROP-007-workspace.md).
+
+The block below shows a `vibe.toml` in the **publishable-package role** — it
+carries `[package]`. §7.5 shows the same file in the **consumer-project
+role**, carrying `[project]` instead.
 
 ```toml
-# vibe-package.toml within a package directory
+# vibe.toml — a publishable package (carries `[package]`)
 
 [package]
 name = "wal"                        # without the kind prefix
@@ -603,11 +613,17 @@ source = "boot/10-flow-wal.md"      # source path within package
 [provides]
 capabilities = []                   # e.g., ["ui:landing-page@0.3", "auth:oauth-callback"]
 
-# What this package needs. Resolved transitively at install time by the depsolver
-# (see §8.6). `packages` pins concrete pkgrefs; `capabilities` match any provider.
+# What this package needs. Resolved transitively at install time by the
+# depsolver (see §8.6). `[requires.packages]` is a TOML table — each key a
+# bare `<kind>:<name>` pkgref, each value a version-constraint string or an
+# inline-table (registry options, or a git-source declaration).
+# `capabilities` match any provider.
 [requires]
-packages     = []                   # e.g., ["flow:atomic-commits@^0.1", "stack:rust-cli@^0.1"]
-capabilities = []                   # e.g., ["db:any@>=1.0"] — satisfied by any package `provides`ing that
+capabilities = []                   # e.g., ["db:any@>=1.0"]
+
+[requires.packages]
+"flow:atomic-commits" = "^0.1"
+"stack:rust-cli"      = "^0.1"
 
 # Disjunctive requirement: exactly one of `one_of` must be satisfied.
 # Repeat the table to express multiple independent disjunctions.
@@ -622,12 +638,6 @@ packages = []                       # e.g., ["feat:welcome-page-legacy"]
 # Direct exclusion — these cannot coexist with this package in a project.
 [conflicts]
 packages = []                       # e.g., ["flow:legacy-wal"]
-
-# Legacy compact form (still parsed; auto-migrated to `[requires].packages`
-# with a deprecation warning):
-# [dependencies]
-# required  = ["flow:atomic-commits@^0.1"]
-# conflicts = ["flow:legacy-wal"]
 ```
 
 ### 7.4 Lockfile schema
@@ -673,10 +683,15 @@ version = "0.1.0"
 
 The lockfile is the source of truth for what is installed. `vibe list` reads it. `vibe uninstall` reads it to know what files to remove. It is committed to git.
 
-### 7.5 Project manifest schema
+### 7.5 The manifest schema — consumer-project role
+
+The same `vibe.toml` file as §7.3, in the **consumer-project role**: it
+carries `[project]` instead of `[package]` — a node is one or the other,
+never both. Consumer-side sections (`[requires]`, `[[registry]]`,
+`[[mirror]]`, `[[override]]`, `[active]`, `[llm]`) are legal in either role.
 
 ```toml
-# vibe.toml at project root
+# vibe.toml — a consumer project (carries `[project]`)
 
 [project]
 name = "my-telegram-client"
@@ -693,10 +708,7 @@ authors = ["Oleg <oleg@example.com>"]
 #
 # `[requires.packages]` is a TOML table: each entry maps a pkgref to either
 # a version-constraint string (registry-resolved, the default shape) or an
-# inline-table (registry-resolved with options, or git-source). The legacy
-# array-of-strings form `packages = ["flow:wal@^0.3", ...]` parses
-# transparently (same semantics) and is rewritten to the table form on the
-# next manifest write.
+# inline-table (registry-resolved with options, or a git-source declaration).
 [requires]
 capabilities = []                                            # abstract requirements satisfied by any provider
 
@@ -716,8 +728,8 @@ capabilities = []                                            # abstract requirem
 
 # ----- Registry redirect (PROP-002 §2.4.2) -----------------------------
 #
-# A registry's stub repo may carry `vibe-redirect.toml` instead of
-# `vibe-package.toml`, pointing at an external git repo where the package
+# A registry's stub repo may carry `vibe-redirect.toml` instead of a
+# package `vibe.toml`, pointing at an external git repo where the package
 # actually lives. Consumers see no difference at the `vibe install` surface
 # — the org owner has delegated content hosting to an external party.
 #
@@ -822,7 +834,7 @@ A registry is a **hosting organization URL**. Each package under it is a **separ
 
 ```
 git@host:<org>/<kind>-<name>.git       (default naming; per-registry convention)
-├── vibe-package.toml                  # required
+├── vibe.toml                          # required — carries [package]
 ├── README.md
 ├── boot/
 │   └── <prefix>-<kind>-<name>.md      # optional — only if this package ships a boot snippet
@@ -864,7 +876,7 @@ The per-user registry cache is organized by **canonical registry URL**, not by m
 
 Transport-level optimisations used where they reduce work:
 - `git ls-remote --tags <url>` — enumerate versions without cloning.
-- `git archive --format=tar --remote=<url> <tag> vibe-package.toml | tar -xO` — pull a single manifest at a specific tag without a working tree. Used by the depsolver (§8.6) when it needs to read the `[requires]` of a candidate version without committing to it.
+- `git archive --format=tar --remote=<url> <tag> vibe.toml | tar -xO` — pull a single manifest at a specific tag without a working tree. Used by the depsolver (§8.6) when it needs to read the `[requires]` of a candidate version without committing to it.
 
 A resolver pass that only needs to consider N candidate versions of a package should never clone all N — it enumerates via `ls-remote`, reads manifests via `git archive`, and only clones the one version it commits to installing.
 
@@ -1191,7 +1203,7 @@ This is the canonical demo package. Implementing it correctly is the v1 acceptan
 
 ```
 flow-wal-package/
-├── vibe-package.toml
+├── vibe.toml
 ├── README.md
 ├── spec/
 │   └── flows/
@@ -1233,10 +1245,6 @@ files = [
 [boot_snippet]
 filename = "10-flow-wal.md"
 source = "boot/10-flow-wal.md"
-
-[dependencies]
-required = []
-conflicts = []
 ```
 
 ### 13.3 Boot snippet content
@@ -1385,13 +1393,13 @@ Terms used throughout this document, in alphabetical order. When in doubt, refer
 - **Kind.** One of `flow`, `feat`, `stack`, `tool`. The category of a package.
 - **Lockfile.** `vibe.lock` at project root, the source of truth for what is installed at exact versions.
 - **LLM provider.** A configured backend that vibevm calls to invoke a language model (Anthropic, OpenAI, etc.).
-- **Manifest.** Either the project manifest (`vibe.toml`) or a package manifest (`vibe-package.toml`).
+- **Manifest.** `vibe.toml` — one file per node, carrying `[project]` or `[package]` (and optionally `[workspace]`). The role is set by which sections are present.
 - **Milestone (M0/M1/...)** A release stage with a defined feature set. See Section 11.
 - **Node.** A unit of work in the task graph.
 - **Package.** A named, versioned installable artifact of one of the four kinds.
 - **PackageRef.** A reference of the form `<kind>:<name>` or `<kind>:<name>@<version-constraint>`.
 - **Plugin.** Synonym for "package" in some contexts; "package" is preferred in user-facing text.
-- **Project manifest.** `vibe.toml`, contains project-wide configuration.
+- **Project manifest.** A `vibe.toml` in the `[project]` role — a non-publishable consumer node.
 - **Registry.** A git repository containing packages, structured per Section 8.
 - **REVIEW marker.** An inline marker indicating an unresolved decision the human should look at.
 - **Spec.** The corpus of files under `spec/` that aren't WAL or boot. Stable, addressable, versioned.
