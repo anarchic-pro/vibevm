@@ -1927,6 +1927,7 @@ dependencies = [
  "vibe-registry",
  "vibe-resolver",
  "vibe-wire",
+ "vibe-workspace",
  "walkdir",
 ]
 
