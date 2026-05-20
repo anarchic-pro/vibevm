@@ -13,3 +13,4 @@ pub mod search_full_scan;
 pub mod show;
 pub mod uninstall;
 pub mod update;
+pub mod workspace;

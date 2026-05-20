@@ -34,6 +34,13 @@ use thiserror::Error;
 use vibe_core::manifest::{Manifest, Requires};
 use vibe_core::{PackageRef, VersionSpec};
 
+pub mod publish;
+
+pub use publish::{
+    OriginInfo, PublishNode, Selection, SkippedNode, StagedNode, select_publishable_nodes,
+    stage_node, topo_order,
+};
+
 /// Errors raised while discovering or loading a workspace.
 #[derive(Debug, Error)]
 pub enum WorkspaceError {

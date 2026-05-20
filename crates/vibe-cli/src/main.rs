@@ -66,6 +66,7 @@ fn main() -> ExitCode {
         Command::Check(args) => commands::check::run(&ctx, args),
         Command::Show(args) => commands::show::run(&ctx, args),
         Command::Registry(args) => commands::registry::run(&ctx, args),
+        Command::Workspace(args) => commands::workspace::run(&ctx, args),
         Command::Version => {
             println!("vibe {}", env!("CARGO_PKG_VERSION"));
             return ExitCode::SUCCESS;
