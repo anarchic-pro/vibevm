@@ -175,6 +175,7 @@ Terminology fixed: the published copy is a **published package repository**; the
 ## 10. Session log
 
 - **2026-05-20.** Session restored from `CONTINUE.md` + `spec/WAL.md`. First closed the `vibe registry redirect-update` tech-debt item (M1.16 deferred-list — 4 commits, `f8af587..b44729d`). Then the owner opened the question of structuring a project with packages without necessarily publishing to a repository. The discussion grew into the workspace + qualified-naming refactor: the four-axis decomposition, the fork-by-fork resolution recorded in §5, two DRAFT PROPs (PROP-007 + PROP-008, commit `ff23a0f`), and finally the decision to create the `spec/design/` genre so this lore is not lost when the implementation moves to a fresh session. Implementation deferred to a new session; this document plus PROP-007/008 are the handoff.
+- **2026-05-21.** PROP-007 implemented — M1.17 Phases 1–5 (the workspace data model, discovery, path-source + `vibe.lock` v4, `[workspace.versions]`, `vibe workspace publish`) shipped on branch `m1.17-workspace`; Phase 6 documented it. The detailed implementation record is [PROP-007 §9](../modules/vibe-workspace/PROP-007-workspace.md#impl). Workspace-aware `vibe install` remains, gated on the materialisation-target decision (PROP-007 §6 q3). PROP-008 (qualified naming) is still unimplemented — its turn comes after PROP-005 (index).
 
 ---
 
