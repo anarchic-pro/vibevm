@@ -192,6 +192,12 @@ pub struct Requires {
     /// directory, typically a sibling workspace member (PROP-007 §2.5).
     /// Its own bucket, for the same reason as `git_packages`.
     pub path_packages: Vec<PathPackageDep>,
+    /// Registry-resolved dependencies whose version is a `[workspace.versions]`
+    /// placeholder — `{ version.var = "core" }`. Unresolved at parse time;
+    /// `vibe-workspace`'s loader resolves each against the recursive
+    /// placeholder chain into a concrete `PackageRef` in `packages`. Empty
+    /// once a workspace has finalised the manifest. PROP-007 §2.6.
+    pub var_packages: Vec<VarRegistryDep>,
 }
 
 impl Requires {
@@ -200,6 +206,7 @@ impl Requires {
             && self.capabilities.is_empty()
             && self.git_packages.is_empty()
             && self.path_packages.is_empty()
+            && self.var_packages.is_empty()
     }
 
     /// Return every root pkgref (registry-resolved + git-source) in a single
@@ -210,6 +217,7 @@ impl Requires {
             .map(|p| (p.kind, p.name.as_str()))
             .chain(self.git_packages.iter().map(|g| (g.kind, g.name.as_str())))
             .chain(self.path_packages.iter().map(|p| (p.kind, p.name.as_str())))
+            .chain(self.var_packages.iter().map(|v| (v.kind, v.name.as_str())))
     }
 }
 
@@ -278,6 +286,17 @@ pub struct PathPackageDep {
     pub version: Option<VersionSpec>,
 }
 
+/// A `[requires.packages.<pkgref>]` registry-resolved entry whose version is
+/// a `[workspace.versions]` placeholder — `{ version.var = "core" }`. Carries
+/// the unresolved placeholder name; `vibe-workspace` resolves it. PROP-007 §2.6.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct VarRegistryDep {
+    pub kind: PackageKind,
+    pub name: String,
+    /// The `[workspace.versions]` placeholder name this dependency references.
+    pub var: String,
+}
+
 // ---------------------------------------------------------------------------
 // Wire types for `Requires` — private; reached only via Serialize / Deserialize.
 // ---------------------------------------------------------------------------
@@ -304,7 +323,7 @@ enum RequiresPackageEntryWire {
 #[serde(deny_unknown_fields)]
 struct InlinePackageDepWire {
     #[serde(default, skip_serializing_if = "Option::is_none")]
-    version: Option<String>,
+    version: Option<VersionFieldWire>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     path: Option<String>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
@@ -321,6 +340,18 @@ struct InlinePackageDepWire {
     token_env: Option<String>,
 }
 
+/// The `version` field of an inline `[requires.packages]` entry — either a
+/// concrete constraint string or a `[workspace.versions]` placeholder
+/// reference (`version.var = "core"`).
+#[derive(Debug, Serialize, Deserialize)]
+#[serde(untagged)]
+enum VersionFieldWire {
+    /// `version = "^0.3"` — a concrete constraint.
+    Constraint(String),
+    /// `version.var = "core"` — a `[workspace.versions]` placeholder.
+    Var { var: String },
+}
+
 impl From<Requires> for RequiresWire {
     fn from(r: Requires) -> Self {
         let mut packages: BTreeMap<String, RequiresPackageEntryWire> = BTreeMap::new();
@@ -333,7 +364,10 @@ impl From<Requires> for RequiresWire {
         for g in &r.git_packages {
             let key = format!("{}:{}", g.kind, g.name);
             let inline = InlinePackageDepWire {
-                version: g.version.as_ref().map(version_spec_to_constraint_str),
+                version: g
+                    .version
+                    .as_ref()
+                    .map(|v| VersionFieldWire::Constraint(version_spec_to_constraint_str(v))),
                 path: None,
                 git: Some(g.url.clone()),
                 tag: match &g.ref_kind {
@@ -360,8 +394,19 @@ impl From<Requires> for RequiresWire {
         for p in &r.path_packages {
             let key = format!("{}:{}", p.kind, p.name);
             let inline = InlinePackageDepWire {
-                version: p.version.as_ref().map(version_spec_to_constraint_str),
+                version: p
+                    .version
+                    .as_ref()
+                    .map(|v| VersionFieldWire::Constraint(version_spec_to_constraint_str(v))),
                 path: Some(p.path.clone()),
+                ..Default::default()
+            };
+            packages.insert(key, RequiresPackageEntryWire::Inline(inline));
+        }
+        for v in &r.var_packages {
+            let key = format!("{}:{}", v.kind, v.name);
+            let inline = InlinePackageDepWire {
+                version: Some(VersionFieldWire::Var { var: v.var.clone() }),
                 ..Default::default()
             };
             packages.insert(key, RequiresPackageEntryWire::Inline(inline));
@@ -380,6 +425,7 @@ impl TryFrom<RequiresWire> for Requires {
         let mut packages: Vec<PackageRef> = Vec::new();
         let mut git_packages: Vec<GitPackageDep> = Vec::new();
         let mut path_packages: Vec<PathPackageDep> = Vec::new();
+        let mut var_packages: Vec<VarRegistryDep> = Vec::new();
         for (key, entry) in w.packages {
             let (kind, name) = parse_pkgref_key(&key).map_err(|e| e.to_string())?;
             match entry {
@@ -389,8 +435,10 @@ impl TryFrom<RequiresWire> for Requires {
                 }
                 RequiresPackageEntryWire::Inline(inline) => {
                     // Dispatch on source-kind: path wins over git wins over
-                    // registry. Each `inline_to_*` rejects fields that belong
-                    // to a different source-kind.
+                    // registry. A registry-resolved entry whose version is a
+                    // `[workspace.versions]` placeholder is held in var_packages
+                    // for the workspace loader to resolve. Each `inline_to_*`
+                    // rejects fields belonging to a different source-kind.
                     if inline.path.is_some() {
                         path_packages.push(
                             inline_to_path_dep(kind, name, inline).map_err(|e| e.to_string())?,
@@ -398,6 +446,9 @@ impl TryFrom<RequiresWire> for Requires {
                     } else if inline.git.is_some() {
                         git_packages
                             .push(inline_to_git_dep(kind, name, inline).map_err(|e| e.to_string())?);
+                    } else if matches!(inline.version, Some(VersionFieldWire::Var { .. })) {
+                        var_packages
+                            .push(inline_to_var_dep(kind, name, inline).map_err(|e| e.to_string())?);
                     } else {
                         packages.push(
                             inline_to_registry_pkgref(kind, name, inline)
@@ -417,6 +468,7 @@ impl TryFrom<RequiresWire> for Requires {
             .map(|p| (p.kind, p.name.clone()))
             .chain(git_packages.iter().map(|g| (g.kind, g.name.clone())))
             .chain(path_packages.iter().map(|p| (p.kind, p.name.clone())))
+            .chain(var_packages.iter().map(|v| (v.kind, v.name.clone())))
         {
             if !seen.insert((kind, name.clone())) {
                 return Err(format!("dependency `{kind}:{name}` declared more than once"));
@@ -427,6 +479,7 @@ impl TryFrom<RequiresWire> for Requires {
             capabilities: w.capabilities,
             git_packages,
             path_packages,
+            var_packages,
         })
     }
 }
@@ -462,8 +515,11 @@ fn inline_to_registry_pkgref(
                 .to_string(),
         });
     }
-    let version = match inline.version.as_deref() {
-        Some(s) => VersionSpec::parse(s)?,
+    let version = match inline.version {
+        Some(VersionFieldWire::Constraint(s)) => VersionSpec::parse(&s)?,
+        Some(VersionFieldWire::Var { .. }) => {
+            unreachable!("a `version.var` entry is dispatched to var_packages")
+        }
         None => VersionSpec::Latest,
     };
     PackageRef::new(kind, name, version)
@@ -494,10 +550,7 @@ fn inline_to_git_dep(
             });
         }
     };
-    let version = match inline.version.as_deref() {
-        Some(s) => Some(VersionSpec::parse(s)?),
-        None => None,
-    };
+    let version = constraint_only_version(&key_for_err, inline.version, "a git-source dependency")?;
     Ok(GitPackageDep {
         kind,
         name,
@@ -533,16 +586,63 @@ fn inline_to_path_dep(
                 .to_string(),
         });
     }
-    let version = match inline.version.as_deref() {
-        Some(s) => Some(VersionSpec::parse(s)?),
-        None => None,
-    };
+    let version =
+        constraint_only_version(&key_for_err, inline.version, "a path-source dependency")?;
     Ok(PathPackageDep {
         kind,
         name,
         path,
         version,
     })
+}
+
+fn inline_to_var_dep(
+    kind: PackageKind,
+    name: String,
+    inline: InlinePackageDepWire,
+) -> Result<VarRegistryDep> {
+    let key_for_err = format!("{kind}:{name}");
+    if inline.git.is_some()
+        || inline.path.is_some()
+        || inline.tag.is_some()
+        || inline.branch.is_some()
+        || inline.rev.is_some()
+        || inline.auth.is_some()
+        || inline.token_env.is_some()
+    {
+        return Err(Error::BadDependencyDecl {
+            input: key_for_err,
+            reason: "a `version.var` dependency is registry-resolved — it cannot carry \
+                     `git`/`path`/`tag`/`branch`/`rev`/`auth`/`token_env`"
+                .to_string(),
+        });
+    }
+    let var = match inline.version {
+        Some(VersionFieldWire::Var { var }) => var,
+        _ => unreachable!("caller checked version is a Var"),
+    };
+    Ok(VarRegistryDep { kind, name, var })
+}
+
+/// Extract an optional concrete [`VersionSpec`] from a wire `version` field,
+/// rejecting a `version.var` placeholder — placeholders are supported only on
+/// registry-resolved dependencies (PROP-007 §2.6), not on `source` declares.
+fn constraint_only_version(
+    key_for_err: &str,
+    field: Option<VersionFieldWire>,
+    source_kind: &str,
+) -> Result<Option<VersionSpec>> {
+    match field {
+        None => Ok(None),
+        Some(VersionFieldWire::Constraint(s)) => Ok(Some(VersionSpec::parse(&s)?)),
+        Some(VersionFieldWire::Var { .. }) => Err(Error::BadDependencyDecl {
+            input: key_for_err.to_string(),
+            reason: format!(
+                "`version.var` is supported only on registry-resolved dependencies, not on \
+                 {source_kind}"
+            ),
+        }),
+    }
 }
 
 fn version_spec_to_constraint_str(spec: &VersionSpec) -> String {
@@ -910,6 +1010,60 @@ mod tests {
         let back: Requires = toml::from_str(&rendered).unwrap();
         assert_eq!(original, back);
         assert_eq!(back.path_packages.len(), 2);
+    }
+
+    #[test]
+    fn version_var_parses() {
+        let r = requires_from_toml(
+            r#"[packages]
+"flow:wal" = { version.var = "core" }
+"#,
+        );
+        assert!(r.packages.is_empty());
+        assert!(r.git_packages.is_empty());
+        assert!(r.path_packages.is_empty());
+        assert_eq!(r.var_packages.len(), 1);
+        let v = &r.var_packages[0];
+        assert_eq!(v.kind, PackageKind::Flow);
+        assert_eq!(v.name, "wal");
+        assert_eq!(v.var, "core");
+    }
+
+    #[test]
+    fn version_var_round_trips() {
+        let original = requires_from_toml(
+            r#"[packages]
+"flow:wal" = { version.var = "core" }
+"feat:auth" = "^0.2"
+"#,
+        );
+        let rendered = toml::to_string_pretty(&original).unwrap();
+        let back: Requires = toml::from_str(&rendered).unwrap();
+        assert_eq!(original, back);
+        assert_eq!(back.var_packages.len(), 1);
+        assert_eq!(back.packages.len(), 1);
+    }
+
+    #[test]
+    fn version_var_rejected_on_git_source() {
+        let err = toml::from_str::<Requires>(
+            r#"[packages]
+"flow:bad" = { git = "https://x/y", tag = "v1", version.var = "core" }
+"#,
+        )
+        .unwrap_err();
+        assert!(err.to_string().contains("version.var"), "{err}");
+    }
+
+    #[test]
+    fn version_var_rejects_extra_fields() {
+        let err = toml::from_str::<Requires>(
+            r#"[packages]
+"flow:bad" = { version.var = "core", tag = "v1" }
+"#,
+        )
+        .unwrap_err();
+        assert!(err.to_string().contains("registry-resolved"), "{err}");
     }
 
     #[test]

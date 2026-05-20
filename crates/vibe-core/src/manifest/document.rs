@@ -143,6 +143,14 @@ pub struct WorkspaceSection {
     /// own `vibe.toml`. Membership is explicit — there is no auto-discovery.
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
     pub members: Vec<String>,
+
+    /// `[workspace.versions]` — named version-constraint placeholders
+    /// (PROP-007 §2.6). A member references one with `version.var = "name"`
+    /// in `[requires.packages]`; the placeholder is resolved bottom-up
+    /// against the enclosing-workspace chain, nearest first. Maps a name to
+    /// a constraint string such as `"0.0.1"` or `"^0.3"`.
+    #[serde(default, skip_serializing_if = "BTreeMap::is_empty")]
+    pub versions: BTreeMap<String, String>,
 }
 
 /// `[origin]` — provenance marker written into a published workspace-member
@@ -463,6 +471,28 @@ members = ["packages/flow-wal", "packages/feat-auth", "packages/stack-*"]
         let m = Manifest::parse_str(raw).unwrap();
         assert!(m.is_workspace_root());
         assert_eq!(m.workspace.as_ref().unwrap().members.len(), 3);
+    }
+
+    #[test]
+    fn workspace_versions_parse_and_round_trip() {
+        let raw = r#"
+[project]
+name = "mono"
+version = "0.0.1"
+
+[workspace]
+members = ["packages/a"]
+
+[workspace.versions]
+core = "0.0.1"
+ui = "^0.3"
+"#;
+        let m = Manifest::parse_str(raw).unwrap();
+        let ws = m.workspace.as_ref().unwrap();
+        assert_eq!(ws.versions.get("core").map(String::as_str), Some("0.0.1"));
+        assert_eq!(ws.versions.get("ui").map(String::as_str), Some("^0.3"));
+        let back = Manifest::parse_str(&toml::to_string_pretty(&m).unwrap()).unwrap();
+        assert_eq!(m, back);
     }
 
     #[test]

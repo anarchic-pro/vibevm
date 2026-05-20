@@ -27,11 +27,12 @@
 
 #![forbid(unsafe_code)]
 
-use std::collections::HashSet;
+use std::collections::{BTreeMap, HashMap, HashSet};
 use std::path::{Path, PathBuf};
 
 use thiserror::Error;
-use vibe_core::manifest::Manifest;
+use vibe_core::manifest::{Manifest, Requires};
+use vibe_core::{PackageRef, VersionSpec};
 
 /// Errors raised while discovering or loading a workspace.
 #[derive(Debug, Error)]
@@ -78,6 +79,18 @@ pub enum WorkspaceError {
     /// A filesystem operation failed.
     #[error("I/O error on `{}`: {reason}", .path.display())]
     Io { path: PathBuf, reason: String },
+
+    /// A `version.var` placeholder names no entry in any enclosing
+    /// `[workspace.versions]` table.
+    #[error(
+        "version placeholder `{var}` referenced in `{declared_in}` is defined in no \
+         enclosing [workspace.versions]"
+    )]
+    UnknownVersionVar { var: String, declared_in: String },
+
+    /// A `[workspace.versions]` entry holds an unparseable version constraint.
+    #[error("[workspace.versions] placeholder `{var}` has an invalid constraint `{constraint}`")]
+    BadVersionVar { var: String, constraint: String },
 }
 
 type Result<T> = std::result::Result<T, WorkspaceError>;
@@ -90,11 +103,16 @@ pub struct WorkspaceMember {
     /// This is the member's portable identity — it is what the lockfile
     /// records, never an absolute path.
     pub rel_path: String,
-    /// The member's parsed, validated manifest.
+    /// The member's parsed, validated manifest, with `[workspace.versions]`
+    /// placeholders already resolved.
     pub manifest: Manifest,
     /// Nesting depth: `0` for a direct member of the absolute root, `1`
     /// for a member of a nested workspace, and so on.
     pub depth: usize,
+    /// The `rel_path` of the workspace node that declared this member, or
+    /// `None` if it was declared directly by the absolute root. Drives the
+    /// recursive `[workspace.versions]` placeholder lookup. PROP-007 §2.6.
+    pub parent: Option<String>,
 }
 
 /// A loaded workspace: an absolute root plus every member, transitively.
@@ -165,15 +183,20 @@ impl Workspace {
     /// workspace with no members.
     pub fn load(root_dir: impl AsRef<Path>) -> Result<Workspace> {
         let root = canonical(root_dir.as_ref())?;
-        let root_manifest = read_manifest(&root)?;
+        let mut root_manifest = read_manifest(&root)?;
 
         let mut members: Vec<WorkspaceMember> = Vec::new();
         if root_manifest.workspace.is_some() {
             let mut visited: HashSet<PathBuf> = HashSet::new();
             visited.insert(root.clone());
-            expand(&root, &root_manifest, &root, 0, &mut visited, &mut members)?;
+            expand(&root, &root_manifest, None, &root, 0, &mut visited, &mut members)?;
         }
         members.sort_by(|a, b| a.rel_path.cmp(&b.rel_path));
+
+        // Resolve every `version.var` placeholder against the recursive
+        // `[workspace.versions]` chain — after this pass the in-memory
+        // manifests carry only concrete versions (PROP-007 §2.6).
+        finalize_versions(&mut root_manifest, &mut members)?;
 
         Ok(Workspace {
             root,
@@ -230,6 +253,7 @@ impl Workspace {
 fn expand(
     node_dir: &Path,
     node_manifest: &Manifest,
+    node_rel: Option<&str>,
     root: &Path,
     depth: usize,
     visited: &mut HashSet<PathBuf>,
@@ -274,15 +298,26 @@ fn expand(
             }
 
             let manifest = read_manifest(&member_dir)?;
-            let nested = manifest.workspace.is_some();
+            // Recurse into a nested workspace before pushing — the recursion
+            // borrows `manifest`, then the push moves it. `out` ends up
+            // children-before-parent, which the caller's sort normalises.
+            if manifest.workspace.is_some() {
+                expand(
+                    &member_dir,
+                    &manifest,
+                    Some(&rel_path),
+                    root,
+                    depth + 1,
+                    visited,
+                    out,
+                )?;
+            }
             out.push(WorkspaceMember {
                 rel_path,
-                manifest: manifest.clone(),
+                manifest,
                 depth,
+                parent: node_rel.map(str::to_string),
             });
-            if nested {
-                expand(&member_dir, &manifest, root, depth + 1, visited, out)?;
-            }
         }
 
         if !found_any && !is_glob {
@@ -291,6 +326,85 @@ fn expand(
                 declared_in: rel_or_dot(root, node_dir),
             });
         }
+    }
+    Ok(())
+}
+
+/// Resolve every `version.var` placeholder in the workspace.
+///
+/// After this pass every node's `[requires].var_packages` is empty and the
+/// concrete `PackageRef`s it produced have been folded into `packages`. A
+/// placeholder is looked up bottom-up: the node's own `[workspace.versions]`
+/// (when the node is itself a workspace), then its declaring workspace, on up
+/// to the absolute root — first hit wins. PROP-007 §2.6.
+fn finalize_versions(root_manifest: &mut Manifest, members: &mut [WorkspaceMember]) -> Result<()> {
+    // Snapshot each node's own [workspace.versions] table and its parent
+    // link, keyed by rel_path ("." = the absolute root). The placeholder
+    // tables are tiny, so cloning beats fighting the borrow checker.
+    let mut own: HashMap<String, BTreeMap<String, String>> = HashMap::new();
+    let mut parent: HashMap<String, Option<String>> = HashMap::new();
+    if let Some(ws) = &root_manifest.workspace {
+        own.insert(".".to_string(), ws.versions.clone());
+    }
+    parent.insert(".".to_string(), None);
+    for m in members.iter() {
+        if let Some(ws) = &m.manifest.workspace {
+            own.insert(m.rel_path.clone(), ws.versions.clone());
+        }
+        parent.insert(
+            m.rel_path.clone(),
+            Some(m.parent.clone().unwrap_or_else(|| ".".to_string())),
+        );
+    }
+
+    // Walk a node's enclosing chain, nearest first, for the placeholder.
+    let resolve = |start: &str, var: &str| -> Option<String> {
+        let mut cursor = Some(start.to_string());
+        while let Some(node) = cursor {
+            if let Some(found) = own.get(&node).and_then(|table| table.get(var)) {
+                return Some(found.clone());
+            }
+            cursor = parent.get(&node).cloned().flatten();
+        }
+        None
+    };
+
+    finalize_one(&mut root_manifest.requires, ".", &resolve)?;
+    for m in members.iter_mut() {
+        let key = m.rel_path.clone();
+        finalize_one(&mut m.manifest.requires, &key, &resolve)?;
+    }
+    Ok(())
+}
+
+/// Fold one node's `var_packages` into `packages`, resolving each placeholder
+/// through `resolve`.
+fn finalize_one(
+    requires: &mut Requires,
+    node_key: &str,
+    resolve: &impl Fn(&str, &str) -> Option<String>,
+) -> Result<()> {
+    if requires.var_packages.is_empty() {
+        return Ok(());
+    }
+    let declared_in = if node_key == "." {
+        "the workspace root"
+    } else {
+        node_key
+    };
+    for dep in std::mem::take(&mut requires.var_packages) {
+        let constraint =
+            resolve(node_key, &dep.var).ok_or_else(|| WorkspaceError::UnknownVersionVar {
+                var: dep.var.clone(),
+                declared_in: declared_in.to_string(),
+            })?;
+        let spec = VersionSpec::parse(&constraint).map_err(|_| WorkspaceError::BadVersionVar {
+            var: dep.var.clone(),
+            constraint: constraint.clone(),
+        })?;
+        let pkgref = PackageRef::new(dep.kind, dep.name, spec)
+            .expect("var-dep name was validated when the manifest was parsed");
+        requires.packages.push(pkgref);
     }
     Ok(())
 }
@@ -592,5 +706,87 @@ mod tests {
         let nodes: Vec<&str> = ws.iter_nodes().map(|(p, _)| p).collect();
         assert_eq!(nodes, vec![".", "pkg"]);
         assert_eq!(ws.lockfile_path(), ws.root.join("vibe.lock"));
+    }
+
+    #[test]
+    fn version_var_resolves_from_root_workspace() {
+        let tmp = TempDir::new().unwrap();
+        write(
+            tmp.path(),
+            "vibe.toml",
+            "[project]\nname = \"mono\"\nversion = \"0.0.1\"\n\n\
+             [workspace]\nmembers = [\"pkg\"]\n\n\
+             [workspace.versions]\ncore = \"^0.2\"\n",
+        );
+        write(
+            tmp.path(),
+            "pkg/vibe.toml",
+            "[package]\nname = \"pkg\"\nkind = \"flow\"\nversion = \"0.1.0\"\n\n\
+             [requires.packages]\n\"flow:wal\" = { version.var = \"core\" }\n",
+        );
+        let ws = Workspace::load(tmp.path()).unwrap();
+        let pkg = ws.member_by_rel_path("pkg").unwrap();
+        // The placeholder is resolved: var_packages drained into packages.
+        assert!(pkg.manifest.requires.var_packages.is_empty());
+        assert_eq!(pkg.manifest.requires.packages.len(), 1);
+        assert_eq!(
+            pkg.manifest.requires.packages[0].to_string(),
+            "flow:wal@^0.2"
+        );
+    }
+
+    #[test]
+    fn version_var_matryoshka_nearest_wins() {
+        let tmp = TempDir::new().unwrap();
+        // Root defines core = ^0.1; a nested workspace overrides it to ^0.9.
+        write(
+            tmp.path(),
+            "vibe.toml",
+            "[project]\nname = \"mono\"\nversion = \"0.0.1\"\n\n\
+             [workspace]\nmembers = [\"sub\"]\n\n\
+             [workspace.versions]\ncore = \"^0.1\"\n",
+        );
+        write(
+            tmp.path(),
+            "sub/vibe.toml",
+            "[package]\nname = \"sub\"\nkind = \"stack\"\nversion = \"0.1.0\"\n\n\
+             [workspace]\nmembers = [\"leaf\"]\n\n\
+             [workspace.versions]\ncore = \"^0.9\"\n",
+        );
+        write(
+            tmp.path(),
+            "sub/leaf/vibe.toml",
+            "[package]\nname = \"leaf\"\nkind = \"flow\"\nversion = \"0.1.0\"\n\n\
+             [requires.packages]\n\"flow:wal\" = { version.var = \"core\" }\n",
+        );
+        let ws = Workspace::load(tmp.path()).unwrap();
+        let leaf = ws.member_by_rel_path("sub/leaf").unwrap();
+        // The nearest enclosing [workspace.versions] — sub's — wins.
+        assert_eq!(
+            leaf.manifest.requires.packages[0].to_string(),
+            "flow:wal@^0.9"
+        );
+    }
+
+    #[test]
+    fn unknown_version_var_errors() {
+        let tmp = TempDir::new().unwrap();
+        write(
+            tmp.path(),
+            "vibe.toml",
+            "[project]\nname = \"mono\"\nversion = \"0.0.1\"\n\n\
+             [workspace]\nmembers = [\"pkg\"]\n",
+        );
+        write(
+            tmp.path(),
+            "pkg/vibe.toml",
+            "[package]\nname = \"pkg\"\nkind = \"flow\"\nversion = \"0.1.0\"\n\n\
+             [requires.packages]\n\"flow:wal\" = { version.var = \"ghost\" }\n",
+        );
+        let err = Workspace::load(tmp.path()).unwrap_err();
+        assert!(
+            matches!(err, WorkspaceError::UnknownVersionVar { .. }),
+            "{err}"
+        );
     }
 }
