@@ -13,7 +13,7 @@ use anyhow::{Context, Result, anyhow, bail};
 use dialoguer::Confirm;
 use vibe_core::PackageRef;
 use vibe_core::manifest::{Lockfile, Manifest};
-use vibe_install::InstallError;
+use crate::exit_code::InstallError;
 use vibe_workspace::Workspace;
 use vibe_workspace::install::regenerate_boot;
 use vibe_workspace::vibedeps;

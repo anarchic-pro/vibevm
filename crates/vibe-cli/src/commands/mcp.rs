@@ -47,9 +47,9 @@ use dialoguer::Confirm;
 use serde::Serialize;
 use serde_json::{Map, Value as JsonValue};
 use vibe_core::manifest::Manifest;
-use vibe_install::InstallError;
 use vibe_mcp::{Server, ServerContext};
 
+use crate::exit_code::InstallError;
 use crate::cli::{
     McpArgs, McpInstallArgs, McpServeArgs, McpStatusArgs, McpSubcommand, McpUninstallArgs,
     McpUpgradeArgs,

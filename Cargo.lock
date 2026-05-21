@@ -1921,7 +1921,6 @@ dependencies = [
  "vibe-check",
  "vibe-core",
  "vibe-graph",
- "vibe-install",
  "vibe-mcp",
  "vibe-publish",
  "vibe-registry",
@@ -1957,13 +1956,6 @@ dependencies = [
  "thiserror 2.0.18",
  "tracing",
  "vibe-core",
-]
-
-[[package]]
-name = "vibe-install"
-version = "0.1.0-dev"
-dependencies = [
- "thiserror 2.0.18",
 ]
 
 [[package]]

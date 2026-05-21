@@ -11,7 +11,7 @@ use dialoguer::Confirm;
 use serde::Serialize;
 use vibe_core::{PackageRef, VersionSpec};
 use vibe_core::manifest::{Lockfile, LockedPackage, Manifest, SourceKind};
-use vibe_install::InstallError;
+use crate::exit_code::InstallError;
 use vibe_registry::{CachedPackage, LocalRegistry, MultiRegistryResolver};
 use vibe_resolver::{
     ActivationContext, DepSolver, FeatureExpansion, FeatureRequest, LocalRegistryProvider,

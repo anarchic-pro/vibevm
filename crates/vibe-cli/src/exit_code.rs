@@ -4,7 +4,7 @@
 
 use std::process::ExitCode;
 
-use vibe_install::InstallError;
+use thiserror::Error;
 
 // Spec: VIBEVM-SPEC.md §9.4. These are the catalogue of CLI exit codes.
 // The runtime path exits via `InstallError::exit_code()` (which maps specific
@@ -19,6 +19,26 @@ pub const GENERAL: u8 = 1;
 #[allow(dead_code)] pub const TYPE_MISMATCH: u8 = 4;
 #[allow(dead_code)] pub const USER_DECLINED: u8 = 5;
 #[allow(dead_code)] pub const LLM_PROVIDER: u8 = 6;
+
+/// A structured `vibe install` / `vibe uninstall` failure the CLI maps to
+/// a specific process exit code (`VIBEVM-SPEC.md` §9.4). Until PROP-009
+/// retired the `[writes]` install machinery this lived in a separate
+/// `vibe-install` crate; with that machinery gone it is this one variant.
+#[derive(Debug, Error)]
+pub enum InstallError {
+    /// The user declined the plan at the interactive confirmation prompt.
+    #[error("user declined the plan")]
+    UserDeclined,
+}
+
+impl InstallError {
+    /// The process exit code for this failure.
+    pub fn exit_code(&self) -> u8 {
+        match self {
+            InstallError::UserDeclined => USER_DECLINED,
+        }
+    }
+}
 
 pub fn as_exit_code(err: &anyhow::Error) -> ExitCode {
     if let Some(install_err) = err.downcast_ref::<InstallError>() {
