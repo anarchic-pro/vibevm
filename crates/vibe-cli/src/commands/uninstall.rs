@@ -1,38 +1,56 @@
 //! `vibe uninstall <kind>:<name>` — remove an installed package.
 //!
-//! Spec: `VIBEVM-SPEC.md` §9.1, §11.1.
+//! In the PROP-009 loading model, uninstalling a package removes its
+//! `vibedeps/` slot, drops its lockfile entry and its `[requires]`
+//! declaration, and regenerates every node's boot artifacts so the
+//! package no longer appears in the computed boot sequence.
+//!
+//! Spec: spec://vibevm/modules/vibe-workspace/PROP-009-loading-model.
 
 use std::path::{Path, PathBuf};
 
-use anyhow::{Context, Result, bail};
+use anyhow::{Context, Result, anyhow, bail};
 use dialoguer::Confirm;
-use serde::Serialize;
 use vibe_core::PackageRef;
 use vibe_core::manifest::{Lockfile, Manifest};
-use vibe_install::{InstallError, apply_uninstall, plan_uninstall, unregister_installed};
+use vibe_install::InstallError;
+use vibe_workspace::Workspace;
+use vibe_workspace::install::regenerate_boot;
+use vibe_workspace::vibedeps;
 
 use crate::cli::UninstallArgs;
 use crate::output;
 
 pub fn run(ctx: &output::Context, args: UninstallArgs) -> Result<()> {
     let project_root = resolve_project_root(&args.path)?;
+    let workspace = Workspace::discover(&project_root)
+        .context("discovering the workspace enclosing the project")?;
     let mut manifest = load_project_manifest(&project_root)?;
-    let mut lockfile = load_lockfile(&project_root)?;
+    let mut lockfile = load_lockfile(&workspace.root)?;
 
     let pkgref = PackageRef::parse(&args.package)
         .with_context(|| format!("parsing `{}`", args.package))?;
 
-    let plan = plan_uninstall(&project_root, &lockfile, &pkgref)?;
+    // The materialised slot is keyed by the resolved version; read it
+    // from the lockfile entry.
+    let version = lockfile
+        .find(pkgref.kind, &pkgref.name)
+        .map(|e| e.version.clone())
+        .ok_or_else(|| {
+            anyhow!(
+                "package `{}:{}` is not installed in `{}`",
+                pkgref.kind,
+                pkgref.name,
+                workspace.root.display()
+            )
+        })?;
 
+    let slot = vibedeps::slot_rel_path(pkgref.kind, &pkgref.name, &version);
     if !ctx.is_json() && !ctx.is_quiet() {
         ctx.heading(&format!(
-            "\nPlan for uninstall {}:{}@{}",
-            plan.kind, plan.name, plan.version
+            "\nUninstall {}:{}@{} — remove `{slot}` and regenerate boot.",
+            pkgref.kind, pkgref.name, version
         ));
-        for rel in &plan.removed_paths {
-            println!("  remove  {}", rel.to_string_lossy().replace('\\', "/"));
-        }
-        println!();
     }
 
     let approved = if args.assume_yes || ctx.is_unattended() || ctx.is_json() {
@@ -44,11 +62,8 @@ pub fn run(ctx: &output::Context, args: UninstallArgs) -> Result<()> {
     } else {
         Confirm::new()
             .with_prompt(format!(
-                "Remove {} file{} for {}:{}?",
-                plan.removed_paths.len(),
-                if plan.removed_paths.len() == 1 { "" } else { "s" },
-                plan.kind,
-                plan.name,
+                "Uninstall {}:{}@{}?",
+                pkgref.kind, pkgref.name, version
             ))
             .default(false)
             .interact()
@@ -58,27 +73,31 @@ pub fn run(ctx: &output::Context, args: UninstallArgs) -> Result<()> {
         return Err(InstallError::UserDeclined.into());
     }
 
-    let removed = apply_uninstall(&plan)?;
-    let _entry = unregister_installed(
-        &mut lockfile,
-        &pkgref,
-        crate::commands::init::current_timestamp_utc(),
-    )?;
+    // Remove the package's materialised slot.
+    vibedeps::remove_slot(&workspace.root, pkgref.kind, &pkgref.name, &version)
+        .context("removing the vibedeps/ slot")?;
 
-    // Drop the pkgref from `vibe.toml` `[requires].packages` if it was
-    // declared there. `unregister_installed` already removed the
-    // matching entry from `lockfile.meta.root_dependencies`; this
-    // mirror keeps the manifest authoritative for user-declared deps
-    // (PROP-002 §2.7). No-op when uninstalling a pure transitive that
-    // was never declared in the manifest.
+    // Drop the lockfile entry and its root-dependency mirror.
+    lockfile.remove(pkgref.kind, &pkgref.name);
+    lockfile
+        .meta
+        .root_dependencies
+        .retain(|r| !(r.kind == pkgref.kind && r.name == pkgref.name));
+    lockfile.meta.generated_at = crate::commands::init::current_timestamp_utc();
+
+    // Drop the `[requires]` declaration from the project manifest.
     let manifest_changed = drop_from_manifest_requires(&mut manifest, &pkgref);
     if manifest_changed {
         manifest.write(project_root.join(Manifest::FILENAME))?;
     }
 
-    lockfile.write(project_root.join(Lockfile::FILENAME))?;
+    // Regenerate every node's boot artifacts from the remaining
+    // materialised state — the uninstalled package is gone from boot.
+    regenerate_boot(&workspace).context("regenerating boot artifacts")?;
 
-    emit_report(ctx, &plan.kind.to_string(), &plan.name, &plan.version.to_string(), &removed)
+    lockfile.write(workspace.lockfile_path())?;
+
+    emit_report(ctx, &pkgref, &version.to_string(), &slot)
 }
 
 /// Remove the matching pkgref from the project manifest's
@@ -101,55 +120,33 @@ fn drop_from_manifest_requires(manifest: &mut Manifest, pkgref: &PackageRef) -> 
         || manifest.requires.git_packages.len() != before_git
 }
 
-#[derive(Debug, Serialize)]
-struct UninstallReport {
-    ok: bool,
-    command: &'static str,
-    package: String,
-    version: String,
-    removed_count: usize,
-    paths: Vec<String>,
-}
-
 fn emit_report(
     ctx: &output::Context,
-    kind: &str,
-    name: &str,
+    pkgref: &PackageRef,
     version: &str,
-    removed: &[std::path::PathBuf],
+    slot: &str,
 ) -> Result<()> {
-    let paths: Vec<String> = removed
-        .iter()
-        .map(|p| p.to_string_lossy().replace('\\', "/"))
-        .collect();
-
     if ctx.is_json() {
-        let report = UninstallReport {
-            ok: true,
-            command: "uninstall",
-            package: format!("{kind}:{name}"),
-            version: version.to_string(),
-            removed_count: paths.len(),
-            paths,
-        };
-        ctx.emit_json(&report)?;
+        ctx.emit_json(&serde_json::json!({
+            "ok": true,
+            "command": "uninstall",
+            "package": format!("{}:{}", pkgref.kind, pkgref.name),
+            "version": version,
+            "removed_slot": slot,
+        }))?;
         return Ok(());
     }
     if ctx.is_quiet() {
         ctx.summary(&format!(
-            "vibe uninstall: {kind}:{name}@{version}, {} file{} removed",
-            paths.len(),
-            if paths.len() == 1 { "" } else { "s" }
+            "vibe uninstall: {}:{}@{} removed",
+            pkgref.kind, pkgref.name, version
         ));
         return Ok(());
     }
-    for p in &paths {
-        ctx.removed(p);
-    }
+    ctx.removed(slot);
     ctx.summary(&format!(
-        "\nUninstalled {kind}:{name}@{version} ({} file{}).",
-        paths.len(),
-        if paths.len() == 1 { "" } else { "s" }
+        "\nUninstalled {}:{}@{} — removed its vibedeps/ slot, regenerated boot.",
+        pkgref.kind, pkgref.name, version
     ));
     Ok(())
 }

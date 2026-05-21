@@ -77,6 +77,22 @@ pub fn apply_resolution(
         materialised.push(vibedeps::slot_rel_path(dep.kind, &dep.name, &dep.version));
     }
 
+    // 2. Regenerate every node's boot artifacts from the resolution.
+    let nodes_regenerated = regenerate_boot_from(workspace, resolution)?;
+
+    Ok(InstallOutcome {
+        materialised,
+        nodes_regenerated,
+    })
+}
+
+/// Regenerate every node's boot artifacts from a given `resolution` — the
+/// boot half of [`apply_resolution`], without materialising. Returns the
+/// `rel_path` of every node whose artifacts were written.
+pub fn regenerate_boot_from(
+    workspace: &Workspace,
+    resolution: &[ResolvedDep],
+) -> Result<Vec<String>, WorkspaceError> {
     // The absolute root's foundation boot — inherited by every member
     // (PROP-009 §2.2: inherited foundation flows down).
     let root_foundation: Vec<AuthoredBoot> = node_own_boot(&workspace.root, ".")?
@@ -84,7 +100,6 @@ pub fn apply_resolution(
         .filter(|b| b.category == Some(BootCategory::Foundation))
         .collect();
 
-    // 2. Regenerate boot artifacts for every node.
     let mut nodes_regenerated = Vec::new();
     for (rel, manifest) in workspace.iter_nodes() {
         let node_dir = workspace.node_abs_path(rel);
@@ -104,11 +119,66 @@ pub fn apply_resolution(
         boot_artifacts::write_boot_artifacts(&node_dir, &workspace.root, &effective)?;
         nodes_regenerated.push(rel.to_string());
     }
+    Ok(nodes_regenerated)
+}
 
-    Ok(InstallOutcome {
-        materialised,
-        nodes_regenerated,
-    })
+/// Regenerate every node's boot artifacts from the materialised `vibedeps/`
+/// state already on disk — no fresh resolution, no re-materialisation.
+///
+/// Used by `vibe uninstall` (after a slot is removed) and, later, by
+/// `vibe reinstall`. The resolution is reconstructed by reading each
+/// `vibedeps/` slot's own manifest.
+pub fn regenerate_boot(workspace: &Workspace) -> Result<Vec<String>, WorkspaceError> {
+    let resolution = read_materialised(&workspace.root)?;
+    regenerate_boot_from(workspace, &resolution)
+}
+
+/// Reconstruct the resolution by reading every `vibedeps/` slot's manifest.
+/// A slot whose `vibe.toml` is missing or carries no `[package]` table is
+/// skipped — it is not a materialised package.
+fn read_materialised(workspace_root: &Path) -> Result<Vec<ResolvedDep>, WorkspaceError> {
+    let vibedeps_dir = workspace_root.join(vibedeps::VIBEDEPS_DIR);
+    if !vibedeps_dir.is_dir() {
+        return Ok(Vec::new());
+    }
+    let mut out = Vec::new();
+    for kind_name in fs::read_dir(&vibedeps_dir).map_err(|e| io_err(&vibedeps_dir, e))? {
+        let kind_name = kind_name.map_err(|e| io_err(&vibedeps_dir, e))?;
+        let kind_name_dir = kind_name.path();
+        if !kind_name_dir.is_dir() {
+            continue;
+        }
+        for version in fs::read_dir(&kind_name_dir).map_err(|e| io_err(&kind_name_dir, e))? {
+            let version = version.map_err(|e| io_err(&kind_name_dir, e))?;
+            let slot = version.path();
+            let manifest_path = slot.join("vibe.toml");
+            if !slot.is_dir() || !manifest_path.is_file() {
+                continue;
+            }
+            let manifest =
+                Manifest::read(&manifest_path).map_err(|e| WorkspaceError::Manifest {
+                    path: manifest_path.clone(),
+                    source: Box::new(e),
+                })?;
+            let Some(pkg) = &manifest.package else {
+                continue;
+            };
+            let requires: Vec<(PackageKind, String)> = manifest
+                .requires
+                .iter_pkgrefs()
+                .map(|(k, n)| (k, n.to_string()))
+                .collect();
+            out.push(ResolvedDep {
+                kind: pkg.kind,
+                name: pkg.name.clone(),
+                version: pkg.version.clone(),
+                content_dir: slot.clone(),
+                manifest: manifest.clone(),
+                requires,
+            });
+        }
+    }
+    Ok(out)
 }
 
 /// Discover a node's own authored boot files — every `*.md` in its
