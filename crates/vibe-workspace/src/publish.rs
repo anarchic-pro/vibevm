@@ -19,7 +19,9 @@
 //! - [`stage_node`] — copy a node's directory into a fresh temp dir,
 //!   excluding `.git/` and `.vibe/`, inject the `[origin]` provenance marker
 //!   into the staged `vibe.toml`, prepend the "generated copy" README banner,
-//!   and write `.github/PULL_REQUEST_TEMPLATE.md`.
+//!   write `.github/PULL_REQUEST_TEMPLATE.md`, and regenerate the boot
+//!   artifacts for the published shape (PROP-009 §2.11) so they never
+//!   dangle on the dev tree's workspace `vibedeps/` slots.
 //!
 //! Token discipline is not a concern of this module — no token, push URL, or
 //! credential ever reaches it. That machinery is `vibe-publish`'s, reused
@@ -299,6 +301,8 @@ pub struct OriginInfo {
 /// 3. Prepend the "generated read-only copy" banner to the staged
 ///    `README.md` (created if absent).
 /// 4. Write `.github/PULL_REQUEST_TEMPLATE.md` with a STOP notice.
+/// 5. Regenerate the staged copy's boot artifacts for the published
+///    shape (PROP-009 §2.11) — see [`regenerate_published_boot`].
 ///
 /// `node_rel_path` is the node's path relative to the workspace root —
 /// `"."` for the root, `"packages/flow-wal"` for a member. It is recorded
@@ -391,10 +395,43 @@ pub fn stage_node(
         reason: format!("writing PULL_REQUEST_TEMPLATE.md: {e}"),
     })?;
 
+    // Step 5 — regenerate the boot artifacts for the published shape
+    // (PROP-009 §2.11). The dev tree's `INDEX.md` points at the
+    // workspace `vibedeps/` slots, absent from a standalone published
+    // copy; regenerate from the staged node's own authored boot.
+    regenerate_published_boot(staging_path, &manifest)?;
+
     Ok(StagedNode {
         staging,
         origin: origin_section,
     })
+}
+
+/// Regenerate a staged copy's boot artifacts for the **published shape**
+/// (PROP-009 §2.11).
+///
+/// In the development workspace a node's generated `INDEX.md` references
+/// the dependency content materialised under the workspace-root
+/// `vibedeps/` tree. A standalone published copy carries no such tree —
+/// publishing the dev tree's artifacts verbatim would leave every
+/// dependency entry dangling for an external consumer.
+///
+/// The published copy is regenerated as a standalone node: its own
+/// authored boot only, with no inherited foundation and no materialised
+/// dependencies. A consumer that installs the published package
+/// re-materialises the dependency content into *its own* `vibedeps/` and
+/// regenerates *its own* boot on `vibe install`; the published copy just
+/// needs artifacts that name only the files it actually ships.
+fn regenerate_published_boot(node_dir: &Path, manifest: &Manifest) -> Result<()> {
+    let own = crate::install::node_own_boot(node_dir, ".")?;
+    let effective = crate::boot::compute_effective_boot(crate::boot::NodeBootInputs {
+        own_boot: &own,
+        inherited_foundation: &[],
+        dependencies: &[],
+        default_link: manifest.boot.default_link,
+    })?;
+    crate::boot_artifacts::write_boot_artifacts(node_dir, node_dir, &effective)?;
+    Ok(())
 }
 
 /// The repo `description` for a generated copy — surfaced in the host's
@@ -1033,5 +1070,57 @@ mod tests {
         let manifest =
             Manifest::read(staged.staging.path().join("vibe.toml")).unwrap();
         assert!(manifest.origin.as_ref().unwrap().commit.is_none());
+    }
+
+    #[test]
+    fn stage_node_regenerates_boot_for_the_published_shape() {
+        // PROP-009 §2.11: the dev tree's boot artifacts reference the
+        // workspace `vibedeps/` slots, which do not exist in a standalone
+        // published copy. `stage_node` regenerates them from the staged
+        // node's own authored boot so nothing dangles.
+        let tmp = TempDir::new().unwrap();
+        write(tmp.path(), "packages/a/vibe.toml", &package("a", "flow"));
+        write(tmp.path(), "packages/a/spec/boot/00-core.md", "# core");
+        // A stale dev-tree INDEX.md pointing at a workspace `vibedeps/`
+        // slot — exactly what must not be published verbatim.
+        write(
+            tmp.path(),
+            "packages/a/spec/boot/INDEX.md",
+            "schema = 1\n\n[[entry]]\n\
+             path = \"vibedeps/flow-dep/1.0.0/boot/dep.md\"\nkind = \"static\"\n",
+        );
+        // A stale INLINE.md left over from a dev-tree inline dependency.
+        write(tmp.path(), "packages/a/spec/boot/INLINE.md", "stale inline lane");
+        write(tmp.path(), "packages/a/CLAUDE.md", "stale dev redirect");
+
+        let staged =
+            stage_node(&tmp.path().join("packages/a"), "packages/a", &origin_info())
+                .unwrap();
+
+        // The dangling `vibedeps/` reference is gone; the node's own
+        // authored foundation boot is named instead.
+        let index =
+            fs::read_to_string(staged.staging.path().join("spec/boot/INDEX.md")).unwrap();
+        assert!(
+            !index.contains("vibedeps/"),
+            "the published INDEX.md must not dangle on a workspace vibedeps/ slot:\n{index}"
+        );
+        assert!(
+            index.contains("spec/boot/00-core.md"),
+            "the published INDEX.md must name the node's own authored boot:\n{index}"
+        );
+        // No inline dependencies in the published shape — the stale
+        // INLINE.md is removed.
+        assert!(
+            !staged.staging.path().join("spec/boot/INLINE.md").exists(),
+            "a stale INLINE.md must be cleared in the published copy"
+        );
+        // The redirect is regenerated as a thin generated pointer.
+        let claude =
+            fs::read_to_string(staged.staging.path().join("CLAUDE.md")).unwrap();
+        assert!(
+            claude.contains("Generated by vibe") && claude.contains("spec/boot/INDEX.md"),
+            "CLAUDE.md must be a regenerated redirect:\n{claude}"
+        );
     }
 }

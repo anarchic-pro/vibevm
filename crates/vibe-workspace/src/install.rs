@@ -238,7 +238,13 @@ fn read_materialised(workspace_root: &Path) -> Result<Vec<ResolvedDep>, Workspac
 /// `spec/boot/`, minus the generated `INLINE.md` / `INDEX.md`. The
 /// user-owned `00-core.md` / `90-user.md` are `Foundation` / `UserOverride`
 /// by name convention; any other authored file is mid-band (`None`).
-fn node_own_boot(node_dir: &Path, node_rel: &str) -> Result<Vec<AuthoredBoot>, WorkspaceError> {
+///
+/// `pub(crate)` so [`crate::publish`] can reuse it to regenerate a
+/// staged copy's boot artifacts for the published shape (PROP-009 §2.11).
+pub(crate) fn node_own_boot(
+    node_dir: &Path,
+    node_rel: &str,
+) -> Result<Vec<AuthoredBoot>, WorkspaceError> {
     let boot_dir = node_dir.join("spec").join("boot");
     if !boot_dir.is_dir() {
         return Ok(Vec::new());
