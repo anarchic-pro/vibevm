@@ -399,40 +399,15 @@ pub fn run(ctx: &output::Context, args: InstallArgs) -> Result<()> {
         return Err(InstallError::UserDeclined.into());
     }
 
-    // 6. Apply: materialise each package into vibedeps/ and regenerate
-    //    every node's boot artifacts.
-    let outcome = apply_resolution(&workspace, &resolution)
-        .context("materialising the resolution into the workspace")?;
-
-    // 7. Rebuild the lockfile from the fresh resolution — `vibe install`
-    //    re-resolves the whole graph, so the recorded package set is
-    //    replaced wholesale.
-    lockfile.packages.clear();
-    for f in &fetched {
-        lockfile
-            .packages
-            .push(locked_package_from_fetched(f, resolved_language.as_deref()));
-    }
-    lockfile.meta.generated_at = crate::commands::init::current_timestamp_utc();
-
-    // Record top-level lockfile metadata: the resolved language chain
-    // and the union of active features across the resolution.
-    if !language_chain.is_empty() && language_chain != ["en"] {
-        lockfile.meta.language_chain = language_chain.clone();
-    }
-    let mut active_features_global: BTreeSet<String> = BTreeSet::new();
-    for f in &fetched {
-        let pkg_label = format!("{}:{}", f.cached.resolved.kind, f.cached.resolved.name);
-        for feat in &f.feature_expansion.active_features {
-            active_features_global.insert(format!("{pkg_label}/{feat}"));
-        }
-    }
-    lockfile.meta.active_features = active_features_global.into_iter().collect();
-
-    // 8. Update `vibe.toml` `[requires].packages` with the CLI-supplied
+    // 6. Update `vibe.toml` `[requires].packages` with the CLI-supplied
     //    roots — caret by default, `--exact` pins `=<resolved>`, an
     //    explicit constraint is preserved verbatim. De-dup by
     //    `(kind, name)`; a no-op in install-from-manifest mode.
+    //
+    //    This MUST run before the boot regeneration below: `apply_resolution`
+    //    composes each node's boot from its `[requires]`, so a package
+    //    installed by pkgref has to be declared first or its boot snippet
+    //    is dropped from the generated `INDEX.md`.
     let finalized_cli_roots: Vec<PackageRef> = cli_roots
         .iter()
         .map(|cli_pkgref| {
@@ -456,8 +431,40 @@ pub fn run(ctx: &output::Context, args: InstallArgs) -> Result<()> {
         manifest.write(project_root.join(Manifest::FILENAME))?;
     }
 
-    // 9. Mirror the declared roots into `meta.root_dependencies` so the
-    //    lockfile stays a self-contained snapshot (PROP-002 §2.7).
+    // 7. Re-discover the workspace so the boot computation reads the
+    //    just-updated `[requires]` from disk.
+    let workspace = Workspace::discover(&project_root)
+        .context("re-discovering the workspace after the manifest update")?;
+
+    // 8. Apply: materialise each package into vibedeps/ and regenerate
+    //    every node's boot artifacts.
+    let outcome = apply_resolution(&workspace, &resolution)
+        .context("materialising the resolution into the workspace")?;
+
+    // 9. Rebuild the lockfile from the fresh resolution — `vibe install`
+    //    re-resolves the whole graph, so the recorded package set is
+    //    replaced wholesale.
+    lockfile.packages.clear();
+    for f in &fetched {
+        lockfile
+            .packages
+            .push(locked_package_from_fetched(f, resolved_language.as_deref()));
+    }
+    lockfile.meta.generated_at = crate::commands::init::current_timestamp_utc();
+    if !language_chain.is_empty() && language_chain != ["en"] {
+        lockfile.meta.language_chain = language_chain.clone();
+    }
+    let mut active_features_global: BTreeSet<String> = BTreeSet::new();
+    for f in &fetched {
+        let pkg_label = format!("{}:{}", f.cached.resolved.kind, f.cached.resolved.name);
+        for feat in &f.feature_expansion.active_features {
+            active_features_global.insert(format!("{pkg_label}/{feat}"));
+        }
+    }
+    lockfile.meta.active_features = active_features_global.into_iter().collect();
+
+    // 10. Mirror the declared roots into `meta.root_dependencies` so the
+    //     lockfile stays a self-contained snapshot (PROP-002 §2.7).
     let lock_roots: &[PackageRef] = if cli_roots.is_empty() {
         &roots
     } else {
