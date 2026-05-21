@@ -296,4 +296,4 @@ M1.17 implemented this proposal across six phases on the `m1.17-workspace` branc
 
 ### 9.5 Quality gates {#impl-gates}
 
-Every phase landed with `cargo clippy --workspace --all-targets -- -D warnings` clean and its full test suite green — 703 hermetic tests across the workspace at the close of M1.17, plus `vibe check` reporting 0/0/0. `vibe-install`'s tests type-check (`cargo build -p vibe-install --tests`) but are not run on the development machine — Windows Defender blocks the unsigned test binary (`os error 740`), an environment issue unrelated to the code.
+Every phase landed with `cargo clippy --workspace --all-targets -- -D warnings` clean and its full test suite green — 703 hermetic tests across the workspace at the close of M1.17, plus `vibe check` reporting 0/0/0. `vibe-install`'s tests pass — 18 of them — but only when the test binary is run under a name without the substring `install`: `os error 740` on the normally-named `vibe_install-<hash>.exe` is **Windows UAC installer detection** (a heuristic that treats an unsigned, unmanifested `*install*.exe` as a legacy installer requiring elevation), not Windows Defender, and not a code defect.
