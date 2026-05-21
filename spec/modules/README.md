@@ -41,3 +41,11 @@ rationale document links to it from its `Related` header.
     absolute root, `path`-source cross-member deps, `[workspace.versions]`
     placeholders, selective publish, published-package-repo signalling.
     **Status: DRAFT 2026-05-20.**
+  - [PROP-009: Loading model](vibe-workspace/PROP-009-loading-model.md)
+    — computed boot composition across a workspace hierarchy: two trees
+    (authored `spec/` vs committed `deps/`), the per-node effective boot
+    sequence, generated `INLINE.md` / `INDEX.md` artifacts, the
+    `inline` / `static` / `dynamic` inclusion types, category-based
+    ordering (retires `NN-` prefixes), workspace-aware `vibe install`,
+    one computed-view engine for boot and the effective spec. Answers
+    PROP-007 §6 question 3. **Status: DRAFT 2026-05-21.**
