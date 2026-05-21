@@ -10,5 +10,12 @@ repository.workspace = true
 homepage.workspace = true
 description = "Structured install error types for the vibe CLI"
 
+[lib]
+# vibe-install carries no tests. Disabling the test harness stops
+# `cargo test` from building a `vibe_install-*` test binary — Windows
+# UAC installer-detection refuses to launch any unsigned executable
+# whose name contains "install" (the long-standing `os error 740`).
+test = false
+
 [dependencies]
 thiserror.workspace = true
