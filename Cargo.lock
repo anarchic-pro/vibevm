@@ -2069,6 +2069,7 @@ name = "vibe-workspace"
 version = "0.1.0-dev"
 dependencies = [
  "glob",
+ "semver",
  "tempfile",
  "thiserror 2.0.18",
  "vibe-core",

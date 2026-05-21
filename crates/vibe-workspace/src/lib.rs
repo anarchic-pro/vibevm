@@ -32,9 +32,10 @@ use std::path::{Path, PathBuf};
 
 use thiserror::Error;
 use vibe_core::manifest::{Manifest, Requires};
-use vibe_core::{PackageRef, VersionSpec};
+use vibe_core::{PackageKind, PackageRef, VersionSpec};
 
 pub mod publish;
+pub mod vibedeps;
 
 pub use publish::{
     OriginInfo, PublishNode, Selection, SkippedNode, StagedNode, select_publishable_nodes,
@@ -221,6 +222,24 @@ impl Workspace {
     /// The absolute path of the single `vibe.lock` — always at the root.
     pub fn lockfile_path(&self) -> PathBuf {
         self.root.join("vibe.lock")
+    }
+
+    /// The absolute path of the `vibedeps/` materialisation tree
+    /// (PROP-009 §2.1) — always at the workspace root.
+    pub fn vibedeps_root(&self) -> PathBuf {
+        self.root.join(vibedeps::VIBEDEPS_DIR)
+    }
+
+    /// The absolute slot path for a resolved package within this
+    /// workspace's `vibedeps/` tree:
+    /// `<root>/vibedeps/<kind>-<name>/<version>`.
+    pub fn vibedeps_slot(
+        &self,
+        kind: PackageKind,
+        name: &str,
+        version: &semver::Version,
+    ) -> PathBuf {
+        vibedeps::slot_abs_path(&self.root, kind, name, version)
     }
 
     /// Look up a member by its root-relative path (forward-slashed).
@@ -511,7 +530,7 @@ fn join_rel(root: &Path, rel: &str) -> PathBuf {
 }
 
 /// Render a path as a forward-slashed string.
-fn path_to_slash(p: &Path) -> String {
+pub(crate) fn path_to_slash(p: &Path) -> String {
     p.to_string_lossy().replace('\\', "/")
 }
 

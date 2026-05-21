@@ -13,5 +13,6 @@ description = "Workspace discovery and the multi-package member model for vibevm
 [dependencies]
 thiserror.workspace = true
 glob.workspace = true
+semver.workspace = true
 tempfile.workspace = true
 vibe-core.workspace = true
