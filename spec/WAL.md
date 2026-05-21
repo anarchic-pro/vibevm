@@ -1,7 +1,28 @@
 # WAL — Project Continuation State
-_Updated: 2026-05-21 (session-end — M1.17 Workspace, Phases 1–5 shipped on branch `m1.17-workspace`)_
+_Updated: 2026-05-21 (checkpoint — PROP-009 loading model designed and contracted; M1.18 implementation is next)_
 
 ## Current phase
+
+**PROP-009 — Loading model: designed and contracted; M1.18 implementation is next (2026-05-21).** A design session reopened [PROP-007 §6 q3](modules/vibe-workspace/PROP-007-workspace.md#open) — the per-member materialisation target left open by M1.17 — and established it is a redesign of vibevm's whole loading model, not a directory choice. The vision and the contract are committed on branch **`m1.17-workspace`**:
+
+- [`spec/design/loading-and-boot-model.md`](design/loading-and-boot-model.md) — non-normative rationale: the static/dynamic-linking metaphor, the four principles, the fork-by-fork record (commit `b48ba7f`).
+- [PROP-009](modules/vibe-workspace/PROP-009-loading-model.md) — the contract; DRAFT, but every §5 open question is resolved — ready for M1.18 implementation (commits `1c1c19c`, `72ac624`).
+
+**The model in one breath.** Two physically separate trees — authored `spec/` (only the author writes it) and a committed `vibedeps/` (only `vibe` writes it; one slot `vibedeps/<kind>-<name>/<version>/` per resolved package, the package's tree verbatim). The boot sequence is *computed* per node from the unified resolution — inherited foundation + own boot + dependency boot + overrides. `vibe install` generates, per entry-point node, `spec/boot/INLINE.md` (verbatim concatenation of `inline`-typed contributions, read first — the priority lane) and `spec/boot/INDEX.md` (a TOML manifest of `static` paths + `dynamic` INCLUDE pointers). Three inclusion types — `inline` / `static` / `dynamic` — set per dependency in `vibe.toml` (`link = …`, default `static`). The `NN-` prefix is retired; `vibe` owns ordering by category. `[writes]` is retired. `vibe reinstall [<path>] [--force]` regenerates. One computed-view engine serves both boot and the effective spec. The model is uniform — a single-package project is a degenerate workspace.
+
+**Next — M1.18 implementation.** Eight phases (PROP-009 §7), every crate touched, the scale of PROP-007's implementation. **Implement additively** — the new path beside the old, then switch, then delete the old — so the build stays green: "retire `[writes]`" cannot land green alone, because `vibe install` is built entirely on `manifest.writes`. The realistic first green slice is schema + materialisation + artifact generation together. Start point: read PROP-009 §2 (decisions) and §7 (phase plan); the computed-view engine likely extends `vibe-workspace` or lands as a new `vibe-boot` crate. Before Phase 7: the `VIBEVM-SPEC.md` sanction must be granted (see Owner attention).
+
+**Branch state.** `m1.17-workspace` — M1.17 (the shipped workspace milestone — see the earlier checkpoint) plus the PROP-009 design + contract docs and this checkpoint. Local only — not pushed, not merged. Working tree clean (only `.claude/settings.local.json` untracked, pre-existing). The full workspace test suite is green this session: vibe-core 142, vibe-cli 124 + e2e 111 + cli_init 11 + cli_search 15, vibe-registry 106 + 5 + 7, vibe-publish 51 + 5, vibe-resolver 48, vibe-workspace 31, vibe-check 25, vibe-mcp 22; vibe-install 18 (see the os-740 note).
+
+**Corrected — the `os error 740` diagnosis.** `cargo test -p vibe-install` fails on this machine because of **Windows UAC installer detection**, not Windows Defender: an unsigned, unmanifested executable whose name contains `install` (the test binary is `vibe_install-<hash>.exe`) is heuristically treated as a legacy installer and refused without elevation. Proof: the identical binary copied to a name without "install" runs all 18 tests. Disabling Defender did not help — Defender was never the cause. Fix: `HKLM\SOFTWARE\Microsoft\Windows\CurrentVersion\Policies\System\EnableInstallerDetection = 0` (registry, admin, once), or run that crate's tests from an elevated shell; Linux / CI are unaffected. This supersedes the "Windows Defender" wording in past checkpoints and in PROP-007 §9.5 (corrected this session).
+
+**Backlog — parked behind PROP-009.** PROP-007 §9.3's deferred items: workspace-aware `vibe install` in the old framing is **subsumed** by PROP-009 (it is the install half of the loading model); `version = { workspace = true }` member-version inheritance and the publish-signalling polish (`--archive`, `has_issues`, `published_repos`) are **parked** behind M1.18 — recorded, not dropped. PROP-008 (qualified naming) is unchanged — it follows PROP-005 (index) — and the milestone numbering shifts: PROP-009 takes M1.18, PROP-008 moves to M1.19.
+
+**Owner attention.** (1) Branch `m1.17-workspace` is local — M1.17 plus the PROP-009 docs; pushing / merging is the owner's call. (2) `VIBEVM-SPEC.md` edits for PROP-009 (§6, §4.2, §4.6, §13.1) need explicit owner sanction — not yet granted; needed only at M1.18 Phase 7. (3) `spec/boot/00-core.md` line 38 still reads `package manifest = vibe-package.toml` — stale since M1.17 Phase 1; it is a user-owned boot file vibevm tooling must not edit, so the owner should change it to `vibe.toml`. (4) (carried from 2026-05-12) delete `https://gitverse.ru/vibespecs/vibevm-direct-push-smoke` via the GitVerse web UI (no API DELETE endpoint). Not blocking.
+
+---
+
+## Earlier checkpoint (kept for context — M1.17 Workspace shipped, 2026-05-21)
 
 **M1.17 — Workspace: Phases 1–5 shipped (2026-05-21).** PROP-007 (multi-package workspaces) implemented across five phases on branch **`m1.17-workspace`** — not yet merged to `main`. Commits `b794e7a..b673d2b` plus the Phase 6 docs commits:
 
@@ -14,7 +35,7 @@ _Updated: 2026-05-21 (session-end — M1.17 Workspace, Phases 1–5 shipped on b
 
 **State.** Branch `m1.17-workspace`, working tree clean (only `.claude/settings.local.json` untracked, pre-existing). Every phase landed clippy-clean (`cargo clippy --workspace --all-targets -- -D warnings`) with its test suite green. Test counts: vibe-core 142, vibe-workspace 24, vibe-registry 106, vibe-cli bin 124 + e2e 111, vibe-publish 51, vibe-resolver 48, vibe-check 25, vibe-mcp 22. `vibe check --path . --quiet` 0/0/0.
 
-**Known environment issue (unchanged, not a code bug):** `cargo test -p vibe-install` fails on this machine with `os error 740` — Windows Defender blocks the unsigned test binary. `vibe-install` was touched this milestone (the `SourceKind::Path` lockfile mapping) but verified via `cargo build -p vibe-install --tests` (clean).
+**Known environment issue (corrected — see the current phase):** `cargo test -p vibe-install` fails on this machine with `os error 740` — Windows UAC installer detection, not Windows Defender. `vibe-install` was touched this milestone (the `SourceKind::Path` lockfile mapping); its 18 tests pass when run under a binary name without the substring `install`.
 
 **Next — the remaining M1.17 piece.** Wire `vibe install` / `vibe build` to discover the workspace and run unified multi-member resolution (PROP-007 §6 question 3). It is gated on a per-member **materialisation-target** decision PROP-007 §2.4 / §3 leaves open — a genuine spec fork that wants owner input (when a dependency is resolved for member M, which member's `spec/` does its content land in?). The path-source resolver capability it builds on is already implemented and tested. Also deferred: `version = { workspace = true }` member-version inheritance (PROP-007 §6 q4) and the `--archive` publish lockdown. Then: merge `m1.17-workspace` to `main`; M1.18 (PROP-008, qualified naming) follows, after PROP-005 (index).
 
