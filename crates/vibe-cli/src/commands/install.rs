@@ -515,7 +515,7 @@ struct Fetched {
 /// Build a `kind:name@=<exact-version>` pkgref for fetching the version
 /// the solver chose, regardless of how the user originally constrained
 /// the package.
-fn exact_pinned_pkgref(node: &ResolvedNode) -> PackageRef {
+pub(crate) fn exact_pinned_pkgref(node: &ResolvedNode) -> PackageRef {
     let req = semver::VersionReq::parse(&format!("={}", node.version))
         .expect("exact version always parses as VersionReq");
     PackageRef {
