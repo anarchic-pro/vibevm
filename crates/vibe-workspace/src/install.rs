@@ -49,6 +49,9 @@ pub struct ResolvedDep {
 pub struct InstallOutcome {
     /// `vibedeps/` slot paths materialised, in resolution order.
     pub materialised: Vec<String>,
+    /// `vibedeps/` slot paths pruned — present before, absent from this
+    /// resolution (a version bump, or a dropped dependency).
+    pub pruned: Vec<String>,
     /// `rel_path` of every node whose boot artifacts were regenerated.
     pub nodes_regenerated: Vec<String>,
 }
@@ -77,13 +80,63 @@ pub fn apply_resolution(
         materialised.push(vibedeps::slot_rel_path(dep.kind, &dep.name, &dep.version));
     }
 
-    // 2. Regenerate every node's boot artifacts from the resolution.
+    // 2. Prune any `vibedeps/` slot no longer in the resolution — a
+    //    version bump or a dropped dependency must leave no orphan.
+    let pruned = prune_stale_slots(&workspace.root, &materialised)?;
+
+    // 3. Regenerate every node's boot artifacts from the resolution.
     let nodes_regenerated = regenerate_boot_from(workspace, resolution)?;
 
     Ok(InstallOutcome {
         materialised,
+        pruned,
         nodes_regenerated,
     })
+}
+
+/// Remove every `vibedeps/` slot whose path is not in `kept`, returning
+/// the removed slot paths (sorted). A `<kind>-<name>` directory left with
+/// no surviving version is removed too, so `vibedeps/` holds exactly the
+/// current resolution and no empty husks.
+fn prune_stale_slots(
+    workspace_root: &Path,
+    kept: &[String],
+) -> Result<Vec<String>, WorkspaceError> {
+    let vibedeps_dir = workspace_root.join(vibedeps::VIBEDEPS_DIR);
+    if !vibedeps_dir.is_dir() {
+        return Ok(Vec::new());
+    }
+    let keep: HashSet<&str> = kept.iter().map(String::as_str).collect();
+    let mut pruned = Vec::new();
+    for kind_name in fs::read_dir(&vibedeps_dir).map_err(|e| io_err(&vibedeps_dir, e))? {
+        let kind_name = kind_name.map_err(|e| io_err(&vibedeps_dir, e))?;
+        let kind_name_dir = kind_name.path();
+        if !kind_name_dir.is_dir() {
+            continue;
+        }
+        let kn = kind_name.file_name().to_string_lossy().into_owned();
+        let mut any_kept = false;
+        for version in fs::read_dir(&kind_name_dir).map_err(|e| io_err(&kind_name_dir, e))? {
+            let version = version.map_err(|e| io_err(&kind_name_dir, e))?;
+            let version_dir = version.path();
+            if !version_dir.is_dir() {
+                continue;
+            }
+            let ver = version.file_name().to_string_lossy().into_owned();
+            let rel = format!("{}/{kn}/{ver}", vibedeps::VIBEDEPS_DIR);
+            if keep.contains(rel.as_str()) {
+                any_kept = true;
+            } else {
+                fs::remove_dir_all(&version_dir).map_err(|e| io_err(&version_dir, e))?;
+                pruned.push(rel);
+            }
+        }
+        if !any_kept {
+            let _ = fs::remove_dir(&kind_name_dir);
+        }
+    }
+    pruned.sort();
+    Ok(pruned)
 }
 
 /// Regenerate every node's boot artifacts from a given `resolution` — the
@@ -459,5 +512,44 @@ mod tests {
             ws_dir.path().join("vibedeps/flow-extra/0.1.0/boot/extra.md").is_file()
         );
         assert!(!index.contains("flow-extra"), "{index}");
+    }
+
+    #[test]
+    fn apply_resolution_prunes_a_stale_slot_on_version_bump() {
+        let ws_dir = TempDir::new().unwrap();
+        write(
+            ws_dir.path(),
+            "vibe.toml",
+            "[project]\nname = \"demo\"\nversion = \"0.1.0\"\n\n\
+             [requires.packages]\n\"flow:wal\" = \"^0\"\n",
+        );
+        write(ws_dir.path(), "spec/boot/00-core.md", "# core");
+        let ws = Workspace::load(ws_dir.path()).unwrap();
+
+        let (wal_v1, _v1) = dep_with_boot(
+            "wal",
+            "0.1.0",
+            "[boot_snippet]\nsource = \"boot/wal.md\"\n",
+            "boot/wal.md",
+            "# v1",
+        );
+        apply_resolution(&ws, std::slice::from_ref(&wal_v1)).unwrap();
+        assert!(ws_dir.path().join("vibedeps/flow-wal/0.1.0").is_dir());
+
+        // Re-apply with wal bumped to 0.2.0 — the 0.1.0 slot is now stale.
+        let (wal_v2, _v2) = dep_with_boot(
+            "wal",
+            "0.2.0",
+            "[boot_snippet]\nsource = \"boot/wal.md\"\n",
+            "boot/wal.md",
+            "# v2",
+        );
+        let outcome = apply_resolution(&ws, std::slice::from_ref(&wal_v2)).unwrap();
+        assert!(ws_dir.path().join("vibedeps/flow-wal/0.2.0").is_dir());
+        assert!(
+            !ws_dir.path().join("vibedeps/flow-wal/0.1.0").exists(),
+            "the stale 0.1.0 slot must be pruned"
+        );
+        assert_eq!(outcome.pruned, vec!["vibedeps/flow-wal/0.1.0"]);
     }
 }

@@ -922,6 +922,7 @@ fn emit_report(ctx: &output::Context, outcome: &InstallOutcome) -> Result<()> {
             "ok": true,
             "command": "install",
             "materialised": outcome.materialised,
+            "pruned": outcome.pruned,
             "nodes_regenerated": outcome.nodes_regenerated,
         }))?;
         return Ok(());
@@ -941,6 +942,13 @@ fn emit_report(ctx: &output::Context, outcome: &InstallOutcome) -> Result<()> {
         outcome.nodes_regenerated.len(),
         if outcome.nodes_regenerated.len() == 1 { "" } else { "s" },
     ));
+    if !outcome.pruned.is_empty() {
+        ctx.step(&format!(
+            "pruned {} stale vibedeps/ slot{}",
+            outcome.pruned.len(),
+            if outcome.pruned.len() == 1 { "" } else { "s" },
+        ));
+    }
     Ok(())
 }
 
