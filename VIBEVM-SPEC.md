@@ -137,7 +137,7 @@ Read what each of these does. Note their gaps.
 
 2. **Stack abstraction.** A vibevm `feat` is context-free; a vibevm `stack` provides the concrete mappings. The same feat compiles to different code for different stacks. Tessl and Spec Kit have no equivalent — their specs are tightly coupled to a single implementation context.
 
-3. **Cross-agent compatibility by design.** vibevm uses a single `spec/boot/` directory referenced by a one-line redirect from `CLAUDE.md`/`AGENTS.md`/`GEMINI.md`. Every agent reads the same boot sequence. Other tools commit to specific agent configurations.
+3. **Cross-agent compatibility by design.** vibevm computes each node's boot sequence into generated `spec/boot/` artifacts, reached through a managed `<vibevm>` block in `CLAUDE.md` / `AGENTS.md` / `GEMINI.md`. Every agent reads the same boot sequence. Other tools commit to specific agent configurations.
 
 4. **CLI-first, agent-agnostic execution.** vibevm uses the user's API key to invoke whichever LLM is configured (Anthropic, OpenAI, OpenRouter, Ollama). It does not require any specific agent product to be installed. It can be run from a bare terminal in CI.
 
@@ -193,31 +193,28 @@ A vibevm project has this structure:
 project-root/
 ├── vibe.toml                       # Project manifest
 ├── vibe.lock                       # Resolved versions
-├── CLAUDE.md                       # One-line redirect to spec/boot/
-├── AGENTS.md                       # Same, identical content
-├── GEMINI.md                       # Same, identical content
-├── spec/                           # All spec content lives here
-│   ├── boot/                       # Numbered boot files (rc.d-style)
+├── CLAUDE.md                       # Carries the managed <vibevm> boot block
+├── AGENTS.md                       # Same block, identical content
+├── GEMINI.md                       # Same block, identical content
+├── spec/                           # Authored spec content — only the author writes here
+│   ├── boot/                       # Boot files — no numeric prefix
 │   │   ├── 00-core.md              # Owned by user, project foundations
-│   │   ├── 10-flow-wal.md          # From flow:wal
-│   │   ├── 20-flow-sync-from-code.md
-│   │   ├── 50-stack-rust-cli.md    # Stack contributes boot snippet
-│   │   └── 90-user.md              # Owned by user, never overwritten
-│   ├── flows/                      # Per-flow content
-│   │   └── wal/
-│   │       └── ...
-│   ├── feats/                      # Per-feat content
+│   │   ├── 90-user.md              # Owned by user, never overwritten
+│   │   ├── INLINE.md               # Generated — the inline priority lane
+│   │   └── INDEX.md                # Generated — the computed boot manifest
+│   ├── flows/                      # The project's own authored flow content
+│   ├── feats/                      # The project's own authored feat content
 │   │   └── welcome-page/
 │   │       ├── spec.md             # Abstract description of the feat
 │   │       ├── capabilities.toml   # What the feat needs from a stack
 │   │       └── acceptance.md       # Stack-agnostic acceptance scenarios
-│   ├── stacks/                     # Per-stack content
-│   │   └── rust-cli/
-│   │       ├── stack.md            # Description of this stack
-│   │       └── mappings.md         # How abstract capabilities map to this stack
+│   ├── stacks/                     # The project's own authored stack content
 │   ├── common/                     # Project-wide specs (PROP-000 etc)
 │   ├── modules/                    # Project module specs (PROP-001 etc)
 │   └── WAL.md                      # Project state checkpoint
+├── vibedeps/                       # Materialised dependencies — only vibe writes here
+│   └── flow-wal/
+│       └── 0.3.0/                  # flow:wal's published tree, verbatim
 ├── src/                            # Generated and user-owned source code
 ├── tests/                          # Generated and user-owned tests
 └── .vibe/                          # Cache, internal state — gitignored
@@ -285,10 +282,10 @@ Use these terms consistently:
 
 ### 4.6 Other key terms
 
-- **Effective spec** — the materialized state of all installed packages plus project configuration plus current WAL, computed at the start of each workflow. The effective spec is what the LLM "sees" during build. `vibe show effective` prints it.
+- **Effective spec** — the layered corpus a workflow consumes: the node's authored `spec/` plus its materialised `vibedeps/` dependencies plus the current WAL, computed at the start of each workflow. A projection of the computed-view engine (Section 6). The effective spec is what the LLM "sees" during build. `vibe show effective` prints it.
 - **Active stack** — the stack currently selected for build operations. A project may have multiple stacks installed; one is active by default; per-command override via `--stack`.
-- **Boot snippet** — a small markdown file installed into `spec/boot/<NN>-<package-name>.md` that tells the AI what to do during session boot regarding this package.
-- **Declared writes** — the explicit list of files a package will create, modify, or append to during install. Recorded in the package manifest. The basis for plan/confirm/apply.
+- **Boot snippet** — a boot file a package contributes. The package declares it in `[boot_snippet]` with a `category`; `vibe` composes every contribution into the consuming node's generated boot artifacts (Section 6).
+- **Inclusion type (`link`)** — how a dependency's boot snippet enters the consumer's boot sequence: `inline`, `static`, or `dynamic`. Declared per dependency in `[requires.packages]` (Section 6).
 - **REVIEW marker** — an inline marker (`<!-- REVIEW: ... -->`) in spec or code that indicates an unresolved decision the human should look at.
 - **`spec://` URI** — the addressing scheme for spec content. Format: `spec://<module>/<document>#<section>.<subsection>`. Used in code comments (`// Implements: spec://...`), in cross-references between specs, and in error messages.
 
@@ -340,8 +337,7 @@ Edges carry typed values. v1 defines this minimal type set:
 | `Lockfile` | Parsed `vibe.lock` |
 | `PackageRef` | A reference to an installable package (`flow:wal@0.3.0`) |
 | `PackageContents` | Fetched package files in a temp directory |
-| `WriteSpec` | A declared write: target path, source path, mode (create/append/replace) |
-| `WritePlan` | List of `WriteSpec` with conflict resolution applied |
+| `InstallPlan` | The set of packages to materialise into `vibedeps/` plus the boot artifacts to regenerate |
 | `Approval` | Boolean + optional comment from user confirmation |
 | `EffectiveSpec` | The materialized merged spec for current project state |
 | `WAL` | Parsed contents of `spec/WAL.md` |
@@ -357,7 +353,7 @@ These are TOML-defined schemas in the codebase. Type matching at graph-build tim
 
 ### 5.4 Plugin contribution model
 
-A package's manifest may contribute nodes to the graph. v1 supports a *content-only* contribution model: packages declare files to write and boot snippets to install, but do not contribute executable nodes. This keeps v1 small.
+A package's manifest may contribute nodes to the graph. v1 supports a *content-only* contribution model: a package materialises as a verbatim `vibedeps/` subtree and contributes a boot snippet, but does not contribute executable nodes. This keeps v1 small.
 
 v1.5 may extend this to allow packages to contribute LLM nodes (e.g., a flow that adds a `wal:checkpoint` node bound after `build:compile`). Document the extension point but do not implement it in v1.
 
@@ -401,13 +397,13 @@ install:review          (input: PackageContents → PackageContents)
                         (v1 no-op; v2: LLM censor)
         │
         ▼
-install:plan            (input: PackageContents → WritePlan)
+install:plan            (input: PackageContents → InstallPlan)
         │
         ▼
 install:user-confirm    (input: WritePlan → Approval; interactive)
         │
         ▼
-install:apply           (input: WritePlan + Approval → CommandResult)
+install:apply           (materialise into vibedeps/, regenerate boot artifacts)
         │
         ▼
 install:update-manifest (input: PackageRef → ProjectManifest with [requires] dirty)
@@ -426,7 +422,7 @@ Each named node is a built-in. `install:user-confirm` is a `prompt` node that pa
 
 **`vibe install` with no arguments — install-from-manifest.** When invoked without pkgref arguments, the workflow reads `vibe.toml` `[requires].packages` and treats those entries as the input root list. This is the cargo / npm / Poetry shape: the project ships `vibe.toml` (and ideally `vibe.lock`) in git, a fresh clone runs `vibe install`, every declared package lands. `install:update-manifest` is a no-op in this mode — there are no new pkgrefs to record.
 
-**M0 implementation note.** In M0 the `install` workflow is implemented procedurally inside the `vibe-install` library (`plan_install` / `apply_install` / `register_installed`) rather than executed through a formal graph runner. The node names above reflect the logical shape and map one-to-one onto library functions. `install:review` is elided entirely in M0 (no corresponding function); when M2 introduces an LLM-driven censor it will land as a new stage between `install:fetch` and `install:plan`. The graph-runner sophistication described here is a v2 deliverable — v1 ships the same semantics executed procedurally so the type system and testability benefits hold without the runner's infrastructure cost.
+**Implementation note.** The `install` workflow is implemented procedurally in `vibe-cli` rather than executed through a formal graph runner. The node names above reflect the logical shape. `install:review` is elided (no LLM censor yet); when M2 introduces one it lands as a new stage between `install:fetch` and `install:plan`. The graph-runner sophistication described here is a v2 deliverable — v1 ships the same semantics executed procedurally so the type-system and testability benefits hold without the runner's infrastructure cost.
 
 ### 5.7 The `build` workflow in detail (v1.5 scope; document for forward compatibility)
 
@@ -475,65 +471,52 @@ Note: in v1.5, flows that want to participate in build (e.g., `wal:checkpoint`) 
 
 ## Section 6. The boot directory model
 
-The `spec/boot/` directory is the key innovation that gives vibevm cross-agent compatibility. Specify it precisely.
+`spec/boot/` is what gives vibevm cross-agent compatibility — every agent reads the same session-start sequence. Under the loading model the sequence is **computed**, not hand-curated. Design lock: [PROP-009](spec/modules/vibe-workspace/PROP-009-loading-model.md) (the loading model) and [PROP-012](spec/modules/vibe-workspace/PROP-012-managed-redirect-block.md) (the managed redirect block). Specify it precisely.
 
-### 6.1 The model
+### 6.1 The computed boot sequence
 
-`spec/boot/` is a flat directory of numbered markdown files. The numeric prefix establishes execution order. Each file is self-contained instructions for an AI agent reading the project at session start.
+A node's boot sequence is not a flat directory the author maintains by hand. `vibe` **computes** it from the unified resolution:
 
-The user's `CLAUDE.md`, `AGENTS.md`, `GEMINI.md`, etc. each contain only this one line:
+> inherited foundation (from workspace ancestors) + the node's own authored boot + the boot of the node's transitive dependencies + user overrides
+
+The computation is deterministic and re-run by `vibe install` / `vibe reinstall`. Authored boot files — the node's own — live in `spec/boot/` as ordinary markdown the author writes. Dependency boot lives in the materialised `vibedeps/` tree (§4.2), never copied into the authored `spec/` — installing a dependency must never modify a node's authored content. `vibe` projects the computed sequence into two generated artifacts (§6.2).
+
+### 6.2 The generated artifacts — `INLINE.md` and `INDEX.md`
+
+For every entry-point node, `vibe` generates two files under the node's `spec/boot/`:
+
+- **`INLINE.md`** — the verbatim concatenation, in computed order, of every `inline`-typed contribution (§6.3). Read first, in full — the priority lane. Generated only when the node has `inline` contributions.
+- **`INDEX.md`** — a generated TOML manifest of the rest of the sequence: a `schema` version, an `inline` pointer (when an `INLINE.md` exists), and an ordered list of `[[entry]]` tables. Each entry carries `path` and `kind` — `"static"` (a resolved file the agent reads directly) or `"dynamic"` (an INCLUDE the agent resolves at boot).
+
+Both are git-tracked and carry a "generated — do not edit" header. The agent performs no graph walk: `vibe` did it once at generation time; the agent parses one TOML document and reads the files it names — no recursion, no discovery, no cycle detection.
+
+### 6.3 Inclusion types and ordering
+
+Each dependency declares an **inclusion type** — `link` on the consumer's `[requires.packages]` entry (§7.3), one of:
+
+- `static` (the default) — `vibe` resolves the contribution to a concrete path in `INDEX.md`; the agent reads it directly.
+- `inline` — the contribution's text is concatenated verbatim into `INLINE.md`; read first, maximum attention weight. The emergency priority lane, used sparingly.
+- `dynamic` — `INDEX.md` carries an INCLUDE pointer the agent resolves at boot; supports conditional, context-gated boot.
+
+`vibe` owns the order. The author-chosen two-digit `NN-` filename prefix is **retired** — it cannot survive a workspace's combined namespace. A package's `[boot_snippet]` declares a **`category`** instead — `foundation`, `flow`, `stack`, or `user-override` — and `vibe` orders the computed sequence by band: `foundation` → the node's own boot → dependency boot (topologically — a dependency before its dependents) → `user-override`. Prefix collisions become impossible by construction. The user-owned `00-core.md` / `90-user.md` keep their reserved names by convention and sit at the foundation / override ends.
+
+### 6.4 The managed `<vibevm>` block
+
+The user's `CLAUDE.md`, `AGENTS.md`, `GEMINI.md` are the cross-agent compatibility layer: every modern coding agent reads a project-level instruction file at session start. vibevm does **not** own these files — they are a shared surface a developer and other tools also write to. vibevm owns only a delimited block inside each, bounded by the literal markers `<vibevm>` and `</vibevm>`:
 
 ```
-Read every file in spec/boot/ in filename order, then await the user's instructions.
+<vibevm>
+... generated boot redirect — read spec/boot/INLINE.md, then spec/boot/INDEX.md ...
+</vibevm>
 ```
 
-This single line is the cross-agent compatibility layer. Every modern coding agent supports reading project-level instruction files. By redirecting all of them to the same source of truth, the project's behavior stays identical regardless of which agent the user runs.
+`vibe` writes only between the markers; every byte outside is preserved verbatim. Exactly one block per file — a file with a malformed block (not one ordered pair) is a hard error the operator repairs by hand; `vibe` never guesses. The block is created (appended at end of file) when absent; its position is thereafter the user's to choose. Full contract: [PROP-012](spec/modules/vibe-workspace/PROP-012-managed-redirect-block.md).
 
-### 6.2 The file numbering convention
-
-Files are named `NN-<short-name>.md` where `NN` is a two-digit number 00-99. Convention:
-
-| Range | Purpose |
-|---|---|
-| 00-09 | Project foundations, owned by the user |
-| 10-49 | Flow-contributed boot snippets (process discipline) |
-| 50-79 | Stack-contributed boot snippets (technology context) |
-| 80-89 | Reserved |
-| 90-99 | User overrides, owned by the user, never touched by `vibe` |
-
-The exact number within a range is chosen by the package author. Conflicts (two packages picking the same number) are detected at install time and reported to the user.
-
-The user always owns `00-core.md` and `90-user.md`. `vibe init` creates these. `vibe install` never modifies them. `vibe uninstall` never deletes them.
-
-### 6.3 Adding and removing snippets
-
-When a package is installed:
-1. The package manifest's `boot_snippet` field declares: target filename (e.g., `10-flow-wal.md`) and source file within the package.
-2. The CLI scans `spec/boot/` for two kinds of conflict:
-   - **Exact-filename conflict.** Another file with the same name already exists. Abort with exit code 3 and, if possible, name the owning package (the lockfile is consulted for attribution).
-   - **Numeric-prefix conflict.** Another file in the package-writable range `10-89` shares the same `NN-` prefix. This is the case §6.2 anticipates: two packages independently picked the same number. Abort with exit code 3.
-   - User-owned files in ranges `00-09` and `90-99` are excluded from both checks; packages cannot target those ranges at all.
-3. The CLI copies the source file to the target path.
-
-When a package is uninstalled:
-1. Look up the boot snippet declared in the package's record in the lockfile.
-2. Delete that file from `spec/boot/`.
-3. Files in 00-09 and 90-99 ranges are never touched.
-
-### 6.4 Why a directory not a single file
-
-Earlier designs considered a single `BOOT.md` with marker-delimited sections (`<!-- vibe:flow:wal:begin -->...<!-- vibe:flow:wal:end -->`). The directory approach is preferred because:
-- No marker-corruption failure mode.
-- Order is visible in `ls`.
-- Each package owns one whole file, no merge conflicts in shared files.
-- Adding/removing is a file operation, not a text-edit operation.
-- Users can edit individual snippets if they want without risk of breaking adjacent snippets.
+**Session-start order:** the `<vibevm>` block of `CLAUDE.md` / `AGENTS.md` / `GEMINI.md` → `spec/boot/INLINE.md` (if present) → `spec/boot/INDEX.md` and the entries it names, in order. Boot stays **pure file-reading** — the block points at files, it never becomes "run `vibe`", preserving the zero-dependency cross-agent property.
 
 ### 6.5 The attention-weight caveat
 
-Because LLMs suffer from "lost in the middle" attention degradation, files earlier in the boot sequence get more attention weight than files in the middle. Document this explicitly in the user-facing flow authoring guide (when written): flow authors should not rely on a particular ordering for *correctness*, only for *priority*. A flow whose correctness depends on running before another flow should declare an explicit dependency, not rely on numeric ordering.
-
-In v1, dependency declaration is not implemented; conflicts are resolved by the user picking numbers manually. v2 may add dependency-based ordering.
+Because LLMs suffer "lost in the middle" attention degradation, files earlier in the boot sequence carry more weight than files in the middle. The `inline` lane — `INLINE.md`, read first — exists for contributions whose priority must be guaranteed by position rather than by trusting agent-side resolution. Authors should not rely on ordering for *correctness*, only for *priority*: a contribution whose correctness depends on running before another must declare an explicit dependency, not lean on a category band.
 
 ---
 
@@ -597,17 +580,14 @@ min_vibe_version = "0.1.0"
 # Only relevant for feats and tools
 requires_kinds = []                 # e.g., a feat might require ["stack"]
 
-[writes]
-# Files this package owns exclusively. Created on install, removed on uninstall.
-files = [
-    "spec/flows/wal/WAL-PROTOCOL.md",
-    "spec/flows/wal/session-end-hook.md",
-]
-
-# A boot snippet is a special case: declared filename, source path within package
+# A boot snippet — the package's contribution to a consuming node's boot
+# sequence. `source` is the path inside the package; `category` places it
+# in the computed order (foundation / flow / stack / user-override). A
+# package declares no per-file write list — its materialised footprint is
+# its verbatim tree under the consumer's `vibedeps/` slot (Section 6).
 [boot_snippet]
-filename = "10-flow-wal.md"         # target path: spec/boot/10-flow-wal.md
-source = "boot/10-flow-wal.md"      # source path within package
+source   = "boot/wal.md"
+category = "flow"
 
 # What this package provides beyond its own identity — abstract capability names
 # other packages can `require` without naming this package directly.
@@ -618,14 +598,16 @@ capabilities = []                   # e.g., ["ui:landing-page@0.3", "auth:oauth-
 # What this package needs. Resolved transitively at install time by the
 # depsolver (see §8.6). `[requires.packages]` is a TOML table — each key a
 # bare `<kind>:<name>` pkgref, each value a version-constraint string or an
-# inline-table (registry options, or a git-source declaration).
+# inline-table. An inline-table may carry registry options, a git-source
+# declaration, or `link` — the boot inclusion type (Section 6): one of
+# `inline` / `static` / `dynamic`, default `static`.
 # `capabilities` match any provider.
 [requires]
 capabilities = []                   # e.g., ["db:any@>=1.0"]
 
 [requires.packages]
 "flow:atomic-commits" = "^0.1"
-"stack:rust-cli"      = "^0.1"
+"stack:rust-cli"      = { version = "^0.1", link = "dynamic" }
 
 # Disjunctive requirement: exactly one of `one_of` must be satisfied.
 # Repeat the table to express multiple independent disjunctions.
@@ -664,12 +646,6 @@ source_ref      = "v0.3.0"                                      # git ref (typic
 resolved_commit = "abc123…def"                                  # commit the ref pointed at
 content_hash    = "sha256:…"                                    # hash over the package tree — the IDENTITY
 source_kind     = "registry"                                    # registry | git | override | path
-boot_snippet    = "10-flow-wal.md"
-files_written   = [
-    "spec/flows/wal/WAL-PROTOCOL.md",
-    "spec/flows/wal/session-end-hook.md",
-    "spec/boot/10-flow-wal.md",
-]
 dependencies    = []                                            # transitively resolved deps (kind:name@=version)
 overridden      = false                                         # true iff resolved through [[override]]
 
@@ -1046,7 +1022,7 @@ A `--quiet` flag reduces output to one line of summary. Useful in CI and in scri
 - `0` — success.
 - `1` — general error (file not found, parse error, etc.).
 - `2` — usage error (bad command-line arguments).
-- `3` — package conflict (e.g., two packages claim the same boot snippet number).
+- `3` — package conflict (e.g., a malformed `<vibevm>` block, or two packages that cannot coexist).
 - `4` — type mismatch in graph construction.
 - `5` — user declined confirmation.
 - `6` — LLM provider error (rate limit, auth failure, etc.).
@@ -1160,7 +1136,7 @@ Tool execution must enforce that file operations are scoped to the project root.
 
 ### 10.5 Spec-driven development of vibevm itself
 
-vibevm is built using vibevm's own philosophy. The `vibevm` source tree itself follows the structure described in the book: `spec/` directory with PROP/FEAT documents, WAL.md, BOOT.md (or `spec/boot/`), CLAUDE.md as redirect. The Reader writes vibevm using the same discipline that vibevm enforces. This is meta-bootstrapping but it's also the most rigorous test of the design.
+vibevm is built using vibevm's own philosophy. The `vibevm` source tree itself follows the structure described in the book: a `spec/` directory with PROP/FEAT documents, `spec/WAL.md`, `spec/boot/`, and the managed `<vibevm>` block in `CLAUDE.md`. The Reader writes vibevm using the same discipline that vibevm enforces. This is meta-bootstrapping but it's also the most rigorous test of the design.
 
 ---
 
@@ -1173,7 +1149,7 @@ vibevm ships in staged milestones. Each milestone is *useful on its own* — if 
 **Scope.** A minimum-viable installer that proves the file-management mechanics work.
 
 **Commands shipped.**
-- `vibe init [--path] [--name] [--stack]` — creates the §4.2 project structure: `CLAUDE.md` / `AGENTS.md` / `GEMINI.md` redirect files, the `spec/` tree with `boot/00-core.md`, `boot/90-user.md`, `WAL.md`, a project-level `.gitignore`, `.vibe/cache/`, `vibe.toml` (with `[active]` pre-populated if `--stack` was given), and an empty `vibe.lock`. Idempotent: a second run never clobbers user-modified files and reports each as `kept`.
+- `vibe init [--path] [--name] [--stack]` — creates the §4.2 project structure: the `spec/` tree with `boot/00-core.md` and `boot/90-user.md`, a project-level `.gitignore`, `.vibe/cache/`, `vibe.toml` (with `[active]` pre-populated if `--stack` was given), and an empty `vibe.lock`. It then generates the boot artifacts — `spec/boot/INDEX.md` and the managed `<vibevm>` block in `CLAUDE.md` / `AGENTS.md` / `GEMINI.md` — so a fresh project is bootable at once. Idempotent: a second run never clobbers user-modified files and reports each as `kept`.
 - `vibe install <kind>:<name>[@version] [...] [--registry <path>] [--assume-yes]` — installs from a *local directory* registry (no git yet). Reads the package manifest, fetches into `.vibe/cache/`, plans the writes (including conflict detection), shows the plan, confirms with user, applies the writes, updates `vibe.lock`.
 - `vibe list [--kind]` — reads lockfile, renders a table (default) or JSON (`--json`) or a one-line comma list (`--quiet`).
 - `vibe uninstall <kind>:<name> [--assume-yes]` — reverses an install. Never touches user-owned files (`00-core.md`, `90-user.md`) or structural directories.
@@ -1259,8 +1235,8 @@ Checks performed:
 4. **Anchor uniqueness.** Each `{#anchor}` is unique within its spec file.
 5. **WAL freshness.** `spec/WAL.md` modification timestamp is less than 24 hours old; warn if older.
 6. **WAL well-formedness.** WAL has the required sections (Current Phase, Constraints, Done, Next, Issues).
-7. **Boot directory consistency.** Every file in `spec/boot/` matches the `NN-name.md` pattern; no number conflicts.
-8. **Lockfile consistency.** Every package in `vibe.lock` has its declared files present; no orphaned files in `spec/flows/`, `spec/feats/`, `spec/stacks/` that aren't in any lockfile entry.
+7. **Boot directory consistency.** `spec/boot/` exists and holds only markdown files; the generated `INDEX.md` / `INLINE.md` are recognised artifacts. The retired `NN-` filename prefix is not enforced.
+8. **Lockfile consistency.** Every package in `vibe.lock` has a materialised `vibedeps/` slot, and `vibedeps/` carries no slot absent from the lockfile.
 9. **REVIEW marker aging.** Any `<!-- REVIEW: ... -->` older than configured threshold (default 14 days) is reported.
 10. **Implementation coverage.** For each feat with a `build` history, files generated from it should have `Implements: spec://...` markers. Report missing markers.
 
@@ -1285,16 +1261,16 @@ flow-wal-package/
 ├── spec/
 │   └── flows/
 │       └── wal/
-│           ├── WAL-PROTOCOL.md      # -> <project>/spec/flows/wal/WAL-PROTOCOL.md
-│           ├── session-end-hook.md  # -> <project>/spec/flows/wal/session-end-hook.md
-│           └── morning-routine.md   # -> <project>/spec/flows/wal/morning-routine.md
+│           ├── WAL-PROTOCOL.md
+│           ├── session-end-hook.md
+│           └── morning-routine.md
 └── boot/
-    └── 10-flow-wal.md                # source path; target is <project>/spec/boot/10-flow-wal.md
+    └── wal.md                        # the boot snippet — [boot_snippet].source
 ```
 
-**Package layout is a mirror layout.** Every entry in `writes.files` is simultaneously (a) the path of the file inside the package directory and (b) the path at which it will be installed in the consumer's project. There is no separate `target = "…"` field per entry; `writes.files` is the single source of truth. A human author inspecting a package directory knows immediately what will appear in a consumer's project — no mapping, no rewriting, no sidecar configuration.
+**A package is its own tree.** On install, `vibe` materialises the package's published tree verbatim into a slot under the consumer's `vibedeps/` — `vibedeps/<kind>-<name>/<version>/` — and never copies a file into the consumer's authored `spec/`. There is no per-file write list and no path rewriting: a human author inspecting a package directory sees exactly what will appear under the consumer's `vibedeps/` slot.
 
-**Boot snippets are the one exception.** The `[boot_snippet]` table has an explicit `source` field naming the path inside the package (conventionally `boot/NN-<name>.md`) because the target is always `spec/boot/<filename>` — a fixed prefix plus the filename, not a free-form project path.
+**The boot snippet is declared, not mirrored.** The `[boot_snippet]` table names the boot file's `source` path inside the package and its `category`; `vibe` composes it into the consumer's computed boot sequence (Section 6). The file is not copied to a fixed `spec/boot/` path.
 
 ### 13.2 Manifest
 
@@ -1312,16 +1288,9 @@ keywords = ["wal", "memory", "discipline", "session-management"]
 min_vibe_version = "0.1.0"
 requires_kinds = []
 
-[writes]
-files = [
-    "spec/flows/wal/WAL-PROTOCOL.md",
-    "spec/flows/wal/session-end-hook.md",
-    "spec/flows/wal/morning-routine.md",
-]
-
 [boot_snippet]
-filename = "10-flow-wal.md"
-source = "boot/10-flow-wal.md"
+source   = "boot/wal.md"
+category = "flow"
 ```
 
 ### 13.3 Boot snippet content
@@ -1372,7 +1341,7 @@ Before writing any code:
 3. Create `spec/boot/00-core.md` with foundational decisions about the project.
 4. Create `spec/common/PROP-000.md` with foundational technical decisions (Rust, TOML, proprietary EULA, etc.).
 5. Create `spec/modules/` for module-level specs (PROP-001 onward).
-6. Set up `CLAUDE.md` at the source tree root with the one-line redirect.
+6. Set up `CLAUDE.md` / `AGENTS.md` / `GEMINI.md` at the source tree root, each carrying the managed `<vibevm>` block.
 7. Eat your own dogfood: this layout is exactly what `vibe init` will generate. You're hand-creating it now because `vibe` doesn't exist yet.
 
 ### 14.2 The discipline
@@ -1455,14 +1424,13 @@ Terms used throughout this document, in alphabetical order. When in doubt, refer
 
 - **Active stack.** The stack currently selected by default for `build` operations.
 - **Barrier.** A node in the task graph with no work, used as a coordination/sync point.
-- **Boot directory.** `spec/boot/`, contains numbered markdown files read by AI agents at session start.
-- **Boot snippet.** A small markdown file installed by a package into `spec/boot/` to declare its presence to AI agents.
+- **Boot directory.** `spec/boot/` — holds the node's authored boot files plus the generated `INDEX.md` / `INLINE.md` artifacts read by AI agents at session start.
+- **Boot snippet.** A boot file a package contributes; `vibe` composes it into a consuming node's computed boot sequence (Section 6).
 - **Build.** The workflow that generates code from a feat × stack combination via LLM invocation.
-- **CLAUDE.md / AGENTS.md / GEMINI.md.** Agent-specific instruction files at project root, each containing a one-line redirect to the boot directory.
+- **CLAUDE.md / AGENTS.md / GEMINI.md.** Agent instruction files at project root. vibevm owns only a managed `<vibevm>` block inside each, redirecting a session into the computed boot sequence; the rest of every file belongs to the developer and any other tool.
 - **Code.** Source files outside `spec/`, generated or user-edited.
 - **Compile.** Synonym for `build` in user-facing contexts.
-- **Declared writes.** The explicit list of files a package will create or modify, recorded in its manifest.
-- **Effective spec.** The materialized state of all installed packages and project configuration at a point in time.
+- **Effective spec.** The layered corpus — a node's authored `spec/` plus its materialised `vibedeps/` dependencies — computed at the start of a workflow.
 - **Feat.** An installable kind: an abstract feature description, decoupled from any technology stack.
 - **Flow.** An installable kind: a process discipline that modifies how the human-AI development workflow operates.
 - **Head.** The human developer's memory; not vibevm's concern but acknowledged in design.
@@ -1505,7 +1473,7 @@ Before declaring any milestone complete, verify every item in its section.
 - [ ] `vibe install <kind>:<name>` from a local directory registry copies declared files to declared locations.
 - [ ] `vibe install` shows a plan (what will be written) and asks for confirmation before mutating.
 - [ ] `vibe install` updates `vibe.lock` correctly.
-- [ ] `vibe install` errors clearly when two packages claim the same boot snippet number.
+- [ ] `vibe install` errors clearly on a package conflict (e.g. two packages that cannot coexist).
 - [ ] `vibe list` reflects the lockfile.
 - [ ] `vibe uninstall <kind>:<name>` removes only the files declared by that package.
 - [ ] `vibe uninstall` updates `vibe.lock` correctly.
