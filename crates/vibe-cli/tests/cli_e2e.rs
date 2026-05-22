@@ -455,6 +455,71 @@ fn install_writes_caret_pkgref_to_vibe_toml_requires() {
     );
 }
 
+/// PROP-008 §2.6 — short-name resolution at the CLI input boundary.
+/// `vibe install wal` (bare, unqualified) is resolved to the qualified
+/// `org.vibevm/wal` against the registry, and it is the **qualified**
+/// form that lands in `vibe.toml` `[requires].packages` — a manifest
+/// never stores a short name.
+#[test]
+fn install_resolves_bare_short_name_to_qualified() {
+    let project = tempfile::tempdir().unwrap();
+    init_project(project.path());
+
+    vibe()
+        .arg("install")
+        .arg("wal") // bare short name — no group
+        .arg("--path")
+        .arg(project.path())
+        .arg("--registry")
+        .arg(fixture_registry())
+        .arg("--assume-yes")
+        .assert()
+        .success();
+
+    let toml_text = fs::read_to_string(project.path().join("vibe.toml")).unwrap();
+    let manifest =
+        vibe_core::manifest::Manifest::parse_str(&toml_text).expect("vibe.toml round-trips");
+    assert_eq!(
+        manifest.requires.packages.len(),
+        1,
+        "expected one entry, got: {:#?}",
+        manifest.requires.packages
+    );
+    let recorded = &manifest.requires.packages[0];
+    // The short `wal` was qualified to `org.vibevm/wal` before the
+    // manifest write — the manifest pkgref carries a group.
+    assert!(
+        recorded.group.is_some(),
+        "manifest pkgref must be group-qualified, got: {recorded}"
+    );
+    assert_eq!(recorded.qualified_name(), "org.vibevm/wal");
+    assert!(
+        toml_text.contains("\"org.vibevm/wal\""),
+        "expected the qualified key in vibe.toml:\n{toml_text}"
+    );
+}
+
+/// A bare short name that resolves to no package fails the install
+/// with a pointer at the qualified form — the resolver never guesses
+/// (PROP-008 §2.6).
+#[test]
+fn install_unresolvable_short_name_fails_with_hint() {
+    let project = tempfile::tempdir().unwrap();
+    init_project(project.path());
+
+    vibe()
+        .arg("install")
+        .arg("no-such-package")
+        .arg("--path")
+        .arg(project.path())
+        .arg("--registry")
+        .arg(fixture_registry())
+        .arg("--assume-yes")
+        .assert()
+        .failure()
+        .stderr(predicate::str::contains("could not resolve the short name"));
+}
+
 /// `vibe install <pkgref>@^0.1` (explicit constraint) records the
 /// constraint verbatim — we don't tighten or override what the
 /// operator typed. Symmetric guard around the

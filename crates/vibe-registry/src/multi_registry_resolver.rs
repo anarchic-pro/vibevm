@@ -494,6 +494,47 @@ impl MultiRegistryResolver {
         &self.registries
     }
 
+    /// Index-backed short-name candidate enumeration (PROP-008 §2.6).
+    /// For each configured registry that exposes an index, fetch the
+    /// `by-name/<name>.json` candidate set and union every `group`
+    /// that publishes a package of this bare `name`. Registries
+    /// without an index contribute nothing — a remote git host cannot
+    /// be enumerated cheaply (PROP-005 §1), which is precisely why
+    /// short-name resolution needs the index layer.
+    ///
+    /// A per-registry index error is logged and skipped, never
+    /// propagated: one unreachable index must not block resolution
+    /// against the others. The returned groups are de-duplicated and
+    /// sorted; `len() > 1` is a short-name collision (PROP-008 §2.7),
+    /// `len() == 0` means no index carried the name.
+    pub fn resolve_name_candidates(&self, name: &str) -> Vec<Group> {
+        let mut groups: Vec<Group> = Vec::new();
+        for reg in &self.registries {
+            let Some(client) = reg.index_client() else {
+                continue;
+            };
+            match client.name_candidates(name) {
+                Ok(found) => {
+                    for g in found {
+                        if !groups.contains(&g) {
+                            groups.push(g);
+                        }
+                    }
+                }
+                Err(e) => {
+                    tracing::debug!(
+                        target: "vibe_registry::multi_registry_resolver",
+                        package = %name,
+                        error = %e,
+                        "index short-name lookup failed; skipping this registry"
+                    );
+                }
+            }
+        }
+        groups.sort();
+        groups
+    }
+
     pub fn mirrors(&self) -> &[MirrorSection] {
         &self.mirrors
     }

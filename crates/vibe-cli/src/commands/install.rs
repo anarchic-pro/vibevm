@@ -23,6 +23,7 @@ use vibe_workspace::Workspace;
 use vibe_workspace::install::{InstallOutcome, ResolvedDep, apply_resolution};
 
 use crate::cli::InstallArgs;
+use crate::commands::short_name;
 use crate::output;
 
 pub fn run(ctx: &output::Context, args: InstallArgs) -> Result<()> {
@@ -83,6 +84,18 @@ pub fn run(ctx: &output::Context, args: InstallArgs) -> Result<()> {
         .packages
         .iter()
         .map(|raw| PackageRef::parse(raw).with_context(|| format!("parsing `{raw}`")))
+        .collect::<Result<_>>()?;
+
+    // PROP-008 §2.6 — short-name resolution at the CLI input boundary.
+    // A bare `vibe install wal` is qualified to `org.vibevm/wal` here,
+    // once, before the depsolver runs and before the pkgref is merged
+    // into `[requires].packages` — manifests only ever store the
+    // qualified form. A pkgref that already carries a group passes
+    // through untouched; an unresolvable or ambiguous short name fails
+    // the command (the resolver never guesses — PROP-008 §2.7).
+    let cli_roots: Vec<PackageRef> = cli_roots
+        .iter()
+        .map(|r| short_name::qualify(&resolver, r, &lockfile))
         .collect::<Result<_>>()?;
 
     let roots: Vec<PackageRef> = if cli_roots.is_empty() {
@@ -769,6 +782,18 @@ impl InstallResolver {
                 let provider = MultiRegistryProvider::new(m);
                 NaiveDepSolver::new(provider).solve(roots)
             }
+        }
+    }
+
+    /// Enumerate every `group` that publishes a package of the bare
+    /// `name` — the candidate set short-name resolution (PROP-008
+    /// §2.6) walks. The local-directory path scans the registry tree;
+    /// the multi-registry path walks each registry's index. The result
+    /// is de-duplicated and sorted; `len() > 1` is a collision.
+    pub(crate) fn candidate_groups(&self, name: &str) -> Result<Vec<Group>> {
+        match self {
+            InstallResolver::Local(r) => Ok(r.candidate_groups(name)?),
+            InstallResolver::Multi(m) => Ok(m.resolve_name_candidates(name)),
         }
     }
 }

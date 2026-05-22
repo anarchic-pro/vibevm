@@ -155,6 +155,52 @@ impl IndexClient {
         Ok(Some(versions))
     }
 
+    /// Fetch the `by-name/<name>.json` candidate set and return every
+    /// `group` that publishes a package of this bare name (PROP-008
+    /// §2.8). This is the primitive index-backed short-name resolution
+    /// (PROP-008 §2.6) walks: one GET per registry enumerates the
+    /// `(*, name)` candidates, so a collision (PROP-008 §2.7) — two
+    /// groups under one bare name — is visible at once.
+    ///
+    /// `Ok(vec![])` when the file is absent (404) — the name is simply
+    /// not carried by this index. `Err(...)` for any other failure;
+    /// the caller decides whether to treat it as fatal or skip the
+    /// registry. Groups are returned in on-disk order; de-duplication
+    /// and sorting are the caller's job (it unions across registries).
+    pub fn name_candidates(&self, name: &str) -> Result<Vec<Group>, IndexError> {
+        let url = format!("{}/by-name/{}.json", self.file_base, name);
+        let client = Self::build_client(Duration::from_secs(FETCH_TIMEOUT_SECS)).map_err(|e| {
+            IndexError::Http {
+                url: url.clone(),
+                message: e.to_string(),
+            }
+        })?;
+        let resp = client.get(&url).send().map_err(|e| IndexError::Http {
+            url: url.clone(),
+            message: e.to_string(),
+        })?;
+        let status = resp.status();
+        if status.as_u16() == 404 {
+            return Ok(Vec::new());
+        }
+        if !status.is_success() {
+            return Err(IndexError::Status {
+                url,
+                status: status.as_u16(),
+            });
+        }
+        let body = resp.bytes().map_err(|e| IndexError::Http {
+            url: url.clone(),
+            message: e.to_string(),
+        })?;
+        let parsed: NameEntryView =
+            serde_json::from_slice(&body).map_err(|e| IndexError::Malformed {
+                url: url.clone(),
+                message: e.to_string(),
+            })?;
+        Ok(parsed.packages.into_iter().map(|p| p.group).collect())
+    }
+
     /// Direct PURL lookup against the live-server route
     /// `<server_base>/v1/purls/{purl}` from PROP-005 §2.10. Returns
     /// every package whose top-level `describes` or any subskill's
@@ -500,5 +546,29 @@ mod tests {
     fn binding_site_display_renders_lowercase_word() {
         assert_eq!(format!("{}", BindingSite::Package), "package");
         assert_eq!(format!("{}", BindingSite::Subskill), "subskill");
+    }
+
+    #[test]
+    fn name_entry_view_extracts_candidate_groups() {
+        // `name_candidates` decodes `by-name/<name>.json` into a
+        // `NameEntryView` and maps each package to its `group` — the
+        // candidate set short-name resolution (PROP-008 §2.6) walks.
+        // Two groups under one bare name is a collision (§2.7). The
+        // surrounding `name` / `indexed_at` fields are tolerated.
+        let body = serde_json::json!({
+            "name": "wal",
+            "indexed_at": "2026-05-22T00:00:00Z",
+            "packages": [
+                { "group": "org.vibevm", "versions": [{ "version": "0.1.0" }] },
+                { "group": "com.acme", "versions": [{ "version": "0.2.0" }] }
+            ]
+        });
+        let parsed: NameEntryView = serde_json::from_value(body).unwrap();
+        let groups: Vec<String> = parsed
+            .packages
+            .iter()
+            .map(|p| p.group.to_string())
+            .collect();
+        assert_eq!(groups, vec!["org.vibevm", "com.acme"]);
     }
 }

@@ -293,6 +293,44 @@ impl LocalRegistry {
         Ok(versions)
     }
 
+    /// Enumerate every `group` that publishes a package of the bare
+    /// `name` — the candidate set short-name resolution (PROP-008
+    /// §2.6) walks. A local-directory registry is laid out
+    /// `<root>/<group>/<name>/v<version>/`, so the candidates are the
+    /// top-level entries whose directory name parses as a [`Group`]
+    /// and that carry a `<name>/` subdirectory. De-duplication is
+    /// structural — one directory per group. A non-group or
+    /// non-package top-level entry is skipped silently; the result is
+    /// sorted. `len() > 1` is a collision (PROP-008 §2.7).
+    ///
+    /// Unlike a remote git registry — which needs a PROP-005 index to
+    /// be enumerated cheaply — a local directory is itself the
+    /// enumeration, so this needs no index.
+    pub fn candidate_groups(&self, name: &str) -> Result<Vec<Group>, RegistryError> {
+        let mut groups: Vec<Group> = Vec::new();
+        let entries = fs::read_dir(&self.root).map_err(|source| RegistryError::Io {
+            path: self.root.clone(),
+            source,
+        })?;
+        for entry in entries {
+            let entry = entry.map_err(|source| RegistryError::Io {
+                path: self.root.clone(),
+                source,
+            })?;
+            if !entry.file_type().map(|ft| ft.is_dir()).unwrap_or(false) {
+                continue;
+            }
+            let Ok(group) = Group::parse(&entry.file_name().to_string_lossy()) else {
+                continue;
+            };
+            if entry.path().join(name).is_dir() {
+                groups.push(group);
+            }
+        }
+        groups.sort();
+        Ok(groups)
+    }
+
     /// Pick the highest version that satisfies `req`.
     pub fn resolve(&self, pkgref: &PackageRef) -> Result<ResolvedPackage, RegistryError> {
         let group = pkgref
@@ -577,6 +615,48 @@ description = "WAL v0.2.0"
         let pkgref = PackageRef::parse("org.vibevm/nope").unwrap();
         let err = reg.resolve(&pkgref).unwrap_err();
         assert!(matches!(err, RegistryError::UnknownPackage { .. }));
+    }
+
+    #[test]
+    fn candidate_groups_single_group_one_match() {
+        // PROP-008 §2.6 short-name resolution: the standard fixture
+        // carries only `org.vibevm/wal`, so `wal` has one candidate.
+        let (_guard, root) = make_fixture_registry();
+        let reg = LocalRegistry::new(root).unwrap();
+        assert_eq!(reg.candidate_groups("wal").unwrap(), vec![org()]);
+    }
+
+    #[test]
+    fn candidate_groups_absent_name_is_empty() {
+        let (_guard, root) = make_fixture_registry();
+        let reg = LocalRegistry::new(root).unwrap();
+        assert!(reg.candidate_groups("nope").unwrap().is_empty());
+    }
+
+    #[test]
+    fn candidate_groups_collision_lists_every_group_sorted() {
+        // A short-name collision (PROP-008 §2.7): two groups each
+        // publish a `wal`. The standard fixture gives `org.vibevm/wal`;
+        // add `com.acme/wal` alongside. The result is sorted.
+        let (_guard, root) = make_fixture_registry();
+        let acme = root.join("com.acme/wal/v0.1.0");
+        fs::create_dir_all(&acme).unwrap();
+        fs::write(acme.join("README.md"), "# acme wal\n").unwrap();
+        let reg = LocalRegistry::new(root).unwrap();
+        assert_eq!(
+            reg.candidate_groups("wal").unwrap(),
+            vec![Group::parse("com.acme").unwrap(), org()]
+        );
+    }
+
+    #[test]
+    fn candidate_groups_skips_non_group_directories() {
+        // A top-level entry whose name is not a valid group (here:
+        // uppercase) is skipped, never an error.
+        let (_guard, root) = make_fixture_registry();
+        fs::create_dir_all(root.join("NotAGroup/wal/v0.1.0")).unwrap();
+        let reg = LocalRegistry::new(root).unwrap();
+        assert_eq!(reg.candidate_groups("wal").unwrap(), vec![org()]);
     }
 
     #[test]
