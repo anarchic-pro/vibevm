@@ -101,11 +101,10 @@ This matters because it disambiguates the failure mode: if the index disagrees w
 ```
 <index-root>/
 ├── repomd.json                                # manifest — hashes & metadata for all other files
-├── primary.jsonl                              # one line per (kind, name, version)
+├── primary.jsonl                              # one line per (group, name, version)
 ├── primary.jsonl.gz                           # gzipped variant
 ├── by-name/
-│   └── <kind>/
-│       └── <name>.json                        # cargo-sparse-style — all versions of one package
+│   └── <name>.json                            # candidate set — every (group, name) sharing one bare name
 ├── by-cap/
 │   └── <capability-slug>.jsonl                # provides-index — pkgrefs that advertise this capability
 ├── by-purl/
@@ -120,7 +119,7 @@ This matters because it disambiguates the failure mode: if the index disagrees w
   "schema_version": 1,
   "registry": "vibespecs",
   "registry_url": "https://github.com/vibespecs",
-  "naming": "kind-name",
+  "naming": "fqdn",
   "generated_at": "2026-05-06T12:00:00Z",
   "generator": "vibe-index 0.1.0",
   "package_count": 42,
@@ -152,7 +151,7 @@ This matters because it disambiguates the failure mode: if the index disagrees w
 
 `repomd.json` is the **single point of trust**. A consumer fetches it once (with a small ETag round-trip later), then fetches whichever sub-files it actually needs, verifying each against the recorded `sha256`. This pattern (manifest-with-checksums) is what RPM, Deb, and OCI all share, and is what gives us a path to GPG signing without re-architecting.
 
-**`primary.jsonl`** — newline-delimited JSON, one record per `(kind, name, version)`. Lines are sorted by `(kind, name, version)`. Each line is one §2.6 entry. JSONL is chosen over JSON-array because:
+**`primary.jsonl`** — newline-delimited JSON, one record per `(group, name, version)`. Lines are sorted by `(group, name, version)` — the PROP-008 §2.2 identity ordering. Each line is one §2.6 entry. JSONL is chosen over JSON-array because:
 
 - Append-friendly (a publish hook can append and re-sort + rewrite, or for incremental update merge a sorted insert).
 - Streamable by consumers (line-at-a-time parse; no need to buffer the whole file).
@@ -161,17 +160,29 @@ This matters because it disambiguates the failure mode: if the index disagrees w
 
 **`primary.jsonl.gz`** — gzip-compressed equivalent for HTTP-bandwidth-conscious consumers. ~5× compression typical for JSON. Byte-identical content; gzip is deterministic at level 6 with the standard zlib dictionary so the file is reproducible across machines (we pin level and disable `mtime` in the gzip header to keep the SHA-256 stable). Both `primary.jsonl` and `primary.jsonl.gz` ship; consumer chooses based on `Accept-Encoding`.
 
-**`by-name/<kind>/<name>.json`** — the cargo-sparse-style per-package file. For a given pkgref, one HTTP GET fetches all versions of just that package, ~1–10 KB. This is the path consumers walk for routine `vibe install foo` resolves once they know `foo` is in this registry.
+**`by-name/<name>.json`** — the candidate-set file for one bare package
+name (PROP-008 §2.8). A single HTTP GET fetches every `(group, name)`
+package that shares the short name `<name>`, each with all its versions —
+~1–10 KB. This is the path short-name resolution (PROP-008 §2.6) walks:
+one GET per registry yields the whole candidate set, so a collision
+(PROP-008 §2.7) is detected at once. The directory level keyed on `kind`
+before PROP-008; `kind` left package identity, so `<name>` alone is the key.
 
 ```json
 {
-  "kind": "flow",
   "name": "wal",
   "indexed_at": "2026-05-06T12:00:00Z",
-  "latest_stable": "0.1.0",
-  "versions": [
-    { /* one §2.6 entry */ },
-    { /* … */ }
+  "packages": [
+    {
+      "group": "org.vibevm",
+      "name": "wal",
+      "indexed_at": "2026-05-06T12:00:00Z",
+      "latest_stable": "0.1.0",
+      "versions": [
+        { /* one §2.6 entry */ },
+        { /* … */ }
+      ]
+    }
   ]
 }
 ```
@@ -182,9 +193,9 @@ This matters because it disambiguates the failure mode: if the index disagrees w
 
 **Sort invariants.** Every file with multiple entries is sorted deterministically:
 
-- `primary.jsonl` — sort key `(kind, name, version)` with versions in ascending semver order.
-- `by-name/<kind>/<name>.json` — `versions` array sorted ascending.
-- `by-cap/<slug>.jsonl` and `by-purl/<slug>.jsonl` — sort key `(kind, name, version)`.
+- `primary.jsonl` — sort key `(group, name, version)` with versions in ascending semver order.
+- `by-name/<name>.json` — `packages` sorted by `group`; each package's `versions` array sorted ascending.
+- `by-cap/<slug>.jsonl` and `by-purl/<slug>.jsonl` — sort key `(group, name, version)`.
 
 Determinism matters because the index repo lives in git: a non-deterministic order would produce churn diffs on every regenerate, defeating the value of git as the transport.
 
@@ -201,12 +212,13 @@ Determinism matters because the index repo lives in git: a non-deterministic ord
 
 ### 2.6 Index entry shape (the canonical record) {#entry}
 
-**Decision.** Every `(kind, name, version)` entry carries the following fields. This is the schema lines of `primary.jsonl` follow, and the elements of `by-name/<kind>/<name>.json::versions[]` carry. JTD schema lives in `crates/vibe-index/schemas/index-entry.jtd.json` (PROP-000 §16).
+**Decision.** Every `(group, name, version)` entry carries the following fields. This is the schema lines of `primary.jsonl` follow, and the elements each `by-name/<name>.json` candidate's `versions[]` carry. JTD schema lives in `crates/vibe-index/schemas/index-entry.jtd.json` (PROP-000 §16).
 
 ```json
 {
   "schema_version": 1,
   "kind": "flow",
+  "group": "org.vibevm",
   "name": "wal",
   "version": "0.1.0",
   "content_hash": "sha256:8136ecdbc25d4555cbab6e9574f153b252a05c62b55b5e0255def645458c9544",
@@ -214,6 +226,7 @@ Determinism matters because the index repo lives in git: a non-deterministic ord
   "source_ref": "v0.1.0",
   "resolved_commit": "1c3a1355abcdef0123456789abcdef0123456789",
   "registry": "vibespecs",
+  "workspace_origin": null,
   "license": "EULA",
   "authors": ["Oleg Chirukhin"],
   "description": "Write-Ahead Log discipline for human-AI development sessions",
@@ -255,7 +268,9 @@ Determinism matters because the index repo lives in git: a non-deterministic ord
 
 **Field provenance.**
 
-- `kind` / `name` / `version` / `license` / `authors` / `description` / `homepage` / `keywords` / `describes` / `compatibility` / `provides` / `requires` / `requires_any` / `obsoletes` / `conflicts` / `features` / `i18n` / `boot_snippet.source` / `boot_snippet.category` — read directly from `vibe.toml` at the tagged ref. (M1.18's loading model, PROP-009, retired the author-chosen `boot_snippet.filename`; a snippet is now its `source` path plus an ordering `category`.)
+- `kind` / `group` / `name` / `version` / `license` / `authors` / `description` / `homepage` / `keywords` / `describes` / `compatibility` / `provides` / `requires` / `requires_any` / `obsoletes` / `conflicts` / `features` / `i18n` / `boot_snippet.source` / `boot_snippet.category` — read directly from `vibe.toml` at the tagged ref. (M1.18's loading model, PROP-009, retired the author-chosen `boot_snippet.filename`; a snippet is now its `source` path plus an ordering `category`.)
+- `group` — the mandatory reverse-FQDN qualifier from `[package].group` (PROP-008 §2.1). With `name` it forms the package identity; `kind` is metadata and identifies nothing (PROP-008 §2.2 / §2.3).
+- `workspace_origin` — the `[origin]` provenance marker (PROP-007 §2.8, PROP-008 §2.8), present only on a copy `vibe workspace publish` generated from a workspace member; absent (`null`) for a standalone publish.
 - `subskills` — collected by walking `<package-root>/subskills/<path>/vibe-subskill.toml` at the tagged ref; each entry: `{path, delivery, describes, description, channels}`. Same fields the lockfile records.
 - `content_hash` — computed by the same algorithm `vibe-registry::compute_content_hash` uses (sha256 over deterministically-ordered file bytes). Index uses **the same hash** as the lockfile, so cross-checks are byte-equal.
 - `source_url` — the canonical org URL (§2.4 of [PROP-002](../vibe-registry/PROP-002-decentralized-registry.md#registry-model)) composed with the package repo name. Mirror URLs do not appear here (same invariant as the lockfile).
@@ -338,21 +353,21 @@ GET    /readyz                                    # readiness (index loaded, no 
 GET    /v1/index/repomd.json
 GET    /v1/index/primary.jsonl
 GET    /v1/index/primary.jsonl.gz
-GET    /v1/index/by-name/{kind}/{name}.json
+GET    /v1/index/by-name/{name}.json
 GET    /v1/index/by-cap/{slug}.jsonl
 GET    /v1/index/by-purl/{slug}.jsonl
 
 # Structured query (richer than the raw files)
 GET    /v1/packages                               # ?kind=&q=&limit=&offset=
-GET    /v1/packages/{kind}/{name}                 # all versions of one package
-GET    /v1/packages/{kind}/{name}/{version}       # one specific version (entry)
+GET    /v1/packages/{group}/{name}                # all versions of one package
+GET    /v1/packages/{group}/{name}/{version}      # one specific version (entry)
 GET    /v1/capabilities/{cap}                     # who provides this capability
 GET    /v1/purls/{purl}                           # who describes this upstream
 
 # Mutations (auth required)
 POST   /v1/packages                               # body: full §2.6 entry — insert/upsert
-DELETE /v1/packages/{kind}/{name}/{version}       # remove one version
-DELETE /v1/packages/{kind}/{name}                 # remove all versions of a package
+DELETE /v1/packages/{group}/{name}/{version}      # remove one version
+DELETE /v1/packages/{group}/{name}                # remove all versions of a package
 
 # Admin (auth required)
 POST   /v1/admin/reindex                          # body: { mode, source, args }
@@ -378,7 +393,7 @@ GET    /metrics                                   # Prometheus text format
 
 ```
 # Lifecycle
-vibe-index init <data-dir> [--registry NAME --registry-url URL --naming kind-name|name]
+vibe-index init <data-dir> [--registry NAME --registry-url URL --naming fqdn|kind-name|name|kind/name]
 vibe-index dump <data-dir> [--format jsonl|json|toml]
 vibe-index verify <data-dir>                         # recompute file hashes, check repomd
 
@@ -388,7 +403,7 @@ vibe-index reindex <data-dir> --from-github <org> [--token-file FILE]  [--full |
 vibe-index reindex <data-dir> --from-gitverse <org>             # emits stub-not-implemented today
 
 # Read
-vibe-index get <data-dir> <kind> <name> [--version V]
+vibe-index get <data-dir> <group> <name> [--version V]
 vibe-index list <data-dir> [--kind K] [--limit N] [--offset M]
 vibe-index search <data-dir> <query> [--kind K] [--limit N]
 vibe-index capabilities <data-dir> <capability>
@@ -397,7 +412,7 @@ vibe-index outdated <data-dir> [--lockfile PATH]                # given a vibe.l
 
 # Write (CLI-mode; refused if server is holding the lock)
 vibe-index add <data-dir> --manifest <package.toml-path> --repo-url URL [--ref REF --commit SHA]
-vibe-index remove <data-dir> <kind> <name> [--version V]
+vibe-index remove <data-dir> <group> <name> [--version V]
 
 # Server
 vibe-index serve <data-dir> [--bind ADDR] [--auth-tokens-file FILE] [--read-only] [--auto-commit-push]
@@ -480,7 +495,7 @@ The data-dir doubles as a git working tree of the org's `index` repo. `state/` i
 
 **Consumer side (`vibe-cli`, `vibe-registry`).**
 
-- `crates/vibe-registry/src/multi_registry_resolver.rs` gains an optional **index-aware fast path**. Before falling back to per-repo `git ls-remote`, it tries `HTTP GET <registry.index_url>/repomd.json`. On 200, it reads `by-name/<kind>/<name>.json` for the pkgref and selects the matching version locally — zero ls-remote calls. On 404 / connect failure, fall through to today's path.
+- `crates/vibe-registry/src/multi_registry_resolver.rs` gains an optional **index-aware fast path**. Before falling back to per-repo `git ls-remote`, it tries `HTTP GET <registry.index_url>/repomd.json`. On 200, it reads `by-name/<name>.json` for the pkgref, selects the candidate whose `group` matches, and picks the matching version locally — zero ls-remote calls. On 404 / connect failure, fall through to today's path.
 - Index-derived `content_hash` does NOT replace fetch-time verification. The actual `git fetch` still happens; the post-fetch `compute_content_hash` still runs; mismatch still errors out per [PROP-002 §2.1](../vibe-registry/PROP-002-decentralized-registry.md#identity).
 
 **Publisher side (`vibe-publish`).**
@@ -864,3 +879,4 @@ These live in `crates/vibe-index/docs/operator-handbook.md` rather than as shipp
 
 - **2026-05-06 — draft 1.** Initial proposal. Open for review.
 - **2026-05-22 — reconciled with the implementation, then folded into the workspace.** A state review found PROP-005 already implemented (slices 1–10 + M2.10 `vibe search`) but rotted; the de-rot realigned the scanner with the current `vibe.toml` schema and corrected this document (§2.6 `boot_snippet`, the `vibe.toml` filename, §2.10 rate-limiter status). The fold then moved `vibe-index` from its own `services/` workspace into `crates/vibe-index/` and switched it to parse through `vibe-core::Manifest` — §3.2, §6, and §9 item 11 are revised for the reversed standalone-workspace decision.
+- **2026-05-22 — group-native (PROP-008 Phase 7).** The index entry gained the mandatory `group` field and the optional `workspace_origin` (§2.6); the `by-name/` layer was re-keyed from `by-name/<kind>/<name>.json` to the candidate-set file `by-name/<name>.json` (§2.4) — one GET per registry now yields every group sharing a bare name; `primary.jsonl` / `by-cap` / `by-purl` sort on the `(group, name, version)` identity; the HTTP `/v1/packages/{group}/{name}` routes, the `vibe-index get/remove` CLI, and the `naming = "fqdn"` default followed. The `vibe-registry` index client and the `vibe-publish` post-publish hook were realigned to the new shape. PROP-008 §2.8's index extension is shipped.
