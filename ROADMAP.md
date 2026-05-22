@@ -569,7 +569,10 @@ published-copy boot regeneration in `vibe workspace publish`. Phase 7 —
 the vibevm self-migration, the `VIBEVM-SPEC.md` consistency pass (owner
 sanction granted), the `docs/` sweep, and
 [PROP-012](spec/modules/vibe-workspace/PROP-012-managed-redirect-block.md)
-(the managed `<vibevm>` redirect block) folded in.
+(the managed `<vibevm>` redirect block) folded in. The dynamic-entry
+`when` gate — an OS condition (`when = "os:<name>"`) on a
+`[boot_snippet]` — landed 2026-05-22, closing the PROP-009 §2.3 contract
+gap Phase 4 had flagged.
 
 **Remaining.** Phase 8 — the effective-spec view — is v1.5 scope; it
 shares the computed-view engine and rides with the M1.5 milestone.
