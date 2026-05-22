@@ -1,17 +1,18 @@
 #!/usr/bin/env bash
-# vibevm self-check — runs the three invariants every commit on `main`
+# vibevm self-check — runs the four invariants every commit on `main`
 # is supposed to satisfy. Designed to be cheap to invoke locally and
 # trivial to wire into a CI matrix later. See `DEV-GUIDE.md` §6.
 #
 # Invariants checked, in order:
-#   1. `cargo test --workspace`          — all tests green.
-#   2. `cargo clippy --workspace ...`     — zero warnings under `-D warnings`.
-#   3. `vibe check --path . --quiet`      — spec linter clean against the
+#   1. `cargo fmt --all --check`         — every file is rustfmt-clean.
+#   2. `cargo test --workspace`          — all tests green.
+#   3. `cargo clippy --workspace ...`     — zero warnings under `-D warnings`.
+#   4. `vibe check --path . --quiet`      — spec linter clean against the
 #                                          repo's own bootstrap manifest.
 #
 # Each step prints a short header. On the first failure the script exits
 # non-zero; later steps are skipped (no "fix the next thing while broken"
-# slog). Pass `--keep-going` to run all three even if earlier ones fail.
+# slog). Pass `--keep-going` to run all four even if earlier ones fail.
 
 set -u
 
@@ -57,14 +58,18 @@ run_step() {
 
 OVERALL=0
 
-# 1. Tests.
+# 1. Formatting. The cheapest invariant — no compilation — so it runs
+# first and fails fast, before the multi-minute test / clippy steps.
+run_step "cargo fmt --all --check" cargo fmt --all --check || OVERALL=$?
+
+# 2. Tests.
 run_step "cargo test --workspace" cargo test --workspace --quiet || OVERALL=$?
 
-# 2. Clippy as errors.
+# 3. Clippy as errors.
 run_step "cargo clippy --workspace --all-targets -- -D warnings" \
   cargo clippy --workspace --all-targets --quiet -- -D warnings || OVERALL=$?
 
-# 3. Spec linter on the bootstrap manifest. Always go through
+# 4. Spec linter on the bootstrap manifest. Always go through
 # `cargo run` so the binary used is guaranteed to match the source
 # tree — a stale `target/release/vibe.exe` from a previous workspace
 # state was a real footgun (e.g. binaries built before a subcommand
