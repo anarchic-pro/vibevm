@@ -147,7 +147,7 @@ The breaking-change window is open: vibevm has no public release, no external us
 - **Canonical packages.** `flow-wal`, `flow-sync-from-code`, `flow-atomic-commits` migrate to `group = "org.vibevm"`. Repositories rename to the `naming = "fqdn"` shape (`org.vibevm.wal`, …). The owner authorised migrating the test fixtures and these three without further questions.
 - **Test orgs.** `vibespecstest1/2/3` fixtures re-laid-out to the new naming.
 - **Manifests.** `vibe-package.toml` → `vibe.toml` ([PROP-007 §2.2](../vibe-workspace/PROP-007-workspace.md)); add the `group` field.
-- **Lockfile.** Schema bumps to **v4** (shared bump with [PROP-007](../vibe-workspace/PROP-007-workspace.md) `source_kind = "path"`); adds the `group` field per `[[package]]`.
+- **Lockfile.** Schema bumps to **v5** — PROP-007 had already taken v4 for `source_kind = "path"`; adds the `group` field per `[[package]]`.
 - **`VIBEVM-SPEC.md` §7.1** is edited (under the owner sanction) — the `name`-uniqueness rule changes from "within a kind" to "within a group", and the identity tuple and pkgref grammar are updated.
 
 ---

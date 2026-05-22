@@ -524,12 +524,29 @@ Because LLMs suffer "lost in the middle" attention degradation, files earlier in
 
 ### 7.1 Package identity
 
-A package is identified by `<kind>:<name>@<version>` where:
-- `kind` is one of `flow`, `feat`, `stack`, `tool`.
-- `name` is a kebab-case string, globally unique within its kind.
-- `version` is a semver string.
+A package's identity is the tuple `(group, name, version, content_hash)`:
 
-Example: `flow:wal@0.3.0`, `feat:welcome-page@1.2.0`, `stack:rust-cli@0.1.0`.
+- `group` — a reverse-FQDN qualifier (`org.vibevm`, `com.acme`): dot-separated segments, each `[a-z0-9_-]+`, ASCII lowercase. **Mandatory.** Reverse-FQDN is the recommended convention, not a shape the core enforces — the posture Maven takes on `groupId`. `org.vibevm` is the canonical group for every first-party vibevm package.
+- `name` — a kebab-case string, **unique within its `group`**. `(group, name)` therefore identifies a package on its own.
+- `version` — a semver string.
+- `content_hash` — the sha256 over the package's file tree (§7.4; [PROP-002 §2.1](spec/modules/vibe-registry/PROP-002-decentralized-registry.md)).
+
+`kind` (`flow` / `feat` / `stack` / `tool`) stays a **mandatory `[package]` field**, but it is **metadata, not identity** — it places content (`spec/flows/` vs `spec/feats/`), drives the `--kind` filter on `vibe list` / `vibe search`, and is a UX signal in a kind-prefixed pkgref. It identifies nothing and names nothing.
+
+A **pkgref** (package reference) is:
+
+```
+pkgref := [ <kind> ":" ] [ <group> "/" ] <name> [ "@" <version> ]
+```
+
+- `org.vibevm/wal` — the **qualified** form; manifests and the lockfile store this (§7.3, §7.4, §7.5).
+- `flow:org.vibevm/wal` — qualified, kind-prefixed; after resolution the resolver asserts the resolved `kind` matches the prefix, and a mismatch is an error.
+- `wal` — the **short** form: CLI-only sugar, resolved to the qualified form at the CLI input boundary via the package index ([PROP-008 §2.6](spec/modules/vibe-registry/PROP-008-qualified-naming.md)). Never written to a manifest.
+- `flow:wal` — short, kind-prefixed.
+
+Examples: `org.vibevm/wal@0.3.0`, `flow:org.vibevm/welcome-page`, and the short `wal` typed on the command line.
+
+The full design — `group`, the identity tuple, `kind`-as-metadata, index-backed short-name resolution, collision detection — is [PROP-008](spec/modules/vibe-registry/PROP-008-qualified-naming.md).
 
 In CLI commands, version is optional and defaults to "latest stable". The version syntax follows Cargo / npm / Poetry conventions — bare semver is shorthand for caret, `=` is the explicit-equal form:
 
@@ -540,7 +557,7 @@ In CLI commands, version is optional and defaults to "latest stable". The versio
 - `vibe install flow:wal@=0.3.0` → strict-equal: only that version.
 - `vibe install flow:wal@>=0.3, <1.0` → arbitrary `semver::VersionReq` syntax.
 
-`vibe install <pkgref>` records the dep in `vibe.toml` `[requires].packages`. When the CLI form had no version, the resolver pins to a concrete version and the manifest stores the **caret** form (`flow:wal@^0.1.0`) — same default Cargo's `cargo add` writes. When the CLI form had an explicit constraint, the manifest preserves it verbatim. The `--exact` flag overrides both: it always pins to `=<resolved-version>` (npm `--save-exact` shape).
+`vibe install <pkgref>` records the dep in `vibe.toml` `[requires].packages`. When the CLI form had no version, the resolver pins to a concrete version and the manifest stores the **caret** form (`org.vibevm/wal@^0.1.0`) — same default Cargo's `cargo add` writes. When the CLI form had an explicit constraint, the manifest preserves it verbatim. The `--exact` flag overrides both: it always pins to `=<resolved-version>` (npm `--save-exact` shape).
 
 ### 7.2 Package contents
 
@@ -565,8 +582,9 @@ role**, carrying `[project]` instead.
 # vibe.toml — a publishable package (carries `[package]`)
 
 [package]
-name = "wal"                        # without the kind prefix
-kind = "flow"                       # one of: flow, feat, stack, tool
+name = "wal"                        # without the group / kind prefix
+group = "org.vibevm"                # reverse-FQDN qualifier — mandatory; (group, name) is identity
+kind = "flow"                       # one of: flow, feat, stack, tool — metadata, not identity
 version = "0.3.0"
 authors = ["Oleg Chirukhin <oleg@example.com>"]
 license = "EULA"
@@ -597,7 +615,7 @@ capabilities = []                   # e.g., ["ui:landing-page@0.3", "auth:oauth-
 
 # What this package needs. Resolved transitively at install time by the
 # depsolver (see §8.6). `[requires.packages]` is a TOML table — each key a
-# bare `<kind>:<name>` pkgref, each value a version-constraint string or an
+# qualified `<group>/<name>` pkgref, each value a version-constraint string or an
 # inline-table. An inline-table may carry registry options, a git-source
 # declaration, or `link` — the boot inclusion type (Section 6): one of
 # `inline` / `static` / `dynamic`, default `static`.
@@ -606,8 +624,8 @@ capabilities = []                   # e.g., ["ui:landing-page@0.3", "auth:oauth-
 capabilities = []                   # e.g., ["db:any@>=1.0"]
 
 [requires.packages]
-"flow:atomic-commits" = "^0.1"
-"stack:rust-cli"      = { version = "^0.1", link = "dynamic" }
+"org.vibevm/atomic-commits" = "^0.1"
+"org.vibevm/rust-cli"       = { version = "^0.1", link = "dynamic" }
 
 # Disjunctive requirement: exactly one of `one_of` must be satisfied.
 # Repeat the table to express multiple independent disjunctions.
@@ -617,11 +635,11 @@ capabilities = []                   # e.g., ["db:any@>=1.0"]
 # Packages this package supersedes — the depsolver treats an installed `obsoletes`
 # target as evidence to remove it on upgrade.
 [obsoletes]
-packages = []                       # e.g., ["feat:welcome-page-legacy"]
+packages = []                       # e.g., ["org.vibevm/welcome-page-legacy"]
 
 # Direct exclusion — these cannot coexist with this package in a project.
 [conflicts]
-packages = []                       # e.g., ["flow:legacy-wal"]
+packages = []                       # e.g., ["org.vibevm/legacy-wal"]
 ```
 
 ### 7.4 Lockfile schema
@@ -632,13 +650,14 @@ packages = []                       # e.g., ["flow:legacy-wal"]
 [meta]
 generated_by      = "vibe 0.2.0"
 generated_at      = "2026-04-24T12:00:00Z"
-schema_version    = 4
+schema_version    = 5
 solver            = "resolvo-0.x"                   # depsolver identity (see §8.6)
-root_dependencies = ["flow:wal", "stack:rust-cli"]  # mirror of `vibe.toml` `[requires].packages`
+root_dependencies = ["org.vibevm/wal", "org.vibevm/rust-cli"]  # mirror of `vibe.toml` `[requires].packages`
 
 [[package]]
 kind            = "flow"
 name            = "wal"
+group           = "org.vibevm"
 version         = "0.3.0"
 registry        = "vibespecs"                                   # name from vibe.toml [[registry]]
 source_url      = "git@gitverse.ru:vibespecs/flow-wal.git"     # WHERE it was fetched this time
@@ -646,21 +665,22 @@ source_ref      = "v0.3.0"                                      # git ref (typic
 resolved_commit = "abc123…def"                                  # commit the ref pointed at
 content_hash    = "sha256:…"                                    # hash over the package tree — the IDENTITY
 source_kind     = "registry"                                    # registry | git | override | path
-dependencies    = []                                            # transitively resolved deps (kind:name@=version)
+dependencies    = []                                            # transitively resolved deps (group/name@=version)
 overridden      = false                                         # true iff resolved through [[override]]
 
 [[package]]
 kind    = "stack"
 name    = "rust-cli"
+group   = "org.vibevm"
 version = "0.1.0"
 # ... etc
 ```
 
-**Identity is `(kind, name, version, content_hash)`**, not the URL. `source_url` is informational — which URL answered the fetch on this particular install. A reinstall through a mirror with a different URL but the same `content_hash` is a no-op; a mismatched `content_hash` is a fatal error (integrity violation). This makes mirror-switching and host-migration invisible to the lockfile — the exact property whose absence turned Nix into a hostage of a single hosting provider.
+**Identity is `(group, name, version, content_hash)`**, not the URL. `source_url` is informational — which URL answered the fetch on this particular install. A reinstall through a mirror with a different URL but the same `content_hash` is a no-op; a mismatched `content_hash` is a fatal error (integrity violation). This makes mirror-switching and host-migration invisible to the lockfile — the exact property whose absence turned Nix into a hostage of a single hosting provider.
 
 **`source_kind`** records which resolution path produced the entry — `registry` (the `[[registry]]` walk), `git` (a `[requires.packages]` git-source), `override` (a `[[override]]` pin), or `path` (a `[requires.packages]` path-source — typically a sibling workspace member, PROP-007 §2.5). For a `path` entry `source_url` is not a URL: it is the member's directory **relative to the workspace root**, so the lockfile stays portable across machines.
 
-**Schema versioning.** `schema_version` is `4`. vibevm is pre-release and breaks lockfile compatibility freely — there is no migration path and none is needed. A `vibe.lock` whose version is not the current one is rejected outright; `vibe install` regenerates it.
+**Schema versioning.** `schema_version` is `5`. vibevm is pre-release and breaks lockfile compatibility freely — there is no migration path and none is needed. A `vibe.lock` whose version is not the current one is rejected outright; `vibe install` regenerates it.
 
 The lockfile is the source of truth for what is installed. `vibe list` reads it. `vibe uninstall` reads it to know what files to remove. It is committed to git.
 
@@ -694,18 +714,18 @@ authors = ["Oleg <oleg@example.com>"]
 capabilities = []                                            # abstract requirements satisfied by any provider
 
 [requires.packages]
-"flow:wal"        = "^0.3"                # registry-resolved; caret-default (Cargo shorthand)
-"stack:rust-cli"  = "^0.1.0"
+"org.vibevm/wal"       = "^0.3"           # registry-resolved; caret-default (Cargo shorthand)
+"org.vibevm/rust-cli"  = "^0.1.0"
 
 # Git-source: a whole repository = one package. PROP-002 §2.4.1.
 # Use case: a single private/internal package without a multi-package
 # `[[registry]]` org behind it.
-# "flow:internal-helper" = { git = "git@gitlab.company.com:specs/internal-helper",
-#                            tag = "v0.1.0" }
-# "flow:experimental"    = { git = "https://github.com/me/flow-experimental",
-#                            branch = "main" }     # mutable; vibe update follows HEAD
-# "flow:wal-fork"        = { git = "https://github.com/me/flow-wal-fork",
-#                            rev = "abc12345" }    # commit SHA (most strict)
+# "org.example/internal-helper" = { git = "git@gitlab.company.com:specs/internal-helper",
+#                                   tag = "v0.1.0" }
+# "org.example/experimental"    = { git = "https://github.com/me/flow-experimental",
+#                                   branch = "main" }   # mutable; vibe update follows HEAD
+# "org.example/wal-fork"        = { git = "https://github.com/me/flow-wal-fork",
+#                                   rev = "abc12345" }  # commit SHA (most strict)
 
 # ----- Registry redirect (PROP-002 §2.4.2) -----------------------------
 #
@@ -759,7 +779,7 @@ api_key_env = "ANTHROPIC_API_KEY"
 name   = "vibespecs"
 url    = "git@gitverse.ru:vibespecs"     # ORG root (not a package repo)
 ref    = "main"                           # registry-level metadata ref (reserved; not used today)
-naming = "kind-name"                      # convention: package repo name = "<kind>-<name>" under this org
+naming = "fqdn"                           # default: package repo name = "<group>.<name>" under this org
 auth   = "none"                           # public read-only — default; no credential prompts in scripted runs
 
 # Authenticated registry — token from env-var (PROP-002 §2.2.1). On 401 with
@@ -783,7 +803,7 @@ auth   = "none"                           # public read-only — default; no cre
 # fetched directly from the given URL at the given ref. Integrity (content_hash)
 # is still pinned in the lockfile and verified on every install.
 # [[override]]
-# pkgref     = "flow:wal"
+# pkgref     = "org.vibevm/wal"
 # source_url = "git@mycompany:forks/wal"
 # ref        = "my-fix-branch"            # optional — tag, branch, or commit
 # reason     = "awaiting upstream PR #42" # optional — surfaces in `vibe list --overrides`
@@ -832,7 +852,7 @@ local directory — typically a sibling member — instead of a registry:
 
 ```toml
 [requires.packages]
-"flow:wal" = { path = "../flow-wal", version = "^0.1" }
+"org.vibevm/wal" = { path = "../flow-wal", version = "^0.1" }
 ```
 
 `path` drives local development; the optional `version` is the constraint
@@ -874,9 +894,9 @@ implementation time.
 A registry is a **git-hosted organization** (GitVerse org / GitHub org / Gitea org / Forgejo group) in which every package is its own repository. A project references one or more registries via the `[[registry]]` array in `vibe.toml`; additional `[[mirror]]` and `[[override]]` entries control fallback and local-pin behaviour (§7.5).
 
 Key properties:
-- **No central monorepo-as-registry.** Each package (`<kind>:<name>`) is a standalone git repository, tagged with its semver releases (`v0.1.0`, `v0.2.0`, …). Repo naming is a property of the registry (default convention: `<kind>-<name>`), not a hard-coded rule in the CLI.
+- **No central monorepo-as-registry.** Each package (`<group>/<name>`) is a standalone git repository, tagged with its semver releases (`v0.1.0`, `v0.2.0`, …). Repo naming is a property of the registry — the default `fqdn` convention maps a package to the repository `<group>.<name>` — not a hard-coded rule in the CLI.
 - **Multi-registry is first-class.** The `[[registry]]` array is ordered — first registry with the requested pkgref wins; mirrors of each registry try first before the next registry is consulted.
-- **Identity is content-addressed.** A package is identified by `(kind, name, version, content_hash)`; the URL that served the content is informational. Mirror-switching and host-migration do not rewrite anyone's lockfile.
+- **Identity is content-addressed.** A package is identified by `(group, name, version, content_hash)`; the URL that served the content is informational. Mirror-switching and host-migration do not rewrite anyone's lockfile.
 - **URLs are generic git URLs.** No `github:` / `gitverse:` / `gitlab:` short-form schemes — the CLI does not hard-code host semantics. Any URL `git` accepts is usable. Onboarding a new host requires only that git speaks to it.
 
 The decentralized shape exists deliberately to avoid the single-host lock-in pattern that, for example, ties Nix to GitHub through hardcoded URL schemes, a global index hosted on GitHub, and lockfiles that pin absolute GitHub URLs. In vibevm, every load-bearing surface (resolve, fetch, lockfile) is host-agnostic.
@@ -886,7 +906,7 @@ The decentralized shape exists deliberately to avoid the single-host lock-in pat
 A registry is a **hosting organization URL**. Each package under it is a **separate git repository** with a flat layout — the package's content lives at the repository root, versions are git tags:
 
 ```
-git@host:<org>/<kind>-<name>.git       (default naming; per-registry convention)
+git@host:<org>/<group>.<name>.git      (default naming = "fqdn"; per-registry convention)
 ├── vibe.toml                          # required — carries [package]
 ├── README.md
 ├── boot/
@@ -901,7 +921,7 @@ tags: v0.1.0, v0.2.0, v1.3.0-rc.1, ...
 A tag is immutable by convention; any observed tag rewrite is caught by the integrity check (content_hash mismatch against lockfile) and halts the install.
 
 Resolution: `vibe install flow:wal@^0.3` →
-1. For each `[[registry]]` in order, and each of its `[[mirror]]`-s before the canonical URL: compute the package repo URL via the registry's `naming` convention (e.g. `git@gitverse.ru:vibespecs/flow-wal.git`).
+1. For each `[[registry]]` in order, and each of its `[[mirror]]`-s before the canonical URL: compute the package repo URL via the registry's `naming` convention (e.g. `git@gitverse.ru:vibespecs/org.vibevm.wal.git`).
 2. `git ls-remote --tags` against that URL — cheap, no clone needed to enumerate versions.
 3. Find the highest version matching `^0.3`; break on first registry that has a satisfying match.
 4. Fetch that tag's worktree into the per-package clone cache (§8.3) — shallow / sparse where beneficial.
@@ -1447,7 +1467,7 @@ Terms used throughout this document, in alphabetical order. When in doubt, refer
 - **Milestone (M0/M1/...)** A release stage with a defined feature set. See Section 11.
 - **Node.** A unit of work in the task graph.
 - **Package.** A named, versioned installable artifact of one of the four kinds.
-- **PackageRef.** A reference of the form `<kind>:<name>` or `<kind>:<name>@<version-constraint>`.
+- **PackageRef.** A package reference — `[<kind>:][<group>/]<name>[@<version-constraint>]`. Manifests store the qualified `<group>/<name>` form; the short `<name>` form is CLI-only sugar resolved via the package index. See §7.1.
 - **Plugin.** Synonym for "package" in some contexts; "package" is preferred in user-facing text.
 - **Project manifest.** A `vibe.toml` in the `[project]` role — a non-publishable consumer node.
 - **Registry.** A git repository containing packages, structured per Section 8.
