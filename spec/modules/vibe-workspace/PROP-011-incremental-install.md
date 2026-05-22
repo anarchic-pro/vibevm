@@ -1,7 +1,7 @@
 # PROP-011: Incremental install — skip resolution when fresh, materialise only the diff {#root}
 
 **Milestone:** design proposal; targets a future milestone (owner to place in [`ROADMAP.md`](../../../ROADMAP.md)). It refines the install machinery of [PROP-009](PROP-009-loading-model.md) (M1.18, Phases 1–6 shipped) and has **no further dependency** — it does not wait on PROP-008 or PROP-010, so it can be scheduled early. Not implementation-locked.
-**Status:** DRAFT — requirements captured in owner discussions on 2026-05-21 (draft 2 closed the boot-regeneration question); the remaining §5 open questions need an owner design session before implementation.
+**Status:** DRAFT — requirements captured in owner discussions on 2026-05-21; the three §5 design questions were resolved in an owner session on 2026-05-22 (draft 3 — see §8). Implementation-ready.
 **Related:** [PROP-009](PROP-009-loading-model.md) (the loading model — `apply_resolution`, `regenerate_boot`, `vibedeps::materialise`, the `vibe install` orchestration this PROP refines; §2.10 `vibe reinstall`); [PROP-007](PROP-007-workspace.md) (workspaces — unified resolution, the matryoshka); [PROP-010](../vibe-registry/PROP-010-local-package-cache.md) (the local cache — skip-when-fresh makes the common path offline-clean for free, §2.6 there).
 **Owner sanction:** this PROP changes `vibe install`'s observable contract (it becomes lockfile-respecting — §2.2) and so edits `VIBEVM-SPEC.md` §9.1. The spec edit lands at implementation time and requires explicit owner sanction — not yet granted; this PROP is the requirements record.
 
@@ -38,7 +38,7 @@ This makes a `vibe install` where no dependency declaration changed cost only: d
 
 It also fixes an observable wart. Today `vibe install` always re-resolves, so it silently bumps a package within its constraint on every run (a `^0.3` pin drifts to the newest `0.3.x` available). With the freshness check, **`vibe install` becomes lockfile-respecting**: unchanged `[requires]` ⇒ the locked versions are honoured verbatim. `vibe update` remains the explicit "re-resolve and pick newer" command. This aligns `vibe install` with the `cargo build` / `npm install` contract — *install respects the lock; update moves it* — and makes a build reproducible.
 
-When `[requires]` *has* changed, resolution runs. Ideally it runs **incrementally** — holding the existing `vibe.lock` pins and resolving only the delta — reusing the scoped-resolution machinery `vibe update <pkgref>` already has (PROP-009 FU3); a full re-resolve is the acceptable fallback. The exact freshness oracle (what is digested, and whether the digest lives in `vibe.lock` meta or is recomputed and compared) is §5.1.
+When `[requires]` *has* changed, resolution runs **incrementally** (§5.3) — holding the existing `vibe.lock` pins and resolving only the delta, reusing the scoped-resolution machinery `vibe update <pkgref>` already has (PROP-009 FU3); a full re-resolve is the fallback when the delta cannot be isolated. The freshness check itself adds no `vibe.lock` field: the lockfile *is* the baseline, and the check is a `cargo`-style **satisfiability test** of the locked versions against the current `[requires]` — see §5.1.
 
 ### 2.3 Materialise only the diff {#materialise-diff}
 
@@ -46,7 +46,7 @@ When `[requires]` *has* changed, resolution runs. Ideally it runs **incrementall
 
 For a `vibe install` that changed one subtree, this turns a re-copy of the whole dependency corpus into a copy of just the handful of slots that actually moved.
 
-The skip trusts slot-presence-for-a-version as a proxy for correctness — it does not re-hash the slot. That is deliberate: hashing every slot on every install would defeat the optimisation, and the integrity escape hatch already exists (`vibe reinstall --force`, §2.5, re-fetches and re-copies unconditionally). Whether a *cheap* `content_hash` spot-check is worth keeping on the fast path is §5.2.
+The skip trusts slot-presence-for-a-version as a proxy for correctness — by default it does not re-hash the slot. That is deliberate: hashing every slot on every install would defeat the optimisation, and the integrity escape hatch already exists (`vibe reinstall --force`, §2.5, re-fetches and re-copies unconditionally). Whether the fast path additionally verifies a slot's `content_hash` before trusting it is a **configurable strategy** — the `slot_integrity` setting, `trust-presence` by default (§5.2).
 
 ### 2.4 Boot regeneration stays whole-tree — and why that is fine {#boot-regen}
 
@@ -73,7 +73,8 @@ The skips are safe precisely *because* these bypasses exist. Keeping them as the
 
 - `vibe-workspace` — the freshness check feeding `apply_resolution`; `vibedeps::materialise` (or its caller) gains the slot-present skip; the install orchestration learns the resolution-skip path.
 - `vibe-cli` — `vibe install` wires the freshness check ahead of the depsolver; its report distinguishes "unchanged — nothing re-resolved" from a real apply.
-- `vibe.lock` — may gain a small `meta` digest of the resolution inputs to make the freshness check cheap and exact (§5.1); assessed at implementation time, no schema bump assumed.
+- `vibe.lock` — unchanged; the lockfile *is* the freshness baseline (§5.1), so no schema bump and no new field.
+- vibevm user configuration — a new `[install] slot_integrity` key (`trust-presence` default, or `verify-hash`) selects the §2.3 fast-path integrity strategy (§5.2). Set once, persists across runs.
 - No change to `vibe update` or `vibe reinstall` beyond their role as the §2.5 bypasses.
 
 ---
@@ -84,11 +85,13 @@ None. PROP-011 is purely an optimisation of an existing, correct operation — t
 
 ---
 
-## 5. Open questions {#open}
+## 5. Resolved questions {#open}
 
-1. **The freshness oracle.** What exactly is digested — the serialised union of every node's `[requires]`? — and where does the comparison baseline live: a digest field in `vibe.lock` `meta`, or recomputed from the locked graph and `meta.root_dependencies`? It must be content-based, not mtime-based (mtime is unreliable across clones and checkouts — §6).
-2. **Slot integrity on the fast path.** Trust slot-presence-for-a-version outright (§2.3), or keep a cheap `content_hash` spot-check? The trade-off is fast-path cost versus catching a hand-corrupted slot without `--force`.
-3. **Incremental re-resolution on a `[requires]` delta.** When resolution does run, hold existing lock pins and resolve only the delta (reuse FU3 machinery), or full re-resolve? Leaning: incremental, full re-resolve as fallback.
+The three questions opened in draft 2 were resolved in an owner design session on 2026-05-22 (draft 3).
+
+1. **The freshness oracle — `cargo`'s model.** No digest field is added to `vibe.lock`; the lockfile *is* the baseline. The freshness check is a **satisfiability test**, the shape `cargo` uses: re-read every node's `[requires]`, and the lock is fresh iff every declared dependency has a `[[package]]` entry whose pinned version satisfies the current constraint (registry / resolved `var`) or whose `source_url` + `source_ref` match the declared git ref or local path. The declared root set must equal `meta.root_dependencies`. Transitive packages are trusted — they were resolved from roots, and an unchanged root set cannot have produced a different transitive closure (a transitive `[requires]` lives inside a `vibedeps/` slot, immutable once materialised). The check uses what the lock already records — versions *and* per-package `content_hash` — and needs no schema bump. It is content-based, never mtime-based (§6).
+2. **Slot integrity on the fast path — a configurable strategy.** The fast-path slot skip (§2.3) is governed by a **`slot_integrity` setting** in the vibevm user configuration, chosen once and persisted. Two values: `trust-presence` (the **default** — skip a slot present for the resolved version, no hashing) and `verify-hash` (additionally verify the slot's content against the lock's `content_hash` before skipping, re-materialising on a mismatch). The default keeps the fast path fast; `verify-hash` is `cargo`'s always-verify discipline for an operator who wants it without reaching for `--force`. A project-level override is a possible later extension, not v1 scope.
+3. **Incremental re-resolution.** When `[requires]` has changed, resolution runs **incrementally** — holding the existing `vibe.lock` pins and resolving only the delta, reusing the scoped-resolution machinery `vibe update <pkgref>` already has (PROP-009 FU3). A full re-resolve is the fallback when the delta cannot be isolated.
 
 Closed in draft 2: scoped boot regeneration — boot regeneration stays whole-tree (§2.4), the cheap phase is not optimised.
 
@@ -106,7 +109,7 @@ Closed in draft 2: scoped boot regeneration — boot regeneration stays whole-tr
 ## 7. Phase plan {#phases}
 
 1. **Skip resolution when fresh** — the content-based freshness check; `vibe install` skips the depsolver on an unchanged `[requires]`, becoming lockfile-respecting. The largest win and the observable-contract change.
-2. **Materialise only the diff** — the slot-present skip in the materialisation step.
+2. **Materialise only the diff** — the slot-present skip in the materialisation step, with the `slot_integrity` user-config setting selecting `trust-presence` (default) or `verify-hash` (§5.2).
 3. **Incremental re-resolution** — on a `[requires]` delta, hold existing pins and resolve the delta (reuse the FU3 scoped-resolution machinery).
 4. **Docs + `VIBEVM-SPEC.md`** — the §9.1 edit (install respects the lock) under owner sanction; a `docs/` note.
 
@@ -118,3 +121,4 @@ Boot-regeneration scoping (§2.4) is out of scope by owner decision — not a ph
 
 - **2026-05-21 — draft 1.** Requirements captured in an owner discussion on incremental install: the resolution / application split (§2.1), skipping the depsolver when `vibe.lock` is fresh — which also makes `vibe install` lockfile-respecting (§2.2), materialising only changed `vibedeps/` slots (§2.3), and the deliberate decision to leave boot regeneration whole-tree because it is the cheap phase (§2.4).
 - **2026-05-21 — draft 2.** Owner review: the §2.4 decision — boot regeneration stays whole-tree, the cheap phase is not optimised — confirmed and made firm; the corresponding draft-1 open question is closed. The PROP stands on its two substantive wins, §2.2 (skip resolution when fresh) and §2.3 (materialise only the diff). Three §5 open questions — the freshness oracle, slot integrity, incremental re-resolution — remain for a follow-up owner design session. Not yet implementation-ready.
+- **2026-05-22 — draft 3.** The three §5 open questions resolved in an owner design session. The freshness oracle is `cargo`'s satisfiability model — the lockfile is the baseline, no new field (§5.1). Slot integrity on the fast path is a `slot_integrity` vibevm user-config setting, `trust-presence` by default (§5.2). A changed `[requires]` re-resolves incrementally, full re-resolve as fallback (§5.3). Implementation-ready.
