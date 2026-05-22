@@ -18,9 +18,17 @@ use crate::types::{
     ObsoletesEntry, PackageKind, ProvidesEntry, RequiresAnyEntry, RequiresEntry, SubskillEntry,
 };
 
-/// Subset of `vibe.toml` we care about for the index.
+/// Subset of `vibe.toml` the index cares about.
+///
+/// Deliberately **lenient** — no `deny_unknown_fields`. The index is a
+/// derived hot cache (PROP-005 §2.3); it reads already-published
+/// manifests and must tolerate every section the unified `vibe.toml`
+/// schema carries today or grows later (`[project]`, `[[registry]]`,
+/// `[origin]`, `[target.*]`, …) without the parser rotting. Strict
+/// validation is `vibe-core`'s job at publish / install time, not the
+/// scanner's. Only the fields below are lifted into a [`VersionEntry`];
+/// every other section is ignored.
 #[derive(Debug, Deserialize)]
-#[serde(deny_unknown_fields)]
 pub struct RawManifest {
     pub package: RawPackage,
 
@@ -42,13 +50,8 @@ pub struct RawManifest {
     #[serde(default)]
     pub conflicts: RawConflicts,
 
-    /// `[writes]` — captured opaquely because file-paths the package
-    /// would land on disk do not bear on the index entry. Slice 11
-    /// docs cover why this stays out of the index.
-    #[serde(default)]
-    pub writes: Option<toml::Value>,
-
-    /// Carried as a generic value-bag; we split into named features + the `exclusive` group during conversion.
+    /// Carried as a generic value-bag; split into named features + the
+    /// `exclusive` group during conversion.
     #[serde(default)]
     pub features: BTreeMap<String, toml::Value>,
 
@@ -57,18 +60,6 @@ pub struct RawManifest {
 
     #[serde(default)]
     pub boot_snippet: Option<RawBootSnippet>,
-
-    /// Legacy v1 compact dependencies block — accepted on parse, not
-    /// surfaced into the index entry (modern manifests carry the
-    /// requires/conflicts split). Anything else here means the raw
-    /// manifest is in legacy form; callers either migrate or skip.
-    #[serde(default)]
-    pub dependencies: Option<toml::Value>,
-
-    /// `[target."context(...)".dependencies]` blocks per PROP-003 §2.6.1.
-    /// Captured opaquely; not surfaced into the index entry by slice 3.
-    #[serde(default, rename = "target")]
-    pub conditional_targets: Option<toml::Value>,
 }
 
 #[derive(Debug, Deserialize)]
@@ -90,7 +81,6 @@ pub struct RawPackage {
     pub describes: Option<String>,
 }
 
-
 #[derive(Debug, Default, Deserialize)]
 pub struct RawCompatibility {
     #[serde(default)]
@@ -105,10 +95,15 @@ pub struct RawProvides {
     pub capabilities: Vec<String>,
 }
 
+/// `[requires]` — `packages` is the modern TOML **table** form
+/// (`<kind>:<name>` key → constraint string or inline-table value); the
+/// legacy array form is gone, retired with the M1.17 unified manifest.
+/// Each value is kept as an opaque [`toml::Value`] and flattened to a
+/// pkgref string by [`requires_from_raw`].
 #[derive(Debug, Default, Deserialize)]
 pub struct RawRequires {
     #[serde(default)]
-    pub packages: Vec<String>,
+    pub packages: BTreeMap<String, toml::Value>,
     #[serde(default)]
     pub capabilities: Vec<String>,
 }
@@ -140,18 +135,26 @@ pub struct RawI18n {
     pub preferred: Vec<String>,
 }
 
+/// `[boot_snippet]` — the boot contribution a package ships. M1.18's
+/// loading model (PROP-009) retired the author-chosen `filename`; a
+/// snippet is now identified by its `source` path inside the package
+/// plus an ordering `category`. `link` / `when`, if present, are
+/// loading-model concerns the index does not catalogue — they are
+/// ignored (the struct carries no `deny_unknown_fields`).
 #[derive(Debug, Deserialize)]
 pub struct RawBootSnippet {
-    pub filename: String,
+    /// Path to the boot file inside the package, e.g. `boot/10-flow-wal.md`.
+    pub source: String,
+    /// Ordering band for the computed boot sequence (PROP-009 §2.5):
+    /// `foundation` / `flow` / `stack` / `user-override`.
     #[serde(default)]
-    pub source: Option<String>,
+    pub category: Option<String>,
 }
 
 pub fn parse_manifest(bytes: &[u8]) -> Result<RawManifest> {
     let s = std::str::from_utf8(bytes)
         .map_err(|e| Error::Malformed(format!("vibe.toml is not UTF-8: {e}")))?;
-    toml::from_str::<RawManifest>(s)
-        .map_err(|e| Error::Malformed(format!("vibe.toml: {e}")))
+    toml::from_str::<RawManifest>(s).map_err(|e| Error::Malformed(format!("vibe.toml: {e}")))
 }
 
 /// Convert `RawManifest` features into the [`FeaturesEntry`] shape —
@@ -162,15 +165,17 @@ pub fn features_from_raw(raw: &BTreeMap<String, toml::Value>) -> Result<Features
     let mut exclusive = BTreeMap::new();
     for (k, v) in raw {
         if k == "exclusive" {
-            let table: BTreeMap<String, Vec<String>> = v.clone().try_into().map_err(|e| {
-                Error::Malformed(format!("`features.exclusive` is malformed: {e}"))
-            })?;
+            let table: BTreeMap<String, Vec<String>> = v
+                .clone()
+                .try_into()
+                .map_err(|e| Error::Malformed(format!("`features.exclusive` is malformed: {e}")))?;
             exclusive = table;
             continue;
         }
-        let arr: Vec<String> = v.clone().try_into().map_err(|e| {
-            Error::Malformed(format!("`features.{k}` is not a string list: {e}"))
-        })?;
+        let arr: Vec<String> = v
+            .clone()
+            .try_into()
+            .map_err(|e| Error::Malformed(format!("`features.{k}` is not a string list: {e}")))?;
         features.insert(k.clone(), arr);
     }
     Ok(FeaturesEntry {
@@ -186,9 +191,31 @@ pub fn provides_from_raw(raw: &RawProvides) -> ProvidesEntry {
 }
 
 pub fn requires_from_raw(raw: &RawRequires) -> RequiresEntry {
+    let mut packages: Vec<String> = raw
+        .packages
+        .iter()
+        .map(|(pkgref, value)| flatten_requires_entry(pkgref, value))
+        .collect();
+    packages.sort();
     RequiresEntry {
-        packages: raw.packages.clone(),
+        packages,
         capabilities: raw.capabilities.clone(),
+    }
+}
+
+/// Flatten one `[requires.packages]` entry into a single pkgref string
+/// for the index. A bare constraint (`"^0.3"`) or an inline-table
+/// `version` becomes `<kind>:<name>@<constraint>`; a git / path /
+/// `version.var` source — which has no single constraint string —
+/// degrades to the bare `<kind>:<name>`.
+fn flatten_requires_entry(pkgref: &str, value: &toml::Value) -> String {
+    match value {
+        toml::Value::String(constraint) => format!("{pkgref}@{constraint}"),
+        toml::Value::Table(table) => match table.get("version") {
+            Some(toml::Value::String(constraint)) => format!("{pkgref}@{constraint}"),
+            _ => pkgref.to_string(),
+        },
+        _ => pkgref.to_string(),
     }
 }
 
@@ -228,7 +255,8 @@ pub fn i18n_from_raw(raw: &RawI18n) -> I18nEntry {
 
 pub fn boot_snippet_from_raw(raw: &Option<RawBootSnippet>) -> Option<BootSnippetEntry> {
     raw.as_ref().map(|b| BootSnippetEntry {
-        filename: b.filename.clone(),
+        source: b.source.clone(),
+        category: b.category.clone(),
     })
 }
 
@@ -237,7 +265,6 @@ pub fn boot_snippet_from_raw(raw: &Option<RawBootSnippet>) -> Option<BootSnippet
 // ---------------------------------------------------------------------------
 
 #[derive(Debug, Default, Deserialize)]
-#[serde(deny_unknown_fields)]
 pub struct RawSubskill {
     #[serde(default)]
     pub subskill: RawSubskillMeta,
@@ -310,7 +337,11 @@ pub fn collect_subskills(pkg_root: &Path) -> Result<Vec<SubskillEntry>> {
         .map_err(|e| {
             Error::Malformed(format!(
                 "{}: {e}",
-                entry.path().strip_prefix(pkg_root).unwrap_or(entry.path()).display()
+                entry
+                    .path()
+                    .strip_prefix(pkg_root)
+                    .unwrap_or(entry.path())
+                    .display()
             ))
         })?;
 
@@ -405,8 +436,10 @@ version = "0.3.0"
 capabilities = ["ui:landing-page@0.3.0"]
 
 [requires]
-packages = ["flow:wal@^0.1"]
 capabilities = ["db:any@>=1.0"]
+
+[requires.packages]
+"flow:wal" = "^0.1"
 
 [[requires_any]]
 one_of = ["stack:rust-cli@^0.1", "stack:rust-axum@^0.2"]
@@ -416,6 +449,10 @@ one_of = ["stack:rust-cli@^0.1", "stack:rust-axum@^0.2"]
         assert_eq!(m.requires.packages.len(), 1);
         assert_eq!(m.requires.capabilities.len(), 1);
         assert_eq!(m.requires_any.len(), 1);
+        // The modern table form flattens to a `<kind>:<name>@<constraint>`
+        // pkgref string in the index entry.
+        let req = requires_from_raw(&m.requires);
+        assert_eq!(req.packages, vec!["flow:wal@^0.1".to_string()]);
     }
 
     #[test]
@@ -439,7 +476,10 @@ group = ["a", "b"]
         assert!(f.features.contains_key("default"));
         assert!(f.features.contains_key("a"));
         assert!(f.features.contains_key("b"));
-        assert_eq!(f.exclusive.get("group").unwrap(), &vec!["a".to_string(), "b".to_string()]);
+        assert_eq!(
+            f.exclusive.get("group").unwrap(),
+            &vec!["a".to_string(), "b".to_string()]
+        );
     }
 
     #[test]
@@ -449,5 +489,50 @@ group = ["a", "b"]
         assert_eq!(m.package.name, "wal");
         assert_eq!(m.package.kind, PackageKind::Flow);
         assert_eq!(m.package.license, Some("EULA".into()));
+    }
+
+    #[test]
+    fn parse_manifest_boot_snippet_current_schema() {
+        // M1.18 loading model: `[boot_snippet]` is `source` + `category`,
+        // not the retired `filename`. A stray `link` (a loading-model
+        // concern the index does not catalogue) is tolerated, not rejected.
+        let body = br#"
+[package]
+name = "wal"
+kind = "flow"
+version = "0.1.0"
+
+[boot_snippet]
+source = "boot/10-flow-wal.md"
+category = "flow"
+link = "inline"
+"#;
+        let m = parse_manifest(body).unwrap();
+        let bs = boot_snippet_from_raw(&m.boot_snippet).expect("boot_snippet present");
+        assert_eq!(bs.source, "boot/10-flow-wal.md");
+        assert_eq!(bs.category.as_deref(), Some("flow"));
+    }
+
+    #[test]
+    fn parse_manifest_tolerates_unknown_sections() {
+        // The scanner is lenient by design (PROP-005 §2.3 — the index is a
+        // derived cache). A unified `vibe.toml` carrying sections the index
+        // does not consume — `[origin]`, `[[registry]]` — must parse, not
+        // error: that strictness is what rotted the pre-de-rot parser.
+        let body = br#"
+[package]
+name = "wal"
+kind = "flow"
+version = "0.1.0"
+
+[origin]
+workspace = "org.vibevm/monorepo"
+
+[[registry]]
+name = "vibespecs"
+url = "https://github.com/vibespecs"
+"#;
+        let m = parse_manifest(body).unwrap();
+        assert_eq!(m.package.name, "wal");
     }
 }

@@ -103,15 +103,12 @@ impl InvertedView {
         for entry in entries {
             for cap in &entry.provides.capabilities {
                 let slug = capability_slug(cap);
-                by_capability
-                    .entry(slug)
-                    .or_default()
-                    .push(CapabilityRow {
-                        kind: entry.kind,
-                        name: entry.name.clone(),
-                        version: entry.version.clone(),
-                        capability: cap.clone(),
-                    });
+                by_capability.entry(slug).or_default().push(CapabilityRow {
+                    kind: entry.kind,
+                    name: entry.name.clone(),
+                    version: entry.version.clone(),
+                    capability: cap.clone(),
+                });
             }
             if let Some(purl) = &entry.describes {
                 let slug = purl_slug(purl);
@@ -206,11 +203,7 @@ pub fn write_capability(
     })
 }
 
-pub fn write_purl(
-    data_dir: &Path,
-    slug: &str,
-    rows: &[PurlRow],
-) -> Result<WrittenInvertedFile> {
+pub fn write_purl(data_dir: &Path, slug: &str, rows: &[PurlRow]) -> Result<WrittenInvertedFile> {
     let bytes = serialise_rows(rows.iter(), serde_json::to_string)?;
     let path = purl_file(data_dir, slug);
     atomic_write(&path, &bytes)?;
@@ -228,9 +221,8 @@ where
 {
     let mut out = Vec::new();
     for row in rows {
-        let line = ser(row).map_err(|e| {
-            Error::Malformed(format!("could not serialise inverted row: {e}"))
-        })?;
+        let line = ser(row)
+            .map_err(|e| Error::Malformed(format!("could not serialise inverted row: {e}")))?;
         out.extend_from_slice(line.as_bytes());
         out.push(b'\n');
     }
@@ -330,7 +322,8 @@ mod tests {
                 .collect(),
             i18n: Default::default(),
             boot_snippet: Some(BootSnippetEntry {
-                filename: format!("10-{name}.md"),
+                source: format!("boot/{name}.md"),
+                category: None,
             }),
             files_count: 1,
             indexed_at: now(),
@@ -436,12 +429,13 @@ mod tests {
             capability: "ui:landing-page@0.3.0".into(),
         }];
         let written = write_capability(dir.path(), "ui--landing-page--0.3.0", &rows).unwrap();
-        assert_eq!(written.relative_path, "by-cap/ui--landing-page--0.3.0.jsonl");
-        let content = std::fs::read_to_string(capability_file(
-            dir.path(),
-            "ui--landing-page--0.3.0",
-        ))
-        .unwrap();
+        assert_eq!(
+            written.relative_path,
+            "by-cap/ui--landing-page--0.3.0.jsonl"
+        );
+        let content =
+            std::fs::read_to_string(capability_file(dir.path(), "ui--landing-page--0.3.0"))
+                .unwrap();
         assert!(content.contains("ui:landing-page"));
         assert!(content.ends_with('\n'));
     }

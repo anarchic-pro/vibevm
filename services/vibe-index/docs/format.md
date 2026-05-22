@@ -101,7 +101,7 @@ PROP-005 §2.6.
   "features": { "default": [], "exclusive": {} },
   "subskills": [],
   "i18n": { "available": ["en"], "default": "en" },
-  "boot_snippet": { "filename": "10-flow-wal.md" },
+  "boot_snippet": { "source": "boot/10-flow-wal.md", "category": "flow" },
   "files_count": 5,
   "indexed_at": "2026-05-06T12:00:00Z",
   "indexed_by": "vibe-index 0.1.0-dev"

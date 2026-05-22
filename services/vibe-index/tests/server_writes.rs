@@ -45,7 +45,8 @@ fn entry(kind: PackageKind, name: &str, version: &str) -> VersionEntry {
         subskills: vec![],
         i18n: Default::default(),
         boot_snippet: Some(BootSnippetEntry {
-            filename: format!("10-{name}.md"),
+            source: format!("boot/{name}.md"),
+            category: None,
         }),
         files_count: 1,
         indexed_at: now(),
@@ -106,11 +107,7 @@ async fn post_packages_inserts_entry() {
     let app = build_app(state);
     let payload = serde_json::to_value(entry(PackageKind::Flow, "wal", "0.1.0")).unwrap();
     let resp = app
-        .oneshot(req_post_json(
-            "/v1/packages",
-            Some("topsecret"),
-            payload,
-        ))
+        .oneshot(req_post_json("/v1/packages", Some("topsecret"), payload))
         .await
         .unwrap();
     assert_eq!(resp.status(), StatusCode::CREATED);
@@ -126,7 +123,11 @@ async fn post_packages_upsert_returns_200_for_existing_version() {
     let payload = serde_json::to_value(entry(PackageKind::Flow, "wal", "0.1.0")).unwrap();
     let resp1 = app
         .clone()
-        .oneshot(req_post_json("/v1/packages", Some("topsecret"), payload.clone()))
+        .oneshot(req_post_json(
+            "/v1/packages",
+            Some("topsecret"),
+            payload.clone(),
+        ))
         .await
         .unwrap();
     assert_eq!(resp1.status(), StatusCode::CREATED);
@@ -215,10 +216,7 @@ async fn delete_version_removes_existing() {
         .await
         .unwrap();
     let resp = app
-        .oneshot(req_delete(
-            "/v1/packages/flow/wal/0.1.0",
-            Some("topsecret"),
-        ))
+        .oneshot(req_delete("/v1/packages/flow/wal/0.1.0", Some("topsecret")))
         .await
         .unwrap();
     assert_eq!(resp.status(), StatusCode::OK);

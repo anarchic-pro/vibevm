@@ -221,10 +221,20 @@ impl I18nEntry {
     }
 }
 
+/// `[boot_snippet]` projection (PROP-005 §2.6). M1.18's loading model
+/// (PROP-009 §2.5) retired the author-chosen `filename`; a snippet is
+/// now identified by its `source` path inside the package plus an
+/// ordering `category`.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(deny_unknown_fields)]
 pub struct BootSnippetEntry {
-    pub filename: String,
+    /// Path to the boot file inside the package, e.g. `boot/10-flow-wal.md`.
+    pub source: String,
+    /// Ordering band for the computed boot sequence — `foundation` /
+    /// `flow` / `stack` / `user-override`. Absent when the package
+    /// declares none.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub category: Option<String>,
 }
 
 /// Aggregated record stored on disk in `by-name/<kind>/<name>.json`.
@@ -294,7 +304,8 @@ mod tests {
             subskills: vec![],
             i18n: I18nEntry::default(),
             boot_snippet: Some(BootSnippetEntry {
-                filename: "10-flow-wal.md".into(),
+                source: "boot/10-flow-wal.md".into(),
+                category: Some("flow".into()),
             }),
             files_count: 5,
             indexed_at: DateTime::parse_from_rfc3339("2026-05-06T12:00:00Z")

@@ -57,7 +57,8 @@ fn entry(
         subskills: vec![],
         i18n: Default::default(),
         boot_snippet: Some(BootSnippetEntry {
-            filename: format!("10-{name}.md"),
+            source: format!("boot/{name}.md"),
+            category: None,
         }),
         files_count: 1,
         indexed_at: now(),
@@ -200,10 +201,7 @@ async fn by_cap_jsonl_serves_inverted_capability_index() {
     // populated_state has flow:wal + stack:rust each providing
     // `interface:wal`. Slug is fs-safe encoding (`:` → `--`).
     let resp = app
-        .oneshot(req(
-            Method::GET,
-            "/v1/index/by-cap/interface--wal.jsonl",
-        ))
+        .oneshot(req(Method::GET, "/v1/index/by-cap/interface--wal.jsonl"))
         .await
         .unwrap();
     assert_eq!(resp.status(), StatusCode::OK);
@@ -381,10 +379,7 @@ async fn purls_route_lists_describing_packages() {
     let (_tmp, state) = populated_state();
     let app = build_app(state);
     let resp = app
-        .oneshot(req(
-            Method::GET,
-            "/v1/purls/pkg:cargo%2Fsqlx@0.8.0",
-        ))
+        .oneshot(req(Method::GET, "/v1/purls/pkg:cargo%2Fsqlx@0.8.0"))
         .await
         .unwrap();
     assert_eq!(resp.status(), StatusCode::OK);

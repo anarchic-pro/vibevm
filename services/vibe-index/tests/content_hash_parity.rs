@@ -3,25 +3,26 @@
 //! the content_hash that `vibe-registry::compute_content_hash`
 //! produces for the same files. Algorithm: see PROP-005 §3.2.
 //!
-//! Verified 2026-05-06 against the canonical algorithm via Python
-//! reimplementation + Rust port — both produce the same digest, and
-//! both match what `vibe-registry::compute_content_hash` returns
-//! against the byte-identical `fixtures/registry/flow/wal/v0.1.0/`
-//! source in the main vibevm workspace.
+//! The golden fixture is a byte-for-byte copy of the main workspace's
+//! `fixtures/registry/flow/wal/v0.1.0/` package; `.gitattributes`
+//! (`* text=auto eol=lf`) keeps every text byte identical on Windows /
+//! macOS / Linux, so the digest is stable cross-platform. The `GOLDEN`
+//! constant below was re-derived 2026-05-22 directly from
+//! `vibe-registry::compute_content_hash` run against that source —
+//! `vibe-index`'s own `content_hash.rs` (a verified byte-identical
+//! port) produces the same value, which is what this test asserts.
 //!
 //! If this test fails after a git operation that touches the fixture
-//! or the algorithm: re-derive the expected value by running
-//! `cargo run --manifest-path ../../Cargo.toml -p vibe-cli -- registry vendor`
-//! against the fixture and reading the lockfile, OR by recomputing
-//! the algorithm via any reference implementation. Update both the
-//! constant below and the divergence note.
+//! or the algorithm: re-sync the fixture from
+//! `fixtures/registry/flow/wal/v0.1.0/`, re-derive `GOLDEN` from
+//! `vibe-registry::compute_content_hash` against that directory, and
+//! update the constant below.
 
 use std::path::PathBuf;
 
 use vibe_index::content_hash::compute_content_hash;
 
-const GOLDEN: &str =
-    "sha256:e9fedc632693ecbc3b041de8f553433349df498bfa4e1f19365f174dcd65b63d";
+const GOLDEN: &str = "sha256:f2af92b8d0ba54b7a78884e96718677e0358ca4ac41d8afa8db04dd541f119e7";
 
 #[test]
 fn flow_wal_v0_1_0_matches_canonical_algorithm() {

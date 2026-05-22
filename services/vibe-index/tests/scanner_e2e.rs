@@ -17,9 +17,8 @@ fn git_available() -> bool {
 }
 
 fn manifest_for(name: &str, kind: &str, version: &str, license: Option<&str>) -> String {
-    let mut s = format!(
-        "[package]\nname = \"{name}\"\nkind = \"{kind}\"\nversion = \"{version}\"\n"
-    );
+    let mut s =
+        format!("[package]\nname = \"{name}\"\nkind = \"{kind}\"\nversion = \"{version}\"\n");
     if let Some(l) = license {
         s.push_str(&format!("license = \"{l}\"\n"));
     }
@@ -130,17 +129,11 @@ fn reindex_from_clones_walks_three_packages() {
     assert_eq!(summary["package_count"], 3);
     assert_eq!(summary["version_count"], 4);
     let by_kind = summary["by_kind"].as_array().unwrap();
-    let flow_count = by_kind
-        .iter()
-        .find(|kc| kc["kind"] == "flow")
-        .unwrap()["count"]
+    let flow_count = by_kind.iter().find(|kc| kc["kind"] == "flow").unwrap()["count"]
         .as_u64()
         .unwrap();
     assert_eq!(flow_count, 2);
-    let stack_count = by_kind
-        .iter()
-        .find(|kc| kc["kind"] == "stack")
-        .unwrap()["count"]
+    let stack_count = by_kind.iter().find(|kc| kc["kind"] == "stack").unwrap()["count"]
         .as_u64()
         .unwrap();
     assert_eq!(stack_count, 1);
@@ -183,11 +176,7 @@ fn reindex_skips_non_v_semver_tags() {
 
     let repo = org.join("flow-wal");
     init_repo(&repo);
-    commit_and_tag(
-        &repo,
-        &manifest_for("wal", "flow", "0.1.0", None),
-        "v0.1.0",
-    );
+    commit_and_tag(&repo, &manifest_for("wal", "flow", "0.1.0", None), "v0.1.0");
     git(&repo, &["tag", "release-candidate"]);
 
     let data = work.path().join("index-data");
@@ -218,13 +207,8 @@ fn reindex_skips_non_v_semver_tags() {
     assert_eq!(summary["version_count"], 1);
     let skipped = summary["skipped"].as_array().unwrap();
     assert!(
-        skipped
-            .iter()
-            .any(|s| s["tag"] == "release-candidate"
-                && s["reason"]
-                    .as_str()
-                    .unwrap()
-                    .contains("not a `v<semver>`")),
+        skipped.iter().any(|s| s["tag"] == "release-candidate"
+            && s["reason"].as_str().unwrap().contains("not a `v<semver>`")),
         "expected `release-candidate` skip note, got {skipped:?}"
     );
 }
@@ -328,14 +312,12 @@ fn incremental_skips_unchanged_repos_and_picks_up_new_tags() {
     assert_eq!(summary["mode"], "incremental");
     assert_eq!(summary["package_count"], 1);
     assert_eq!(summary["version_count"], 1);
-    assert!(summary["skipped"]
-        .as_array()
-        .unwrap()
-        .iter()
-        .any(|s| s["reason"]
+    assert!(summary["skipped"].as_array().unwrap().iter().any(|s| {
+        s["reason"]
             .as_str()
             .unwrap()
-            .contains("unchanged since last checkpoint")));
+            .contains("unchanged since last checkpoint")
+    }));
 
     // Add a new tag and reindex incrementally — the new version
     // should land while existing ones are preserved via checkpoint.
@@ -360,10 +342,9 @@ fn incremental_skips_unchanged_repos_and_picks_up_new_tags() {
     assert_eq!(summary["package_count"], 1);
     assert_eq!(summary["version_count"], 2);
 
-    let by_name: serde_json::Value = serde_json::from_slice(
-        &std::fs::read(data.join("by-name/flow/wal.json")).unwrap(),
-    )
-    .unwrap();
+    let by_name: serde_json::Value =
+        serde_json::from_slice(&std::fs::read(data.join("by-name/flow/wal.json")).unwrap())
+            .unwrap();
     assert_eq!(by_name["latest_stable"], "0.2.0");
 }
 
@@ -405,4 +386,88 @@ fn reindex_preserves_registry_metadata_from_init() {
         serde_json::from_slice(&std::fs::read(data.join("repomd.json")).unwrap()).unwrap();
     assert_eq!(repomd["registry"], "vibespecs-gitverse");
     assert_eq!(repomd["naming"], "name");
+}
+
+#[test]
+fn reindex_captures_current_schema_manifest() {
+    // Regression gate against manifest-schema rot. A package whose
+    // `vibe.toml` carries the M1.17 unified-manifest + M1.18 loading-model
+    // shape — a `[requires.packages]` table and a `[boot_snippet]` with
+    // `source` / `category` — must scan into a complete index entry. Before
+    // the 2026-05-22 de-rot the scanner only parsed the pre-M1.17 shape and
+    // silently rotted; this test fails loudly if that ever recurs.
+    if !git_available() {
+        return;
+    }
+    let work = tempfile::tempdir().unwrap();
+    let org = work.path().join("org");
+    fs_must_create(&org);
+
+    let feat = org.join("feat-welcome");
+    init_repo(&feat);
+    let modern = r#"[package]
+name = "welcome"
+kind = "feat"
+version = "0.3.0"
+license = "EULA"
+description = "landing page feat"
+describes = "pkg:cargo/welcome@0.3.0"
+
+[provides]
+capabilities = ["ui:landing-page@0.3.0"]
+
+[requires]
+capabilities = ["db:any@>=1.0"]
+
+[requires.packages]
+"flow:wal" = "^0.1"
+
+[boot_snippet]
+source = "boot/10-feat-welcome.md"
+category = "flow"
+link = "static"
+"#;
+    std::fs::create_dir_all(feat.join("boot")).unwrap();
+    std::fs::write(feat.join("boot/10-feat-welcome.md"), "# welcome boot\n").unwrap();
+    commit_and_tag(&feat, modern, "v0.3.0");
+
+    let data = work.path().join("data");
+    cmd()
+        .args([
+            "init",
+            data.to_str().unwrap(),
+            "--registry",
+            "vibespecs",
+            "--registry-url",
+            "https://example.invalid/vibespecs",
+        ])
+        .assert()
+        .success();
+    cmd()
+        .args([
+            "reindex",
+            data.to_str().unwrap(),
+            "--from-clones",
+            org.to_str().unwrap(),
+            "--full",
+        ])
+        .assert()
+        .success();
+
+    let feat_json: serde_json::Value =
+        serde_json::from_slice(&std::fs::read(data.join("by-name/feat/welcome.json")).unwrap())
+            .unwrap();
+    let entry = &feat_json["versions"][0];
+    assert_eq!(entry["describes"], "pkg:cargo/welcome@0.3.0");
+    assert_eq!(
+        entry["provides"]["capabilities"][0],
+        "ui:landing-page@0.3.0"
+    );
+    // The modern `[requires.packages]` table flattens to a pkgref string.
+    assert_eq!(entry["requires"]["packages"][0], "flow:wal@^0.1");
+    assert_eq!(entry["requires"]["capabilities"][0], "db:any@>=1.0");
+    // `[boot_snippet]` is recorded with `source` + `category` — the M1.18
+    // loading model retired the pre-de-rot `filename`.
+    assert_eq!(entry["boot_snippet"]["source"], "boot/10-feat-welcome.md");
+    assert_eq!(entry["boot_snippet"]["category"], "flow");
 }

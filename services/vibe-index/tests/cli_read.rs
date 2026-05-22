@@ -26,10 +26,6 @@ keywords = ["{name}", "{kind}", "test"]
 
 [provides]
 capabilities = ["interface:{name}"]
-
-[requires]
-packages = []
-capabilities = []
 "#
     )
 }
@@ -134,13 +130,7 @@ fn get_returns_versions_for_known_package() {
         return;
     };
     let out = cmd()
-        .args([
-            "get",
-            data.to_str().unwrap(),
-            "stack",
-            "rust",
-            "--json",
-        ])
+        .args(["get", data.to_str().unwrap(), "stack", "rust", "--json"])
         .assert()
         .success();
     let stdout = String::from_utf8(out.get_output().stdout.clone()).unwrap();
@@ -233,13 +223,7 @@ fn list_filters_by_kind() {
         return;
     };
     let out = cmd()
-        .args([
-            "list",
-            data.to_str().unwrap(),
-            "--kind",
-            "stack",
-            "--json",
-        ])
+        .args(["list", data.to_str().unwrap(), "--kind", "stack", "--json"])
         .assert()
         .success();
     let stdout = String::from_utf8(out.get_output().stdout.clone()).unwrap();
@@ -296,11 +280,13 @@ fn capabilities_lookup_returns_advertisers() {
     let stdout = String::from_utf8(out.get_output().stdout.clone()).unwrap();
     let env: serde_json::Value = serde_json::from_str(&stdout).unwrap();
     assert!(env["hit_count"].as_u64().unwrap() >= 1);
-    assert!(env["hits"]
-        .as_array()
-        .unwrap()
-        .iter()
-        .any(|h| h["name"] == "wal" && h["kind"] == "flow"));
+    assert!(
+        env["hits"]
+            .as_array()
+            .unwrap()
+            .iter()
+            .any(|h| h["name"] == "wal" && h["kind"] == "flow")
+    );
 }
 
 #[test]
@@ -362,16 +348,10 @@ version = "0.1.0"
     let env: serde_json::Value = serde_json::from_str(&stdout).unwrap();
     assert_eq!(env["update_available"], 1);
     let rows = env["rows"].as_array().unwrap();
-    let rust_row = rows
-        .iter()
-        .find(|r| r["name"] == "rust")
-        .expect("rust row");
+    let rust_row = rows.iter().find(|r| r["name"] == "rust").expect("rust row");
     assert_eq!(rust_row["status"], "update-available");
     assert_eq!(rust_row["latest"], "0.2.0");
-    let wal_row = rows
-        .iter()
-        .find(|r| r["name"] == "wal")
-        .expect("wal row");
+    let wal_row = rows.iter().find(|r| r["name"] == "wal").expect("wal row");
     assert_eq!(wal_row["status"], "up-to-date");
 }
 
