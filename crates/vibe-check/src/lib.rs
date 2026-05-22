@@ -15,10 +15,10 @@
 //!    less than `wal_max_age_hours` (default 24); older → warning.
 //! 6. [`CheckId::WalWellformed`] — WAL has the canonical sections
 //!    (Current Phase, Constraints, Done, Next, Issues).
-//! 7. [`CheckId::BootDirectory`] — every file in `spec/boot/` matches
-//!    the `NN-name.md` pattern; no two files share the same `NN`
-//!    prefix (excluding the user-owned `00-core.md` / `90-user.md`
-//!    pair, which are the foundation / overrides slots).
+//! 7. [`CheckId::BootDirectory`] — `spec/boot/` exists and holds only
+//!    markdown files. PROP-009 retired the `NN-` filename prefix; the
+//!    directory holds authored boot files and `vibe`-generated
+//!    `INDEX.md` / `INLINE.md` artifacts, none numerically prefixed.
 //! 8. [`CheckId::LockfileFiles`] — every package in `vibe.lock` has
 //!    its declared `files_written` present on disk; spec/flows,
 //!    spec/feats, spec/stacks subtrees have no orphan files (files
@@ -41,7 +41,6 @@
 
 #![forbid(unsafe_code)]
 
-use std::collections::BTreeMap;
 use std::fs;
 use std::path::{Path, PathBuf};
 use std::time::{SystemTime, UNIX_EPOCH};
@@ -767,69 +766,23 @@ fn check_boot_directory(project_root: &Path, report: &mut CheckReport) {
             return;
         }
     };
-    // Map NN-prefix → Vec<filename> so we can flag collisions.
-    let mut by_prefix: BTreeMap<String, Vec<String>> = BTreeMap::new();
+    // PROP-009 §2.5 retired the `NN-` filename prefix — `vibe` owns boot
+    // ordering by category band, and the generated `INDEX.md` /
+    // `INLINE.md` artifacts carry no numeric prefix. Any markdown file is
+    // a valid boot file; only a non-markdown stray is worth flagging.
     for entry in entries.filter_map(|e| e.ok()) {
         let name = entry.file_name().to_string_lossy().into_owned();
         if !entry.file_type().map(|t| t.is_file()).unwrap_or(false) {
             continue;
         }
         if !name.ends_with(".md") {
-            // Non-markdown files in boot/ — flag as warning. M0/M1
-            // contract is markdown-only here.
             report.warn(
                 CheckId::BootDirectory,
                 Some(boot_rel.join(&name)),
                 None,
                 format!("non-markdown file `{name}` in spec/boot/"),
             );
-            continue;
         }
-        match numeric_prefix(&name) {
-            None => {
-                report.err(
-                    CheckId::BootDirectory,
-                    Some(boot_rel.join(&name)),
-                    None,
-                    format!(
-                        "`{name}` does not match the `NN-name.md` pattern (NN = two ASCII digits)"
-                    ),
-                );
-            }
-            Some(prefix) => {
-                by_prefix.entry(prefix.to_string()).or_default().push(name);
-            }
-        }
-    }
-    for (prefix, mut names) in by_prefix {
-        if names.len() > 1 {
-            names.sort();
-            report.err(
-                CheckId::BootDirectory,
-                Some(boot_rel.clone()),
-                None,
-                format!(
-                    "boot prefix `{prefix}` is shared by {} files: {}",
-                    names.len(),
-                    names.join(", ")
-                ),
-            );
-        }
-    }
-}
-
-/// Two-ASCII-digit prefix followed by `-`, or `None`. Mirrors the
-/// helper in `vibe-install` — duplicated rather than re-exported to
-/// keep `vibe-check` independent of the install crate's surface.
-fn numeric_prefix(filename: &str) -> Option<&str> {
-    if filename.len() < 3 {
-        return None;
-    }
-    let (prefix, rest) = filename.split_at(2);
-    if prefix.chars().all(|c| c.is_ascii_digit()) && rest.starts_with('-') {
-        Some(prefix)
-    } else {
-        None
     }
 }
 
@@ -1273,37 +1226,38 @@ url = "https://example/vibespecs"
     }
 
     #[test]
-    fn boot_dir_prefix_collision_is_an_error() {
+    fn boot_dir_accepts_the_loading_model_layout() {
+        // PROP-009 §2.5 retired the `NN-` prefix: the generated INDEX.md
+        // / INLINE.md and any author-named boot file are all valid.
         let project = tempdir().unwrap();
         write_minimal_project(project.path());
-        // Two `10-` boot snippets — collision.
-        fs::write(project.path().join("spec/boot/10-flow-wal.md"), "x").unwrap();
-        fs::write(project.path().join("spec/boot/10-flow-other.md"), "y").unwrap();
+        fs::write(project.path().join("spec/boot/INDEX.md"), "schema = 1\n").unwrap();
+        fs::write(project.path().join("spec/boot/INLINE.md"), "# inline\n").unwrap();
+        fs::write(project.path().join("spec/boot/rules.md"), "# rules\n").unwrap();
         let report = check_project(project.path(), &opts());
         assert!(
-            report
+            !report
                 .findings
                 .iter()
                 .any(|f| f.check == CheckId::BootDirectory && f.severity == Severity::Error),
-            "expected boot prefix collision error; got: {:?}",
+            "the loading-model boot layout must not be flagged; got: {:?}",
             report.findings
         );
     }
 
     #[test]
-    fn boot_dir_bad_filename_is_an_error() {
+    fn boot_dir_non_markdown_file_is_a_warning() {
         let project = tempdir().unwrap();
         write_minimal_project(project.path());
-        // `flow-wal.md` (no NN- prefix) doesn't match the pattern.
-        fs::write(project.path().join("spec/boot/flow-wal.md"), "x").unwrap();
+        fs::write(project.path().join("spec/boot/notes.txt"), "x").unwrap();
         let report = check_project(project.path(), &opts());
         assert!(
             report
                 .findings
                 .iter()
-                .any(|f| f.check == CheckId::BootDirectory
-                    && f.severity == Severity::Error
-                    && f.message.contains("does not match"))
+                .any(|f| f.check == CheckId::BootDirectory && f.severity == Severity::Warning),
+            "a non-markdown file in spec/boot/ must warn; got: {:?}",
+            report.findings
         );
     }
 
