@@ -67,6 +67,11 @@ pub fn apply_resolution(
     workspace: &Workspace,
     resolution: &[ResolvedDep],
 ) -> Result<InstallOutcome, WorkspaceError> {
+    // 0. Validate every node's `<vibevm>` instruction-file block before
+    //    any mutation — a malformed block aborts here, not mid-install
+    //    (PROP-012 §2.4).
+    validate_redirect_blocks(workspace)?;
+
     // 1. Materialise every resolved package into its `vibedeps/` slot.
     let mut materialised = Vec::with_capacity(resolution.len());
     for dep in resolution {
@@ -182,6 +187,9 @@ pub fn regenerate_boot_from(
 /// `vibe reinstall`. The resolution is reconstructed by reading each
 /// `vibedeps/` slot's own manifest.
 pub fn regenerate_boot(workspace: &Workspace) -> Result<Vec<String>, WorkspaceError> {
+    // PROP-012 §2.4 — reject a malformed instruction-file block before
+    // any boot-artifact write.
+    validate_redirect_blocks(workspace)?;
     let resolution = read_materialised(&workspace.root)?;
     regenerate_boot_from(workspace, &resolution)
 }
@@ -338,6 +346,31 @@ fn node_dependency_boot(
             }
         })
         .collect()
+}
+
+/// Validate every node's agent instruction files before any mutation
+/// (PROP-012 §2.4): a malformed `<vibevm>` block aborts the operation
+/// here — ahead of materialisation or any boot-artifact write — so an
+/// install never half-applies. A missing instruction file is fine; it is
+/// created on write.
+fn validate_redirect_blocks(workspace: &Workspace) -> Result<(), WorkspaceError> {
+    for (rel, _) in workspace.iter_nodes() {
+        let node_dir = workspace.node_abs_path(rel);
+        for name in boot_artifacts::REDIRECT_FILES {
+            let path = node_dir.join(name);
+            let content = match fs::read_to_string(&path) {
+                Ok(s) => s,
+                Err(e) if e.kind() == std::io::ErrorKind::NotFound => continue,
+                Err(e) => return Err(io_err(&path, e)),
+            };
+            if let boot_artifacts::BlockLocation::Malformed(reason) =
+                boot_artifacts::locate_block(&content)
+            {
+                return Err(WorkspaceError::MalformedRedirectBlock { path, reason });
+            }
+        }
+    }
+    Ok(())
 }
 
 /// Build a [`WorkspaceError::Io`] from a `std::io::Error` and its path.

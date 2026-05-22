@@ -18,8 +18,6 @@ use vibe_core::manifest::{
 use crate::cli::InitArgs;
 use crate::output;
 
-const REDIRECT_LINE: &str = "Read every file in spec/boot/ in filename order, then await the user's instructions.\n";
-
 pub fn run(ctx: &output::Context, args: InitArgs) -> Result<()> {
     fs::create_dir_all(&args.path)
         .with_context(|| format!("creating project directory `{}`", args.path.display()))?;
@@ -39,23 +37,12 @@ pub fn run(ctx: &output::Context, args: InitArgs) -> Result<()> {
 
     let mut outcomes = Vec::<Outcome>::new();
 
-    // 1. Redirect files (CLAUDE.md, AGENTS.md, GEMINI.md).
-    for filename in ["CLAUDE.md", "AGENTS.md", "GEMINI.md"] {
-        outcomes.push(ensure_file(
-            ctx,
-            &path,
-            &path.join(filename),
-            REDIRECT_LINE,
-            "agent redirect",
-        )?);
-    }
-
-    // 2. spec/ directory tree.
+    // 1. spec/ directory tree.
     for sub in ["boot", "flows", "feats", "stacks", "common", "modules"] {
         ensure_dir(&path.join("spec").join(sub))?;
     }
 
-    // 3. User-owned boot snippets.
+    // 2. User-owned boot snippets.
     outcomes.push(ensure_file(
         ctx,
         &path,
@@ -71,13 +58,13 @@ pub fn run(ctx: &output::Context, args: InitArgs) -> Result<()> {
         "boot: user overrides",
     )?);
 
-    // 5. Project manifest and empty lockfile.
+    // 3. Project manifest and empty lockfile.
     //
-    // (Step 4 — `spec/WAL.md` scaffold — is intentionally absent. WAL
-    // discipline is a project convention, not part of the package
-    // manager's contract. Operators who want the WAL protocol install
-    // it explicitly, e.g. via `vibe install flow:wal`, which ships a
-    // protocol document plus a starter `spec/WAL.md` template.)
+    // (No `spec/WAL.md` scaffold — WAL discipline is a project
+    // convention, not part of the package manager's contract. Operators
+    // who want the WAL protocol install it explicitly, e.g. via
+    // `vibe install flow:wal`, which ships a protocol document plus a
+    // starter `spec/WAL.md` template.)
     let registries = resolve_registry_sections(&args);
     outcomes.push(ensure_project_manifest(
         ctx,
@@ -88,7 +75,7 @@ pub fn run(ctx: &output::Context, args: InitArgs) -> Result<()> {
     )?);
     outcomes.push(ensure_empty_lockfile(ctx, &path)?);
 
-    // 6. `.vibe/` cache (gitignored per §4.2).
+    // 4. `.vibe/` cache (gitignored per §4.2).
     ensure_dir(&path.join(".vibe/cache"))?;
     outcomes.push(ensure_file(
         ctx,
@@ -98,7 +85,7 @@ pub fn run(ctx: &output::Context, args: InitArgs) -> Result<()> {
         "gitignore: cache",
     )?);
 
-    // 7. .gitignore at project root (only if absent — don't overwrite).
+    // 5. .gitignore at project root (only if absent — don't overwrite).
     outcomes.push(ensure_file(
         ctx,
         &path,
@@ -107,8 +94,44 @@ pub fn run(ctx: &output::Context, args: InitArgs) -> Result<()> {
         "gitignore: root",
     )?);
 
+    // 6. Generate the boot artifacts (PROP-009): `spec/boot/INDEX.md` and
+    //    the managed `<vibevm>` block in CLAUDE.md / AGENTS.md / GEMINI.md
+    //    (PROP-012), so a freshly-initialised project is bootable at once.
+    //    vibevm owns only the block; any co-tenant content is preserved.
+    outcomes.extend(generate_boot_artifacts(ctx, &path)?);
+
     report(ctx, &project_name, &display_root, &outcomes)?;
     Ok(())
+}
+
+/// Generate the PROP-009 boot artifacts for the freshly-scaffolded
+/// project at `path`: `spec/boot/INDEX.md` and the managed `<vibevm>`
+/// block in each agent instruction file (PROP-012). Returns one
+/// [`Outcome`] per artifact, reporting whether it was newly created or
+/// regenerated in place.
+fn generate_boot_artifacts(ctx: &output::Context, path: &Path) -> Result<Vec<Outcome>> {
+    const ARTIFACTS: [&str; 4] = ["spec/boot/INDEX.md", "CLAUDE.md", "AGENTS.md", "GEMINI.md"];
+    let preexisting: Vec<bool> = ARTIFACTS.iter().map(|f| path.join(f).exists()).collect();
+
+    let workspace = vibe_workspace::Workspace::load(path)
+        .with_context(|| "loading the new project to generate its boot artifacts")?;
+    vibe_workspace::install::regenerate_boot(&workspace)
+        .with_context(|| "generating the boot artifacts")?;
+
+    let mut outcomes = Vec::with_capacity(ARTIFACTS.len());
+    for (artifact, &existed) in ARTIFACTS.iter().zip(&preexisting) {
+        if existed {
+            ctx.skipped(artifact, "regenerated");
+        } else {
+            ctx.created(artifact);
+        }
+        outcomes.push(Outcome {
+            path: (*artifact).to_string(),
+            action: if existed { Action::Kept } else { Action::Created },
+            reason: "boot artifact",
+        });
+    }
+    Ok(outcomes)
 }
 
 #[derive(Debug, Clone, Serialize)]

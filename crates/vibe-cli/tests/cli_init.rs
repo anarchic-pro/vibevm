@@ -29,6 +29,7 @@ fn init_creates_expected_layout() {
         "GEMINI.md",
         "spec/boot/00-core.md",
         "spec/boot/90-user.md",
+        "spec/boot/INDEX.md",
         "vibe.toml",
         "vibe.lock",
         ".vibe/.gitignore",
@@ -48,13 +49,18 @@ fn init_creates_expected_layout() {
         "spec/WAL.md must NOT be created by default; it's a project convention, not part of the package manager"
     );
 
-    // CLAUDE.md / AGENTS.md / GEMINI.md have the exact same one-line body.
+    // CLAUDE.md / AGENTS.md / GEMINI.md each carry vibevm's managed
+    // `<vibevm>` block (PROP-012), identical in all three.
     let claude = fs::read_to_string(path.join("CLAUDE.md")).unwrap();
     let agents = fs::read_to_string(path.join("AGENTS.md")).unwrap();
     let gemini = fs::read_to_string(path.join("GEMINI.md")).unwrap();
     assert_eq!(claude, agents);
     assert_eq!(agents, gemini);
-    assert!(claude.trim_end().ends_with("await the user's instructions."));
+    assert!(
+        claude.contains("<vibevm>") && claude.contains("</vibevm>"),
+        "CLAUDE.md must carry the managed <vibevm> block: {claude}"
+    );
+    assert!(claude.contains("spec/boot/INDEX.md"));
 
     // vibe.toml should parse as a valid Manifest.
     let manifest_text = fs::read_to_string(path.join("vibe.toml")).unwrap();
@@ -161,12 +167,14 @@ fn init_json_output_parses() {
     let v: serde_json::Value = serde_json::from_str(&stdout).expect("stdout must be valid JSON");
     assert_eq!(v["ok"], true);
     assert_eq!(v["command"], "init");
-    // 9 files created by default: CLAUDE.md / AGENTS.md / GEMINI.md
-    // (3 redirects), spec/boot/00-core.md, spec/boot/90-user.md
-    // (2 boot snippets), vibe.toml, vibe.lock (manifest + lockfile),
-    // .vibe/.gitignore, .gitignore (root). spec/WAL.md is NOT
-    // created — it's a project convention, see init.rs step 4 comment.
-    assert_eq!(v["created"], 9);
+    // 10 files created by default: spec/boot/00-core.md,
+    // spec/boot/90-user.md (2 boot snippets), vibe.toml, vibe.lock
+    // (manifest + lockfile), .vibe/.gitignore, .gitignore (root), and
+    // the 4 generated boot artifacts — spec/boot/INDEX.md plus the
+    // managed `<vibevm>` block in CLAUDE.md / AGENTS.md / GEMINI.md
+    // (PROP-009 / PROP-012). spec/WAL.md is NOT created — it's a
+    // project convention.
+    assert_eq!(v["created"], 10);
     assert_eq!(v["kept"], 0);
 }
 

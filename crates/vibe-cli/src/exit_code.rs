@@ -15,7 +15,7 @@ use thiserror::Error;
 #[allow(dead_code)] pub const OK: u8 = 0;
 pub const GENERAL: u8 = 1;
 #[allow(dead_code)] pub const USAGE: u8 = 2;
-#[allow(dead_code)] pub const PACKAGE_CONFLICT: u8 = 3;
+pub const PACKAGE_CONFLICT: u8 = 3;
 #[allow(dead_code)] pub const TYPE_MISMATCH: u8 = 4;
 #[allow(dead_code)] pub const USER_DECLINED: u8 = 5;
 #[allow(dead_code)] pub const LLM_PROVIDER: u8 = 6;
@@ -44,6 +44,16 @@ pub fn as_exit_code(err: &anyhow::Error) -> ExitCode {
     if let Some(install_err) = err.downcast_ref::<InstallError>() {
         return ExitCode::from(install_err.exit_code());
     }
+    // A malformed `<vibevm>` block (PROP-012 §2.3) is conflict-shaped —
+    // vibevm and the instruction file disagree on the managed region.
+    // Walk the chain so a `.context()` wrapper cannot hide it.
+    for cause in err.chain() {
+        if let Some(vibe_workspace::WorkspaceError::MalformedRedirectBlock { .. }) =
+            cause.downcast_ref::<vibe_workspace::WorkspaceError>()
+        {
+            return ExitCode::from(PACKAGE_CONFLICT);
+        }
+    }
     if err.downcast_ref::<vibe_core::Error>().is_some() {
         return ExitCode::from(GENERAL);
     }
@@ -70,5 +80,14 @@ mod tests {
     fn install_declined_maps_to_five() {
         let err = anyhow::Error::from(InstallError::UserDeclined);
         assert_eq!(code_of_install(err.downcast_ref().unwrap()), USER_DECLINED);
+    }
+
+    #[test]
+    fn malformed_redirect_block_maps_to_three() {
+        let err = anyhow::Error::from(vibe_workspace::WorkspaceError::MalformedRedirectBlock {
+            path: std::path::PathBuf::from("CLAUDE.md"),
+            reason: "two `<vibevm>` markers".to_string(),
+        });
+        assert_eq!(as_exit_code(&err), ExitCode::from(PACKAGE_CONFLICT));
     }
 }

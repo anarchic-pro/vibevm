@@ -107,6 +107,13 @@ pub enum WorkspaceError {
     /// contains a cycle — a package transitively requires itself.
     #[error("boot dependency cycle among: {packages}")]
     BootDependencyCycle { packages: String },
+
+    /// A `CLAUDE.md` / `AGENTS.md` / `GEMINI.md` carries a malformed
+    /// vibevm managed block — not exactly one well-formed `<vibevm>` …
+    /// `</vibevm>` pair (PROP-012 §2.3). vibevm never guesses which block
+    /// is canonical; the operator repairs the file by hand.
+    #[error("malformed <vibevm> block in `{}`: {reason}", .path.display())]
+    MalformedRedirectBlock { path: PathBuf, reason: String },
 }
 
 type Result<T> = std::result::Result<T, WorkspaceError>;
