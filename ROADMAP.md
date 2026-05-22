@@ -579,19 +579,22 @@ shares the computed-view engine and rides with the M1.5 milestone.
 
 **Order.** Followed M1.17 directly; no dependency on the index.
 
-### M1.19 — Qualified package naming — DRAFT design
+### M1.19 — Qualified package naming (PROP-008) — 🚧 Phases 1–4 + 7 shipped (2026-05-22)
 
 **Thesis.** Replace the flat `<kind>:<name>` namespace with reverse-FQDN `group` qualification (Maven `groupId` shape), keeping short names as CLI sugar. Design lock: [PROP-008](spec/modules/vibe-registry/PROP-008-qualified-naming.md).
 
-**Scope (requirements locked 2026-05-20; implementation pending).**
+**Shipped (2026-05-22) — the identity core, Phases 1–4 + 7, under MFBT.**
 
-- Mandatory `[package].group`; identity tuple becomes `(group, name, version, content_hash)`; `kind` leaves identity, stays metadata.
-- pkgref grammar `[kind:][group/]name[@version]` — `kind` prefix optional, validated when present.
-- `naming = "fqdn"` repo names (`org.vibevm.wal`); `kind` leaves the repository name.
-- Index-backed short-name resolution (PROP-005, now implemented); collision detection with new exit code `7`.
-- Migration of the three canonical packages to `group = "org.vibevm"`; lockfile schema v4 (shared bump with M1.17).
+- Mandatory `[package].group`; identity tuple is `(group, name, version, content_hash)`; `kind` left identity and is now pure metadata.
+- pkgref grammar `[kind:][group/]name[@version]` — `kind` prefix optional, validated when present; manifests store the qualified `group/name` form.
+- `naming = "fqdn"` repo names (`org.vibevm.wal`), the new default; `kind` left the repository name. Registry resolution keys on `(group, name)`.
+- The package index is group-native (Phase 7) — the entry carries `group` + `workspace_origin`, the `by-name/` layer is the candidate-set file `by-name/<name>.json`.
+- Lockfile schema v5 (v4 was PROP-007's); each `[[package]]` carries `group`.
+- `VIBEVM-SPEC.md` §7 / §8 and `docs/` reconciled with qualified naming (Phase 8 docs).
 
-**Order.** Needs short-name resolution from [PROP-005](spec/modules/vibe-index/PROP-005-package-index.md), which is now implemented (the index server, the consumer fast path, and `vibe search`). Sequence: M1.17 → M1.18 → PROP-005 (done) → M1.19.
+**Remaining.** Phase 5 — index-backed short-name resolution at the CLI boundary (`vibe install wal` → `org.vibevm/wal`), consuming the `by-name/<name>.json` candidate set Phase 7 shipped. Phase 6 — collision detection when one short name matches two groups, with a new exit code `7`. The live `vibespecs` repo renames to the `fqdn` shape are owner-only outward work and gate nothing in-repo.
+
+**Order.** Needs the short-name-resolution machinery from [PROP-005](spec/modules/vibe-index/PROP-005-package-index.md) (the index), which is implemented. Sequence: M1.17 → M1.18 → PROP-005 → M1.19.
 
 ### M1.20 — Local package cache (PROP-010) — DRAFT design
 

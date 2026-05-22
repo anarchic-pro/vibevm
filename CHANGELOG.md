@@ -8,6 +8,17 @@ Format roughly follows [Keep a Changelog](https://keepachangelog.com/), grouped 
 
 ## [Unreleased]
 
+### M1.19 — Qualified package naming (PROP-008)
+
+Reverse-FQDN `group` qualification — the Maven `groupId` shape — replaces the flat `<kind>:<name>` namespace, so two unrelated authors can each ship a `wal` without colliding. Design lock: [PROP-008](spec/modules/vibe-registry/PROP-008-qualified-naming.md). The identity core landed under MFBT across Phases 1–4 + 7; index-backed short-name resolution and collision detection follow.
+
+- **`group` and the identity tuple.** `[package]` gains a mandatory `group` field — dot-separated `[a-z0-9_-]` segments, reverse-FQDN by convention (not enforced, exactly as Maven does not enforce `groupId` shape). Package identity becomes `(group, name, version, content_hash)`; a `name` is unique within its `group`, not within its `kind`. `kind` leaves identity entirely — it stays a mandatory `[package]` field, but it is pure metadata: it places content, drives the `--kind` filter, and is a UX signal in a kind-prefixed pkgref, while identifying and naming nothing.
+- **pkgref grammar `[kind:][group/]name[@version]`.** The qualified `org.vibevm/wal` form is what manifests and the lockfile store. `flow:org.vibevm/wal` adds a kind prefix, validated against the manifest after resolution. The short `wal` / `flow:wal` form stays as CLI-only sugar.
+- **Group-native registry.** `NamingConvention` gains `fqdn` — repo name `<group>.<name>` (`org.vibevm.wal`) — and `fqdn` becomes the default. Registry resolution keys on `(group, name)`; `LocalRegistry`'s layout, `fixtures/registry/`, and every embedded test manifest moved to the `org.vibevm/<name>` shape. The legacy `kind-name` / `name` / `kind/name` conventions remain for registries that have not adopted `group`.
+- **Group-native package index.** The `vibe-index` entry schema gains `group` (mandatory) and `workspace_origin` (optional); the `by-name/` layer is re-keyed to the candidate-set file `by-name/<name>.json` — every group sharing a bare name in one file, so a short-name lookup is one GET per registry. The `vibe-registry` index client and the `vibe-publish` post-publish hook follow.
+- **Lockfile schema v5.** Each `[[package]]` gains a `group` field; `CURRENT_SCHEMA_VERSION` is `5` (v4 was PROP-007's). vibevm is pre-release — an older lockfile is rejected, not migrated.
+- **Spec + docs.** `VIBEVM-SPEC.md` §7.1 (identity, the pkgref grammar) / §7.3–§7.5 / §8 are rewritten for qualified naming under the standing owner sanction; `docs/` (glossary, lockfile-format, the install / version-syntax / git-source references) and this changelog follow.
+
 ### PROP-005 — Package index (`vibe-index`) (2026-05-22)
 
 A registry-org metadata index, so `vibe` can `list` / `search` / `outdated` / shortlist versions against cached, mirror-able metadata instead of a live `git ls-remote` per package. Design lock: [PROP-005](spec/modules/vibe-index/PROP-005-package-index.md). The index layer is strictly optional — a registry without one keeps working through the live path unchanged. This block records work that landed across earlier sessions but was never written up here, plus the 2026-05-22 reconciliation that brought it green.
