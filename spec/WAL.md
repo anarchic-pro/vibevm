@@ -30,7 +30,15 @@ _Updated: 2026-05-22 (M1.18 loading model on `main` at `ffd5e1c`; the `when` gat
 
 **Branch state.** On `main`, pushed to `origin/main`. The M1.21 (PROP-011) commits — `d6c4248`, `2b1b6cc`, `f22f629`, plus this Phase-4 docs checkpoint — land on top of the `when`-gate commits (`fef37e5` … `0164a20`, `00bdd48`) and the M1.18 session-end checkpoints (`ffd5e1c` merge → `c74b2a5`). The `m1.17-workspace` feature branch is retained (merged, not deleted). Gate green — test counts: vibe-cli bin 124 / e2e 106 / cli_init 11 / cli_search 15 (3 ignored), vibe-core 173, vibe-workspace 103, vibe-check 27, vibe-registry 106 + 5 + 7, vibe-publish 51 + 5, vibe-resolver 48, vibe-mcp 22.
 
-**Next — per the owner's plan; no blocker.** PROP-011 is shipped. Remaining, in order, each under MFBT (PROP-006 §2): (a) **PROP-010** — local package cache — close its §5 open questions in an owner design session, then implement. (b) **PROP-005** (the package index) implementation → then M1.19 / PROP-008 (qualified naming). (c) M1.5 (Generation — the LLM `vibe build`).
+**Next — base-machinery-first, per the owner (2026-05-22).** The owner **deferred M1.5 (LLM Generation)** to a later phase. The rationale, recorded verbatim in intent: the base package machinery is to be brought to relative stability first — covered with tests, ready for large structural refactors — before *any* generation (not only LLM generation) is layered on top. Stability is a fuzzy target for a research prototype, but as much as possible should be done on the base before moving into a different knowledge domain like LLM generation.
+
+The dependency-correct sequence for the base, each under MFBT (PROP-006 §2):
+
+- (a) **PROP-005 — the package index.** Consumer side: `vibe` resolves against a cached/mirrorable index instead of live `git ls-remote`. The `services/vibe-index/` server already exists (outside the cargo workspace); PROP-005 is an older draft (2026-05-06) — start with a state review of what is built versus what the consumer side needs.
+- (b) **PROP-008 — qualified naming (M1.19).** Needs PROP-005 for short-name resolution.
+- (c) **PROP-010 — the local package cache (M1.20).** §2.3 keys it by PROP-008 identity; its five §5 open questions need an owner design session before implementation.
+
+Then M1.5. No blocker. The earlier "PROP-010 next" ordering was dependency-infeasible — PROP-010 ⟸ PROP-008 ⟸ PROP-005 — and is corrected here.
 
 **Known issues / open items.**
 

@@ -662,6 +662,15 @@ spec-driven vibecoding" — only when it can actually produce working
 code from a `feat × stack` pairing. This milestone is where the tool
 makes the jump from "manages specs" to "produces software."
 
+**Sequencing — deferred (2026-05-22, owner decision).** M1.5 is
+deferred behind a base-stabilisation phase. The package machinery —
+the PROP-005 → PROP-008 → PROP-010 chain, plus the testing and
+structural refactors that follow — is to reach relative stability
+before generation is layered on top. Generation, and not only LLM
+generation, belongs on a base solid enough to absorb large refactors;
+moving into that knowledge domain before the base is condition-stable
+would build on sand. M1.5 resumes once the base is in place.
+
 ### M1.5.1 — LLM provider abstraction
 
 - `vibe-llm` gets real. `LLMProvider` trait with methods `chat` and
