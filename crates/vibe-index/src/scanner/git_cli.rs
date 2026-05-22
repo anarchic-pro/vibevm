@@ -192,7 +192,7 @@ mod tests {
 
     fn manifest_for(version: &str) -> String {
         format!(
-            "[package]\nname = \"wal\"\nkind = \"flow\"\nversion = \"{version}\"\nlicense = \"EULA\"\n"
+            "[package]\ngroup = \"org.vibevm\"\nname = \"wal\"\nkind = \"flow\"\nversion = \"{version}\"\nlicense = \"EULA\"\n"
         )
     }
 

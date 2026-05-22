@@ -482,6 +482,7 @@ mod tests {
         fs::write(
             v1.join("vibe.toml"),
             r#"[package]
+group = "org.vibevm"
 name = "wal"
 kind = "flow"
 version = "0.1.0"
@@ -497,6 +498,7 @@ description = "WAL v0.1.0"
         fs::write(
             v2.join("vibe.toml"),
             r#"[package]
+group = "org.vibevm"
 name = "wal"
 kind = "flow"
 version = "0.2.0"

@@ -1,5 +1,6 @@
 [package]
 name = "integration-rust"
+group = "org.vibevm"
 kind = "stack"
 version = "0.1.0"
 authors = ["vibevm test fixtures"]

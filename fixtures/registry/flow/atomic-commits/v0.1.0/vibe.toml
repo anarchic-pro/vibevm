@@ -1,5 +1,6 @@
 [package]
 name = "atomic-commits"
+group = "org.vibevm"
 kind = "flow"
 version = "0.1.0"
 authors = ["Oleg Chirukhin"]

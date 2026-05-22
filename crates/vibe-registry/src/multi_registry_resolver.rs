@@ -1854,7 +1854,9 @@ mod tests {
     }
 
     fn manifest_text(name: &str, kind: &str, version: &str) -> String {
-        format!("[package]\nname = \"{name}\"\nkind = \"{kind}\"\nversion = \"{version}\"\n")
+        format!(
+            "[package]\ngroup = \"org.vibevm\"\nname = \"{name}\"\nkind = \"{kind}\"\nversion = \"{version}\"\n"
+        )
     }
 
     fn build_resolver(

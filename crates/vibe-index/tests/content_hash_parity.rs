@@ -7,10 +7,11 @@
 //! `fixtures/registry/flow/wal/v0.1.0/` package; `.gitattributes`
 //! (`* text=auto eol=lf`) keeps every text byte identical on Windows /
 //! macOS / Linux, so the digest is stable cross-platform. The `GOLDEN`
-//! constant below was re-derived 2026-05-22 directly from
-//! `vibe-registry::compute_content_hash` run against that source —
-//! `vibe-index`'s own `content_hash.rs` (a verified byte-identical
-//! port) produces the same value, which is what this test asserts.
+//! constant below was re-derived 2026-05-22 after PROP-008 added the
+//! mandatory `[package].group` field to the fixture's `vibe.toml`;
+//! `vibe-index`'s own `content_hash.rs` (a verified byte-identical port
+//! of `vibe-registry::compute_content_hash`) produces it, which is what
+//! this test asserts.
 //!
 //! If this test fails after a git operation that touches the fixture
 //! or the algorithm: re-sync the fixture from
@@ -22,7 +23,7 @@ use std::path::PathBuf;
 
 use vibe_index::content_hash::compute_content_hash;
 
-const GOLDEN: &str = "sha256:f2af92b8d0ba54b7a78884e96718677e0358ca4ac41d8afa8db04dd541f119e7";
+const GOLDEN: &str = "sha256:865d47fb41fb8590ef6f0780f7fe98c716b897dea494769dd37a0e5280bc55a5";
 
 #[test]
 fn flow_wal_v0_1_0_matches_canonical_algorithm() {

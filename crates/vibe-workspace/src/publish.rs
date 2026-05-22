@@ -629,12 +629,14 @@ mod tests {
     }
 
     fn package(name: &str, kind: &str) -> String {
-        format!("[package]\nname = \"{name}\"\nkind = \"{kind}\"\nversion = \"0.1.0\"\n")
+        format!(
+            "[package]\ngroup = \"org.vibevm\"\nname = \"{name}\"\nkind = \"{kind}\"\nversion = \"0.1.0\"\n"
+        )
     }
 
     fn package_publish(name: &str, kind: &str, publish: &str) -> String {
         format!(
-            "[package]\nname = \"{name}\"\nkind = \"{kind}\"\nversion = \"0.1.0\"\n\
+            "[package]\ngroup = \"org.vibevm\"\nname = \"{name}\"\nkind = \"{kind}\"\nversion = \"0.1.0\"\n\
              publish = {publish}\n"
         )
     }

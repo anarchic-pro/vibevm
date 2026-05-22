@@ -663,7 +663,9 @@ mod tests {
     }
 
     fn package(name: &str, kind: &str) -> String {
-        format!("[package]\nname = \"{name}\"\nkind = \"{kind}\"\nversion = \"0.1.0\"\n")
+        format!(
+            "[package]\ngroup = \"org.vibevm\"\nname = \"{name}\"\nkind = \"{kind}\"\nversion = \"0.1.0\"\n"
+        )
     }
 
     fn origin_info() -> OriginInfo {

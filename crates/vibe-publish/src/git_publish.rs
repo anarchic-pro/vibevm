@@ -530,7 +530,7 @@ mod tests {
         fs::write(src.path().join("README.md"), "hi").unwrap();
         fs::write(
             src.path().join("vibe.toml"),
-            "[package]\nname = \"x\"\nkind = \"flow\"\nversion = \"0.1.0\"\n",
+            "[package]\ngroup = \"org.vibevm\"\nname = \"x\"\nkind = \"flow\"\nversion = \"0.1.0\"\n",
         )
         .unwrap();
 
@@ -563,7 +563,7 @@ mod tests {
         let src = tempdir().unwrap();
         fs::write(
             src.path().join("vibe.toml"),
-            "[package]\nname = \"wal\"\nkind = \"flow\"\nversion = \"0.1.0\"\n",
+            "[package]\ngroup = \"org.vibevm\"\nname = \"wal\"\nkind = \"flow\"\nversion = \"0.1.0\"\n",
         )
         .unwrap();
         fs::create_dir_all(src.path().join("spec")).unwrap();

@@ -407,7 +407,9 @@ mod tests {
     }
 
     fn manifest_minimal(kind: &str, name: &str, version: &str) -> String {
-        format!("[package]\nname = \"{name}\"\nkind = \"{kind}\"\nversion = \"{version}\"\n")
+        format!(
+            "[package]\ngroup = \"org.vibevm\"\nname = \"{name}\"\nkind = \"{kind}\"\nversion = \"{version}\"\n"
+        )
     }
 
     fn manifest_with_requires(kind: &str, name: &str, version: &str, requires: &[&str]) -> String {
@@ -543,6 +545,7 @@ mod tests {
         // roots, solver refuses.
         let m_ui = r#"
 [package]
+group = "org.vibevm"
 name = "ui"
 kind = "feat"
 version = "0.1.0"
@@ -578,6 +581,7 @@ packages = ["flow:legacy-wal"]
         // succeeds. Reversed order would fail (limitation).
         let m_stack = r#"
 [package]
+group = "org.vibevm"
 name = "rust"
 kind = "stack"
 version = "0.1.0"
@@ -587,6 +591,7 @@ capabilities = ["ui:landing-page@0.3.0"]
 "#;
         let m_feat = r#"
 [package]
+group = "org.vibevm"
 name = "home"
 kind = "feat"
 version = "0.1.0"
@@ -614,6 +619,7 @@ capabilities = ["ui:landing-page@^0.3"]
         // with the same exact version trivially satisfies itself.
         let m = r#"
 [package]
+group = "org.vibevm"
 name = "magic"
 kind = "feat"
 version = "0.1.0"
@@ -637,6 +643,7 @@ capabilities = ["x:y@^0.1"]
     fn capability_requires_unmet_errors() {
         let m = r#"
 [package]
+group = "org.vibevm"
 name = "home"
 kind = "feat"
 version = "0.1.0"
@@ -678,6 +685,7 @@ capabilities = ["ui:landing-page@^0.3"]
         // After solve, legacy is removed via obsoletes.
         let m_new = r#"
 [package]
+group = "org.vibevm"
 name = "welcome-page"
 kind = "feat"
 version = "0.2.0"
@@ -709,6 +717,7 @@ packages = ["feat:welcome-page-legacy"]
         // feat:x requires_any [stack:a, stack:b]; only stack:a available.
         let m_x = r#"
 [package]
+group = "org.vibevm"
 name = "x"
 kind = "feat"
 version = "0.1.0"

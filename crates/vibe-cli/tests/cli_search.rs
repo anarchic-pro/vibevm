@@ -625,6 +625,7 @@ fn search_full_scan_finds_matching_packages_in_github_org() {
         "vibespecs/flow-wal".into(),
         Some(
             r#"[package]
+group = "org.vibevm"
 kind = "flow"
 name = "wal"
 version = "0.1.0"
@@ -637,6 +638,7 @@ description = "Write-ahead log discipline for spec-driven projects."
         "vibespecs/flow-other".into(),
         Some(
             r#"[package]
+group = "org.vibevm"
 kind = "flow"
 name = "other"
 version = "0.2.0"

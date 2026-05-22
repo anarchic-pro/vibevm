@@ -1178,6 +1178,7 @@ fn make_redirect_target_bare_repo(
     // (`MANIFEST.md`), materialised verbatim into its vibedeps/ slot.
     let manifest = format!(
         r#"[package]
+group = "org.vibevm"
 name = "{pkg_name}"
 kind = "{pkg_kind}"
 version = "{version}"
@@ -1716,6 +1717,7 @@ fn make_two_version_registry(root: &Path) -> PathBuf {
 
     // v0.1.0 layout: A.md + B.md + boot snippet, capabilities empty.
     let manifest_v1 = r#"[package]
+group = "org.vibevm"
 name = "wal"
 kind = "flow"
 version = "0.1.0"
@@ -1741,6 +1743,7 @@ category = "flow"
 
     // v0.2.0: A modified, B removed, C added, boot unchanged.
     let manifest_v2 = r#"[package]
+group = "org.vibevm"
 name = "wal"
 kind = "flow"
 version = "0.2.0"
@@ -2534,6 +2537,7 @@ fn make_features_fixture_registry(root: &Path) -> PathBuf {
     fs::write(
         pkg.join("vibe.toml"),
         r#"[package]
+group = "org.vibevm"
 name = "feat-pkg"
 kind = "flow"
 version = "0.1.0"
@@ -4486,6 +4490,7 @@ fn make_conditional_deps_registry(root: &Path) -> (PathBuf, String) {
         run_git(&src, &["config", "user.name", "Test"]);
         let manifest = format!(
             r#"[package]
+group = "org.vibevm"
 name = "{name}"
 kind = "{kind}"
 version = "{version}"
@@ -4647,6 +4652,7 @@ fn make_cascading_conditional_registry(root: &Path) -> (PathBuf, String) {
         run_git(&src, &["config", "user.name", "Test"]);
         let manifest = format!(
             r#"[package]
+group = "org.vibevm"
 name = "{name}"
 kind = "{kind}"
 version = "{version}"
@@ -4841,6 +4847,7 @@ fn make_two_version_per_package_registry(root: &Path) -> (PathBuf, String) {
     fs::write(
         src.join("vibe.toml"),
         r#"[package]
+group = "org.vibevm"
 name = "test-multi"
 kind = "flow"
 version = "0.1.0"
@@ -4856,6 +4863,7 @@ version = "0.1.0"
     fs::write(
         src.join("vibe.toml"),
         r#"[package]
+group = "org.vibevm"
 name = "test-multi"
 kind = "flow"
 version = "0.2.0"
@@ -5108,6 +5116,7 @@ fn publish_against_gitverse_registry_emits_stub_envelope() {
     fs::write(
         pkg_dir.path().join("vibe.toml"),
         r#"[package]
+group = "org.vibevm"
 name = "tiny"
 kind = "flow"
 version = "0.0.1"
@@ -5175,6 +5184,7 @@ fn publish_direct_repo_url_pushes_to_local_bare_repo() {
     fs::write(
         pkg_dir.path().join("vibe.toml"),
         r#"[package]
+group = "org.vibevm"
 name = "tiny"
 kind = "flow"
 version = "0.0.1"
@@ -5266,6 +5276,7 @@ fn publish_direct_repo_url_dry_run_skips_actual_push() {
     fs::write(
         pkg_dir.path().join("vibe.toml"),
         r#"[package]
+group = "org.vibevm"
 name = "tiny"
 kind = "flow"
 version = "0.0.1"
@@ -5312,6 +5323,7 @@ fn publish_repo_url_and_registry_are_mutually_exclusive() {
     fs::write(
         pkg_dir.path().join("vibe.toml"),
         r#"[package]
+group = "org.vibevm"
 name = "tiny"
 kind = "flow"
 version = "0.0.1"
@@ -5496,7 +5508,7 @@ fn write_member_pkg(dir: &Path, rel: &str, name: &str, kind: &str, publish: &str
     fs::write(
         path,
         format!(
-            "[package]\nname = \"{name}\"\nkind = \"{kind}\"\nversion = \"0.1.0\"\n{publish_line}"
+            "[package]\ngroup = \"org.vibevm\"\nname = \"{name}\"\nkind = \"{kind}\"\nversion = \"0.1.0\"\n{publish_line}"
         ),
     )
     .unwrap();
@@ -5582,7 +5594,7 @@ fn workspace_publish_dry_run_topological_order() {
     fs::create_dir_all(project.path().join("packages/b")).unwrap();
     fs::write(
         project.path().join("packages/b/vibe.toml"),
-        "[package]\nname = \"b\"\nkind = \"feat\"\nversion = \"0.1.0\"\n\n\
+        "[package]\ngroup = \"org.vibevm\"\nname = \"b\"\nkind = \"feat\"\nversion = \"0.1.0\"\n\n\
          [requires.packages]\n\"flow:a\" = { path = \"../a\", version = \"^0.1\" }\n",
     )
     .unwrap();
@@ -5660,14 +5672,14 @@ fn workspace_publish_detects_dependency_cycle() {
     fs::create_dir_all(project.path().join("packages/a")).unwrap();
     fs::write(
         project.path().join("packages/a/vibe.toml"),
-        "[package]\nname = \"a\"\nkind = \"flow\"\nversion = \"0.1.0\"\n\n\
+        "[package]\ngroup = \"org.vibevm\"\nname = \"a\"\nkind = \"flow\"\nversion = \"0.1.0\"\n\n\
          [requires.packages]\n\"feat:b\" = { path = \"../b\", version = \"^0.1\" }\n",
     )
     .unwrap();
     fs::create_dir_all(project.path().join("packages/b")).unwrap();
     fs::write(
         project.path().join("packages/b/vibe.toml"),
-        "[package]\nname = \"b\"\nkind = \"feat\"\nversion = \"0.1.0\"\n\n\
+        "[package]\ngroup = \"org.vibevm\"\nname = \"b\"\nkind = \"feat\"\nversion = \"0.1.0\"\n\n\
          [requires.packages]\n\"flow:a\" = { path = \"../a\", version = \"^0.1\" }\n",
     )
     .unwrap();
@@ -5745,7 +5757,7 @@ fn workspace_publish_root_package_is_included() {
     let project = tempfile::tempdir().unwrap();
     fs::write(
         project.path().join("vibe.toml"),
-        "[package]\nname = \"umbrella\"\nkind = \"stack\"\nversion = \"0.1.0\"\n\n\
+        "[package]\ngroup = \"org.vibevm\"\nname = \"umbrella\"\nkind = \"stack\"\nversion = \"0.1.0\"\n\n\
          [workspace]\nmembers = [\"packages/a\"]\n\n\
          [[registry]]\nname = \"vibespecs\"\nurl = \"https://github.com/vibespecs\"\n",
     )
@@ -5782,7 +5794,7 @@ fn workspace_publish_standalone_package_publishes_just_itself() {
     let project = tempfile::tempdir().unwrap();
     fs::write(
         project.path().join("vibe.toml"),
-        "[package]\nname = \"solo\"\nkind = \"flow\"\nversion = \"0.2.0\"\n\n\
+        "[package]\ngroup = \"org.vibevm\"\nname = \"solo\"\nkind = \"flow\"\nversion = \"0.2.0\"\n\n\
          [[registry]]\nname = \"vibespecs\"\nurl = \"https://github.com/vibespecs\"\n",
     )
     .unwrap();

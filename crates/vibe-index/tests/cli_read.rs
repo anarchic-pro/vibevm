@@ -17,6 +17,7 @@ fn git_available() -> bool {
 fn manifest(name: &str, kind: &str, version: &str) -> String {
     format!(
         r#"[package]
+group = "org.vibevm"
 name = "{name}"
 kind = "{kind}"
 version = "{version}"
@@ -33,6 +34,7 @@ capabilities = ["interface:{name}"]
 fn manifest_with_describes(name: &str, kind: &str, version: &str, purl: &str) -> String {
     format!(
         r#"[package]
+group = "org.vibevm"
 name = "{name}"
 kind = "{kind}"
 version = "{version}"

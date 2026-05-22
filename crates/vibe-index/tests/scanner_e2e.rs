@@ -17,8 +17,9 @@ fn git_available() -> bool {
 }
 
 fn manifest_for(name: &str, kind: &str, version: &str, license: Option<&str>) -> String {
-    let mut s =
-        format!("[package]\nname = \"{name}\"\nkind = \"{kind}\"\nversion = \"{version}\"\n");
+    let mut s = format!(
+        "[package]\ngroup = \"org.vibevm\"\nname = \"{name}\"\nkind = \"{kind}\"\nversion = \"{version}\"\n"
+    );
     if let Some(l) = license {
         s.push_str(&format!("license = \"{l}\"\n"));
     }
@@ -406,6 +407,7 @@ fn reindex_captures_current_schema_manifest() {
     let feat = org.join("feat-welcome");
     init_repo(&feat);
     let modern = r#"[package]
+group = "org.vibevm"
 name = "welcome"
 kind = "feat"
 version = "0.3.0"

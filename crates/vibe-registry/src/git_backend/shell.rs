@@ -730,7 +730,7 @@ mod tests {
         // Commit 1 + lightweight tag v0.1.0.
         fs::write(
             src.join("vibe.toml"),
-            "[package]\nname = \"x\"\nkind = \"flow\"\nversion = \"0.1.0\"\n",
+            "[package]\ngroup = \"org.vibevm\"\nname = \"x\"\nkind = \"flow\"\nversion = \"0.1.0\"\n",
         )
         .unwrap();
         run_or_panic(&src, &["add", "vibe.toml"]);
@@ -740,7 +740,7 @@ mod tests {
         // Commit 2 + lightweight tag v0.2.0.
         fs::write(
             src.join("vibe.toml"),
-            "[package]\nname = \"x\"\nkind = \"flow\"\nversion = \"0.2.0\"\n",
+            "[package]\ngroup = \"org.vibevm\"\nname = \"x\"\nkind = \"flow\"\nversion = \"0.2.0\"\n",
         )
         .unwrap();
         run_or_panic(&src, &["add", "vibe.toml"]);
@@ -751,7 +751,7 @@ mod tests {
         // a peeled `^{}` line in `ls-remote --tags` output).
         fs::write(
             src.join("vibe.toml"),
-            "[package]\nname = \"x\"\nkind = \"flow\"\nversion = \"0.3.0\"\n",
+            "[package]\ngroup = \"org.vibevm\"\nname = \"x\"\nkind = \"flow\"\nversion = \"0.3.0\"\n",
         )
         .unwrap();
         run_or_panic(&src, &["add", "vibe.toml"]);
@@ -761,7 +761,7 @@ mod tests {
         // Commit 4 + tag v1.0.0-rc.1.
         fs::write(
             src.join("vibe.toml"),
-            "[package]\nname = \"x\"\nkind = \"flow\"\nversion = \"1.0.0-rc.1\"\n",
+            "[package]\ngroup = \"org.vibevm\"\nname = \"x\"\nkind = \"flow\"\nversion = \"1.0.0-rc.1\"\n",
         )
         .unwrap();
         run_or_panic(&src, &["add", "vibe.toml"]);

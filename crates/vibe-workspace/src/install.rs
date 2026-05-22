@@ -441,7 +441,7 @@ mod tests {
             pkg.path(),
             "vibe.toml",
             &format!(
-                "[package]\nname = \"{name}\"\nkind = \"flow\"\nversion = \"{version}\"\n\n{snippet_toml}"
+                "[package]\ngroup = \"org.vibevm\"\nname = \"{name}\"\nkind = \"flow\"\nversion = \"{version}\"\n\n{snippet_toml}"
             ),
         );
         write(pkg.path(), boot_rel, boot_body);

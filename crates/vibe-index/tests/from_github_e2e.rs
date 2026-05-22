@@ -145,7 +145,7 @@ fn git(repo: &Path, args: &[&str]) {
 
 fn manifest(name: &str, kind: &str, version: &str) -> String {
     format!(
-        "[package]\nname = \"{name}\"\nkind = \"{kind}\"\nversion = \"{version}\"\nlicense = \"EULA\"\n"
+        "[package]\ngroup = \"org.vibevm\"\nname = \"{name}\"\nkind = \"{kind}\"\nversion = \"{version}\"\nlicense = \"EULA\"\n"
     )
 }
 

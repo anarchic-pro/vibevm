@@ -26,7 +26,7 @@ use serde::{Deserialize, Serialize};
 
 use crate::capability_ref::CapabilityRef;
 use crate::error::{Error, Result};
-use crate::package_ref::{PackageKind, PackageRef, VersionSpec};
+use crate::package_ref::{Group, PackageKind, PackageRef, VersionSpec};
 
 use super::project::AuthKind;
 use super::purl::Purl;
@@ -40,6 +40,10 @@ use super::purl::Purl;
 #[serde(deny_unknown_fields)]
 pub struct PackageMeta {
     pub name: String,
+    /// Reverse-FQDN namespace qualifier (PROP-008 §2.1) — mandatory. With
+    /// `name` it forms the package's identity; `name` is unique within a
+    /// `group`. `kind` is metadata, not part of identity (PROP-008 §2.2).
+    pub group: Group,
     pub kind: PackageKind,
     pub version: semver::Version,
     #[serde(default)]
@@ -1313,6 +1317,7 @@ mod tests {
     fn package_meta_as_package_ref_pins_exact() {
         let meta = PackageMeta {
             name: "wal".into(),
+            group: Group::parse("org.vibevm").unwrap(),
             kind: PackageKind::Flow,
             version: semver::Version::parse("0.3.0").unwrap(),
             authors: vec![],

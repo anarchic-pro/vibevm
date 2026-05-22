@@ -60,6 +60,93 @@ impl FromStr for PackageKind {
     }
 }
 
+/// A package's **group** — the reverse-FQDN namespace qualifier (PROP-008
+/// §2.1).
+///
+/// Wire form: a dot-separated string of one or more segments, each segment
+/// one or more characters from `a`–`z`, `0`–`9`, `_`, `-` — e.g.
+/// `org.vibevm`, `com.acme`, `dev.example-team`.
+///
+/// Reverse-FQDN is the **recommended** convention, but the core does **not**
+/// enforce it: whether a group looks like a reversed domain is a matter of
+/// style, left to humans and linters — exactly as Maven does not enforce
+/// `groupId` shape. Together with `name`, a group forms a package's
+/// identity: `name` is unique *within* a group (PROP-008 §2.2), so
+/// `(group, name)` identifies a package without `kind`.
+#[derive(Debug, Clone, PartialEq, Eq, Hash, PartialOrd, Ord, Serialize, Deserialize)]
+#[serde(try_from = "String", into = "String")]
+pub struct Group(String);
+
+impl Group {
+    /// Parse and validate a group string. Surrounding whitespace is trimmed;
+    /// the stored form is the trimmed string.
+    pub fn parse(input: &str) -> Result<Self> {
+        let trimmed = input.trim();
+        if trimmed.is_empty() {
+            return Err(Error::BadGroup {
+                input: input.to_owned(),
+                reason: "empty input".into(),
+            });
+        }
+        for segment in trimmed.split('.') {
+            if segment.is_empty() {
+                return Err(Error::BadGroup {
+                    input: input.to_owned(),
+                    reason: "empty segment — segments are joined by single dots, with no \
+                             leading, trailing, or doubled dot"
+                        .into(),
+                });
+            }
+            if let Some(bad) = segment
+                .chars()
+                .find(|c| !matches!(c, 'a'..='z' | '0'..='9' | '_' | '-'))
+            {
+                return Err(Error::BadGroup {
+                    input: input.to_owned(),
+                    reason: format!(
+                        "illegal character `{bad}` in segment `{segment}` — each segment \
+                         is one or more of `a`–`z`, `0`–`9`, `_`, `-`"
+                    ),
+                });
+            }
+        }
+        Ok(Group(trimmed.to_owned()))
+    }
+
+    /// The group as a string slice — e.g. `org.vibevm`.
+    pub fn as_str(&self) -> &str {
+        &self.0
+    }
+}
+
+impl fmt::Display for Group {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        f.write_str(&self.0)
+    }
+}
+
+impl FromStr for Group {
+    type Err = Error;
+
+    fn from_str(s: &str) -> Result<Self> {
+        Group::parse(s)
+    }
+}
+
+impl TryFrom<String> for Group {
+    type Error = Error;
+
+    fn try_from(s: String) -> std::result::Result<Self, Self::Error> {
+        Group::parse(&s)
+    }
+}
+
+impl From<Group> for String {
+    fn from(g: Group) -> String {
+        g.0
+    }
+}
+
 /// What the user wrote after `@` (if anything).
 ///
 /// Spec examples (`VIBEVM-SPEC.md` §7.1):
@@ -278,6 +365,63 @@ mod tests {
                 "should reject `{name}`"
             );
         }
+    }
+
+    #[test]
+    fn group_accepts_valid() {
+        for g in [
+            "org.vibevm",
+            "com.acme",
+            "a",
+            "x.y.z",
+            "dev.example-team",
+            "org.vibevm_internal",
+            "h2o.mol",
+        ] {
+            Group::parse(g).unwrap_or_else(|_| panic!("should accept `{g}`"));
+        }
+    }
+
+    #[test]
+    fn group_rejects_invalid() {
+        for g in [
+            "",
+            "   ",
+            ".org",
+            "org.",
+            "org..vibevm",
+            "Org.Vibevm",
+            "org vibevm",
+            "org/vibevm",
+            "org.vibevm!",
+            "org:vibevm",
+        ] {
+            assert!(Group::parse(g).is_err(), "should reject `{g}`");
+        }
+    }
+
+    #[test]
+    fn group_display_roundtrips() {
+        let g = Group::parse("org.vibevm").unwrap();
+        assert_eq!(g.to_string(), "org.vibevm");
+        assert_eq!(g.as_str(), "org.vibevm");
+        let back: Group = g.to_string().parse().unwrap();
+        assert_eq!(g, back);
+    }
+
+    #[test]
+    fn group_trims_whitespace() {
+        let g = Group::parse("  org.vibevm  ").unwrap();
+        assert_eq!(g.as_str(), "org.vibevm");
+    }
+
+    #[test]
+    fn group_serde_via_string() {
+        let g = Group::parse("com.acme").unwrap();
+        let json = serde_json::to_string(&g).unwrap();
+        assert_eq!(json, r#""com.acme""#);
+        let back: Group = serde_json::from_str(&json).unwrap();
+        assert_eq!(g, back);
     }
 
     #[test]

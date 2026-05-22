@@ -1462,7 +1462,9 @@ mod tests {
     }
 
     fn manifest_text(name: &str, kind: &str, version: &str) -> String {
-        format!("[package]\nname = \"{name}\"\nkind = \"{kind}\"\nversion = \"{version}\"\n")
+        format!(
+            "[package]\ngroup = \"org.vibevm\"\nname = \"{name}\"\nkind = \"{kind}\"\nversion = \"{version}\"\n"
+        )
     }
 
     fn registry_with(
@@ -1639,7 +1641,7 @@ mod tests {
         let pkg_src = tempdir().unwrap();
         std::fs::write(
             pkg_src.path().join("vibe.toml"),
-            "[package]\nname = \"wal\"\nkind = \"flow\"\nversion = \"0.1.0\"\n",
+            "[package]\ngroup = \"org.vibevm\"\nname = \"wal\"\nkind = \"flow\"\nversion = \"0.1.0\"\n",
         )
         .unwrap();
         let credentialed_url =

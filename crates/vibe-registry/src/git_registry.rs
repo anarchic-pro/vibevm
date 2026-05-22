@@ -486,6 +486,7 @@ mod tests {
         fs::write(
             v.join("vibe.toml"),
             r#"[package]
+group = "org.vibevm"
 name = "wal"
 kind = "flow"
 version = "0.1.0"

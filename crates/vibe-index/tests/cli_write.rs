@@ -32,6 +32,7 @@ fn write_pkg(
 ) -> std::path::PathBuf {
     let body = format!(
         r#"[package]
+group = "org.vibevm"
 name = "{name}"
 kind = "{kind}"
 version = "{version}"

@@ -240,6 +240,7 @@ mod tests {
     fn parse_manifest_minimal() {
         let body = br#"
 [package]
+group = "org.vibevm"
 name = "wal"
 kind = "flow"
 version = "0.1.0"
@@ -255,6 +256,7 @@ version = "0.1.0"
     fn parse_manifest_with_provides_requires() {
         let body = br#"
 [package]
+group = "org.vibevm"
 name = "welcome"
 kind = "feat"
 version = "0.3.0"
@@ -285,6 +287,7 @@ one_of = ["stack:rust-cli@^0.1", "stack:rust-axum@^0.2"]
     fn features_split_into_named_and_exclusive() {
         let body = br#"
 [package]
+group = "org.vibevm"
 name = "x"
 kind = "flow"
 version = "0.1.0"
@@ -325,6 +328,7 @@ group = ["a", "b"]
         // `vibe-core` parses and the index simply does not catalogue.
         let body = br#"
 [package]
+group = "org.vibevm"
 name = "wal"
 kind = "flow"
 version = "0.1.0"

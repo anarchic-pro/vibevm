@@ -21,4 +21,4 @@ pub mod values;
 
 pub use capability_ref::CapabilityRef;
 pub use error::{Error, Result};
-pub use package_ref::{PackageKind, PackageRef, VersionSpec};
+pub use package_ref::{Group, PackageKind, PackageRef, VersionSpec};

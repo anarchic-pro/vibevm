@@ -22,6 +22,9 @@ pub enum Error {
     )]
     BadPackageName(String),
 
+    #[error("invalid package group `{input}`: {reason}")]
+    BadGroup { input: String, reason: String },
+
     #[error("invalid capability reference `{input}`: {reason}")]
     BadCapabilityRef { input: String, reason: String },
 

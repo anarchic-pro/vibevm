@@ -1542,6 +1542,7 @@ files_written = []
             pkg.join("vibe.toml"),
             format!(
                 r#"[package]
+group = "org.vibevm"
 name = "test-pkg"
 kind = "flow"
 version = "0.1.0"
@@ -1609,6 +1610,7 @@ a = []
         fs::write(
             pkg.join("vibe.toml"),
             r#"[package]
+group = "org.vibevm"
 name = "test-pkg"
 kind = "flow"
 version = "0.1.0"
@@ -1650,6 +1652,7 @@ delivery = "lazy-push"
         fs::write(
             pkg.join("vibe.toml"),
             r#"[package]
+group = "org.vibevm"
 name = "test-pkg"
 kind = "flow"
 version = "0.1.0"
@@ -1691,6 +1694,7 @@ files_written = ["spec/missing.md"]
         fs::write(
             pkg.join("vibe.toml"),
             r#"[package]
+group = "org.vibevm"
 name = "test-pkg"
 kind = "flow"
 version = "0.1.0"
@@ -1734,6 +1738,7 @@ category = "flow"
         fs::write(
             pkg.join("vibe.toml"),
             r#"[package]
+group = "org.vibevm"
 name = "test-pkg"
 kind = "flow"
 version = "0.1.0"
@@ -1793,6 +1798,7 @@ description = "{desc}"
         fs::write(
             pkg.join("vibe.toml"),
             r#"[package]
+group = "org.vibevm"
 name = "test-pkg"
 kind = "flow"
 version = "0.1.0"
@@ -1835,6 +1841,7 @@ path = "a/b/c/d"
         fs::write(
             pkg.join("vibe.toml"),
             r#"[package]
+group = "org.vibevm"
 name = "test-pkg"
 kind = "flow"
 version = "0.1.0"
@@ -1885,6 +1892,7 @@ description = "{desc}"
         fs::write(
             pkg.join("vibe.toml"),
             r#"[package]
+group = "org.vibevm"
 name = "test-pkg"
 kind = "flow"
 version = "0.1.0"

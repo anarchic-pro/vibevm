@@ -207,7 +207,11 @@ mod tests {
     fn materialise_copies_the_tree_verbatim() {
         let ws = TempDir::new().unwrap();
         let src = TempDir::new().unwrap();
-        write(src.path(), "vibe.toml", "[package]\nname = \"wal\"\n");
+        write(
+            src.path(),
+            "vibe.toml",
+            "[package]\ngroup = \"org.vibevm\"\nname = \"wal\"\n",
+        );
         write(src.path(), "boot/10-flow-wal.md", "# boot");
         write(src.path(), "spec/flows/wal/WAL.md", "# protocol");
 
@@ -223,7 +227,7 @@ mod tests {
         let slot = ws.path().join("vibedeps/flow-wal/0.3.0");
         assert_eq!(
             fs::read_to_string(slot.join("vibe.toml")).unwrap(),
-            "[package]\nname = \"wal\"\n"
+            "[package]\ngroup = \"org.vibevm\"\nname = \"wal\"\n"
         );
         assert_eq!(
             fs::read_to_string(slot.join("boot/10-flow-wal.md")).unwrap(),

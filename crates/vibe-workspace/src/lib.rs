@@ -596,7 +596,9 @@ mod tests {
     }
 
     fn package(name: &str, kind: &str) -> String {
-        format!("[package]\nname = \"{name}\"\nkind = \"{kind}\"\nversion = \"0.1.0\"\n")
+        format!(
+            "[package]\ngroup = \"org.vibevm\"\nname = \"{name}\"\nkind = \"{kind}\"\nversion = \"0.1.0\"\n"
+        )
     }
 
     fn workspace_root(name: &str, members: &[&str]) -> String {
@@ -812,7 +814,7 @@ mod tests {
         write(
             tmp.path(),
             "pkg/vibe.toml",
-            "[package]\nname = \"pkg\"\nkind = \"flow\"\nversion = \"0.1.0\"\n\n\
+            "[package]\ngroup = \"org.vibevm\"\nname = \"pkg\"\nkind = \"flow\"\nversion = \"0.1.0\"\n\n\
              [requires.packages]\n\"flow:wal\" = { version.var = \"core\" }\n",
         );
         let ws = Workspace::load(tmp.path()).unwrap();
@@ -840,14 +842,14 @@ mod tests {
         write(
             tmp.path(),
             "sub/vibe.toml",
-            "[package]\nname = \"sub\"\nkind = \"stack\"\nversion = \"0.1.0\"\n\n\
+            "[package]\ngroup = \"org.vibevm\"\nname = \"sub\"\nkind = \"stack\"\nversion = \"0.1.0\"\n\n\
              [workspace]\nmembers = [\"leaf\"]\n\n\
              [workspace.versions]\ncore = \"^0.9\"\n",
         );
         write(
             tmp.path(),
             "sub/leaf/vibe.toml",
-            "[package]\nname = \"leaf\"\nkind = \"flow\"\nversion = \"0.1.0\"\n\n\
+            "[package]\ngroup = \"org.vibevm\"\nname = \"leaf\"\nkind = \"flow\"\nversion = \"0.1.0\"\n\n\
              [requires.packages]\n\"flow:wal\" = { version.var = \"core\" }\n",
         );
         let ws = Workspace::load(tmp.path()).unwrap();
@@ -871,7 +873,7 @@ mod tests {
         write(
             tmp.path(),
             "pkg/vibe.toml",
-            "[package]\nname = \"pkg\"\nkind = \"flow\"\nversion = \"0.1.0\"\n\n\
+            "[package]\ngroup = \"org.vibevm\"\nname = \"pkg\"\nkind = \"flow\"\nversion = \"0.1.0\"\n\n\
              [requires.packages]\n\"flow:wal\" = { version.var = \"ghost\" }\n",
         );
         let err = Workspace::load(tmp.path()).unwrap_err();

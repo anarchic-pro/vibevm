@@ -444,6 +444,7 @@ reason = "pending upstream PR"
     fn package_manifest_parses() {
         let raw = r#"
 [package]
+group = "org.vibevm"
 name = "wal"
 kind = "flow"
 version = "0.3.0"
@@ -521,6 +522,7 @@ ui = "^0.3"
         // cargo-style: the root crate is itself publishable. PROP-007 §2.9.
         let raw = r#"
 [package]
+group = "org.vibevm"
 name = "umbrella"
 kind = "stack"
 version = "0.1.0"
@@ -546,6 +548,7 @@ members = ["packages/core"]
     fn origin_marker_parses() {
         let raw = r#"
 [package]
+group = "org.vibevm"
 name = "wal"
 kind = "flow"
 version = "0.3.0"
@@ -573,6 +576,7 @@ name = "demo"
 version = "0.0.1"
 
 [package]
+group = "org.vibevm"
 name = "demo"
 kind = "flow"
 version = "0.0.1"
@@ -613,6 +617,7 @@ source = "boot/x.md"
     fn conditional_deps_parse() {
         let raw = r#"
 [package]
+group = "org.vibevm"
 name = "x"
 kind = "flow"
 version = "0.1.0"
