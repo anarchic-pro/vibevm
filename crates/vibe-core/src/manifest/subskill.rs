@@ -137,6 +137,15 @@ pub struct ActivationRules {
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
     pub if_env: Vec<String>,
 
+    /// Operating systems this subskill is scoped to — a session whose OS
+    /// is not in the set does not activate it. Values are
+    /// `std::env::consts::OS` names (`windows`, `macos`, `linux`). The OS
+    /// probe is the same one the `[boot_snippet]` `when` gate ships
+    /// end-to-end (PROP-009 §2.4); here it is reserved for forward
+    /// compatibility, inert until the subskill activation engine lands.
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub if_os: Vec<String>,
+
     /// Match if any package or the project carries a `describes` PURL
     /// of the same `<type>` as this subskill's `describes`. Off by
     /// default; set to `true` to opt in.
@@ -274,6 +283,7 @@ if_provides = ["interface:build-system"]
 if_files = ["**/Cargo.toml"]
 if_command = ["cargo"]
 if_env = ["RUST_LOG"]
+if_os = ["linux", "macos"]
 if_describes_match = true
 if_language = ["en", "ru"]
 allow_llm_emission = true
@@ -302,6 +312,7 @@ files_written = [
         );
         assert_eq!(m.activation.if_present, vec!["stack:rust"]);
         assert_eq!(m.activation.if_files, vec!["**/Cargo.toml"]);
+        assert_eq!(m.activation.if_os, vec!["linux", "macos"]);
         assert!(m.activation.if_describes_match);
         assert_eq!(m.recommends.subskills, vec!["feature/atomic-only"]);
         assert_eq!(m.content.files_written.len(), 2);

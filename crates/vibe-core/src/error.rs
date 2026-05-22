@@ -35,6 +35,9 @@ pub enum Error {
     #[error("invalid dependency declaration for `{input}`: {reason}")]
     BadDependencyDecl { input: String, reason: String },
 
+    #[error("invalid `when` condition `{input}`: {reason}")]
+    BadWhenCondition { input: String, reason: String },
+
     #[error("invalid manifest: {reason}")]
     InvalidManifest { reason: String },
 
