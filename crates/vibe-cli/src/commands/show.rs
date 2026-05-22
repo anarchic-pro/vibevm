@@ -61,7 +61,7 @@ struct EffectiveSection {
     spec_uri: String,
     /// Project-relative path of the file that produced this section.
     path: String,
-    /// Origin of the section: `"package:<kind>:<name>@<version>"`,
+    /// Origin of the section: `"package:<group>/<name>@<version>"`,
     /// `"user"`, or `"wal"`.
     origin: String,
     /// File content, verbatim.
@@ -133,7 +133,7 @@ fn run_effective(ctx: &output::Context, args: ShowEffectiveArgs) -> Result<()> {
     // enough for cold-reader use.
     if let Some(lockfile) = &lockfile {
         for entry in &lockfile.packages {
-            let pkg_uri_root = format!("spec://{}/{}/{}", entry.kind, entry.name, entry.version);
+            let pkg_uri_root = format!("spec://{}/{}/{}", entry.group, entry.name, entry.version);
             let mut paths: Vec<PathBuf> = entry
                 .files_written
                 .iter()
@@ -161,8 +161,8 @@ fn run_effective(ctx: &output::Context, args: ShowEffectiveArgs) -> Result<()> {
                         ),
                         path: rel_str.clone(),
                         origin: format!(
-                            "package:{}:{}@{} (MISSING ON DISK)",
-                            entry.kind, entry.name, entry.version
+                            "package:{}/{}@{} (MISSING ON DISK)",
+                            entry.group, entry.name, entry.version
                         ),
                         body: String::new(),
                     });
@@ -174,7 +174,7 @@ fn run_effective(ctx: &output::Context, args: ShowEffectiveArgs) -> Result<()> {
                 sections.push(EffectiveSection {
                     spec_uri: format!("{pkg_uri_root}/{suffix}"),
                     path: rel_str,
-                    origin: format!("package:{}:{}@{}", entry.kind, entry.name, entry.version),
+                    origin: format!("package:{}/{}@{}", entry.group, entry.name, entry.version),
                     body,
                 });
             }
@@ -241,7 +241,7 @@ fn boot_origin(filename: &str, lockfile: Option<&Lockfile>) -> String {
         .iter()
         .find(|p| p.boot_snippet.as_deref() == Some(filename))
     {
-        return format!("package:{}:{}@{}", pkg.kind, pkg.name, pkg.version);
+        return format!("package:{}/{}@{}", pkg.group, pkg.name, pkg.version);
     }
     "user".to_string()
 }
@@ -666,6 +666,7 @@ fn forward_slash_display(path: &Path) -> String {
 
 fn naming_label(naming: vibe_core::manifest::NamingConvention) -> String {
     match naming {
+        vibe_core::manifest::NamingConvention::Fqdn => "fqdn",
         vibe_core::manifest::NamingConvention::KindName => "kind-name",
         vibe_core::manifest::NamingConvention::Name => "name",
         vibe_core::manifest::NamingConvention::KindSlashName => "kind/name",
@@ -727,7 +728,7 @@ fn run_features(ctx: &output::Context, args: ShowFeaturesArgs) -> Result<()> {
         }
         total += p.features.len();
         entries.push(FeaturesEntry {
-            package: format!("{}:{}", p.kind, p.name),
+            package: format!("{}/{}", p.group, p.name),
             features: p.features.clone(),
         });
     }
@@ -817,7 +818,7 @@ fn run_subskills(ctx: &output::Context, args: ShowSubskillsArgs) -> Result<()> {
         }
         total += p.subskills_active.len();
         entries.push(SubskillsPackageEntry {
-            package: format!("{}:{}", p.kind, p.name),
+            package: format!("{}/{}", p.group, p.name),
             subskills: p
                 .subskills_active
                 .iter()
@@ -905,14 +906,14 @@ fn run_purls(ctx: &output::Context, args: ShowPurlsArgs) -> Result<()> {
     for p in &lockfile.packages {
         if let Some(purl) = &p.describes {
             bindings.push(PurlEntry {
-                package: format!("{}:{}", p.kind, p.name),
+                package: format!("{}/{}", p.group, p.name),
                 purl: purl.clone(),
             });
         }
         for s in &p.subskills_active {
             if let Some(purl) = &s.describes {
                 bindings.push(PurlEntry {
-                    package: format!("{}:{}/{}", p.kind, p.name, s.path),
+                    package: format!("{}/{}/{}", p.group, p.name, s.path),
                     purl: purl.clone(),
                 });
             }

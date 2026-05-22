@@ -12,7 +12,7 @@ use dialoguer::Confirm;
 use serde::Serialize;
 use vibe_core::manifest::{LockedPackage, Lockfile, Manifest, SourceKind};
 use vibe_core::user_config::UserConfig;
-use vibe_core::{PackageRef, VersionSpec};
+use vibe_core::{Group, PackageRef, VersionSpec};
 use vibe_registry::{CachedPackage, LocalRegistry, MultiRegistryResolver};
 use vibe_resolver::{
     ActivationContext, DepSolver, FeatureExpansion, FeatureRequest, LocalRegistryProvider,
@@ -119,17 +119,21 @@ pub fn run(ctx: &output::Context, args: InstallArgs) -> Result<()> {
         let discovered = Workspace::discover(&project_root)
             .context("re-discovering the workspace to collect every member's [requires]")?;
         let mut all: Vec<PackageRef> = Vec::new();
-        let mut seen: std::collections::HashSet<(_, String)> = std::collections::HashSet::new();
+        // De-duplicate on the `(group, name)` identity (PROP-008 §2.3). A
+        // manifest pkgref is group-qualified, so `group` is always present.
+        let mut seen: std::collections::HashSet<(Option<Group>, String)> =
+            std::collections::HashSet::new();
         for (_, node) in discovered.iter_nodes() {
             for p in &node.requires.packages {
-                if seen.insert((p.kind, p.name.clone())) {
+                if seen.insert((p.group.clone(), p.name.clone())) {
                     all.push(p.clone());
                 }
             }
             for g in &node.requires.git_packages {
-                if seen.insert((g.kind, g.name.clone())) {
+                if seen.insert((Some(g.group.clone()), g.name.clone())) {
                     all.push(PackageRef::new(
                         g.kind,
+                        Some(g.group.clone()),
                         g.name.clone(),
                         VersionSpec::Latest,
                     )?);
@@ -138,7 +142,7 @@ pub fn run(ctx: &output::Context, args: InstallArgs) -> Result<()> {
         }
         if all.is_empty() {
             bail!(
-                "no packages to install. Pass `<kind>:<name>[@<version>] …` on the command \
+                "no packages to install. Pass `<group>/<name>[@<version>] …` on the command \
                  line, or add entries to `[requires].packages` in `{}/vibe.toml`.",
                 project_root.display()
             );
@@ -226,7 +230,7 @@ pub fn run(ctx: &output::Context, args: InstallArgs) -> Result<()> {
     for node in graph.iter() {
         let pkgref = exact_pinned_pkgref(node);
         let expected = lockfile
-            .find(node.kind, &node.name)
+            .find(&node.group, &node.name)
             .map(|p| p.content_hash.clone());
         let cached = resolver.resolve_and_fetch(&pkgref, &cache_root, expected.as_deref())?;
         // Roots get the user-requested feature set, but features the
@@ -244,8 +248,8 @@ pub fn run(ctx: &output::Context, args: InstallArgs) -> Result<()> {
         let feature_expansion =
             expand_features(&cached.manifest.features, &req).with_context(|| {
                 format!(
-                    "expanding features for `{}:{}@{}`",
-                    cached.resolved.kind, cached.resolved.name, cached.resolved.version
+                    "expanding features for `{}/{}@{}`",
+                    cached.resolved.group, cached.resolved.name, cached.resolved.version
                 )
             })?;
         fetched.push(Fetched {
@@ -323,11 +327,11 @@ pub fn run(ctx: &output::Context, args: InstallArgs) -> Result<()> {
                         if pred.evaluate(&preliminary_ctx) {
                             for r in &target.dependencies.packages {
                                 let already = fetched.iter().any(|g| {
-                                    g.cached.resolved.kind == r.kind
+                                    Some(&g.cached.resolved.group) == r.group.as_ref()
                                         && g.cached.resolved.name == r.name
                                 }) || extra
                                     .iter()
-                                    .any(|x| x.kind == r.kind && x.name == r.name);
+                                    .any(|x| x.group == r.group && x.name == r.name);
                                 if !already {
                                     extra.push(r.clone());
                                 }
@@ -337,7 +341,7 @@ pub fn run(ctx: &output::Context, args: InstallArgs) -> Result<()> {
                     Err(e) => {
                         tracing::warn!(
                             target: "vibe_install",
-                            package = %format!("{}:{}", f.cached.resolved.kind, f.cached.resolved.name),
+                            package = %format!("{}/{}", f.cached.resolved.group, f.cached.resolved.name),
                             predicate = %pred_str,
                             error = %e,
                             "conditional-dep predicate could not be parsed; skipping"
@@ -364,7 +368,7 @@ pub fn run(ctx: &output::Context, args: InstallArgs) -> Result<()> {
         let mut combined = roots.clone();
         combined.extend(fetched.iter().filter(|f| f.meta.is_root).map(|f| {
             exact_pinned_pkgref(&ResolvedNode {
-                kind: f.cached.resolved.kind,
+                group: f.cached.resolved.group.clone(),
                 name: f.cached.resolved.name.clone(),
                 version: f.cached.resolved.version.clone(),
                 dependencies: Vec::new(),
@@ -372,22 +376,22 @@ pub fn run(ctx: &output::Context, args: InstallArgs) -> Result<()> {
             })
         }));
         combined.extend(extra.iter().cloned());
-        // De-duplicate by (kind, name).
-        let mut seen: std::collections::HashSet<(_, String)> = std::collections::HashSet::new();
-        combined.retain(|r| seen.insert((r.kind, r.name.clone())));
+        // De-duplicate by the `(group, name)` identity (PROP-008 §2.3).
+        let mut seen: std::collections::HashSet<(Option<Group>, String)> =
+            std::collections::HashSet::new();
+        combined.retain(|r| seen.insert((r.group.clone(), r.name.clone())));
         let new_graph = resolver
             .solve(&combined)
             .with_context(|| "dependency resolution failed during conditional expansion")?;
         for node in new_graph.iter() {
-            if fetched
-                .iter()
-                .any(|g| g.cached.resolved.kind == node.kind && g.cached.resolved.name == node.name)
-            {
+            if fetched.iter().any(|g| {
+                g.cached.resolved.group == node.group && g.cached.resolved.name == node.name
+            }) {
                 continue;
             }
             let pkgref = exact_pinned_pkgref(node);
             let expected = lockfile
-                .find(node.kind, &node.name)
+                .find(&node.group, &node.name)
                 .map(|p| p.content_hash.clone());
             let cached = resolver.resolve_and_fetch(&pkgref, &cache_root, expected.as_deref())?;
             let req = if node.is_root {
@@ -398,8 +402,8 @@ pub fn run(ctx: &output::Context, args: InstallArgs) -> Result<()> {
             let feature_expansion =
                 expand_features(&cached.manifest.features, &req).with_context(|| {
                     format!(
-                        "expanding features for `{}:{}@{}`",
-                        cached.resolved.kind, cached.resolved.name, cached.resolved.version
+                        "expanding features for `{}/{}@{}`",
+                        cached.resolved.group, cached.resolved.name, cached.resolved.version
                     )
                 })?;
             fetched.push(Fetched {
@@ -421,16 +425,19 @@ pub fn run(ctx: &output::Context, args: InstallArgs) -> Result<()> {
     let resolution: Vec<ResolvedDep> = fetched
         .iter()
         .map(|f| ResolvedDep {
-            kind: f.cached.resolved.kind,
+            kind: f.cached.package_meta().kind,
+            group: f.cached.resolved.group.clone(),
             name: f.cached.resolved.name.clone(),
             version: f.cached.resolved.version.clone(),
             content_dir: f.cached.cache_dir.clone(),
             manifest: f.cached.manifest.clone(),
+            // A `[requires.packages]` dependency pkgref is group-qualified
+            // (PROP-008 §2.6).
             requires: f
                 .meta
                 .dependencies
                 .iter()
-                .map(|p| (p.kind, p.name.clone()))
+                .filter_map(|p| p.group.clone().map(|g| (g, p.name.clone())))
                 .collect(),
         })
         .collect();
@@ -466,7 +473,7 @@ pub fn run(ctx: &output::Context, args: InstallArgs) -> Result<()> {
     // 6. Update `vibe.toml` `[requires].packages` with the CLI-supplied
     //    roots — caret by default, `--exact` pins `=<resolved>`, an
     //    explicit constraint is preserved verbatim. De-dup by
-    //    `(kind, name)`; a no-op in install-from-manifest mode.
+    //    `(group, name)`; a no-op in install-from-manifest mode.
     //
     //    This MUST run before the boot regeneration below: `apply_resolution`
     //    composes each node's boot from its `[requires]`, so a package
@@ -478,7 +485,7 @@ pub fn run(ctx: &output::Context, args: InstallArgs) -> Result<()> {
             let resolved = fetched
                 .iter()
                 .find(|f| {
-                    f.cached.resolved.kind == cli_pkgref.kind
+                    Some(&f.cached.resolved.group) == cli_pkgref.group.as_ref()
                         && f.cached.resolved.name == cli_pkgref.name
                 })
                 .map(|f| &f.cached.resolved.version)
@@ -520,7 +527,7 @@ pub fn run(ctx: &output::Context, args: InstallArgs) -> Result<()> {
     }
     let mut active_features_global: BTreeSet<String> = BTreeSet::new();
     for f in &fetched {
-        let pkg_label = format!("{}:{}", f.cached.resolved.kind, f.cached.resolved.name);
+        let pkg_label = format!("{}/{}", f.cached.resolved.group, f.cached.resolved.name);
         for feat in &f.feature_expansion.active_features {
             active_features_global.insert(format!("{pkg_label}/{feat}"));
         }
@@ -557,22 +564,23 @@ struct Fetched {
     meta: NodeInstallMeta,
 }
 
-/// Build a `kind:name@=<exact-version>` pkgref for fetching the version
-/// the solver chose, regardless of how the user originally constrained
-/// the package.
+/// Build a `<group>/<name>@=<exact-version>` pkgref for fetching the
+/// version the solver chose, regardless of how the user originally
+/// constrained the package.
 pub(crate) fn exact_pinned_pkgref(node: &ResolvedNode) -> PackageRef {
     let req = semver::VersionReq::parse(&format!("={}", node.version))
         .expect("exact version always parses as VersionReq");
     PackageRef {
-        kind: node.kind,
+        kind: None,
+        group: Some(node.group.clone()),
         name: node.name.clone(),
         version: VersionSpec::Req(req),
     }
 }
 
 /// Merge new root pkgrefs into `lockfile.meta.root_dependencies`,
-/// deduplicating on `(kind, name)` (idempotent re-installs don't grow
-/// the list). Existing entries for the same `(kind, name)` are
+/// deduplicating on `(group, name)` (idempotent re-installs don't grow
+/// the list). Existing entries for the same `(group, name)` are
 /// overwritten by the new pkgref so a constraint change in
 /// `vibe install` updates the recorded root constraint.
 fn merge_root_dependencies(lockfile: &mut Lockfile, roots: &[PackageRef]) {
@@ -581,7 +589,7 @@ fn merge_root_dependencies(lockfile: &mut Lockfile, roots: &[PackageRef]) {
             .meta
             .root_dependencies
             .iter()
-            .position(|existing| existing.kind == r.kind && existing.name == r.name);
+            .position(|existing| existing.group == r.group && existing.name == r.name);
         match pos {
             Some(i) => lockfile.meta.root_dependencies[i] = r.clone(),
             None => lockfile.meta.root_dependencies.push(r.clone()),
@@ -619,6 +627,7 @@ fn finalize_pkgref_for_manifest(
     };
     PackageRef {
         kind: cli_pkgref.kind,
+        group: cli_pkgref.group.clone(),
         name: cli_pkgref.name.clone(),
         version,
     }
@@ -632,7 +641,7 @@ fn finalize_pkgref_for_manifest(
 /// Skips pkgrefs that are already declared as a git-source in
 /// `manifest.requires.git_packages` — those were recorded earlier via
 /// `apply_git_source_flag` (M1.15) and writing them again as
-/// registry-resolved would create a `(kind, name)` duplicate that
+/// registry-resolved would create a `(group, name)` duplicate that
 /// `try_from = "RequiresWire"` rejects on the next parse.
 fn merge_manifest_requires(manifest: &mut Manifest, roots: &[PackageRef]) -> bool {
     let mut changed = false;
@@ -641,7 +650,7 @@ fn merge_manifest_requires(manifest: &mut Manifest, roots: &[PackageRef]) -> boo
             .requires
             .git_packages
             .iter()
-            .any(|g| g.kind == r.kind && g.name == r.name)
+            .any(|g| Some(&g.group) == r.group.as_ref() && g.name == r.name)
         {
             // Already declared as git-source — leave untouched.
             continue;
@@ -650,7 +659,7 @@ fn merge_manifest_requires(manifest: &mut Manifest, roots: &[PackageRef]) -> boo
             .requires
             .packages
             .iter()
-            .position(|existing| existing.kind == r.kind && existing.name == r.name);
+            .position(|existing| existing.group == r.group && existing.name == r.name);
         match pos {
             Some(i) => {
                 if manifest.requires.packages[i] != *r {
@@ -791,15 +800,19 @@ fn apply_git_source_flag(
     }
     if args.packages.len() != 1 {
         bail!(
-            "--git requires exactly one positional pkgref `<kind>:<name>`; got {}",
+            "--git requires exactly one positional pkgref `<group>/<name>`; got {}",
             args.packages.len()
         );
     }
-    // Allow user to type either `flow:internal` or `flow:internal@*` —
-    // version is irrelevant for git-source (the ref decides), but we
-    // accept both shapes for muscle-memory compatibility.
+    // Allow user to type either `org.vibevm/internal` or
+    // `org.vibevm/internal@*` — version is irrelevant for git-source (the
+    // ref decides), but we accept both shapes for muscle-memory
+    // compatibility.
     let pr = PackageRef::parse(&args.packages[0])
         .with_context(|| format!("parsing `{}`", args.packages[0]))?;
+    let pr_group = pr.group.clone().ok_or_else(|| {
+        anyhow!("package reference `{pr}` is not group-qualified — write `<group>/<name>`")
+    })?;
     let url = args.git.clone().expect("caller checked args.git.is_some()");
     let ref_kind = match (
         args.tag.as_deref(),
@@ -829,6 +842,7 @@ fn apply_git_source_flag(
     }
     let dep = GitPackageDep {
         kind: pr.kind,
+        group: pr_group.clone(),
         name: pr.name.clone(),
         url,
         ref_kind,
@@ -838,18 +852,18 @@ fn apply_git_source_flag(
     };
 
     // Drop any prior registry-resolved entry for the same pkgref —
-    // M1.15 forbids `(kind, name)` collision between
+    // M1.15 forbids `(group, name)` collision between
     // `requires.packages` and `requires.git_packages`.
     manifest
         .requires
         .packages
-        .retain(|p| !(p.kind == dep.kind && p.name == dep.name));
+        .retain(|p| !(p.group.as_ref() == Some(&dep.group) && p.name == dep.name));
     // Replace any prior git-source entry for the same pkgref (same
     // shape as updating an existing constraint).
     manifest
         .requires
         .git_packages
-        .retain(|g| !(g.kind == dep.kind && g.name == dep.name));
+        .retain(|g| !(g.group == dep.group && g.name == dep.name));
     manifest.requires.git_packages.push(dep);
 
     manifest.write(project_root.join(Manifest::FILENAME))?;
@@ -908,7 +922,8 @@ fn locked_package_from_fetched(f: &Fetched, language: Option<&str>) -> LockedPac
         SourceKind::Registry
     };
     LockedPackage {
-        kind: c.resolved.kind,
+        kind: c.package_meta().kind,
+        group: c.resolved.group.clone(),
         name: c.resolved.name.clone(),
         version: c.resolved.version.clone(),
         registry: c.registry_name.clone(),
@@ -944,7 +959,7 @@ fn present_resolution(ctx: &output::Context, resolution: &[ResolvedDep]) {
         let payload: Vec<PlanEntry> = resolution
             .iter()
             .map(|d| PlanEntry {
-                package: format!("{}:{}", d.kind, d.name),
+                package: format!("{}/{}", d.group, d.name),
                 version: d.version.to_string(),
             })
             .collect();
@@ -963,7 +978,7 @@ fn present_resolution(ctx: &output::Context, resolution: &[ResolvedDep]) {
         if resolution.len() == 1 { "" } else { "s" },
     ));
     for d in resolution {
-        println!("  {}:{}@{}", d.kind, d.name, d.version);
+        println!("  {}/{}@{}", d.group, d.name, d.version);
     }
     println!();
 }
@@ -1114,7 +1129,12 @@ where
         ..Default::default()
     };
     for c in cached {
-        ctx.add_present(format!("{}:{}", c.resolved.kind, c.resolved.name));
+        // The conditional-dep `context(<key>)` predicate matches an
+        // opaque present-set token; for a package the token is the
+        // `<kind>:<name>` tag (PROP-003 §2.6.1), consistent with the
+        // `<type>:<name>` shape of capability / interface tags. This is
+        // not a package label — identity remains `(group, name)`.
+        ctx.add_present(format!("{}:{}", c.package_meta().kind, c.resolved.name));
         for cap in &c.manifest.provides.capabilities {
             let qualified = cap.qualified();
             ctx.add_present(qualified.clone());

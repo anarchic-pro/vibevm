@@ -1,7 +1,7 @@
 //! End-to-end tests for the full M0 walk: init → install → list → uninstall.
 //!
 //! The registry used here is the hand-written `fixtures/registry/` tree that ships in
-//! the vibevm repo itself (the canonical `flow:wal` fixture per
+//! the vibevm repo itself (the canonical `org.vibevm/wal` fixture per
 //! `VIBEVM-SPEC.md` §13).
 
 use std::fs;
@@ -46,10 +46,10 @@ fn full_install_cycle() {
     let project = tempfile::tempdir().unwrap();
     init_project(project.path());
 
-    // Install flow:wal from the local fixture registry.
+    // Install org.vibevm/wal from the local fixture registry.
     vibe()
         .arg("install")
-        .arg("flow:wal")
+        .arg("org.vibevm/wal")
         .arg("--path")
         .arg(project.path())
         .arg("--registry")
@@ -59,7 +59,7 @@ fn full_install_cycle() {
         .success();
 
     // The package's whole published tree is materialised verbatim into
-    // its `vibedeps/` slot — the fixture flow:wal v0.1.0 ships
+    // its `vibedeps/` slot — the fixture org.vibevm/wal v0.1.0 ships
     // `vibe.toml`, `README.md`, `boot/10-flow-wal.md`, and three
     // `spec/flows/wal/*.md` files.
     let slot = project.path().join("vibedeps/flow-wal/0.1.0");
@@ -151,7 +151,7 @@ fn full_install_cycle() {
     assert!(
         project
             .path()
-            .join(".vibe/cache/flow/wal/v0.1.0/vibe.toml")
+            .join(".vibe/cache/org.vibevm/wal/v0.1.0/vibe.toml")
             .is_file()
     );
 
@@ -169,7 +169,7 @@ fn full_install_cycle() {
     // `vibe uninstall` removes the package's `vibedeps/` slot.
     vibe()
         .arg("uninstall")
-        .arg("flow:wal")
+        .arg("org.vibevm/wal")
         .arg("--path")
         .arg(project.path())
         .arg("--assume-yes")
@@ -215,7 +215,7 @@ fn install_second_install_is_idempotent() {
 
     vibe()
         .arg("install")
-        .arg("flow:wal")
+        .arg("org.vibevm/wal")
         .arg("--path")
         .arg(project.path())
         .arg("--registry")
@@ -228,7 +228,7 @@ fn install_second_install_is_idempotent() {
     // present for 0.1.0, so materialisation skips it (PROP-011 §2.3).
     vibe()
         .arg("install")
-        .arg("flow:wal")
+        .arg("org.vibevm/wal")
         .arg("--path")
         .arg(project.path())
         .arg("--registry")
@@ -263,7 +263,7 @@ fn install_skips_a_present_slot_on_re_install() {
     // First install materialises the `vibedeps/flow-wal/0.1.0` slot.
     vibe()
         .arg("install")
-        .arg("flow:wal")
+        .arg("org.vibevm/wal")
         .arg("--path")
         .arg(project.path())
         .arg("--registry")
@@ -277,7 +277,7 @@ fn install_skips_a_present_slot_on_re_install() {
     let out = vibe()
         .arg("--json")
         .arg("install")
-        .arg("flow:wal")
+        .arg("org.vibevm/wal")
         .arg("--path")
         .arg(project.path())
         .arg("--registry")
@@ -309,7 +309,7 @@ fn install_reports_json() {
     let out = vibe()
         .arg("--json")
         .arg("install")
-        .arg("flow:wal")
+        .arg("org.vibevm/wal")
         .arg("--path")
         .arg(project.path())
         .arg("--registry")
@@ -350,10 +350,10 @@ fn install_skips_resolution_when_the_lockfile_is_fresh() {
     init_project(project.path());
 
     // First install — the full pipeline: resolve, materialise, lock. It
-    // also records `flow:wal` in `[requires].packages`.
+    // also records `org.vibevm/wal` in `[requires].packages`.
     vibe()
         .arg("install")
-        .arg("flow:wal")
+        .arg("org.vibevm/wal")
         .arg("--path")
         .arg(project.path())
         .arg("--registry")
@@ -362,7 +362,7 @@ fn install_skips_resolution_when_the_lockfile_is_fresh() {
         .assert()
         .success();
 
-    // Second install with no pkgref — `[requires]` carries flow:wal, the
+    // Second install with no pkgref — `[requires]` carries org.vibevm/wal, the
     // lock is a fresh resolution of it, the slot is materialised: the
     // depsolver is skipped.
     let out = vibe()
@@ -395,7 +395,7 @@ fn uninstall_errors_when_package_not_installed() {
 
     vibe()
         .arg("uninstall")
-        .arg("flow:wal")
+        .arg("org.vibevm/wal")
         .arg("--path")
         .arg(project.path())
         .arg("--assume-yes")
@@ -406,7 +406,7 @@ fn uninstall_errors_when_package_not_installed() {
 
 /// `vibe install <pkgref>` (no version) records the user-supplied
 /// pkgref in `vibe.toml` `[requires].packages` with the **caret**
-/// shape derived from the resolved version (`flow:wal@^0.1.0`).
+/// shape derived from the resolved version (`org.vibevm/wal@^0.1.0`).
 /// Same default as Cargo / npm / Poetry — `vibe update` later picks
 /// up patch-compatible bumps without needing an explicit re-pin.
 #[test]
@@ -416,7 +416,7 @@ fn install_writes_caret_pkgref_to_vibe_toml_requires() {
 
     vibe()
         .arg("install")
-        .arg("flow:wal")
+        .arg("org.vibevm/wal")
         .arg("--path")
         .arg(project.path())
         .arg("--registry")
@@ -435,12 +435,12 @@ fn install_writes_caret_pkgref_to_vibe_toml_requires() {
         manifest.requires.packages
     );
     let recorded = &manifest.requires.packages[0];
-    assert_eq!(recorded.qualified_name(), "flow:wal");
+    assert_eq!(recorded.qualified_name(), "org.vibevm/wal");
     // Caret shape: rendered string ends in `@^<resolved>`. The fixture
-    // ships flow:wal at v0.1.0 so the manifest should carry `^0.1.0`.
+    // ships org.vibevm/wal at v0.1.0 so the manifest should carry `^0.1.0`.
     assert_eq!(
         recorded.to_string(),
-        "flow:wal@^0.1.0",
+        "org.vibevm/wal@^0.1.0",
         "expected caret-default constraint, got: {recorded}"
     );
     // M1.15 wire shape: `[requires.packages]` map-form table with the key
@@ -450,8 +450,8 @@ fn install_writes_caret_pkgref_to_vibe_toml_requires() {
         "expected [requires.packages] header in rendered vibe.toml:\n{toml_text}"
     );
     assert!(
-        toml_text.contains("\"flow:wal\" = \"^0.1.0\""),
-        "expected `\"flow:wal\" = \"^0.1.0\"` row in rendered vibe.toml:\n{toml_text}"
+        toml_text.contains("\"org.vibevm/wal\" = \"^0.1.0\""),
+        "expected `\"org.vibevm/wal\" = \"^0.1.0\"` row in rendered vibe.toml:\n{toml_text}"
     );
 }
 
@@ -466,7 +466,7 @@ fn install_preserves_explicit_constraint_in_vibe_toml() {
 
     vibe()
         .arg("install")
-        .arg("flow:wal@^0.1")
+        .arg("org.vibevm/wal@^0.1")
         .arg("--path")
         .arg(project.path())
         .arg("--registry")
@@ -481,7 +481,10 @@ fn install_preserves_explicit_constraint_in_vibe_toml() {
     // CLI typed `^0.1`; manifest preserves `^0.1`. We do NOT tighten
     // to the resolved `^0.1.0` — the operator's wider declaration
     // wins.
-    assert_eq!(manifest.requires.packages[0].to_string(), "flow:wal@^0.1");
+    assert_eq!(
+        manifest.requires.packages[0].to_string(),
+        "org.vibevm/wal@^0.1"
+    );
 }
 
 /// `vibe install <pkgref> --exact` pins the manifest to the exact
@@ -494,7 +497,7 @@ fn install_with_exact_flag_pins_manifest_to_eq_resolved() {
 
     vibe()
         .arg("install")
-        .arg("flow:wal")
+        .arg("org.vibevm/wal")
         .arg("--exact")
         .arg("--path")
         .arg(project.path())
@@ -509,7 +512,7 @@ fn install_with_exact_flag_pins_manifest_to_eq_resolved() {
     assert_eq!(manifest.requires.packages.len(), 1);
     assert_eq!(
         manifest.requires.packages[0].to_string(),
-        "flow:wal@=0.1.0",
+        "org.vibevm/wal@=0.1.0",
         "expected =-pinned exact constraint with --exact"
     );
 }
@@ -523,7 +526,7 @@ fn install_from_manifest_uses_requires() {
     let project = tempfile::tempdir().unwrap();
     init_project(project.path());
 
-    // Hand-edit vibe.toml: declare flow:wal as a required package without
+    // Hand-edit vibe.toml: declare org.vibevm/wal as a required package without
     // having installed it yet. This is the freshly-cloned-project case —
     // `vibe.toml` already declares the deps, but nothing has been resolved.
     let toml_path = project.path().join("vibe.toml");
@@ -532,11 +535,11 @@ fn install_from_manifest_uses_requires() {
     manifest
         .requires
         .packages
-        .push(vibe_core::PackageRef::parse("flow:wal").unwrap());
+        .push(vibe_core::PackageRef::parse("org.vibevm/wal").unwrap());
     manifest.write(&toml_path).unwrap();
 
     // Run `vibe install` with no pkgref arguments — should pick up the
-    // manifest declaration and install flow:wal.
+    // manifest declaration and install org.vibevm/wal.
     vibe()
         .arg("install")
         .arg("--path")
@@ -561,9 +564,12 @@ fn install_from_manifest_uses_requires() {
     assert_eq!(lock.packages.len(), 1);
     assert_eq!(lock.packages[0].name, "wal");
     assert_eq!(lock.meta.root_dependencies.len(), 1);
-    assert_eq!(lock.meta.root_dependencies[0].qualified_name(), "flow:wal");
+    assert_eq!(
+        lock.meta.root_dependencies[0].qualified_name(),
+        "org.vibevm/wal"
+    );
 
-    // Because flow:wal was declared in `[requires]` before this
+    // Because org.vibevm/wal was declared in `[requires]` before this
     // install, the boot computation sees it as a dependency of the
     // project node — `INDEX.md` names its boot file inside the
     // `vibedeps/` slot, in the dependency band (between the node's own
@@ -607,7 +613,7 @@ fn uninstall_drops_pkgref_from_vibe_toml() {
 
     vibe()
         .arg("install")
-        .arg("flow:wal")
+        .arg("org.vibevm/wal")
         .arg("--path")
         .arg(project.path())
         .arg("--registry")
@@ -624,7 +630,7 @@ fn uninstall_drops_pkgref_from_vibe_toml() {
 
     vibe()
         .arg("uninstall")
-        .arg("flow:wal")
+        .arg("org.vibevm/wal")
         .arg("--path")
         .arg(project.path())
         .arg("--assume-yes")
@@ -687,10 +693,11 @@ fn run_git(cwd: &Path, args: &[&str]) {
 /// Build a per-package bare git registry under `root/`: one bare repo
 /// per package, content at the repo root, tagged `v<semver>`.
 ///
-/// For this test we seed exactly one package: `flow:wal@0.1.0` →
-/// `<root>/flow-wal.git`. The "registry" is then `<root>` itself —
+/// For this test we seed exactly one package: `org.vibevm/wal@0.1.0` →
+/// `<root>/org.vibevm.wal.git`. The "registry" is then `<root>` itself —
 /// `MultiRegistryResolver` composes per-package URLs by appending
-/// `<kind>-<name>.git` to the org URL.
+/// `<group>.<name>.git` to the org URL (the `fqdn` naming convention,
+/// PROP-008 §3).
 ///
 /// Returns the org root path (not any single repo), since the install
 /// flow points `[[registry]]` at the org URL.
@@ -702,13 +709,13 @@ fn make_per_package_registry(root: &Path) -> PathBuf {
     run_git(&src, &["config", "user.name", "Test"]);
 
     // Per-package layout: package contents live AT THE ROOT of the repo,
-    // not under `<kind>/<name>/v<ver>/`.
-    copy_tree(&fixture_registry().join("flow/wal/v0.1.0"), &src);
+    // not under `<group>/<name>/v<ver>/`.
+    copy_tree(&fixture_registry().join("org.vibevm/wal/v0.1.0"), &src);
     run_git(&src, &["add", "-A"]);
-    run_git(&src, &["commit", "-m", "flow:wal@0.1.0"]);
+    run_git(&src, &["commit", "-m", "org.vibevm/wal@0.1.0"]);
     run_git(&src, &["tag", "v0.1.0"]);
 
-    let bare = root.join("flow-wal.git");
+    let bare = root.join("org.vibevm.wal.git");
     run_git(
         root,
         &[
@@ -742,7 +749,8 @@ fn copy_tree(src: &Path, dst: &Path) {
 
 fn write_project_with_per_package_registry(project_dir: &Path, registry_url: &str) {
     // [[registry]] in PROP-002 shape, pointing at the per-package org URL.
-    // `naming = "kind-name"` is the default convention for vibespecs.
+    // `naming` defaults to `fqdn` — repos resolve as `<group>.<name>.git`
+    // (PROP-008 §3).
     let manifest = format!(
         r#"[project]
 name = "demo"
@@ -771,10 +779,10 @@ fn install_from_git_registry() {
     let project = tempfile::tempdir().unwrap();
     init_project(project.path());
 
-    // Org URL = parent of `flow-wal.git`. `git+file://` prefix is the
-    // Cargo / pip convention recorded in lockfiles; the resolver strips
-    // it before invoking `git`, so it works with both prefixed and bare
-    // forms in `vibe.toml`.
+    // Org URL = parent of `org.vibevm.wal.git`. `git+file://` prefix is
+    // the Cargo / pip convention recorded in lockfiles; the resolver
+    // strips it before invoking `git`, so it works with both prefixed and
+    // bare forms in `vibe.toml`.
     let url = format!(
         "git+file://{}",
         org_root.to_string_lossy().replace('\\', "/")
@@ -784,7 +792,7 @@ fn install_from_git_registry() {
     vibe()
         .env("VIBE_REGISTRY_CACHE", &cache)
         .arg("install")
-        .arg("flow:wal")
+        .arg("org.vibevm/wal")
         .arg("--path")
         .arg(project.path())
         .arg("--assume-yes")
@@ -797,7 +805,7 @@ fn install_from_git_registry() {
     assert_eq!(lock.packages.len(), 1);
     let entry = &lock.packages[0];
 
-    // schema_version matches CURRENT (3 after PROP-003 r2).
+    // schema_version matches CURRENT (5 after PROP-008 qualified naming).
     assert_eq!(
         lock.meta.schema_version,
         vibe_core::manifest::CURRENT_SCHEMA_VERSION,
@@ -812,8 +820,8 @@ fn install_from_git_registry() {
         entry.source_url
     );
     assert!(
-        entry.source_url.ends_with("/flow-wal.git"),
-        "expected per-package URL ending in /flow-wal.git, got: {}",
+        entry.source_url.ends_with("/org.vibevm.wal.git"),
+        "expected per-package URL ending in /org.vibevm.wal.git, got: {}",
         entry.source_url
     );
     assert_eq!(entry.source_ref.as_deref(), Some("v0.1.0"));
@@ -829,7 +837,7 @@ fn install_from_git_registry() {
         .collect();
     assert_eq!(clone_dirs.len(), 1, "expected one registry cache bucket");
     let bucket = clone_dirs[0].path();
-    let pkg_clone = bucket.join("packages/flow-wal/clone");
+    let pkg_clone = bucket.join("packages/org.vibevm.wal/clone");
     assert!(
         pkg_clone.join(".git").exists(),
         "per-package clone missing .git/: {}",
@@ -856,9 +864,9 @@ fn make_single_package_bare_repo(root: &Path) -> PathBuf {
     run_git(&src, &["init", "--initial-branch=main"]);
     run_git(&src, &["config", "user.email", "t@example.com"]);
     run_git(&src, &["config", "user.name", "Test"]);
-    copy_tree(&fixture_registry().join("flow/wal/v0.1.0"), &src);
+    copy_tree(&fixture_registry().join("org.vibevm/wal/v0.1.0"), &src);
     run_git(&src, &["add", "-A"]);
-    run_git(&src, &["commit", "-m", "flow:wal@0.1.0"]);
+    run_git(&src, &["commit", "-m", "org.vibevm/wal@0.1.0"]);
     run_git(&src, &["tag", "v0.1.0"]);
     let bare = root.join("flow-wal-direct.git");
     run_git(
@@ -893,7 +901,7 @@ fn install_from_git_source_with_tag_records_source_kind_git() {
     vibe()
         .env("VIBE_REGISTRY_CACHE", &cache)
         .arg("install")
-        .arg("flow:wal")
+        .arg("org.vibevm/wal")
         .arg("--git")
         .arg(&url)
         .arg("--tag")
@@ -920,7 +928,7 @@ fn install_from_git_source_with_tag_records_source_kind_git() {
         manifest.requires.packages
     );
     let g = &manifest.requires.git_packages[0];
-    assert_eq!(g.kind, vibe_core::PackageKind::Flow);
+    assert_eq!(g.group, vibe_core::Group::parse("org.vibevm").unwrap());
     assert_eq!(g.name, "wal");
     assert_eq!(g.url, url);
     assert!(
@@ -982,7 +990,7 @@ fn install_from_git_source_with_branch_pins_lockfile_to_resolved_commit() {
     vibe()
         .env("VIBE_REGISTRY_CACHE", &cache)
         .arg("install")
-        .arg("flow:wal")
+        .arg("org.vibevm/wal")
         .arg("--git")
         .arg(&url)
         .arg("--branch")
@@ -1047,7 +1055,7 @@ fn install_git_source_then_repeat_install_no_args_is_idempotent() {
     vibe()
         .env("VIBE_REGISTRY_CACHE", &cache)
         .arg("install")
-        .arg("flow:wal")
+        .arg("org.vibevm/wal")
         .arg("--git")
         .arg(&url)
         .arg("--tag")
@@ -1241,14 +1249,14 @@ fn install_via_redirect_pass_through_tag() {
         target_bare.to_string_lossy().replace('\\', "/")
     );
 
-    // Stub lives at `<org_root>/flow-internal.git` so the resolver's
+    // Stub lives at `<org_root>/org.vibevm.internal.git` so the resolver's
     // composed per-package URL hits it via the registry's naming
-    // convention (kind-name).
+    // convention (fqdn — `<group>.<name>`).
     let org_root = outer_path.join("org-root");
     fs::create_dir_all(&org_root).unwrap();
     let _stub = make_redirect_stub_bare_repo(
         &org_root,
-        "flow-internal",
+        "org.vibevm.internal",
         &target_url,
         "pass-through-tag",
         None,
@@ -1266,7 +1274,7 @@ fn install_via_redirect_pass_through_tag() {
     vibe()
         .env("VIBE_REGISTRY_CACHE", &cache)
         .arg("install")
-        .arg("flow:internal@^0.1")
+        .arg("org.vibevm/internal@^0.1")
         .arg("--path")
         .arg(project.path())
         .arg("--assume-yes")
@@ -1294,7 +1302,7 @@ fn install_via_redirect_pass_through_tag() {
     );
     let via = entry.via_redirect.as_deref().unwrap();
     assert!(
-        via.contains("flow-internal") && !via.contains("external-flow-internal"),
+        via.contains("org.vibevm.internal") && !via.contains("external-flow-internal"),
         "expected stub URL in via_redirect, got: {via}"
     );
     assert_eq!(entry.registry.as_deref(), Some("default"));
@@ -1359,7 +1367,7 @@ fn install_via_redirect_pinned_policy_uses_pinned_ref() {
     fs::create_dir_all(&org_root).unwrap();
     let _stub = make_redirect_stub_bare_repo(
         &org_root,
-        "flow-pinned",
+        "org.vibevm.pinned",
         &target_url,
         "pinned",
         Some("v1.0.0"),
@@ -1377,7 +1385,7 @@ fn install_via_redirect_pinned_policy_uses_pinned_ref() {
     vibe()
         .env("VIBE_REGISTRY_CACHE", &cache)
         .arg("install")
-        .arg("flow:pinned@^1")
+        .arg("org.vibevm/pinned@^1")
         .arg("--path")
         .arg(project.path())
         .arg("--assume-yes")
@@ -1408,7 +1416,7 @@ fn install_via_redirect_identity_mismatch_rejected() {
     fs::create_dir_all(&cache).unwrap();
 
     // Stub is hosted at `flow-internal` slot but redirects to a target
-    // whose manifest declares `feat:something-else`. Per PROP-002
+    // whose manifest declares `org.vibevm/something-else`. Per PROP-002
     // §2.4.2 identity check, the resolver refuses the install loud.
     let target_root = outer_path.join("target-host");
     fs::create_dir_all(&target_root).unwrap();
@@ -1429,7 +1437,7 @@ fn install_via_redirect_identity_mismatch_rejected() {
     fs::create_dir_all(&org_root).unwrap();
     let _stub = make_redirect_stub_bare_repo(
         &org_root,
-        "flow-internal",
+        "org.vibevm.internal",
         &target_url,
         "pass-through-tag",
         None,
@@ -1447,7 +1455,7 @@ fn install_via_redirect_identity_mismatch_rejected() {
     vibe()
         .env("VIBE_REGISTRY_CACHE", &cache)
         .arg("install")
-        .arg("flow:internal@^0.1")
+        .arg("org.vibevm/internal@^0.1")
         .arg("--path")
         .arg(project.path())
         .arg("--assume-yes")
@@ -1495,7 +1503,7 @@ fn install_via_redirect_chain_rejected_at_hop_two() {
     );
     let hop2_stub = make_redirect_stub_bare_repo(
         &hop2_root,
-        "flow-chain-hop2",
+        "org.vibevm.chain-hop2",
         &hop2_target_url,
         "pass-through-tag",
         None,
@@ -1509,7 +1517,7 @@ fn install_via_redirect_chain_rejected_at_hop_two() {
     fs::create_dir_all(&org_root).unwrap();
     let _hop1_stub = make_redirect_stub_bare_repo(
         &org_root,
-        "flow-chain",
+        "org.vibevm.chain",
         &hop2_stub_url,
         "pass-through-tag",
         None,
@@ -1527,7 +1535,7 @@ fn install_via_redirect_chain_rejected_at_hop_two() {
     vibe()
         .env("VIBE_REGISTRY_CACHE", &cache)
         .arg("install")
-        .arg("flow:chain@^1")
+        .arg("org.vibevm/chain@^1")
         .arg("--path")
         .arg(project.path())
         .arg("--assume-yes")
@@ -1590,7 +1598,7 @@ fn redirect_update_rejects_description_and_clear_combined() {
     vibe()
         .arg("registry")
         .arg("redirect-update")
-        .arg("flow:wal")
+        .arg("org.vibevm/wal")
         .arg("--description")
         .arg("new text")
         .arg("--clear-description")
@@ -1617,7 +1625,7 @@ fn redirect_update_rejects_invalid_pkgref() {
         .arg(project.path())
         .assert()
         .failure()
-        .stderr(predicate::str::contains("parsing pkgref"));
+        .stderr(predicate::str::contains("not group-qualified"));
 }
 
 #[test]
@@ -1629,7 +1637,7 @@ fn redirect_update_rejects_missing_vibe_toml() {
     vibe()
         .arg("registry")
         .arg("redirect-update")
-        .arg("flow:wal")
+        .arg("org.vibevm/wal")
         .arg("--description")
         .arg("anything")
         .arg("--path")
@@ -1657,7 +1665,7 @@ fn uninstall_removes_git_source_from_manifest_and_lockfile() {
     vibe()
         .env("VIBE_REGISTRY_CACHE", &cache)
         .arg("install")
-        .arg("flow:wal")
+        .arg("org.vibevm/wal")
         .arg("--git")
         .arg(&url)
         .arg("--tag")
@@ -1671,7 +1679,7 @@ fn uninstall_removes_git_source_from_manifest_and_lockfile() {
     vibe()
         .env("VIBE_REGISTRY_CACHE", &cache)
         .arg("uninstall")
-        .arg("flow:wal")
+        .arg("org.vibevm/wal")
         .arg("--path")
         .arg(project.path())
         .arg("--assume-yes")
@@ -1738,7 +1746,7 @@ category = "flow"
     fs::write(src.join("spec/flows/wal/B.md"), "v1 B\n").unwrap();
     fs::write(src.join("boot/10-flow-wal.md"), "v1 boot\n").unwrap();
     run_git(&src, &["add", "-A"]);
-    run_git(&src, &["commit", "-m", "flow:wal@0.1.0"]);
+    run_git(&src, &["commit", "-m", "org.vibevm/wal@0.1.0"]);
     run_git(&src, &["tag", "v0.1.0"]);
 
     // v0.2.0: A modified, B removed, C added, boot unchanged.
@@ -1757,10 +1765,10 @@ category = "flow"
     fs::write(src.join("spec/flows/wal/C.md"), "v2 C\n").unwrap();
     fs::remove_file(src.join("spec/flows/wal/B.md")).unwrap();
     run_git(&src, &["add", "-A"]);
-    run_git(&src, &["commit", "-m", "flow:wal@0.2.0"]);
+    run_git(&src, &["commit", "-m", "org.vibevm/wal@0.2.0"]);
     run_git(&src, &["tag", "v0.2.0"]);
 
-    let bare = root.join("flow-wal.git");
+    let bare = root.join("org.vibevm.wal.git");
     run_git(
         root,
         &[
@@ -1805,7 +1813,7 @@ fn update_bumps_to_new_version_and_remateralises() {
     vibe()
         .env("VIBE_REGISTRY_CACHE", &cache)
         .arg("install")
-        .arg("flow:wal@=0.1.0")
+        .arg("org.vibevm/wal@=0.1.0")
         .arg("--path")
         .arg(project.path())
         .arg("--assume-yes")
@@ -1829,7 +1837,7 @@ fn update_bumps_to_new_version_and_remateralises() {
     let toml_path = project.path().join("vibe.toml");
     let mut manifest =
         vibe_core::manifest::Manifest::parse_str(&fs::read_to_string(&toml_path).unwrap()).unwrap();
-    manifest.requires.packages[0] = vibe_core::PackageRef::parse("flow:wal@*").unwrap();
+    manifest.requires.packages[0] = vibe_core::PackageRef::parse("org.vibevm/wal@*").unwrap();
     manifest.write(&toml_path).unwrap();
 
     // `vibe update` re-resolves `[requires]` afresh and re-materialises
@@ -1837,7 +1845,7 @@ fn update_bumps_to_new_version_and_remateralises() {
     vibe()
         .env("VIBE_REGISTRY_CACHE", &cache)
         .arg("update")
-        .arg("flow:wal")
+        .arg("org.vibevm/wal")
         .arg("--path")
         .arg(project.path())
         .arg("--assume-yes")
@@ -1915,7 +1923,7 @@ fn show_effective_emits_boot_files_with_provenance() {
 
 #[test]
 fn show_effective_includes_wal_when_present() {
-    // When the operator (or `flow:wal` install) put `spec/WAL.md` in
+    // When the operator (or `org.vibevm/wal` install) put `spec/WAL.md` in
     // place, `show effective` includes it with `(wal)` provenance.
     let project = tempfile::tempdir().unwrap();
     init_project(project.path());
@@ -1997,7 +2005,7 @@ fn user_config_promotes_vibe_registry_cache_into_runtime() {
         .env("VIBEVM_USER_CONFIG", &user_cfg_path)
         .env_remove("VIBE_REGISTRY_CACHE")
         .arg("install")
-        .arg("flow:wal")
+        .arg("org.vibevm/wal")
         .arg("--path")
         .arg(project.path())
         .arg("--assume-yes")
@@ -2017,7 +2025,7 @@ fn user_config_promotes_vibe_registry_cache_into_runtime() {
         .next()
         .expect("bucket")
         .path();
-    let pkg_clone = bucket.join("packages/flow-wal/clone");
+    let pkg_clone = bucket.join("packages/org.vibevm.wal/clone");
     assert!(
         pkg_clone.join(".git").exists(),
         "per-package clone must land in user-config cache: {}",
@@ -2275,7 +2283,7 @@ fn update_keeps_pinned_version_when_constraint_excludes_newer() {
     vibe()
         .env("VIBE_REGISTRY_CACHE", &cache)
         .arg("install")
-        .arg("flow:wal@^0.1")
+        .arg("org.vibevm/wal@^0.1")
         .arg("--path")
         .arg(project.path())
         .arg("--assume-yes")
@@ -2287,7 +2295,7 @@ fn update_keeps_pinned_version_when_constraint_excludes_newer() {
     vibe()
         .env("VIBE_REGISTRY_CACHE", &cache)
         .arg("update")
-        .arg("flow:wal")
+        .arg("org.vibevm/wal")
         .arg("--path")
         .arg(project.path())
         .arg("--assume-yes")
@@ -2340,7 +2348,7 @@ fn vendor_produces_bare_repo_per_lockfile_entry() {
     vibe()
         .env("VIBE_REGISTRY_CACHE", &cache)
         .arg("install")
-        .arg("flow:wal")
+        .arg("org.vibevm/wal")
         .arg("--path")
         .arg(project.path())
         .arg("--assume-yes")
@@ -2362,7 +2370,7 @@ fn vendor_produces_bare_repo_per_lockfile_entry() {
 
     // The vendor dir contains a bare repo for the package and a
     // README.md explaining how to wire it.
-    let bare_repo = vendor_dir.join("flow-wal.git");
+    let bare_repo = vendor_dir.join("org.vibevm.wal.git");
     assert!(
         bare_repo.is_dir(),
         "expected vendor bare repo at {}",
@@ -2380,7 +2388,7 @@ fn vendor_produces_bare_repo_per_lockfile_entry() {
     );
 
     // Verify the bare repo is a usable git source. `git ls-remote
-    // <vendor>/flow-wal.git` must list the v0.1.0 tag the install
+    // <vendor>/org.vibevm.wal.git` must list the v0.1.0 tag the install
     // pulled in.
     let ls_out = std::process::Command::new("git")
         .args(["ls-remote", "--tags", bare_repo.to_str().unwrap()])
@@ -2450,7 +2458,7 @@ fn vendor_refuses_non_empty_out_dir_without_force() {
     vibe()
         .env("VIBE_REGISTRY_CACHE", &cache)
         .arg("install")
-        .arg("flow:wal")
+        .arg("org.vibevm/wal")
         .arg("--path")
         .arg(project.path())
         .arg("--assume-yes")
@@ -2497,7 +2505,7 @@ fn vendor_refuses_non_empty_out_dir_without_force() {
         "important.txt should be gone after --force vendor"
     );
     assert!(
-        vendor_dir.join("flow-wal.git").is_dir(),
+        vendor_dir.join("org.vibevm.wal.git").is_dir(),
         "vendored bare repo missing after --force"
     );
 }
@@ -2507,7 +2515,7 @@ fn vendor_refuses_non_empty_out_dir_without_force() {
 /// install testing. Layout:
 ///
 /// ```text
-/// registry/flow/feat-pkg/v0.1.0/
+/// registry/org.vibevm/feat-pkg/v0.1.0/
 /// ├── vibe.toml      [features].default = ["base"]
 /// │                          [features].base = []
 /// │                          [features].with-rust = ["subskill:stack/rust"]
@@ -2528,7 +2536,7 @@ fn vendor_refuses_non_empty_out_dir_without_force() {
 /// ```
 fn make_features_fixture_registry(root: &Path) -> PathBuf {
     let registry = root.join("registry");
-    let pkg = registry.join("flow").join("feat-pkg").join("v0.1.0");
+    let pkg = registry.join("org.vibevm").join("feat-pkg").join("v0.1.0");
     fs::create_dir_all(pkg.join("spec/feats/feat-pkg")).unwrap();
     fs::create_dir_all(pkg.join("boot")).unwrap();
     fs::create_dir_all(pkg.join("subskills/stack/rust/spec/feats/feat-pkg")).unwrap();
@@ -2618,7 +2626,7 @@ fn install_with_features_records_active_features_in_lockfile() {
 
     vibe()
         .arg("install")
-        .arg("flow:feat-pkg")
+        .arg("org.vibevm/feat-pkg")
         .arg("--registry")
         .arg(&registry)
         .arg("--path")
@@ -2673,7 +2681,7 @@ fn install_no_default_features_drops_default_feature_from_lockfile() {
 
     vibe()
         .arg("install")
-        .arg("flow:feat-pkg")
+        .arg("org.vibevm/feat-pkg")
         .arg("--registry")
         .arg(&registry)
         .arg("--path")
@@ -3261,7 +3269,7 @@ fn install_unattended_skips_confirm_like_assume_yes() {
     vibe()
         .arg("--unattended")
         .arg("install")
-        .arg("flow:wal")
+        .arg("org.vibevm/wal")
         .arg("--path")
         .arg(project.path())
         .arg("--registry")
@@ -4045,7 +4053,7 @@ fn mcp_serve_responds_to_initialize_and_query_package() {
     // something interesting to return.
     vibe()
         .arg("install")
-        .arg("flow:integration-alpha")
+        .arg("org.vibevm/integration-alpha")
         .arg("--registry")
         .arg(&registry)
         .arg("--path")
@@ -4061,7 +4069,7 @@ fn mcp_serve_responds_to_initialize_and_query_package() {
     let script = [
         r#"{"jsonrpc":"2.0","id":1,"method":"initialize","params":{}}"#,
         r#"{"jsonrpc":"2.0","id":2,"method":"tools/list","params":{}}"#,
-        r#"{"jsonrpc":"2.0","id":3,"method":"tools/call","params":{"name":"query_package","arguments":{"name":"flow:integration-alpha"}}}"#,
+        r#"{"jsonrpc":"2.0","id":3,"method":"tools/call","params":{"name":"query_package","arguments":{"name":"org.vibevm/integration-alpha"}}}"#,
         "",
     ]
     .join("\n");
@@ -4155,13 +4163,13 @@ fn mcp_serve_responds_to_initialize_and_query_package() {
 //   `extra-discipline` feature mapping `subskill:feature/extra-discipline`,
 //   `[features.exclusive]` group, and a conditional dep
 //   `[target."context(stack:integration-rust)".dependencies]` →
-//   `flow:integration-beta`.
+//   `org.vibevm/integration-beta`.
 // - alpha ships subskills probing every channel: `feature/extra-
 //   discipline` (manual feature), `stack/rust` (if_present), `lang/ru-
 //   extras` (if_language), `sqlx/v08` (if_describes_match + own PURL).
 // - beta provides `interface:trace-discipline` and ships an
 //   `if-cargo` subskill activated by `if_files = ["**/Cargo.toml"]`.
-// - stack:integration-rust is the trigger that pulls beta in via
+// - org.vibevm/integration-rust is the trigger that pulls beta in via
 //   alpha's conditional dep + activates alpha's `stack/rust` subskill.
 
 #[test]
@@ -4172,8 +4180,8 @@ fn omnibus_install_exercises_every_prop003_surface() {
 
     vibe()
         .arg("install")
-        .arg("stack:integration-rust")
-        .arg("flow:integration-alpha")
+        .arg("org.vibevm/integration-rust")
+        .arg("org.vibevm/integration-alpha")
         .arg("--registry")
         .arg(&registry)
         .arg("--path")
@@ -4188,9 +4196,9 @@ fn omnibus_install_exercises_every_prop003_surface() {
 
     let lock: vibe_core::manifest::Lockfile =
         toml::from_str(&fs::read_to_string(project.path().join("vibe.lock")).unwrap()).unwrap();
-    assert_eq!(lock.meta.schema_version, 4);
+    assert_eq!(lock.meta.schema_version, 5);
     assert_eq!(lock.meta.language_chain, vec!["ru", "en"]);
-    // Three packages: the two CLI roots plus `flow:integration-beta`,
+    // Three packages: the two CLI roots plus `org.vibevm/integration-beta`,
     // pulled in by alpha's conditional dep
     // `[target."context(stack:integration-rust)".dependencies]`. The
     // conditional-dep fixed-point loop still runs under the loading
@@ -4346,8 +4354,8 @@ fn omnibus_show_features_and_purls_after_install() {
 
     vibe()
         .arg("install")
-        .arg("stack:integration-rust")
-        .arg("flow:integration-alpha")
+        .arg("org.vibevm/integration-rust")
+        .arg("org.vibevm/integration-alpha")
         .arg("--registry")
         .arg(&registry)
         .arg("--path")
@@ -4377,12 +4385,12 @@ fn omnibus_show_features_and_purls_after_install() {
         .iter()
         .map(|p| p["package"].as_str().unwrap())
         .collect();
-    assert!(pkgs.contains(&"flow:integration-alpha"));
+    assert!(pkgs.contains(&"org.vibevm/integration-alpha"));
     let alpha_features: Vec<&str> = v["packages"]
         .as_array()
         .unwrap()
         .iter()
-        .find(|p| p["package"] == "flow:integration-alpha")
+        .find(|p| p["package"] == "org.vibevm/integration-alpha")
         .unwrap()["features"]
         .as_array()
         .unwrap()
@@ -4404,9 +4412,8 @@ fn omnibus_show_features_and_purls_after_install() {
     assert_eq!(v["command"], "show:purls");
     let bindings = v["bindings"].as_array().unwrap();
     assert!(
-        bindings.iter().any(
-            |b| b["purl"] == "pkg:cargo/sqlx@0.8.0" && b["package"] == "flow:integration-alpha"
-        ),
+        bindings.iter().any(|b| b["purl"] == "pkg:cargo/sqlx@0.8.0"
+            && b["package"] == "org.vibevm/integration-alpha"),
         "expected alpha→cargo/sqlx@0.8.0 binding; got {:?}",
         bindings
     );
@@ -4420,7 +4427,7 @@ fn omnibus_install_no_default_features_drops_default_subskill() {
 
     vibe()
         .arg("install")
-        .arg("flow:integration-alpha")
+        .arg("org.vibevm/integration-alpha")
         .arg("--registry")
         .arg(&registry)
         .arg("--path")
@@ -4463,10 +4470,10 @@ fn workspace_root() -> std::path::PathBuf {
 
 /// Build a per-package git registry hosting three flow packages:
 ///
-/// - `flow:dispatcher` v0.1.0 with a `[target."context(stack:rust)"]`
-///   conditional dep on `flow:rust-helper@^0.1`.
-/// - `flow:rust-helper` v0.1.0 (the conditional target).
-/// - `stack:rust-cli` v0.1.0 (a stack package that the project will
+/// - `org.vibevm/dispatcher` v0.1.0 with a `[target."context(stack:rust)"]`
+///   conditional dep on `org.vibevm/rust-helper@^0.1`.
+/// - `org.vibevm/rust-helper` v0.1.0 (the conditional target).
+/// - `org.vibevm/rust-cli` v0.1.0 (a stack package that the project will
 ///   install to make the predicate match).
 ///
 /// Returns the org root path and a `git+file://...` URL pointing at it.
@@ -4509,7 +4516,7 @@ version = "{version}"
         run_git(&src, &["commit", "-m", &format!("v{version}")]);
         run_git(&src, &["tag", &format!("v{version}")]);
 
-        let bare = org_dir.join(format!("{kind}-{name}.git"));
+        let bare = org_dir.join(format!("org.vibevm.{name}.git"));
         run_git(
             out_root,
             &[
@@ -4530,7 +4537,7 @@ version = "{version}"
         "0.1.0",
         r#"
 [target."context(stack:rust-cli)".dependencies]
-packages = { "flow:rust-helper" = "^0.1" }
+packages = { "org.vibevm/rust-helper" = "^0.1" }
 "#,
         &[("spec/flows/dispatcher/CORE.md", "# dispatcher core")],
     );
@@ -4579,57 +4586,57 @@ fn install_expands_conditional_dependencies_when_predicate_matches() {
     let cache = outer.path().join("cache");
     fs::create_dir_all(&cache).unwrap();
 
-    // Install stack:rust-cli first to make `stack:rust` present in the
+    // Install org.vibevm/rust-cli first to make `org.vibevm/rust` present in the
     // graph before dispatcher's conditional predicate evaluates.
     vibe()
         .env("VIBE_REGISTRY_CACHE", &cache)
         .arg("install")
-        .arg("stack:rust-cli")
-        .arg("flow:dispatcher")
+        .arg("org.vibevm/rust-cli")
+        .arg("org.vibevm/dispatcher")
         .arg("--path")
         .arg(project.path())
         .arg("--assume-yes")
         .assert()
         .success();
 
-    // The conditional dependency `flow:rust-helper` should have been
+    // The conditional dependency `org.vibevm/rust-helper` should have been
     // pulled in as well.
     let lock_text = fs::read_to_string(project.path().join("vibe.lock")).unwrap();
     let lock: vibe_core::manifest::Lockfile = toml::from_str(&lock_text).unwrap();
     let names: Vec<_> = lock
         .packages
         .iter()
-        .map(|p| format!("{}:{}", p.kind, p.name))
+        .map(|p| format!("{}/{}", p.group, p.name))
         .collect();
     assert!(
-        names.iter().any(|n| n == "stack:rust-cli"),
-        "expected stack:rust-cli; got {:?}",
+        names.iter().any(|n| n == "org.vibevm/rust-cli"),
+        "expected org.vibevm/rust-cli; got {:?}",
         names
     );
     assert!(
-        names.iter().any(|n| n == "flow:dispatcher"),
-        "expected flow:dispatcher; got {:?}",
+        names.iter().any(|n| n == "org.vibevm/dispatcher"),
+        "expected org.vibevm/dispatcher; got {:?}",
         names
     );
     assert!(
-        names.iter().any(|n| n == "flow:rust-helper"),
-        "expected flow:rust-helper to be pulled in via conditional dep; got {:?}",
+        names.iter().any(|n| n == "org.vibevm/rust-helper"),
+        "expected org.vibevm/rust-helper to be pulled in via conditional dep; got {:?}",
         names
     );
 }
 
 /// Build a registry that exercises **cascading** conditional deps:
 ///
-/// - `flow:cascade-root` depends conditionally on `flow:cascade-mid`
-///   when `stack:rust-cli` is present.
-/// - `flow:cascade-mid` depends conditionally on `flow:cascade-leaf`
-///   when `flow:cascade-root` is present.
-/// - `flow:cascade-leaf` has no further conditional deps.
-/// - `stack:rust-cli` is the trigger package.
+/// - `org.vibevm/cascade-root` depends conditionally on `org.vibevm/cascade-mid`
+///   when `org.vibevm/rust-cli` is present.
+/// - `org.vibevm/cascade-mid` depends conditionally on `org.vibevm/cascade-leaf`
+///   when `org.vibevm/cascade-root` is present.
+/// - `org.vibevm/cascade-leaf` has no further conditional deps.
+/// - `org.vibevm/rust-cli` is the trigger package.
 ///
-/// Project installs `stack:rust-cli` + `flow:cascade-root`. Iteration 1
-/// of the fixed-point loop pulls in `flow:cascade-mid`; iteration 2
-/// pulls in `flow:cascade-leaf`; iteration 3 finds no new extras and
+/// Project installs `org.vibevm/rust-cli` + `org.vibevm/cascade-root`. Iteration 1
+/// of the fixed-point loop pulls in `org.vibevm/cascade-mid`; iteration 2
+/// pulls in `org.vibevm/cascade-leaf`; iteration 3 finds no new extras and
 /// breaks. Verifies the runtime supports cascading predicates the
 /// single-pass shape would have missed.
 fn make_cascading_conditional_registry(root: &Path) -> (PathBuf, String) {
@@ -4671,7 +4678,7 @@ version = "{version}"
         run_git(&src, &["commit", "-m", &format!("v{version}")]);
         run_git(&src, &["tag", &format!("v{version}")]);
 
-        let bare = org_dir.join(format!("{kind}-{name}.git"));
+        let bare = org_dir.join(format!("org.vibevm.{name}.git"));
         run_git(
             out_root,
             &[
@@ -4701,7 +4708,7 @@ version = "{version}"
         "0.1.0",
         r#"
 [target."context(stack:rust-cli)".dependencies]
-packages = { "flow:cascade-mid" = "^0.1" }
+packages = { "org.vibevm/cascade-mid" = "^0.1" }
 "#,
         &[("spec/flows/cascade-root/CORE.md", "# root")],
     );
@@ -4713,7 +4720,7 @@ packages = { "flow:cascade-mid" = "^0.1" }
         "0.1.0",
         r#"
 [target."context(flow:cascade-root)".dependencies]
-packages = { "flow:cascade-leaf" = "^0.1" }
+packages = { "org.vibevm/cascade-leaf" = "^0.1" }
 "#,
         &[("spec/flows/cascade-mid/MID.md", "# mid")],
     );
@@ -4756,8 +4763,8 @@ fn install_expands_cascading_conditional_dependencies() {
     vibe()
         .env("VIBE_REGISTRY_CACHE", &cache)
         .arg("install")
-        .arg("stack:rust-cli")
-        .arg("flow:cascade-root")
+        .arg("org.vibevm/rust-cli")
+        .arg("org.vibevm/cascade-root")
         .arg("--path")
         .arg(project.path())
         .arg("--assume-yes")
@@ -4769,13 +4776,13 @@ fn install_expands_cascading_conditional_dependencies() {
     let names: Vec<_> = lock
         .packages
         .iter()
-        .map(|p| format!("{}:{}", p.kind, p.name))
+        .map(|p| format!("{}/{}", p.group, p.name))
         .collect();
     for expected in [
-        "stack:rust-cli",
-        "flow:cascade-root",
-        "flow:cascade-mid",
-        "flow:cascade-leaf",
+        "org.vibevm/rust-cli",
+        "org.vibevm/cascade-root",
+        "org.vibevm/cascade-mid",
+        "org.vibevm/cascade-leaf",
     ] {
         assert!(
             names.iter().any(|n| n == expected),
@@ -4800,13 +4807,13 @@ fn conditional_dependencies_dormant_when_predicate_misses() {
     let cache = outer.path().join("cache");
     fs::create_dir_all(&cache).unwrap();
 
-    // Install dispatcher WITHOUT stack:rust-cli. The conditional
+    // Install dispatcher WITHOUT org.vibevm/rust-cli. The conditional
     // predicate `context(stack:rust)` doesn't match → rust-helper
     // stays dormant.
     vibe()
         .env("VIBE_REGISTRY_CACHE", &cache)
         .arg("install")
-        .arg("flow:dispatcher")
+        .arg("org.vibevm/dispatcher")
         .arg("--path")
         .arg(project.path())
         .arg("--assume-yes")
@@ -4818,22 +4825,22 @@ fn conditional_dependencies_dormant_when_predicate_misses() {
     let names: Vec<_> = lock
         .packages
         .iter()
-        .map(|p| format!("{}:{}", p.kind, p.name))
+        .map(|p| format!("{}/{}", p.group, p.name))
         .collect();
     assert!(
-        names.iter().any(|n| n == "flow:dispatcher"),
+        names.iter().any(|n| n == "org.vibevm/dispatcher"),
         "got {:?}",
         names
     );
     assert!(
-        !names.iter().any(|n| n == "flow:rust-helper"),
+        !names.iter().any(|n| n == "org.vibevm/rust-helper"),
         "rust-helper should NOT be installed; got {:?}",
         names
     );
 }
 
 /// Build a per-package git registry with two tagged versions of
-/// `flow:test-multi`: v0.1.0 (the older release) and v0.2.0 (newer).
+/// `org.vibevm/test-multi`: v0.1.0 (the older release) and v0.2.0 (newer).
 /// Returns `(registry_org_root, file_url_for_org)` so tests can wire
 /// the registry into a project's `vibe.toml`.
 fn make_two_version_per_package_registry(root: &Path) -> (PathBuf, String) {
@@ -4875,7 +4882,7 @@ version = "0.2.0"
     run_git(&src, &["commit", "-m", "v0.2.0"]);
     run_git(&src, &["tag", "v0.2.0"]);
 
-    let bare = org.join("flow-test-multi.git");
+    let bare = org.join("org.vibevm.test-multi.git");
     run_git(
         root,
         &[
@@ -4918,7 +4925,7 @@ fn outdated_reports_newer_version_available() {
     vibe()
         .env("VIBE_REGISTRY_CACHE", &cache)
         .arg("install")
-        .arg("flow:test-multi@=0.1.0")
+        .arg("org.vibevm/test-multi@=0.1.0")
         .arg("--path")
         .arg(project.path())
         .arg("--assume-yes")
@@ -4942,7 +4949,7 @@ fn outdated_reports_newer_version_available() {
     assert_eq!(v["command"], "outdated");
     assert_eq!(v["update_available"], 1);
     let pkg = &v["packages"][0];
-    assert_eq!(pkg["kind"], "flow");
+    assert_eq!(pkg["group"], "org.vibevm");
     assert_eq!(pkg["name"], "test-multi");
     assert_eq!(pkg["installed"], "0.1.0");
     assert_eq!(pkg["latest"], "0.2.0");
@@ -4959,7 +4966,7 @@ fn show_features_lists_active_features_after_install() {
     init_project(project.path());
     vibe()
         .arg("install")
-        .arg("flow:feat-pkg")
+        .arg("org.vibevm/feat-pkg")
         .arg("--registry")
         .arg(&registry)
         .arg("--path")
@@ -4982,7 +4989,7 @@ fn show_features_lists_active_features_after_install() {
     assert_eq!(v["command"], "show:features");
     let pkgs = v["packages"].as_array().unwrap();
     assert_eq!(pkgs.len(), 1);
-    assert_eq!(pkgs[0]["package"], "flow:feat-pkg");
+    assert_eq!(pkgs[0]["package"], "org.vibevm/feat-pkg");
     let features: Vec<&str> = pkgs[0]["features"]
         .as_array()
         .unwrap()
@@ -5534,12 +5541,12 @@ fn workspace_publish_dry_run_reports_plan() {
     let stdout = String::from_utf8_lossy(&out.stdout);
     // Both members appear in the would-publish output.
     assert!(
-        stdout.contains("flow:a"),
-        "stdout missing flow:a:\n{stdout}"
+        stdout.contains("org.vibevm/a"),
+        "stdout missing org.vibevm/a:\n{stdout}"
     );
     assert!(
-        stdout.contains("feat:b"),
-        "stdout missing feat:b:\n{stdout}"
+        stdout.contains("org.vibevm/b"),
+        "stdout missing org.vibevm/b:\n{stdout}"
     );
     assert!(
         stdout.contains("dry-run"),
@@ -5567,12 +5574,12 @@ fn workspace_publish_dry_run_json_envelope() {
     assert_eq!(payload["command"], "workspace:publish");
     assert_eq!(payload["dry_run"], true);
     let published = payload["published"].as_array().expect("published array");
-    assert_eq!(published.len(), 1, "only flow:a publishes");
-    assert_eq!(published[0]["pkgref"], "flow:a");
+    assert_eq!(published.len(), 1, "only org.vibevm/a publishes");
+    assert_eq!(published[0]["pkgref"], "org.vibevm/a");
     assert_eq!(published[0]["rel_path"], "packages/a");
     assert_eq!(published[0]["tag"], "v0.1.0");
     let skipped = payload["skipped"].as_array().expect("skipped array");
-    assert_eq!(skipped.len(), 1, "feat:b is skipped");
+    assert_eq!(skipped.len(), 1, "org.vibevm/b is skipped");
     assert_eq!(skipped[0]["rel_path"], "packages/b");
     assert!(
         skipped[0]["reason"]
@@ -5595,7 +5602,7 @@ fn workspace_publish_dry_run_topological_order() {
     fs::write(
         project.path().join("packages/b/vibe.toml"),
         "[package]\ngroup = \"org.vibevm\"\nname = \"b\"\nkind = \"feat\"\nversion = \"0.1.0\"\n\n\
-         [requires.packages]\n\"flow:a\" = { path = \"../a\", version = \"^0.1\" }\n",
+         [requires.packages]\n\"org.vibevm/a\" = { path = \"../a\", version = \"^0.1\" }\n",
     )
     .unwrap();
 
@@ -5609,8 +5616,8 @@ fn workspace_publish_dry_run_topological_order() {
     let published = payload["published"].as_array().unwrap();
     assert_eq!(published.len(), 2);
     // Dependency-first: a before b.
-    assert_eq!(published[0]["pkgref"], "flow:a");
-    assert_eq!(published[1]["pkgref"], "feat:b");
+    assert_eq!(published[0]["pkgref"], "org.vibevm/a");
+    assert_eq!(published[1]["pkgref"], "org.vibevm/b");
 }
 
 #[test]
@@ -5637,7 +5644,7 @@ fn workspace_publish_member_filter_narrows() {
     let payload: serde_json::Value = serde_json::from_slice(&out.stdout).unwrap();
     let published = payload["published"].as_array().unwrap();
     assert_eq!(published.len(), 1, "only the named member publishes");
-    assert_eq!(published[0]["pkgref"], "feat:b");
+    assert_eq!(published[0]["pkgref"], "org.vibevm/b");
 }
 
 #[test]
@@ -5673,14 +5680,14 @@ fn workspace_publish_detects_dependency_cycle() {
     fs::write(
         project.path().join("packages/a/vibe.toml"),
         "[package]\ngroup = \"org.vibevm\"\nname = \"a\"\nkind = \"flow\"\nversion = \"0.1.0\"\n\n\
-         [requires.packages]\n\"feat:b\" = { path = \"../b\", version = \"^0.1\" }\n",
+         [requires.packages]\n\"org.vibevm/b\" = { path = \"../b\", version = \"^0.1\" }\n",
     )
     .unwrap();
     fs::create_dir_all(project.path().join("packages/b")).unwrap();
     fs::write(
         project.path().join("packages/b/vibe.toml"),
         "[package]\ngroup = \"org.vibevm\"\nname = \"b\"\nkind = \"feat\"\nversion = \"0.1.0\"\n\n\
-         [requires.packages]\n\"flow:a\" = { path = \"../a\", version = \"^0.1\" }\n",
+         [requires.packages]\n\"org.vibevm/a\" = { path = \"../a\", version = \"^0.1\" }\n",
     )
     .unwrap();
 
@@ -5777,12 +5784,12 @@ fn workspace_publish_root_package_is_included() {
         .iter()
         .map(|p| p["pkgref"].as_str().unwrap())
         .collect();
-    assert!(pkgrefs.contains(&"stack:umbrella"));
-    assert!(pkgrefs.contains(&"flow:a"));
+    assert!(pkgrefs.contains(&"org.vibevm/umbrella"));
+    assert!(pkgrefs.contains(&"org.vibevm/a"));
     // The root node stages with rel_path ".".
     let root_entry = published
         .iter()
-        .find(|p| p["pkgref"] == "stack:umbrella")
+        .find(|p| p["pkgref"] == "org.vibevm/umbrella")
         .unwrap();
     assert_eq!(root_entry["rel_path"], ".");
 }
@@ -5808,7 +5815,7 @@ fn workspace_publish_standalone_package_publishes_just_itself() {
     let payload: serde_json::Value = serde_json::from_slice(&out.stdout).unwrap();
     let published = payload["published"].as_array().unwrap();
     assert_eq!(published.len(), 1);
-    assert_eq!(published[0]["pkgref"], "flow:solo");
+    assert_eq!(published[0]["pkgref"], "org.vibevm/solo");
     assert_eq!(published[0]["tag"], "v0.2.0");
     assert_eq!(published[0]["rel_path"], ".");
 }
@@ -5826,7 +5833,7 @@ fn reinstall_regenerates_deleted_boot_artifacts() {
     init_project(project.path());
     vibe()
         .arg("install")
-        .arg("flow:wal")
+        .arg("org.vibevm/wal")
         .arg("--path")
         .arg(project.path())
         .arg("--registry")
@@ -5902,7 +5909,7 @@ fn reinstall_non_force_bails_when_vibedeps_slot_missing() {
     init_project(project.path());
     vibe()
         .arg("install")
-        .arg("flow:wal")
+        .arg("org.vibevm/wal")
         .arg("--path")
         .arg(project.path())
         .arg("--registry")
@@ -5911,7 +5918,7 @@ fn reinstall_non_force_bails_when_vibedeps_slot_missing() {
         .assert()
         .success();
 
-    // Delete the materialised slot — the lockfile still records flow:wal.
+    // Delete the materialised slot — the lockfile still records org.vibevm/wal.
     fs::remove_dir_all(project.path().join("vibedeps/flow-wal")).unwrap();
 
     vibe()
@@ -5929,7 +5936,7 @@ fn reinstall_reports_json() {
     init_project(project.path());
     vibe()
         .arg("install")
-        .arg("flow:wal")
+        .arg("org.vibevm/wal")
         .arg("--path")
         .arg(project.path())
         .arg("--registry")
@@ -5981,7 +5988,7 @@ fn reinstall_force_refetches_corrupted_vibedeps() {
     vibe()
         .env("VIBE_REGISTRY_CACHE", &cache)
         .arg("install")
-        .arg("flow:wal")
+        .arg("org.vibevm/wal")
         .arg("--path")
         .arg(project.path())
         .arg("--assume-yes")
@@ -5994,7 +6001,7 @@ fn reinstall_force_refetches_corrupted_vibedeps() {
         .join("vibedeps/flow-wal/0.1.0/spec/flows/wal/WAL-PROTOCOL.md");
     assert!(
         corrupted.is_file(),
-        "fixture flow:wal ships WAL-PROTOCOL.md"
+        "fixture org.vibevm/wal ships WAL-PROTOCOL.md"
     );
     fs::write(&corrupted, "CORRUPTED — hand-edited garbage").unwrap();
 

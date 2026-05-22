@@ -16,10 +16,10 @@
 use std::fs;
 use std::path::{Path, PathBuf};
 
-use anyhow::{Context, Result, bail};
+use anyhow::{Context, Result, anyhow, bail};
 use dialoguer::Confirm;
 use vibe_core::manifest::{LockedPackage, Lockfile, Manifest, SourceKind};
-use vibe_core::{PackageRef, VersionSpec};
+use vibe_core::{Group, PackageRef, VersionSpec};
 use vibe_registry::CachedPackage;
 use vibe_workspace::Workspace;
 use vibe_workspace::install::regenerate_boot;
@@ -53,17 +53,18 @@ pub fn run(ctx: &output::Context, args: UpdateArgs) -> Result<()> {
     }
 
     // Each named package must already be installed; re-resolve it against
-    // its original root constraint so a caret bumps within range.
+    // its original root constraint so a caret bumps within range. Identity
+    // is `(group, name)` — `vibe update` needs the qualified form
+    // (PROP-008 §2.4).
     let mut roots: Vec<PackageRef> = Vec::with_capacity(args.packages.len());
     for raw in &args.packages {
         let pkgref = PackageRef::parse(raw).with_context(|| format!("parsing `{raw}`"))?;
-        if lockfile.find(pkgref.kind, &pkgref.name).is_none() {
+        let group = require_group(&pkgref)?.clone();
+        if lockfile.find(&group, &pkgref.name).is_none() {
             bail!(
-                "package `{}:{}` is not installed — `vibe update` only refreshes installed \
-                 packages; use `vibe install {}:{}` to add it.",
-                pkgref.kind,
+                "package `{group}/{}` is not installed — `vibe update` only refreshes installed \
+                 packages; use `vibe install {group}/{}` to add it.",
                 pkgref.name,
-                pkgref.kind,
                 pkgref.name,
             );
         }
@@ -75,17 +76,22 @@ pub fn run(ctx: &output::Context, args: UpdateArgs) -> Result<()> {
             .requires
             .packages
             .iter()
-            .find(|r| r.kind == pkgref.kind && r.name == pkgref.name)
+            .find(|r| r.group.as_ref() == Some(&group) && r.name == pkgref.name)
             .or_else(|| {
                 lockfile
                     .meta
                     .root_dependencies
                     .iter()
-                    .find(|r| r.kind == pkgref.kind && r.name == pkgref.name)
+                    .find(|r| r.group.as_ref() == Some(&group) && r.name == pkgref.name)
             })
             .map(|r| r.version.clone())
             .unwrap_or(VersionSpec::Latest);
-        roots.push(PackageRef::new(pkgref.kind, pkgref.name, constraint)?);
+        roots.push(PackageRef::new(
+            pkgref.kind,
+            Some(group),
+            pkgref.name,
+            constraint,
+        )?);
     }
 
     let resolver = build_install_resolver(&install_args_from(&args), &manifest)?;
@@ -134,27 +140,25 @@ pub fn run(ctx: &output::Context, args: UpdateArgs) -> Result<()> {
     }
 
     // Materialise the subtree. A package whose version moved has its
-    // superseded slot removed first, so a bump leaves no stale slot.
+    // superseded slot removed first, so a bump leaves no stale slot. The
+    // `vibedeps/` slot directory is named `<kind>-<name>`; `kind` is read
+    // off the manifest (metadata), identity is `(group, name)`.
     let mut bumps: Vec<String> = Vec::new();
     for (cached, _) in &updated {
-        if let Some(old) = lockfile.find(cached.resolved.kind, &cached.resolved.name)
+        let kind = cached.package_meta().kind;
+        if let Some(old) = lockfile.find(&cached.resolved.group, &cached.resolved.name)
             && old.version != cached.resolved.version
         {
-            vibedeps::remove_slot(
-                &workspace.root,
-                cached.resolved.kind,
-                &cached.resolved.name,
-                &old.version,
-            )
-            .context("removing the superseded vibedeps/ slot")?;
+            vibedeps::remove_slot(&workspace.root, kind, &cached.resolved.name, &old.version)
+                .context("removing the superseded vibedeps/ slot")?;
             bumps.push(format!(
-                "{}:{} {} -> {}",
-                cached.resolved.kind, cached.resolved.name, old.version, cached.resolved.version
+                "{}/{} {} -> {}",
+                cached.resolved.group, cached.resolved.name, old.version, cached.resolved.version
             ));
         }
         vibedeps::materialise(
             &workspace.root,
-            cached.resolved.kind,
+            kind,
             &cached.resolved.name,
             &cached.resolved.version,
             &cached.cache_dir,
@@ -169,12 +173,12 @@ pub fn run(ctx: &output::Context, args: UpdateArgs) -> Result<()> {
     // install-scoped metadata (features / language) the version bump does
     // not change.
     for (cached, deps) in &updated {
-        let old = lockfile.find(cached.resolved.kind, &cached.resolved.name);
+        let old = lockfile.find(&cached.resolved.group, &cached.resolved.name);
         let entry = locked_package(cached, deps, old);
         match lockfile
             .packages
             .iter()
-            .position(|p| p.kind == entry.kind && p.name == entry.name)
+            .position(|p| p.group == entry.group && p.name == entry.name)
         {
             Some(i) => lockfile.packages[i] = entry,
             None => lockfile.packages.push(entry),
@@ -230,7 +234,8 @@ fn locked_package(
         SourceKind::Registry
     };
     LockedPackage {
-        kind: cached.resolved.kind,
+        kind: cached.package_meta().kind,
+        group: cached.resolved.group.clone(),
         name: cached.resolved.name.clone(),
         version: cached.resolved.version.clone(),
         registry: cached.registry_name.clone(),
@@ -283,6 +288,14 @@ fn emit_report(ctx: &output::Context, count: usize, bumps: &[String]) {
         bumps.len(),
         if bumps.len() == 1 { "" } else { "s" },
     ));
+}
+
+/// Extract the `(group, …)` half of a pkgref's identity, rejecting an
+/// unqualified `vibe update` argument (PROP-008 §2.4).
+fn require_group(pkgref: &PackageRef) -> Result<&Group> {
+    pkgref.group.as_ref().ok_or_else(|| {
+        anyhow!("package reference `{pkgref}` is not group-qualified — write `<group>/<name>`")
+    })
 }
 
 fn resolve_project_root(path: &Path) -> Result<PathBuf> {

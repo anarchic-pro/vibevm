@@ -21,7 +21,7 @@ use serde::{Deserialize, Serialize};
 use sha2::{Digest, Sha256};
 use vibe_core::manifest::Manifest;
 use vibe_core::timestamp;
-use vibe_core::{PackageKind, PackageRef};
+use vibe_core::{Group, PackageRef};
 
 use crate::git_backend::{GitBackend, ShellGit};
 use crate::{
@@ -170,10 +170,10 @@ impl GitRegistry {
 impl Registry for GitRegistry {
     fn list_versions(
         &self,
-        kind: PackageKind,
+        group: &Group,
         name: &str,
     ) -> Result<Vec<semver::Version>, RegistryError> {
-        self.local.list_versions(kind, name)
+        self.local.list_versions(group, name)
     }
 
     fn resolve(&self, pkgref: &PackageRef) -> Result<ResolvedPackage, RegistryError> {
@@ -189,7 +189,7 @@ impl Registry for GitRegistry {
         cache_root: &Path,
     ) -> Result<CachedPackage, RegistryError> {
         let cache_dir = cache_root
-            .join(resolved.kind.as_str())
+            .join(resolved.group.as_str())
             .join(&resolved.name)
             .join(format!("v{}", resolved.version));
 
@@ -213,7 +213,7 @@ impl Registry for GitRegistry {
 
         let source_uri = source_uri_for_git(
             &self.url,
-            resolved.kind,
+            &resolved.group,
             &resolved.name,
             &resolved.version.to_string(),
         );
@@ -346,15 +346,17 @@ fn current_epoch_secs() -> Option<u64> {
         .map(|d| d.as_secs())
 }
 
-/// `git+ssh://git@host/owner/repo.git#<kind>/<name>/v<ver>` etc.
-/// Preserves the original transport in the scheme prefix.
-pub fn source_uri_for_git(url: &str, kind: PackageKind, name: &str, version: &str) -> String {
+/// `git+ssh://git@host/owner/repo.git#<group>/<name>/v<ver>` etc.
+/// Preserves the original transport in the scheme prefix. The fragment
+/// is keyed by `(group, name)` identity — the group-native shape after
+/// PROP-008.
+pub fn source_uri_for_git(url: &str, group: &Group, name: &str, version: &str) -> String {
     let transport = detect_transport(url);
     format!(
-        "{transport}://{host_path}#{kind}/{name}/v{version}",
+        "{transport}://{host_path}#{group}/{name}/v{version}",
         transport = transport,
         host_path = to_uri_body(url),
-        kind = kind.as_str(),
+        group = group.as_str(),
         name = name,
         version = version,
     )
@@ -481,7 +483,8 @@ mod tests {
     }
 
     fn seed_fixture_layout(root: &Path) {
-        let v = root.join("flow/wal/v0.1.0");
+        // Group-native on-disk layout (PROP-008): `<group>/<name>/v<ver>/`.
+        let v = root.join("org.vibevm/wal/v0.1.0");
         fs::create_dir_all(&v).unwrap();
         fs::write(
             v.join("vibe.toml"),
@@ -520,15 +523,16 @@ description = "WAL v0.1.0"
 
     #[test]
     fn source_uri_for_git_produces_fragment() {
+        let group = Group::parse("org.vibevm").unwrap();
         let s = source_uri_for_git(
             "git@gitverse.ru:anarchic/vibespecs.git",
-            PackageKind::Flow,
+            &group,
             "wal",
             "0.1.0",
         );
         assert_eq!(
             s,
-            "git+ssh://git@gitverse.ru/anarchic/vibespecs.git#flow/wal/v0.1.0"
+            "git+ssh://git@gitverse.ru/anarchic/vibespecs.git#org.vibevm/wal/v0.1.0"
         );
     }
 
@@ -554,7 +558,11 @@ description = "WAL v0.1.0"
         .unwrap();
         assert_eq!(fake.clone_count(), 1);
         assert_eq!(fake.update_count(), 0);
-        assert!(r1.clone_dir().join("flow/wal/v0.1.0/vibe.toml").exists());
+        assert!(
+            r1.clone_dir()
+                .join("org.vibevm/wal/v0.1.0/vibe.toml")
+                .exists()
+        );
         assert!(r1.cache_dir().join("meta.toml").exists());
 
         // Second open with fresh TTL → no update.
@@ -621,7 +629,7 @@ description = "WAL v0.1.0"
             DEFAULT_FRESHNESS_SECS,
         )
         .unwrap();
-        let pkgref = PackageRef::parse("flow:wal@0.1.0").unwrap();
+        let pkgref = PackageRef::parse("org.vibevm/wal@0.1.0").unwrap();
         let resolved = r.resolve(&pkgref).unwrap();
         assert_eq!(resolved.version.to_string(), "0.1.0");
 
@@ -629,6 +637,6 @@ description = "WAL v0.1.0"
         fs::create_dir_all(&pkg_cache).unwrap();
         let cached = r.fetch(&resolved, &pkg_cache).unwrap();
         assert!(cached.source_uri.starts_with("git+ssh://"));
-        assert!(cached.source_uri.ends_with("#flow/wal/v0.1.0"));
+        assert!(cached.source_uri.ends_with("#org.vibevm/wal/v0.1.0"));
     }
 }

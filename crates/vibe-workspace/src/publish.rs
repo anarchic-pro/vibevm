@@ -30,8 +30,8 @@
 use std::collections::{HashMap, HashSet};
 use std::path::{Path, PathBuf};
 
-use vibe_core::PackageKind;
 use vibe_core::manifest::{Manifest, OriginSection};
+use vibe_core::{Group, PackageKind};
 
 use crate::{Workspace, WorkspaceError};
 
@@ -41,23 +41,28 @@ type Result<T> = std::result::Result<T, WorkspaceError>;
 /// carries `[package]`) or a member.
 ///
 /// `rel_path` is `"."` for the absolute root and the member's root-relative
-/// forward-slashed path otherwise. The `kind`/`name` pair is the node's
+/// forward-slashed path otherwise. The `(group, name)` pair is the node's
 /// package identity, lifted out of its `[package]` table so the topological
-/// sort and reporting code do not have to re-unwrap it.
+/// sort and reporting code do not have to re-unwrap it; `kind` rides along
+/// as metadata.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct PublishNode {
     /// `"."` for the absolute root, the member `rel_path` otherwise.
     pub rel_path: String,
-    /// Package kind from the node's `[package].kind`.
+    /// Package kind from the node's `[package].kind` — metadata only, not
+    /// part of identity (PROP-008 §2.3).
     pub kind: PackageKind,
+    /// Reverse-FQDN group from the node's `[package].group` — with `name`,
+    /// the `(group, name)` identity.
+    pub group: Group,
     /// Package name from the node's `[package].name`.
     pub name: String,
 }
 
 impl PublishNode {
-    /// `<kind>:<name>` — the human-facing pkgref for progress lines / JSON.
+    /// `<group>/<name>` — the human-facing pkgref for progress lines / JSON.
     pub fn pkgref(&self) -> String {
-        format!("{}:{}", self.kind.as_str(), self.name)
+        format!("{}/{}", self.group, self.name)
     }
 }
 
@@ -143,6 +148,7 @@ pub fn select_publishable_nodes(
         selection.publishable.push(PublishNode {
             rel_path: rel_path.to_string(),
             kind: meta.kind,
+            group: meta.group.clone(),
             name: meta.name.clone(),
         });
     }
@@ -349,7 +355,7 @@ pub fn stage_node(
     let pkgref = manifest
         .package
         .as_ref()
-        .map(|p| format!("{}:{}", p.kind.as_str(), p.name))
+        .map(|p| format!("{}/{}", p.group, p.name))
         .unwrap_or_else(|| node_rel_path.to_string());
     if let Some(meta) = manifest.package.as_mut() {
         meta.description = Some(generated_copy_description(&pkgref, &origin.upstream));
@@ -810,7 +816,7 @@ mod tests {
             tmp.path(),
             "packages/b/vibe.toml",
             &format!(
-                "{}\n[requires.packages]\n\"flow:a\" = {{ path = \"../a\", version = \"^0.1\" }}\n",
+                "{}\n[requires.packages]\n\"org.vibevm/a\" = {{ path = \"../a\", version = \"^0.1\" }}\n",
                 package("b", "flow")
             ),
         );
@@ -854,7 +860,7 @@ mod tests {
             tmp.path(),
             "packages/b/vibe.toml",
             &format!(
-                "{}\n[requires.packages]\n\"flow:a\" = {{ path = \"../a\", version = \"^0.1\" }}\n",
+                "{}\n[requires.packages]\n\"org.vibevm/a\" = {{ path = \"../a\", version = \"^0.1\" }}\n",
                 package("b", "flow")
             ),
         );
@@ -862,7 +868,7 @@ mod tests {
             tmp.path(),
             "packages/c/vibe.toml",
             &format!(
-                "{}\n[requires.packages]\n\"flow:b\" = {{ path = \"../b\", version = \"^0.1\" }}\n",
+                "{}\n[requires.packages]\n\"org.vibevm/b\" = {{ path = \"../b\", version = \"^0.1\" }}\n",
                 package("c", "flow")
             ),
         );
@@ -886,7 +892,7 @@ mod tests {
             tmp.path(),
             "packages/a/vibe.toml",
             &format!(
-                "{}\n[requires.packages]\n\"flow:b\" = {{ path = \"../b\", version = \"^0.1\" }}\n",
+                "{}\n[requires.packages]\n\"org.vibevm/b\" = {{ path = \"../b\", version = \"^0.1\" }}\n",
                 package("a", "flow")
             ),
         );
@@ -894,7 +900,7 @@ mod tests {
             tmp.path(),
             "packages/b/vibe.toml",
             &format!(
-                "{}\n[requires.packages]\n\"flow:a\" = {{ path = \"../a\", version = \"^0.1\" }}\n",
+                "{}\n[requires.packages]\n\"org.vibevm/a\" = {{ path = \"../a\", version = \"^0.1\" }}\n",
                 package("b", "flow")
             ),
         );
@@ -920,7 +926,7 @@ mod tests {
             "packages/b/vibe.toml",
             &format!(
                 "{}\n[requires.packages]\n\
-                 \"flow:ext\" = {{ path = \"../../external\", version = \"^0.1\" }}\n",
+                 \"org.vibevm/ext\" = {{ path = \"../../external\", version = \"^0.1\" }}\n",
                 package("b", "flow")
             ),
         );
@@ -1009,7 +1015,7 @@ mod tests {
         .unwrap();
         assert!(pr_template.contains("does not accept pull requests"));
         assert!(pr_template.contains("https://github.com/you/monorepo"));
-        assert!(pr_template.contains("flow:a"));
+        assert!(pr_template.contains("org.vibevm/a"));
     }
 
     #[test]
@@ -1024,7 +1030,7 @@ mod tests {
             .as_ref()
             .and_then(|p| p.description.clone())
             .expect("description set");
-        assert!(desc.contains("Generated copy of `flow:a`"));
+        assert!(desc.contains("Generated copy of `org.vibevm/a`"));
         assert!(desc.contains("https://github.com/you/monorepo"));
     }
 

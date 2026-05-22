@@ -33,7 +33,7 @@
 use std::collections::HashSet;
 
 use vibe_core::manifest::{Lockfile, SourceKind};
-use vibe_core::{PackageKind, PackageRef, VersionSpec};
+use vibe_core::{Group, PackageRef, VersionSpec};
 
 use crate::{Workspace, vibedeps};
 
@@ -62,8 +62,9 @@ impl Freshness {
 pub fn check(workspace: &Workspace, lockfile: &Lockfile) -> Freshness {
     // The declared registry root set, unioned across every node. Built
     // only once every node has been proven free of the source kinds the
-    // check cannot cheaply reason about (below).
-    let mut declared_roots: HashSet<(PackageKind, String)> = HashSet::new();
+    // check cannot cheaply reason about (below). Keyed by the
+    // `(group, name)` identity (PROP-008 §2.3).
+    let mut declared_roots: HashSet<(Group, String)> = HashSet::new();
 
     for (rel, manifest) in workspace.iter_nodes() {
         let req = &manifest.requires;
@@ -97,19 +98,27 @@ pub fn check(workspace: &Workspace, lockfile: &Lockfile) -> Freshness {
         }
 
         // Registry-resolved dependencies: the locked version must still
-        // satisfy the declared constraint.
+        // satisfy the declared constraint. A `[requires.packages]` key is
+        // group-qualified at parse time (PROP-008 §2.6), so `group` is
+        // always present here.
         for pr in &req.packages {
-            declared_roots.insert((pr.kind, pr.name.clone()));
-            let Some(locked) = lockfile.find(pr.kind, &pr.name) else {
+            let Some(group) = pr.group.clone() else {
                 return stale(format!(
-                    "`{}:{}` is declared in `{rel}` but absent from vibe.lock",
-                    pr.kind, pr.name
+                    "node `{rel}` declares an unqualified dependency `{}`",
+                    pr.name
+                ));
+            };
+            declared_roots.insert((group.clone(), pr.name.clone()));
+            let Some(locked) = lockfile.find(&group, &pr.name) else {
+                return stale(format!(
+                    "`{}/{}` is declared in `{rel}` but absent from vibe.lock",
+                    group, pr.name
                 ));
             };
             if !satisfies(&pr.version, &locked.version) {
                 return stale(format!(
-                    "`{}:{}` is locked at {}, outside the constraint declared in `{rel}`",
-                    pr.kind, pr.name, locked.version
+                    "`{}/{}` is locked at {}, outside the constraint declared in `{rel}`",
+                    group, pr.name, locked.version
                 ));
             }
         }
@@ -119,11 +128,11 @@ pub fn check(workspace: &Workspace, lockfile: &Lockfile) -> Freshness {
     // satisfiability loop above caught every *added* root (no locked
     // entry); this catches a *removed* one — still in `root_dependencies`,
     // no longer declared anywhere.
-    let locked_roots: HashSet<(PackageKind, String)> = lockfile
+    let locked_roots: HashSet<(Group, String)> = lockfile
         .meta
         .root_dependencies
         .iter()
-        .map(|p| (p.kind, p.name.clone()))
+        .filter_map(|p| p.group.clone().map(|g| (g, p.name.clone())))
         .collect();
     if declared_roots != locked_roots {
         return stale(
@@ -138,8 +147,8 @@ pub fn check(workspace: &Workspace, lockfile: &Lockfile) -> Freshness {
     for p in &lockfile.packages {
         if !vibedeps::is_materialised(&workspace.root, p.kind, &p.name, &p.version) {
             return stale(format!(
-                "`{}:{}@{}` has no materialised vibedeps/ slot",
-                p.kind, p.name, p.version
+                "`{}/{}@{}` has no materialised vibedeps/ slot",
+                p.group, p.name, p.version
             ));
         }
     }
@@ -184,20 +193,28 @@ fn stale(reason: String) -> Freshness {
 pub fn hold_pins(declared_roots: &[PackageRef], lockfile: &Lockfile) -> Vec<PackageRef> {
     declared_roots
         .iter()
-        .map(|root| match lockfile.find(root.kind, &root.name) {
-            Some(locked)
-                if locked.source_kind == Some(SourceKind::Registry)
-                    && satisfies(&root.version, &locked.version) =>
-            {
-                let req = semver::VersionReq::parse(&format!("={}", locked.version))
-                    .expect("`=<version>` always parses as a VersionReq");
-                PackageRef {
-                    kind: root.kind,
-                    name: root.name.clone(),
-                    version: VersionSpec::Req(req),
+        .map(|root| {
+            // A root with no group cannot be matched against the lock's
+            // `(group, name)` identity — leave it at its declared form.
+            let Some(group) = root.group.as_ref() else {
+                return root.clone();
+            };
+            match lockfile.find(group, &root.name) {
+                Some(locked)
+                    if locked.source_kind == Some(SourceKind::Registry)
+                        && satisfies(&root.version, &locked.version) =>
+                {
+                    let req = semver::VersionReq::parse(&format!("={}", locked.version))
+                        .expect("`=<version>` always parses as a VersionReq");
+                    PackageRef {
+                        kind: root.kind,
+                        group: root.group.clone(),
+                        name: root.name.clone(),
+                        version: VersionSpec::Req(req),
+                    }
                 }
+                _ => root.clone(),
             }
-            _ => root.clone(),
         })
         .collect()
 }
@@ -208,6 +225,7 @@ mod tests {
     use std::fs;
     use std::path::Path;
     use tempfile::TempDir;
+    use vibe_core::PackageKind;
 
     fn write(dir: &Path, rel: &str, body: &str) {
         let p = dir.join(rel);
@@ -233,7 +251,8 @@ mod tests {
     }
 
     /// Parse a `Lockfile` from a `[[package]]` body, prepending the meta
-    /// block. `roots` becomes `meta.root_dependencies`.
+    /// block. `roots` becomes `meta.root_dependencies`. Schema v5 — the
+    /// PROP-008 qualified-naming lockfile.
     fn lockfile(roots: &[&str], packages_toml: &str) -> Lockfile {
         let roots_list = roots
             .iter()
@@ -241,7 +260,7 @@ mod tests {
             .collect::<Vec<_>>()
             .join(", ");
         let text = format!(
-            "[meta]\ngenerated_by = \"test\"\ngenerated_at = \"x\"\nschema_version = 4\n\
+            "[meta]\ngenerated_by = \"test\"\ngenerated_at = \"x\"\nschema_version = 5\n\
              root_dependencies = [{roots_list}]\n\n{packages_toml}"
         );
         toml::from_str(&text).unwrap()
@@ -253,26 +272,29 @@ mod tests {
         fs::create_dir_all(ws.vibedeps_slot(kind, name, &ver(version))).unwrap();
     }
 
-    /// A `[[package]]` table for a registry-resolved dependency.
+    /// A `[[package]]` table for a registry-resolved dependency. Carries a
+    /// `group` field — the PROP-008 qualified-naming lockfile.
     fn registry_pkg(kind: &str, name: &str, version: &str) -> String {
         format!(
-            "[[package]]\nkind = \"{kind}\"\nname = \"{name}\"\nversion = \"{version}\"\n\
-             source_url = \"https://example/{name}\"\ncontent_hash = \"sha256:x\"\n\
-             source_kind = \"registry\"\n"
+            "[[package]]\nkind = \"{kind}\"\ngroup = \"org.vibevm\"\nname = \"{name}\"\n\
+             version = \"{version}\"\nsource_url = \"https://example/{name}\"\n\
+             content_hash = \"sha256:x\"\nsource_kind = \"registry\"\n"
         )
     }
 
     #[test]
     fn fresh_when_lock_satisfies_and_slots_present() {
-        let (_t, ws) = workspace_with_requires("[requires.packages]\n\"flow:wal\" = \"^0.3\"\n");
-        let lf = lockfile(&["flow:wal"], &registry_pkg("flow", "wal", "0.3.2"));
+        let (_t, ws) =
+            workspace_with_requires("[requires.packages]\n\"org.vibevm/wal\" = \"^0.3\"\n");
+        let lf = lockfile(&["org.vibevm/wal"], &registry_pkg("flow", "wal", "0.3.2"));
         materialise_slot(&ws, PackageKind::Flow, "wal", "0.3.2");
         assert_eq!(check(&ws, &lf), Freshness::Fresh);
     }
 
     #[test]
     fn stale_when_a_declared_dep_is_absent_from_the_lock() {
-        let (_t, ws) = workspace_with_requires("[requires.packages]\n\"flow:wal\" = \"^0.3\"\n");
+        let (_t, ws) =
+            workspace_with_requires("[requires.packages]\n\"org.vibevm/wal\" = \"^0.3\"\n");
         let lf = lockfile(&[], "");
         match check(&ws, &lf) {
             Freshness::Stale(r) => assert!(r.contains("absent from vibe.lock"), "{r}"),
@@ -283,8 +305,9 @@ mod tests {
     #[test]
     fn stale_when_the_locked_version_is_outside_the_constraint() {
         // The constraint was tightened to `^0.4`; the lock still pins 0.3.2.
-        let (_t, ws) = workspace_with_requires("[requires.packages]\n\"flow:wal\" = \"^0.4\"\n");
-        let lf = lockfile(&["flow:wal"], &registry_pkg("flow", "wal", "0.3.2"));
+        let (_t, ws) =
+            workspace_with_requires("[requires.packages]\n\"org.vibevm/wal\" = \"^0.4\"\n");
+        let lf = lockfile(&["org.vibevm/wal"], &registry_pkg("flow", "wal", "0.3.2"));
         materialise_slot(&ws, PackageKind::Flow, "wal", "0.3.2");
         match check(&ws, &lf) {
             Freshness::Stale(r) => assert!(r.contains("outside the constraint"), "{r}"),
@@ -296,8 +319,9 @@ mod tests {
     fn fresh_when_locked_version_still_satisfies_a_loosened_constraint() {
         // `^0.3` and the lock at 0.3.2 — no drift to a newer 0.3.x; the
         // locked version is honoured verbatim (the lockfile-respecting win).
-        let (_t, ws) = workspace_with_requires("[requires.packages]\n\"flow:wal\" = \"^0.3\"\n");
-        let lf = lockfile(&["flow:wal"], &registry_pkg("flow", "wal", "0.3.2"));
+        let (_t, ws) =
+            workspace_with_requires("[requires.packages]\n\"org.vibevm/wal\" = \"^0.3\"\n");
+        let lf = lockfile(&["org.vibevm/wal"], &registry_pkg("flow", "wal", "0.3.2"));
         materialise_slot(&ws, PackageKind::Flow, "wal", "0.3.2");
         assert!(check(&ws, &lf).is_fresh());
     }
@@ -306,9 +330,10 @@ mod tests {
     fn stale_when_a_root_was_removed() {
         // `[requires]` declares only `flow:wal`, but the lock still records
         // `feat:auth` as a root — a dependency was dropped.
-        let (_t, ws) = workspace_with_requires("[requires.packages]\n\"flow:wal\" = \"^0.3\"\n");
+        let (_t, ws) =
+            workspace_with_requires("[requires.packages]\n\"org.vibevm/wal\" = \"^0.3\"\n");
         let lf = lockfile(
-            &["flow:wal", "feat:auth"],
+            &["org.vibevm/wal", "org.vibevm/auth"],
             &format!(
                 "{}\n{}",
                 registry_pkg("flow", "wal", "0.3.2"),
@@ -325,8 +350,9 @@ mod tests {
 
     #[test]
     fn stale_when_a_locked_slot_is_not_materialised() {
-        let (_t, ws) = workspace_with_requires("[requires.packages]\n\"flow:wal\" = \"^0.3\"\n");
-        let lf = lockfile(&["flow:wal"], &registry_pkg("flow", "wal", "0.3.2"));
+        let (_t, ws) =
+            workspace_with_requires("[requires.packages]\n\"org.vibevm/wal\" = \"^0.3\"\n");
+        let lf = lockfile(&["org.vibevm/wal"], &registry_pkg("flow", "wal", "0.3.2"));
         // No materialise_slot call — the slot is absent.
         match check(&ws, &lf) {
             Freshness::Stale(r) => assert!(r.contains("no materialised"), "{r}"),
@@ -338,7 +364,7 @@ mod tests {
     fn stale_when_a_git_source_dependency_is_present() {
         let (_t, ws) = workspace_with_requires(
             "[requires.packages]\n\
-             \"flow:internal\" = { git = \"https://example/i\", tag = \"v1.0.0\" }\n",
+             \"org.vibevm/internal\" = { git = \"https://example/i\", tag = \"v1.0.0\" }\n",
         );
         let lf = lockfile(&[], "");
         match check(&ws, &lf) {
@@ -372,19 +398,19 @@ mod tests {
 
     #[test]
     fn hold_pins_pins_a_satisfied_registry_root() {
-        let lf = lockfile(&["flow:wal"], &registry_pkg("flow", "wal", "0.3.2"));
-        let declared = vec![PackageRef::parse("flow:wal@^0.3").unwrap()];
+        let lf = lockfile(&["org.vibevm/wal"], &registry_pkg("flow", "wal", "0.3.2"));
+        let declared = vec![PackageRef::parse("org.vibevm/wal@^0.3").unwrap()];
         let pinned = hold_pins(&declared, &lf);
         // `^0.3` becomes `=0.3.2` — the locked version is held.
-        assert_eq!(pinned[0].to_string(), "flow:wal@=0.3.2");
+        assert_eq!(pinned[0].to_string(), "org.vibevm/wal@=0.3.2");
     }
 
     #[test]
     fn hold_pins_leaves_a_changed_root_free() {
         // The constraint moved to `^0.4`; the lock at 0.3.2 no longer
         // satisfies it — this is the change, it must resolve freely.
-        let lf = lockfile(&["flow:wal"], &registry_pkg("flow", "wal", "0.3.2"));
-        let declared = vec![PackageRef::parse("flow:wal@^0.4").unwrap()];
+        let lf = lockfile(&["org.vibevm/wal"], &registry_pkg("flow", "wal", "0.3.2"));
+        let declared = vec![PackageRef::parse("org.vibevm/wal@^0.4").unwrap()];
         let pinned = hold_pins(&declared, &lf);
         assert_eq!(pinned[0], declared[0]);
     }
@@ -392,7 +418,7 @@ mod tests {
     #[test]
     fn hold_pins_leaves_an_unlocked_root_free() {
         let lf = lockfile(&[], "");
-        let declared = vec![PackageRef::parse("flow:new@^1.0").unwrap()];
+        let declared = vec![PackageRef::parse("org.vibevm/new@^1.0").unwrap()];
         let pinned = hold_pins(&declared, &lf);
         assert_eq!(pinned[0], declared[0]);
     }
@@ -403,12 +429,12 @@ mod tests {
         // `=<version>` would be meaningless, so it is left at its declared
         // form and resolves freely.
         let lf = lockfile(
-            &["flow:internal"],
-            "[[package]]\nkind = \"flow\"\nname = \"internal\"\nversion = \"0.1.0\"\n\
-             source_url = \"https://example/i\"\ncontent_hash = \"sha256:x\"\n\
-             source_kind = \"git\"\n",
+            &["org.vibevm/internal"],
+            "[[package]]\nkind = \"flow\"\ngroup = \"org.vibevm\"\nname = \"internal\"\n\
+             version = \"0.1.0\"\nsource_url = \"https://example/i\"\n\
+             content_hash = \"sha256:x\"\nsource_kind = \"git\"\n",
         );
-        let declared = vec![PackageRef::parse("flow:internal").unwrap()];
+        let declared = vec![PackageRef::parse("org.vibevm/internal").unwrap()];
         let pinned = hold_pins(&declared, &lf);
         assert_eq!(pinned[0], declared[0]);
     }
@@ -417,7 +443,7 @@ mod tests {
     fn hold_pins_mixes_held_and_free_roots() {
         // wal is satisfied (held); auth's constraint moved (free).
         let lf = lockfile(
-            &["flow:wal", "feat:auth"],
+            &["org.vibevm/wal", "org.vibevm/auth"],
             &format!(
                 "{}\n{}",
                 registry_pkg("flow", "wal", "0.3.2"),
@@ -425,11 +451,11 @@ mod tests {
             ),
         );
         let declared = vec![
-            PackageRef::parse("flow:wal@^0.3").unwrap(),
-            PackageRef::parse("feat:auth@^2.0").unwrap(),
+            PackageRef::parse("org.vibevm/wal@^0.3").unwrap(),
+            PackageRef::parse("org.vibevm/auth@^2.0").unwrap(),
         ];
         let pinned = hold_pins(&declared, &lf);
-        assert_eq!(pinned[0].to_string(), "flow:wal@=0.3.2");
+        assert_eq!(pinned[0].to_string(), "org.vibevm/wal@=0.3.2");
         assert_eq!(pinned[1], declared[1]);
     }
 }

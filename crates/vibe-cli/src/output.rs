@@ -263,7 +263,7 @@ impl Context {
                 continue;
             };
             if let vibe_resolver::DepProviderError::AggregateNotFound {
-                kind,
+                group,
                 name,
                 attempts,
                 ..
@@ -272,8 +272,9 @@ impl Context {
             {
                 map.entry("error_kind".to_string())
                     .or_insert_with(|| Value::String("package_not_found_everywhere".into()));
-                map.entry("package".to_string())
-                    .or_insert_with(|| serde_json::json!({ "kind": kind.as_str(), "name": name }));
+                map.entry("package".to_string()).or_insert_with(
+                    || serde_json::json!({ "group": group.as_str(), "name": name }),
+                );
                 if let Ok(serialised) = serde_json::to_value(attempts) {
                     map.entry("attempts".to_string()).or_insert(serialised);
                 }

@@ -13,6 +13,8 @@
 
 use serde::{Deserialize, Serialize};
 
+use crate::error::{Error, Result};
+
 /// `[project]` — the identity of a non-publishable consumer node.
 ///
 /// A `vibe.toml` carrying this table is a plain project; one carrying
@@ -181,9 +183,15 @@ fn registry_host(url: &str) -> Option<&str> {
 /// registry, not a global rule.
 #[derive(Debug, Clone, Copy, Default, PartialEq, Eq, Serialize, Deserialize)]
 pub enum NamingConvention {
-    /// `flow:wal` → `<org>/flow-wal`. Default; matches the `vibespecs`
-    /// organization convention.
+    /// `org.vibevm/wal` → `<org>/org.vibevm.wal`. The reverse-FQDN
+    /// convention (PROP-008 §2.5): a flat `<group>.<name>` repo name,
+    /// collision-free because `(group, name)` is unique. Default — the
+    /// convention every group-aware registry uses.
     #[default]
+    #[serde(rename = "fqdn")]
+    Fqdn,
+    /// `flow:wal` → `<org>/flow-wal`. A pre-`group` convention, kept for
+    /// registries that have not adopted reverse-FQDN naming (PROP-008 §2.5).
     #[serde(rename = "kind-name")]
     KindName,
     /// `flow:wal` → `<org>/wal`. Legal only when names are globally unique
@@ -198,15 +206,38 @@ pub enum NamingConvention {
 
 impl NamingConvention {
     pub fn is_default(&self) -> bool {
-        matches!(self, NamingConvention::KindName)
+        matches!(self, NamingConvention::Fqdn)
     }
 
-    /// Compute the repository name for `<kind>:<name>` under this convention.
-    pub fn repo_name(&self, kind: crate::package_ref::PackageKind, name: &str) -> String {
+    /// Compute the repository name for a `(kind, group, name)` package
+    /// under this convention.
+    ///
+    /// `Fqdn` uses `group` and is infallible — every group-native registry
+    /// uses it. The legacy `kind-*` conventions use `kind`, which a kindless
+    /// pkgref does not carry; calling them with `kind = None` is an error.
+    pub fn repo_name(
+        &self,
+        kind: Option<crate::package_ref::PackageKind>,
+        group: &crate::package_ref::Group,
+        name: &str,
+    ) -> Result<String> {
         match self {
-            NamingConvention::KindName => format!("{}-{name}", kind.as_str()),
-            NamingConvention::Name => name.to_string(),
-            NamingConvention::KindSlashName => format!("{}/{name}", kind.as_str()),
+            NamingConvention::Fqdn => Ok(format!("{group}.{name}")),
+            NamingConvention::KindName => {
+                let kind = kind.ok_or_else(|| Error::BadPackageRef {
+                    input: format!("{group}/{name}"),
+                    reason: "the `kind-name` naming convention needs a kind".into(),
+                })?;
+                Ok(format!("{}-{name}", kind.as_str()))
+            }
+            NamingConvention::Name => Ok(name.to_string()),
+            NamingConvention::KindSlashName => {
+                let kind = kind.ok_or_else(|| Error::BadPackageRef {
+                    input: format!("{group}/{name}"),
+                    reason: "the `kind/name` naming convention needs a kind".into(),
+                })?;
+                Ok(format!("{}/{name}", kind.as_str()))
+            }
         }
     }
 }
@@ -303,7 +334,6 @@ fn is_zero(x: &i32) -> bool {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::package_ref::PackageKind;
 
     #[test]
     fn registry_section_rejects_unknown_field() {
@@ -323,7 +353,7 @@ url = "https://github.com/vibespecs"
 "#;
         let r: RegistrySection = toml::from_str(raw).unwrap();
         assert_eq!(r.r#ref, DEFAULT_REGISTRY_REF);
-        assert_eq!(r.naming, NamingConvention::KindName);
+        assert_eq!(r.naming, NamingConvention::Fqdn);
         assert_eq!(r.auth, AuthKind::None);
         assert!(r.token_env.is_none());
         // Defaults skip on serialize — no spurious diffs.
@@ -357,17 +387,35 @@ url = "https://github.com/vibespecs"
 
     #[test]
     fn naming_convention_repo_name() {
+        use crate::package_ref::{Group, PackageKind};
+        let org = Group::parse("org.vibevm").unwrap();
         assert_eq!(
-            NamingConvention::KindName.repo_name(PackageKind::Flow, "wal"),
+            NamingConvention::Fqdn.repo_name(None, &org, "wal").unwrap(),
+            "org.vibevm.wal"
+        );
+        assert_eq!(
+            NamingConvention::KindName
+                .repo_name(Some(PackageKind::Flow), &org, "wal")
+                .unwrap(),
             "flow-wal"
         );
         assert_eq!(
-            NamingConvention::Name.repo_name(PackageKind::Stack, "rust-cli"),
+            NamingConvention::Name
+                .repo_name(Some(PackageKind::Stack), &org, "rust-cli")
+                .unwrap(),
             "rust-cli"
         );
         assert_eq!(
-            NamingConvention::KindSlashName.repo_name(PackageKind::Feat, "welcome-page"),
+            NamingConvention::KindSlashName
+                .repo_name(Some(PackageKind::Feat), &org, "welcome-page")
+                .unwrap(),
             "feat/welcome-page"
+        );
+        // A legacy `kind-*` convention without a kind is an error.
+        assert!(
+            NamingConvention::KindName
+                .repo_name(None, &org, "wal")
+                .is_err()
         );
     }
 

@@ -10,7 +10,7 @@ use std::path::PathBuf;
 use std::sync::Arc;
 
 use serde_json::{Value, json};
-use vibe_core::PackageKind;
+use vibe_core::{Group, PackageRef};
 
 use crate::{ServerContext, ToolDescriptor, ToolError, ToolHandler};
 
@@ -39,7 +39,7 @@ fn query_package_tool() -> (ToolDescriptor, ToolHandler) {
             "properties": {
                 "name": {
                     "type": "string",
-                    "description": "Package reference in `<kind>:<name>` form (e.g. `flow:wal`)."
+                    "description": "Group-qualified package reference in `<group>/<name>` form (e.g. `org.vibevm/wal`)."
                 }
             },
             "required": ["name"],
@@ -55,12 +55,12 @@ fn query_package_run(args: &Value, ctx: &ServerContext) -> Result<Value, ToolErr
         .get("name")
         .and_then(|v| v.as_str())
         .ok_or_else(|| ToolError::InvalidArguments("`name` must be a string".into()))?;
-    let (kind, pname) = parse_pkgref(name)?;
+    let (group, pname) = parse_pkgref(name)?;
     let lockfile = ctx
         .load_lockfile()
         .map_err(|e| ToolError::Internal(format!("loading lockfile: {e}")))?;
     let entry = lockfile
-        .find(kind, &pname)
+        .find(&group, &pname)
         .ok_or_else(|| ToolError::NotFound(format!("package `{name}` not in lockfile")))?;
 
     let subskills: Vec<Value> = entry
@@ -115,7 +115,7 @@ fn read_subskill_tool() -> (ToolDescriptor, ToolHandler) {
             "properties": {
                 "package": {
                     "type": "string",
-                    "description": "Package reference in `<kind>:<name>` form."
+                    "description": "Group-qualified package reference in `<group>/<name>` form."
                 },
                 "subskill_path": {
                     "type": "string",
@@ -139,12 +139,12 @@ fn read_subskill_run(args: &Value, ctx: &ServerContext) -> Result<Value, ToolErr
         .get("subskill_path")
         .and_then(|v| v.as_str())
         .ok_or_else(|| ToolError::InvalidArguments("`subskill_path` must be a string".into()))?;
-    let (kind, pname) = parse_pkgref(package)?;
+    let (group, pname) = parse_pkgref(package)?;
     let lockfile = ctx
         .load_lockfile()
         .map_err(|e| ToolError::Internal(format!("loading lockfile: {e}")))?;
     let entry = lockfile
-        .find(kind, &pname)
+        .find(&group, &pname)
         .ok_or_else(|| ToolError::NotFound(format!("package `{package}` not in lockfile")))?;
     let sub = entry
         .subskills_active
@@ -239,7 +239,7 @@ fn materialise_subskill_tool() -> (ToolDescriptor, ToolHandler) {
             "properties": {
                 "package": {
                     "type": "string",
-                    "description": "Package reference in `<kind>:<name>` form."
+                    "description": "Group-qualified package reference in `<group>/<name>` form."
                 },
                 "subskill_path": {
                     "type": "string",
@@ -268,12 +268,12 @@ fn materialise_subskill_run(args: &Value, ctx: &ServerContext) -> Result<Value, 
         .and_then(|v| v.as_str())
         .ok_or_else(|| ToolError::InvalidArguments("`subskill_path` must be a string".into()))?;
     let force = args.get("force").and_then(|v| v.as_bool()).unwrap_or(false);
-    let (kind, pname) = parse_pkgref(package)?;
+    let (group, pname) = parse_pkgref(package)?;
     let lockfile = ctx
         .load_lockfile()
         .map_err(|e| ToolError::Internal(format!("loading lockfile: {e}")))?;
     let entry = lockfile
-        .find(kind, &pname)
+        .find(&group, &pname)
         .ok_or_else(|| ToolError::NotFound(format!("package `{package}` not in lockfile")))?;
     let sub = entry
         .subskills_active
@@ -350,19 +350,20 @@ fn materialise_subskill_run(args: &Value, ctx: &ServerContext) -> Result<Value, 
 // shared helpers
 // ---------------------------------------------------------------------------
 
-fn parse_pkgref(s: &str) -> Result<(PackageKind, String), ToolError> {
-    let (kind_s, name) = s
-        .split_once(':')
-        .ok_or_else(|| ToolError::InvalidArguments(format!("`{s}`: expected `<kind>:<name>`")))?;
-    if name.is_empty() {
-        return Err(ToolError::InvalidArguments(format!(
-            "`{s}`: empty package name"
-        )));
-    }
-    use std::str::FromStr;
-    let kind = PackageKind::from_str(kind_s)
-        .map_err(|e| ToolError::InvalidArguments(format!("`{s}`: invalid kind — {e}")))?;
-    Ok((kind, name.to_string()))
+/// Parse a package reference into its `(group, name)` identity. The
+/// reference must be group-qualified (`<group>/<name>`, e.g.
+/// `org.vibevm/wal`); an optional `<kind>:` prefix is tolerated but
+/// ignored — `kind` is metadata, not identity (PROP-008 §2.3).
+fn parse_pkgref(s: &str) -> Result<(Group, String), ToolError> {
+    let pkgref = PackageRef::parse(s).map_err(|e| {
+        ToolError::InvalidArguments(format!("`{s}`: invalid package reference — {e}"))
+    })?;
+    let group = pkgref.group.ok_or_else(|| {
+        ToolError::InvalidArguments(format!(
+            "`{s}`: package reference must be group-qualified — write `<group>/<name>`"
+        ))
+    })?;
+    Ok((group, pkgref.name))
 }
 
 /// Convenience for tests: write a lockfile fixture into a fresh
@@ -400,10 +401,11 @@ mod tests {
 [meta]
 generated_by = "vibe-test"
 generated_at = "2026-05-05T00:00:00Z"
-schema_version = 4
+schema_version = 5
 
 [[package]]
 kind = "flow"
+group = "org.vibevm"
 name = "wal"
 version = "0.1.0"
 registry = "vibespecs"
@@ -449,7 +451,7 @@ cache_files = [
             "method": "tools/call",
             "params": {
                 "name": "query_package",
-                "arguments": { "name": "flow:wal" }
+                "arguments": { "name": "org.vibevm/wal" }
             }
         })
         .to_string();
@@ -482,7 +484,7 @@ cache_files = [
             "method": "tools/call",
             "params": {
                 "name": "query_package",
-                "arguments": { "name": "flow:nonexistent" }
+                "arguments": { "name": "org.vibevm/nonexistent" }
             }
         })
         .to_string();
@@ -540,7 +542,7 @@ cache_files = [
             "params": {
                 "name": "read_subskill",
                 "arguments": {
-                    "package": "flow:wal",
+                    "package": "org.vibevm/wal",
                     "subskill_path": "stack/rust",
                 }
             }
@@ -595,7 +597,7 @@ cache_files = [
             "params": {
                 "name": "materialise_subskill",
                 "arguments": {
-                    "package": "flow:wal",
+                    "package": "org.vibevm/wal",
                     "subskill_path": "sqlx/v08",
                 }
             }
@@ -633,7 +635,7 @@ cache_files = [
             "params": {
                 "name": "materialise_subskill",
                 "arguments": {
-                    "package": "flow:wal",
+                    "package": "org.vibevm/wal",
                     "subskill_path": "stack/rust",
                 }
             }
@@ -672,7 +674,7 @@ cache_files = [
             "params": {
                 "name": "materialise_subskill",
                 "arguments": {
-                    "package": "flow:wal",
+                    "package": "org.vibevm/wal",
                     "subskill_path": "sqlx/v08",
                 }
             }
@@ -699,7 +701,7 @@ cache_files = [
             "params": {
                 "name": "read_subskill",
                 "arguments": {
-                    "package": "flow:wal",
+                    "package": "org.vibevm/wal",
                     "subskill_path": "made/up",
                 }
             }

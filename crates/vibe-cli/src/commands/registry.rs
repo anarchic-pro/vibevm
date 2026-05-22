@@ -16,6 +16,7 @@ use std::path::{Path, PathBuf};
 
 use anyhow::{Context, Result, anyhow, bail};
 use serde::Serialize;
+use vibe_core::Group;
 use vibe_core::manifest::{
     DEFAULT_REGISTRY_NAME, DEFAULT_REGISTRY_URL, Lockfile, Manifest, MirrorSection,
     NamingConvention, RegistrySection,
@@ -61,7 +62,7 @@ struct SyncReport {
 
 #[derive(Debug, Serialize)]
 struct RefreshedReportEntry {
-    kind: String,
+    group: String,
     name: String,
     via: String, // "registry:<name>" or "override"
     #[serde(rename = "ref")]
@@ -70,7 +71,7 @@ struct RefreshedReportEntry {
 
 #[derive(Debug, Serialize)]
 struct SkippedReportEntry {
-    kind: String,
+    group: String,
     name: String,
     reason: String,
 }
@@ -160,7 +161,7 @@ fn run_sync(ctx: &output::Context, args: RegistrySyncArgs) -> Result<()> {
         .refreshed
         .iter()
         .map(|e| RefreshedReportEntry {
-            kind: e.kind.as_str().to_string(),
+            group: e.group.as_str().to_string(),
             name: e.name.clone(),
             via: match &e.via {
                 RefreshedVia::Registry(n) => format!("registry:{n}"),
@@ -173,7 +174,7 @@ fn run_sync(ctx: &output::Context, args: RegistrySyncArgs) -> Result<()> {
         .skipped
         .iter()
         .map(|e| SkippedReportEntry {
-            kind: e.kind.as_str().to_string(),
+            group: e.group.as_str().to_string(),
             name: e.name.clone(),
             reason: e.reason.clone(),
         })
@@ -196,14 +197,14 @@ fn run_sync(ctx: &output::Context, args: RegistrySyncArgs) -> Result<()> {
                 RefreshedVia::Override => "override".to_string(),
             };
             ctx.step(&format!(
-                "{}:{} @ {} via {}",
-                e.kind, e.name, e.refname, via_text
+                "{}/{} @ {} via {}",
+                e.group, e.name, e.refname, via_text
             ));
         }
     }
     if !report.skipped.is_empty() {
         for e in &report.skipped {
-            ctx.skipped(&format!("{}:{}", e.kind, e.name), &e.reason);
+            ctx.skipped(&format!("{}/{}", e.group, e.name), &e.reason);
         }
     }
 
@@ -293,6 +294,7 @@ fn run_list(ctx: &output::Context, args: RegistryListArgs) -> Result<()> {
         let org = extract_org_segment(&reg.url).unwrap_or_else(|_| String::from("?"));
         let adapter = adapter_for_host(&host).map(String::from);
         let naming_label = match reg.naming {
+            vibe_core::manifest::NamingConvention::Fqdn => "fqdn",
             vibe_core::manifest::NamingConvention::KindName => "kind-name",
             vibe_core::manifest::NamingConvention::Name => "name",
             vibe_core::manifest::NamingConvention::KindSlashName => "kind/name",
@@ -544,6 +546,7 @@ fn run_add(ctx: &output::Context, args: RegistryAddArgs) -> Result<()> {
         .with_context(|| format!("writing `{}`", manifest_path.display()))?;
 
     let naming_label = match new.naming {
+        NamingConvention::Fqdn => "fqdn",
         NamingConvention::KindName => "kind-name",
         NamingConvention::Name => "name",
         NamingConvention::KindSlashName => "kind/name",
@@ -951,7 +954,7 @@ struct VendorReport {
 
 #[derive(Debug, Serialize)]
 struct VendoredReportEntry {
-    kind: String,
+    group: String,
     name: String,
     /// Registry that originally served this package — what `vibe.lock`
     /// records under `registry`.
@@ -1041,7 +1044,7 @@ fn run_vendor(ctx: &output::Context, args: RegistryVendorArgs) -> Result<()> {
     for entry in &lockfile.packages {
         if entry.overridden {
             skipped.push(SkippedReportEntry {
-                kind: entry.kind.as_str().to_string(),
+                group: entry.group.as_str().to_string(),
                 name: entry.name.clone(),
                 reason: format!(
                     "[[override]]-served (source_url `{}`); vendor it manually if you need offline coverage",
@@ -1052,7 +1055,7 @@ fn run_vendor(ctx: &output::Context, args: RegistryVendorArgs) -> Result<()> {
         }
         let Some(reg_name) = entry.registry.as_deref() else {
             skipped.push(SkippedReportEntry {
-                kind: entry.kind.as_str().to_string(),
+                group: entry.group.as_str().to_string(),
                 name: entry.name.clone(),
                 reason: "lockfile entry has no `registry` (likely installed via `--registry <path>` or a legacy v1 path)"
                     .to_string(),
@@ -1061,7 +1064,7 @@ fn run_vendor(ctx: &output::Context, args: RegistryVendorArgs) -> Result<()> {
         };
         let Some(reg) = mrr.registries().iter().find(|r| r.name() == reg_name) else {
             skipped.push(SkippedReportEntry {
-                kind: entry.kind.as_str().to_string(),
+                group: entry.group.as_str().to_string(),
                 name: entry.name.clone(),
                 reason: format!(
                     "lockfile names registry `{reg_name}` but no `[[registry]]` with that name exists in `vibe.toml`"
@@ -1079,15 +1082,15 @@ fn run_vendor(ctx: &output::Context, args: RegistryVendorArgs) -> Result<()> {
         // requested ref. `refresh_package` is mirror-aware, so a fresh
         // `vibe registry vendor` against an unreachable primary still
         // works as long as some `[[mirror]]` URL is reachable.
-        reg.refresh_package(entry.kind, &entry.name, &refname)
+        reg.refresh_package(&entry.group, &entry.name, &refname)
             .with_context(|| {
                 format!(
-                    "refreshing per-package clone for `{}:{}` against `{}`",
-                    entry.kind, entry.name, refname
+                    "refreshing per-package clone for `{}/{}` against `{}`",
+                    entry.group, entry.name, refname
                 )
             })?;
 
-        let clone_dir = reg.package_clone_dir(entry.kind, &entry.name);
+        let clone_dir = reg.package_clone_dir(&entry.group, &entry.name);
         let clone_git = clone_dir.join(".git");
         if !clone_git.is_dir() {
             // Should not happen after a successful `refresh_package`,
@@ -1095,14 +1098,22 @@ fn run_vendor(ctx: &output::Context, args: RegistryVendorArgs) -> Result<()> {
             // `.git/` and an explicit error here beats a confusing
             // I/O error two layers down.
             bail!(
-                "per-package clone for `{}:{}` lacks a `.git/` after refresh — registry returned without populating the cache (`{}`)",
-                entry.kind,
+                "per-package clone for `{}/{}` lacks a `.git/` after refresh — registry returned without populating the cache (`{}`)",
+                entry.group,
                 entry.name,
                 clone_dir.display()
             );
         }
 
-        let repo_name = reg.naming().repo_name(entry.kind, &entry.name);
+        let repo_name = reg
+            .naming()
+            .repo_name(Some(entry.kind), &entry.group, &entry.name)
+            .with_context(|| {
+                format!(
+                    "deriving the vendor repo name for `{}/{}`",
+                    entry.group, entry.name
+                )
+            })?;
         let vendor_repo = out_dir.join(format!("{repo_name}.git"));
         if vendor_repo.exists() {
             std::fs::remove_dir_all(&vendor_repo)
@@ -1115,22 +1126,22 @@ fn run_vendor(ctx: &output::Context, args: RegistryVendorArgs) -> Result<()> {
 
         bare_clone_from_clone(&clone_git, &vendor_repo).with_context(|| {
             format!(
-                "vendoring `{}:{}` into `{}`",
-                entry.kind,
+                "vendoring `{}/{}` into `{}`",
+                entry.group,
                 entry.name,
                 vendor_repo.display()
             )
         })?;
 
         ctx.step(&format!(
-            "{}:{} @ {} → {}",
-            entry.kind,
+            "{}/{} @ {} → {}",
+            entry.group,
             entry.name,
             refname,
             forward_slash_display(&vendor_repo)
         ));
         vendored.push(VendoredReportEntry {
-            kind: entry.kind.as_str().to_string(),
+            group: entry.group.as_str().to_string(),
             name: entry.name.clone(),
             registry: reg_name.to_string(),
             repo_dir: forward_slash_display(&vendor_repo),
@@ -1143,7 +1154,7 @@ fn run_vendor(ctx: &output::Context, args: RegistryVendorArgs) -> Result<()> {
 
     if !skipped.is_empty() {
         for s in &skipped {
-            ctx.skipped(&format!("{}:{}", s.kind, s.name), &s.reason);
+            ctx.skipped(&format!("{}/{}", s.group, s.name), &s.reason);
         }
     }
 
@@ -1267,8 +1278,8 @@ fn write_vendor_readme(
         body.push_str("## Contents\n\n");
         for v in vendored {
             body.push_str(&format!(
-                "- `{}:{}` @ `{}` — `{}` (from registry `{}`)\n",
-                v.kind, v.name, v.refname, v.repo_dir, v.registry
+                "- `{}/{}` @ `{}` — `{}` (from registry `{}`)\n",
+                v.group, v.name, v.refname, v.repo_dir, v.registry
             ));
         }
     }
@@ -1276,6 +1287,17 @@ fn write_vendor_readme(
     std::fs::write(&readme_path, body)
         .with_context(|| format!("writing `{}`", readme_path.display()))?;
     Ok(())
+}
+
+/// Extract the `(group, …)` half of a pkgref's identity, rejecting an
+/// unqualified registry-subcommand argument (PROP-008 §2.4). Registry
+/// resolution and repo naming are group-keyed; a bare name has no group.
+fn require_group(pkgref: &vibe_core::PackageRef) -> Result<&Group> {
+    pkgref.group.as_ref().ok_or_else(|| {
+        anyhow::anyhow!(
+            "package reference `{pkgref}` is not group-qualified — write `<group>/<name>`"
+        )
+    })
 }
 
 fn resolve_project_root(path: &Path) -> Result<PathBuf> {
@@ -1951,6 +1973,7 @@ fn run_redirect(ctx: &output::Context, args: RegistryRedirectArgs) -> Result<()>
 
     let pkgref = PackageRef::parse(&args.pkgref)
         .with_context(|| format!("parsing pkgref `{}`", args.pkgref))?;
+    let group = require_group(&pkgref)?;
 
     let registry_section =
         resolve_target_registry(&manifest, args.registry.as_deref(), &manifest_path)?;
@@ -2004,7 +2027,10 @@ fn run_redirect(ctx: &output::Context, args: RegistryRedirectArgs) -> Result<()>
     }
 
     // Compute the stub repo name from naming convention.
-    let stub_repo_name = registry_section.naming.repo_name(pkgref.kind, &pkgref.name);
+    let stub_repo_name = registry_section
+        .naming
+        .repo_name(pkgref.kind, group, &pkgref.name)
+        .with_context(|| format!("deriving the stub repo name for `{group}/{}`", pkgref.name))?;
     // Stub URL surfaced in JSON / human output. Construction mirrors what
     // [`MultiRegistryResolver`] does at resolve time.
     let stub_url = format!(
@@ -2247,13 +2273,17 @@ fn run_redirect_sync(ctx: &output::Context, args: RegistryRedirectSyncArgs) -> R
 
     let pkgref = PackageRef::parse(&args.pkgref)
         .with_context(|| format!("parsing pkgref `{}`", args.pkgref))?;
+    let group = require_group(&pkgref)?;
     let registry_section =
         resolve_target_registry(&manifest, args.registry.as_deref(), &manifest_path)?;
     let host = extract_host_segment(&registry_section.url)
         .map_err(|e| anyhow!("registry URL `{}`: {e}", registry_section.url))?;
     let org_segment = extract_org_segment(&registry_section.url)
         .map_err(|e| anyhow!("registry URL `{}`: {e}", registry_section.url))?;
-    let stub_repo_name = registry_section.naming.repo_name(pkgref.kind, &pkgref.name);
+    let stub_repo_name = registry_section
+        .naming
+        .repo_name(pkgref.kind, group, &pkgref.name)
+        .with_context(|| format!("deriving the stub repo name for `{group}/{}`", pkgref.name))?;
     let stub_url = format!(
         "{}/{}",
         registry_section.url.trim_end_matches('/'),
@@ -2361,13 +2391,17 @@ fn run_redirect_update(ctx: &output::Context, args: RegistryRedirectUpdateArgs) 
 
     let pkgref = PackageRef::parse(&args.pkgref)
         .with_context(|| format!("parsing pkgref `{}`", args.pkgref))?;
+    let group = require_group(&pkgref)?;
     let registry_section =
         resolve_target_registry(&manifest, args.registry.as_deref(), &manifest_path)?;
     let host = extract_host_segment(&registry_section.url)
         .map_err(|e| anyhow!("registry URL `{}`: {e}", registry_section.url))?;
     let org_segment = extract_org_segment(&registry_section.url)
         .map_err(|e| anyhow!("registry URL `{}`: {e}", registry_section.url))?;
-    let stub_repo_name = registry_section.naming.repo_name(pkgref.kind, &pkgref.name);
+    let stub_repo_name = registry_section
+        .naming
+        .repo_name(pkgref.kind, group, &pkgref.name)
+        .with_context(|| format!("deriving the stub repo name for `{group}/{}`", pkgref.name))?;
     let stub_url = format!(
         "{}/{}",
         registry_section.url.trim_end_matches('/'),

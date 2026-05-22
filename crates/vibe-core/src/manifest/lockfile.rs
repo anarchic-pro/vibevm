@@ -14,7 +14,7 @@
 //!
 //! # Identity vs. source_url
 //!
-//! Package identity is the tuple `(kind, name, version, content_hash)`.
+//! Package identity is the tuple `(group, name, version, content_hash)`.
 //! `source_url` is informational — it records where the content came from
 //! on this particular install. Mirror-switching, host-migration, and
 //! override pins all change `source_url` without changing identity; the
@@ -29,7 +29,7 @@ use std::path::{Path, PathBuf};
 use serde::{Deserialize, Serialize};
 
 use crate::error::Result;
-use crate::package_ref::{PackageKind, PackageRef, VersionSpec};
+use crate::package_ref::{Group, PackageKind, PackageRef, VersionSpec};
 
 use super::{read_toml, write_toml};
 
@@ -41,8 +41,9 @@ use super::{read_toml, write_toml};
 ///
 /// History (for the record only — earlier versions are not read):
 /// `1` M0/M1.1 · `2` per-package registries · `3` PROP-003 features ·
-/// `4` PROP-007 workspace path-source (`source_kind = "path"`).
-pub const CURRENT_SCHEMA_VERSION: u32 = 4;
+/// `4` PROP-007 workspace path-source (`source_kind = "path"`) ·
+/// `5` PROP-008 qualified naming (the per-package `group` field).
+pub const CURRENT_SCHEMA_VERSION: u32 = 5;
 
 fn is_false(b: &bool) -> bool {
     !*b
@@ -95,7 +96,7 @@ pub struct LockfileMeta {
     pub language_chain: Vec<String>,
 
     /// Full set of features active in this resolution. Each entry is
-    /// `<kind>:<name>/<feature-name>`, scoped per package. Empty on v2
+    /// `<group>/<name>/<feature-name>`, scoped per package. Empty on v2
     /// lockfiles and when no features are configured.
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
     pub active_features: Vec<String>,
@@ -149,6 +150,10 @@ pub enum SourceKind {
 pub struct LockedPackage {
     pub kind: PackageKind,
     pub name: String,
+    /// Reverse-FQDN group (PROP-008 §2.1). With `name` it forms the
+    /// package's `(group, name, version, content_hash)` identity; `kind`
+    /// is metadata, not part of identity (PROP-008 §2.2 / §2.3).
+    pub group: Group,
     pub version: semver::Version,
 
     /// Name of the registry that served this package — matches a
@@ -179,7 +184,7 @@ pub struct LockedPackage {
     pub resolved_commit: Option<String>,
 
     /// `sha256:<hex>` content hash over the package tree. The
-    /// **identity** component of the (kind, name, version, content_hash)
+    /// **identity** component of the (group, name, version, content_hash)
     /// tuple. Present in every lockfile version.
     pub content_hash: String,
 
@@ -190,7 +195,7 @@ pub struct LockedPackage {
     pub files_written: Vec<PathBuf>,
 
     /// Transitive dependencies as resolved by the solver at install time.
-    /// Each entry is pinned to an exact version (`kind:name@=version`).
+    /// Each entry is pinned to an exact version (`group/name@=version`).
     /// Empty for pre-resolver installs and v1 lockfiles.
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
     pub dependencies: Vec<PackageRef>,
@@ -308,35 +313,41 @@ impl Lockfile {
         write_toml(path, self)
     }
 
-    /// Find an installed package by its `<kind>:<name>` identity.
-    pub fn find(&self, kind: PackageKind, name: &str) -> Option<&LockedPackage> {
+    /// Find an installed package by its `(group, name)` identity.
+    pub fn find(&self, group: &Group, name: &str) -> Option<&LockedPackage> {
         self.packages
             .iter()
-            .find(|p| p.kind == kind && p.name == name)
+            .find(|p| p.group == *group && p.name == name)
     }
 
-    pub fn find_mut(&mut self, kind: PackageKind, name: &str) -> Option<&mut LockedPackage> {
+    pub fn find_mut(&mut self, group: &Group, name: &str) -> Option<&mut LockedPackage> {
         self.packages
             .iter_mut()
-            .find(|p| p.kind == kind && p.name == name)
+            .find(|p| p.group == *group && p.name == name)
     }
 
     /// Remove an installed package; returns the removed entry if present.
-    pub fn remove(&mut self, kind: PackageKind, name: &str) -> Option<LockedPackage> {
+    pub fn remove(&mut self, group: &Group, name: &str) -> Option<LockedPackage> {
         let idx = self
             .packages
             .iter()
-            .position(|p| p.kind == kind && p.name == name)?;
+            .position(|p| p.group == *group && p.name == name)?;
         Some(self.packages.remove(idx))
     }
 }
 
 impl LockedPackage {
-    /// Produce a `PackageRef` pinned to this exact installed version.
+    /// Produce a `PackageRef` pinned to this exact installed version —
+    /// fully qualified, carrying the package's `group` and `kind`.
     pub fn as_package_ref(&self) -> Result<PackageRef> {
         let req = semver::VersionReq::parse(&format!("={}", self.version))
             .expect("exact version always parses");
-        PackageRef::new(self.kind, self.name.clone(), VersionSpec::Req(req))
+        PackageRef::new(
+            Some(self.kind),
+            Some(self.group.clone()),
+            self.name.clone(),
+            VersionSpec::Req(req),
+        )
     }
 }
 
@@ -344,18 +355,24 @@ impl LockedPackage {
 mod tests {
     use super::*;
 
+    /// The canonical group every fixture package in these tests belongs to.
+    fn org() -> Group {
+        Group::parse("org.vibevm").unwrap()
+    }
+
     const FIXTURE: &str = r#"
 [meta]
 generated_by = "vibe 0.1.0-dev"
 generated_at = "2026-05-21T12:00:00Z"
-schema_version = 4
+schema_version = 5
 solver = "resolvo-0.x"
-root_dependencies = ["flow:wal", "stack:rust-cli"]
+root_dependencies = ["org.vibevm/wal", "org.vibevm/rust-cli"]
 
 [[package]]
 kind = "flow"
 name = "wal"
-version = "0.3.0"
+group = "org.vibevm"
+version ="0.3.0"
 registry = "vibespecs"
 source_url = "git@gitverse.ru:vibespecs/flow-wal.git"
 source_ref = "v0.3.0"
@@ -367,12 +384,13 @@ files_written = [
     "spec/flows/wal/WAL-PROTOCOL.md",
     "spec/boot/10-flow-wal.md",
 ]
-dependencies = ["flow:atomic-commits@=0.1.0"]
+dependencies = ["org.vibevm/atomic-commits@=0.1.0"]
 
 [[package]]
 kind = "stack"
 name = "rust-cli"
-version = "0.1.0"
+group = "org.vibevm"
+version ="0.1.0"
 registry = "vibespecs"
 source_url = "git@gitverse.ru:vibespecs/stack-rust-cli.git"
 source_ref = "v0.1.0"
@@ -384,19 +402,22 @@ source_kind = "registry"
     #[test]
     fn parses_fully() {
         let lf: Lockfile = toml::from_str(FIXTURE).unwrap();
-        assert_eq!(lf.meta.schema_version, 4);
+        assert_eq!(lf.meta.schema_version, 5);
         assert_eq!(lf.meta.solver.as_deref(), Some("resolvo-0.x"));
         assert_eq!(lf.meta.root_dependencies.len(), 2);
         assert_eq!(lf.packages.len(), 2);
 
-        let wal = lf.find(PackageKind::Flow, "wal").unwrap();
+        let wal = lf.find(&org(), "wal").unwrap();
         assert_eq!(wal.version.to_string(), "0.3.0");
         assert_eq!(wal.registry.as_deref(), Some("vibespecs"));
         assert_eq!(wal.source_url, "git@gitverse.ru:vibespecs/flow-wal.git");
         assert_eq!(wal.source_ref.as_deref(), Some("v0.3.0"));
         assert_eq!(wal.resolved_commit.as_deref(), Some("abc123def456"));
         assert_eq!(wal.dependencies.len(), 1);
-        assert_eq!(wal.dependencies[0].qualified_name(), "flow:atomic-commits");
+        assert_eq!(
+            wal.dependencies[0].qualified_name(),
+            "org.vibevm/atomic-commits"
+        );
         assert_eq!(wal.source_kind, Some(SourceKind::Registry));
         assert!(!wal.overridden);
     }
@@ -410,10 +431,10 @@ source_kind = "registry"
     }
 
     #[test]
-    fn empty_lockfile_has_v4_defaults() {
+    fn empty_lockfile_has_v5_defaults() {
         let lf = Lockfile::empty("vibe 0.1.0-dev", "2026-05-21T00:00:00Z");
         assert_eq!(lf.meta.schema_version, CURRENT_SCHEMA_VERSION);
-        assert_eq!(CURRENT_SCHEMA_VERSION, 4);
+        assert_eq!(CURRENT_SCHEMA_VERSION, 5);
         assert!(lf.meta.solver.is_none());
         assert!(lf.packages.is_empty());
 
@@ -430,18 +451,18 @@ source_kind = "registry"
             .write(&path)
             .unwrap();
         let lf = Lockfile::read(&path).unwrap();
-        assert_eq!(lf.meta.schema_version, 4);
+        assert_eq!(lf.meta.schema_version, 5);
     }
 
     #[test]
     fn read_rejects_non_current_version() {
-        // A pre-v4 lockfile is rejected outright — no legacy reader, no
+        // A pre-v5 lockfile is rejected outright — no legacy reader, no
         // migration. The fix is to regenerate with `vibe install`.
         let dir = tempfile::tempdir().unwrap();
         let path = dir.path().join("vibe.lock");
         std::fs::write(
             &path,
-            "[meta]\ngenerated_by = \"old\"\ngenerated_at = \"x\"\nschema_version = 3\n",
+            "[meta]\ngenerated_by = \"old\"\ngenerated_at = \"x\"\nschema_version = 4\n",
         )
         .unwrap();
         let err = Lockfile::read(&path).unwrap_err();
@@ -449,8 +470,8 @@ source_kind = "registry"
             matches!(
                 err,
                 crate::error::Error::UnsupportedLockfile {
-                    found: 3,
-                    expected: 4
+                    found: 4,
+                    expected: 5
                 }
             ),
             "{err}"
@@ -465,18 +486,19 @@ source_kind = "registry"
 [meta]
 generated_by = "vibe"
 generated_at = "2026-05-21T00:00:00Z"
-schema_version = 4
+schema_version = 5
 
 [[package]]
 kind = "flow"
 name = "wal"
-version = "0.1.0"
+group = "org.vibevm"
+version ="0.1.0"
 source_url = "packages/flow-wal"
 content_hash = "sha256:abc"
 source_kind = "path"
 "#;
         let lf: Lockfile = toml::from_str(raw).unwrap();
-        let wal = lf.find(PackageKind::Flow, "wal").unwrap();
+        let wal = lf.find(&org(), "wal").unwrap();
         assert_eq!(wal.source_kind, Some(SourceKind::Path));
         assert_eq!(wal.source_url, "packages/flow-wal");
         let rendered = toml::to_string_pretty(&lf).unwrap();
@@ -496,10 +518,10 @@ source_kind = "path"
     fn remove_drops_entry() {
         let mut lf: Lockfile = toml::from_str(FIXTURE).unwrap();
         assert_eq!(lf.packages.len(), 2);
-        let removed = lf.remove(PackageKind::Flow, "wal").unwrap();
+        let removed = lf.remove(&org(), "wal").unwrap();
         assert_eq!(removed.name, "wal");
         assert_eq!(lf.packages.len(), 1);
-        assert!(lf.find(PackageKind::Flow, "wal").is_none());
+        assert!(lf.find(&org(), "wal").is_none());
     }
 
     #[test]
@@ -508,12 +530,13 @@ source_kind = "path"
 [meta]
 generated_by = "vibe 0.1.0-dev"
 generated_at = "2026-05-21T00:00:00Z"
-schema_version = 4
+schema_version = 5
 
 [[package]]
 kind = "flow"
 name = "wal"
-version = "0.3.0"
+group = "org.vibevm"
+version ="0.3.0"
 source_url = "git@mycompany:forks/wal"
 source_ref = "my-fix"
 content_hash = "sha256:xyz"
@@ -538,12 +561,13 @@ overridden = true
 [meta]
 generated_by = "vibe"
 generated_at = "2026-05-21T00:00:00Z"
-schema_version = 4
+schema_version = 5
 
 [[package]]
 kind = "flow"
 name = "wal"
-version = "0.1.0"
+group = "org.vibevm"
+version ="0.1.0"
 source_url = "file:///x"
 content_hash = "sha256:abc"
 mystery = true

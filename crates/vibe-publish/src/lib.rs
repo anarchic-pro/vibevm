@@ -220,6 +220,7 @@ impl<'c, C: RepoCreator + ?Sized> Publisher<'c, C> {
             })?;
 
         let kind = meta.kind;
+        let group = meta.group.clone();
         let name = meta.name.clone();
         let version = meta.version.clone();
         let tag = format!("{}{}", config.tag_prefix, version);
@@ -236,11 +237,17 @@ impl<'c, C: RepoCreator + ?Sized> Publisher<'c, C> {
             // No naming convention probe — the operator supplied the
             // URL, so the host's actual repo path is whatever they
             // chose. For the human-facing `PublishOutcome.repo_name`
-            // we fall back to the conventional `<kind>-<name>` form
+            // we fall back to the configured naming convention's form
             // (matches what the operator typically picked when they
             // provisioned the repo); the truth-of-the-matter is the
             // URL itself, surfaced in `repo_url`.
-            let repo_name = config.naming.repo_name(kind, &name);
+            let repo_name = config
+                .naming
+                .repo_name(Some(kind), &group, &name)
+                .map_err(|e| PublishError::SourceInvalid {
+                    path: manifest_path.clone(),
+                    reason: format!("could not derive a repo name: {e}"),
+                })?;
             if !config.dry_run {
                 git_publish::push_release(&config.source_dir, direct_url, &tag, &name, &version)?;
             }
@@ -257,7 +264,13 @@ impl<'c, C: RepoCreator + ?Sized> Publisher<'c, C> {
             });
         }
 
-        let repo_name = config.naming.repo_name(kind, &name);
+        let repo_name = config
+            .naming
+            .repo_name(Some(kind), &group, &name)
+            .map_err(|e| PublishError::SourceInvalid {
+                path: manifest_path.clone(),
+                reason: format!("could not derive a repo name: {e}"),
+            })?;
 
         // Step 2: derive org segment from the configured org URL.
         let org_segment = extract_org_segment(&config.org_url)?;

@@ -40,7 +40,7 @@ use std::collections::{HashMap, HashSet, VecDeque};
 
 use thiserror::Error;
 use vibe_core::manifest::Manifest;
-use vibe_core::{PackageKind, PackageRef, VersionSpec};
+use vibe_core::{Group, PackageRef, VersionSpec};
 
 pub mod activation;
 pub mod conditional;
@@ -65,7 +65,9 @@ pub use naive::NaiveDepSolver;
 /// One node in the resolved dependency graph.
 #[derive(Debug, Clone)]
 pub struct ResolvedNode {
-    pub kind: PackageKind,
+    /// Reverse-FQDN group — half of the `(group, name)` identity tuple
+    /// (PROP-008 §2.3). `kind` is pure metadata and is not carried here.
+    pub group: Group,
     pub name: String,
     pub version: semver::Version,
     /// Direct dependencies of this node, pinned to exact versions chosen
@@ -92,11 +94,11 @@ impl ResolvedGraph {
         self.packages.iter().filter(|n| n.is_root)
     }
 
-    /// Find a node by `(kind, name)` identity.
-    pub fn find(&self, kind: PackageKind, name: &str) -> Option<&ResolvedNode> {
+    /// Find a node by `(group, name)` identity.
+    pub fn find(&self, group: &Group, name: &str) -> Option<&ResolvedNode> {
         self.packages
             .iter()
-            .find(|n| n.kind == kind && n.name == name)
+            .find(|n| &n.group == group && n.name == name)
     }
 }
 
@@ -115,7 +117,7 @@ pub trait DepProvider {
     /// Read the package manifest at a specific version.
     fn fetch_manifest(
         &self,
-        kind: PackageKind,
+        group: &Group,
         name: &str,
         version: &semver::Version,
     ) -> Result<Manifest, DepProviderError>;
@@ -133,12 +135,12 @@ pub trait DepSolver {
 
 #[derive(Debug, Error)]
 pub enum DepProviderError {
-    #[error("package `{kind}:{name}` is not available in any configured registry")]
-    UnknownPackage { kind: PackageKind, name: String },
+    #[error("package `{group}/{name}` is not available in any configured registry")]
+    UnknownPackage { group: Group, name: String },
 
-    #[error("no version of `{kind}:{name}` matches `{constraint}`")]
+    #[error("no version of `{group}/{name}` matches `{constraint}`")]
     NoMatchingVersion {
-        kind: PackageKind,
+        group: Group,
         name: String,
         constraint: String,
     },
@@ -154,7 +156,7 @@ pub enum DepProviderError {
     /// produces, so prose-only consumers see no regression.
     #[error("{summary}")]
     AggregateNotFound {
-        kind: PackageKind,
+        group: Group,
         name: String,
         summary: String,
         attempts: Vec<vibe_registry::RegistryWalkAttempt>,
@@ -210,14 +212,14 @@ pub enum SolveError {
 // Helpers used by both the naive impl and (eventually) the resolvo impl.
 // ---------------------------------------------------------------------------
 
-/// Per-(kind,name) state the solver accumulates as it walks. `pub(crate)`
+/// Per-(group,name) state the solver accumulates as it walks. `pub(crate)`
 /// rather than module-private so the multiple solver impls in this crate
 /// share one definition.
 pub(crate) struct SolverState {
-    pub chosen: HashMap<(PackageKind, String), ChosenEntry>,
-    pub providers_index: HashMap<String, Vec<(PackageKind, String, semver::Version)>>,
-    pub declared_conflicts: HashSet<(PackageKind, String)>,
-    pub declared_obsolete: HashSet<(PackageKind, String)>,
+    pub chosen: HashMap<(Group, String), ChosenEntry>,
+    pub providers_index: HashMap<String, Vec<(Group, String, semver::Version)>>,
+    pub declared_conflicts: HashSet<(Group, String)>,
+    pub declared_obsolete: HashSet<(Group, String)>,
     pub queue: VecDeque<EnqueuedPkg>,
 }
 

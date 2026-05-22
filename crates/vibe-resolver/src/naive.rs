@@ -4,12 +4,26 @@
 //! pinned limitations and when to upgrade to a SAT-style solver.
 
 use vibe_core::manifest::Manifest;
-use vibe_core::{CapabilityRef, PackageKind, PackageRef, VersionSpec};
+use vibe_core::{CapabilityRef, Group, PackageRef, VersionSpec};
 
 use crate::{
-    ChosenEntry, DepProvider, DepSolver, EnqueuedPkg, ResolvedGraph, ResolvedNode, SolveError,
-    SolverState, version_satisfies,
+    ChosenEntry, DepProvider, DepProviderError, DepSolver, EnqueuedPkg, ResolvedGraph,
+    ResolvedNode, SolveError, SolverState, version_satisfies,
 };
+
+/// Extract the `(group, name)` identity from a pkgref. Solver-internal
+/// refs — roots, `[requires.packages]` deps, `[conflicts]` / `[obsoletes]`
+/// / `[[requires_any]]` entries — are all group-qualified (PROP-008 §2.6
+/// makes every manifest pkgref carry a group); an unqualified ref reaching
+/// the solver is a contract violation surfaced as a provider error.
+fn require_group(pkgref: &PackageRef) -> Result<&Group, SolveError> {
+    pkgref.group.as_ref().ok_or_else(|| {
+        SolveError::Provider(DepProviderError::Other(format!(
+            "package reference `{pkgref}` is not group-qualified — \
+             dependency resolution needs `<group>/<name>`"
+        )))
+    })
+}
 
 /// DFS solver over a [`DepProvider`].
 pub struct NaiveDepSolver<P: DepProvider> {
@@ -29,8 +43,10 @@ impl<P: DepProvider> NaiveDepSolver<P> {
 impl<P: DepProvider> DepSolver for NaiveDepSolver<P> {
     fn solve(&self, roots: &[PackageRef]) -> Result<ResolvedGraph, SolveError> {
         let mut state = SolverState::new();
-        let root_keys: Vec<(PackageKind, String)> =
-            roots.iter().map(|r| (r.kind, r.name.clone())).collect();
+        let root_keys: Vec<(Group, String)> = roots
+            .iter()
+            .map(|r| Ok((require_group(r)?.clone(), r.name.clone())))
+            .collect::<Result<_, SolveError>>()?;
         for r in roots {
             state.queue.push_back(EnqueuedPkg {
                 pkgref: r.clone(),
@@ -56,36 +72,37 @@ impl<P: DepProvider> DepSolver for NaiveDepSolver<P> {
         // Build the output graph. Order: roots first (input order
         // preserved), then the rest sorted for determinism.
         let mut packages: Vec<ResolvedNode> = Vec::with_capacity(state.chosen.len());
-        for (kind, name) in &root_keys {
-            if let Some(entry) = state.chosen.remove(&(*kind, name.clone())) {
-                packages.push(node_from_entry(*kind, name.clone(), entry, true));
+        for (group, name) in &root_keys {
+            if let Some(entry) = state.chosen.remove(&(group.clone(), name.clone())) {
+                packages.push(node_from_entry(group.clone(), name.clone(), entry, true));
             }
         }
-        let mut rest: Vec<((PackageKind, String), ChosenEntry)> =
-            state.chosen.into_iter().collect();
+        let mut rest: Vec<((Group, String), ChosenEntry)> = state.chosen.into_iter().collect();
         rest.sort_by(|a, b| {
             (a.0.0.as_str(), a.0.1.as_str()).cmp(&(b.0.0.as_str(), b.0.1.as_str()))
         });
-        for ((kind, name), entry) in rest {
-            packages.push(node_from_entry(kind, name, entry, false));
+        for ((group, name), entry) in rest {
+            packages.push(node_from_entry(group, name, entry, false));
         }
 
         // Pin every dependency reference to the exact version chosen for
         // it in the graph. Lockfile `dependencies` per entry stores
-        // exact-pinned `kind:name@=version` so a later `vibe install`
+        // exact-pinned `group/name@=version` so a later `vibe install`
         // off this lockfile reproduces the same install bit-for-bit.
-        let resolved_versions: std::collections::HashMap<(PackageKind, String), semver::Version> =
+        let resolved_versions: std::collections::HashMap<(Group, String), semver::Version> =
             packages
                 .iter()
-                .map(|n| ((n.kind, n.name.clone()), n.version.clone()))
+                .map(|n| ((n.group.clone(), n.name.clone()), n.version.clone()))
                 .collect();
         for node in packages.iter_mut() {
             for dep in node.dependencies.iter_mut() {
-                if let Some(version) = resolved_versions.get(&(dep.kind, dep.name.clone()))
+                if let Some(group) = dep.group.clone()
+                    && let Some(version) = resolved_versions.get(&(group, dep.name.clone()))
                     && let Ok(req) = semver::VersionReq::parse(&format!("={version}"))
                 {
                     *dep = PackageRef {
                         kind: dep.kind,
+                        group: dep.group.clone(),
                         name: dep.name.clone(),
                         version: VersionSpec::Req(req),
                     };
@@ -97,14 +114,9 @@ impl<P: DepProvider> DepSolver for NaiveDepSolver<P> {
     }
 }
 
-fn node_from_entry(
-    kind: PackageKind,
-    name: String,
-    entry: ChosenEntry,
-    is_root: bool,
-) -> ResolvedNode {
+fn node_from_entry(group: Group, name: String, entry: ChosenEntry, is_root: bool) -> ResolvedNode {
     ResolvedNode {
-        kind,
+        group,
         name,
         version: entry.version,
         dependencies: entry.direct_deps,
@@ -120,9 +132,10 @@ impl<P: DepProvider> NaiveDepSolver<P> {
         _via: Option<String>,
         is_root: bool,
     ) -> Result<(), SolveError> {
-        let key = (pkgref.kind, pkgref.name.clone());
+        let group = require_group(&pkgref)?.clone();
+        let key = (group.clone(), pkgref.name.clone());
 
-        // If a conflict was declared against this exact (kind, name) by
+        // If a conflict was declared against this exact (group, name) by
         // some prior package in the graph, refuse to add it.
         if state.declared_conflicts.contains(&key) {
             // Find which prior package declared the conflict for a useful
@@ -135,13 +148,13 @@ impl<P: DepProvider> NaiveDepSolver<P> {
                         .conflicts
                         .packages
                         .iter()
-                        .any(|c| c.kind == pkgref.kind && c.name == pkgref.name)
+                        .any(|c| c.group.as_ref() == Some(&group) && c.name == pkgref.name)
                 })
-                .map(|((k, n), _)| format!("{k}:{n}"))
+                .map(|((g, n), _)| format!("{g}/{n}"))
                 .unwrap_or_else(|| "<unknown>".to_string());
             return Err(SolveError::ConflictsDeclared {
                 package: against,
-                against: format!("{}:{}", pkgref.kind, pkgref.name),
+                against: pkgref.qualified_name(),
             });
         }
 
@@ -149,7 +162,7 @@ impl<P: DepProvider> NaiveDepSolver<P> {
         if let Some(existing) = state.chosen.get(&key) {
             if !version_satisfies(&pkgref.version, &existing.version) {
                 return Err(SolveError::VersionConflict {
-                    package: format!("{}:{}", pkgref.kind, pkgref.name),
+                    package: pkgref.qualified_name(),
                     existing: existing.version.to_string(),
                     new_constraint: format!("{}", pkgref.version),
                 });
@@ -165,26 +178,31 @@ impl<P: DepProvider> NaiveDepSolver<P> {
         let version = self.provider.resolve_version(&pkgref)?;
         let manifest = self
             .provider
-            .fetch_manifest(pkgref.kind, &pkgref.name, &version)?;
+            .fetch_manifest(&group, &pkgref.name, &version)?;
 
         // Refuse if this package's declared `[conflicts]` collide with
         // anything already in the graph.
         for c in &manifest.conflicts.packages {
-            let ck = (c.kind, c.name.clone());
+            let cg = require_group(c)?;
+            let ck = (cg.clone(), c.name.clone());
             if state.chosen.contains_key(&ck) {
                 return Err(SolveError::ConflictsDeclared {
-                    package: format!("{}:{}", pkgref.kind, pkgref.name),
-                    against: format!("{}:{}", c.kind, c.name),
+                    package: pkgref.qualified_name(),
+                    against: c.qualified_name(),
                 });
             }
         }
 
         // Mark conflicts and obsoletes so future enqueues respect them.
         for c in &manifest.conflicts.packages {
-            state.declared_conflicts.insert((c.kind, c.name.clone()));
+            let cg = require_group(c)?;
+            state
+                .declared_conflicts
+                .insert((cg.clone(), c.name.clone()));
         }
         for o in &manifest.obsoletes.packages {
-            state.declared_obsolete.insert((o.kind, o.name.clone()));
+            let og = require_group(o)?;
+            state.declared_obsolete.insert((og.clone(), o.name.clone()));
         }
 
         // Index provided capabilities BEFORE verifying requires — a
@@ -196,7 +214,7 @@ impl<P: DepProvider> NaiveDepSolver<P> {
                 .providers_index
                 .entry(cap.qualified())
                 .or_default()
-                .push((pkgref.kind, pkgref.name.clone(), cap_version));
+                .push((group.clone(), pkgref.name.clone(), cap_version));
         }
 
         // Capture direct package deps verbatim — they go straight into the
@@ -217,7 +235,7 @@ impl<P: DepProvider> NaiveDepSolver<P> {
         for d in &direct_deps {
             state.queue.push_back(EnqueuedPkg {
                 pkgref: d.clone(),
-                via: Some(format!("{}:{}", pkgref.kind, pkgref.name)),
+                via: Some(pkgref.qualified_name()),
                 is_root: false,
             });
         }
@@ -254,7 +272,7 @@ fn verify_capability_requires(
         if !any_match {
             return Err(SolveError::CapabilityUnmet {
                 capability: cap_req.to_string(),
-                requirer: format!("{}:{}", pkgref.kind, pkgref.name),
+                requirer: pkgref.qualified_name(),
             });
         }
     }
@@ -293,13 +311,14 @@ fn handle_disjunction(
 ) -> Result<(), SolveError> {
     if disj.one_of.is_empty() {
         return Err(SolveError::DisjunctionUnsatisfiable {
-            requirer: format!("{}:{}", requirer.kind, requirer.name),
+            requirer: requirer.qualified_name(),
             alternatives: Vec::new(),
         });
     }
     // If any alternative is already chosen, satisfied.
     for opt in &disj.one_of {
-        if state.chosen.contains_key(&(opt.kind, opt.name.clone())) {
+        let og = require_group(opt)?;
+        if state.chosen.contains_key(&(og.clone(), opt.name.clone())) {
             return Ok(());
         }
     }
@@ -308,10 +327,7 @@ fn handle_disjunction(
     let first = disj.one_of.first().expect("one_of non-empty above");
     state.queue.push_back(EnqueuedPkg {
         pkgref: first.clone(),
-        via: Some(format!(
-            "[[requires_any]] of {}:{}",
-            requirer.kind, requirer.name
-        )),
+        via: Some(format!("[[requires_any]] of {}", requirer.qualified_name())),
         is_root: false,
     });
     Ok(())
@@ -324,10 +340,16 @@ mod tests {
     use std::collections::HashMap;
     use vibe_core::PackageRef;
 
-    type ProviderEntries = HashMap<(PackageKind, String), Vec<(semver::Version, Manifest)>>;
+    type ProviderEntries = HashMap<(Group, String), Vec<(semver::Version, Manifest)>>;
 
-    /// In-memory provider for tests. Pre-seeded with `(kind, name) →
-    /// list-of-(version, manifest)` pairs.
+    /// Build the canonical first-party `Group` for tests.
+    fn org() -> Group {
+        Group::parse("org.vibevm").unwrap()
+    }
+
+    /// In-memory provider for tests. Pre-seeded with `(group, name) →
+    /// list-of-(version, manifest)` pairs. Identity is `(group, name)`;
+    /// `kind` is only manifest metadata.
     struct MapProvider {
         entries: RefCell<ProviderEntries>,
     }
@@ -338,12 +360,12 @@ mod tests {
                 entries: RefCell::new(HashMap::new()),
             }
         }
-        fn seed(&self, kind: PackageKind, name: &str, manifest_toml: &str) {
+        fn seed(&self, name: &str, manifest_toml: &str) {
             let m = Manifest::parse_str(manifest_toml).unwrap();
             let v = m.require_package().unwrap().version.clone();
             self.entries
                 .borrow_mut()
-                .entry((kind, name.to_string()))
+                .entry((org(), name.to_string()))
                 .or_default()
                 .push((v, m));
         }
@@ -354,13 +376,14 @@ mod tests {
             &self,
             pkgref: &PackageRef,
         ) -> Result<semver::Version, crate::DepProviderError> {
-            let key = (pkgref.kind, pkgref.name.clone());
+            let group = pkgref.group.clone().unwrap_or_else(org);
+            let key = (group.clone(), pkgref.name.clone());
             let entries = self.entries.borrow();
             let candidates =
                 entries
                     .get(&key)
                     .ok_or_else(|| crate::DepProviderError::UnknownPackage {
-                        kind: pkgref.kind,
+                        group: group.clone(),
                         name: pkgref.name.clone(),
                     })?;
             // Pick highest matching version, prefer stable.
@@ -373,7 +396,7 @@ mod tests {
                 .or_else(|| versions.iter().rev().find(|v| pkgref.version.matches(v)))
                 .copied()
                 .ok_or_else(|| crate::DepProviderError::NoMatchingVersion {
-                    kind: pkgref.kind,
+                    group,
                     name: pkgref.name.clone(),
                     constraint: format!("{}", pkgref.version),
                 })?;
@@ -381,17 +404,17 @@ mod tests {
         }
         fn fetch_manifest(
             &self,
-            kind: PackageKind,
+            group: &Group,
             name: &str,
             version: &semver::Version,
         ) -> Result<Manifest, crate::DepProviderError> {
-            let key = (kind, name.to_string());
+            let key = (group.clone(), name.to_string());
             let entries = self.entries.borrow();
             let candidates =
                 entries
                     .get(&key)
                     .ok_or_else(|| crate::DepProviderError::UnknownPackage {
-                        kind,
+                        group: group.clone(),
                         name: name.to_string(),
                     })?;
             candidates
@@ -400,7 +423,7 @@ mod tests {
                 .map(|(_, m)| m.clone())
                 .ok_or_else(|| {
                     crate::DepProviderError::Other(format!(
-                        "no manifest for {kind}:{name}@{version}"
+                        "no manifest for {group}/{name}@{version}"
                     ))
                 })
         }
@@ -413,10 +436,11 @@ mod tests {
     }
 
     fn manifest_with_requires(kind: &str, name: &str, version: &str, requires: &[&str]) -> String {
-        // `[requires.packages]` is a TOML table — each key a bare
-        // `<kind>:<name>` pkgref, each value the version constraint.
-        // The test helpers pass entries in the `<kind>:<name>@<req>`
-        // shorthand; split on the `@` to render the table form.
+        // `[requires.packages]` is a TOML table — each key a
+        // group-qualified `<group>/<name>` pkgref, each value the version
+        // constraint. The test helpers pass entries in the
+        // `<group>/<name>@<req>` shorthand; split on the `@` to render
+        // the table form.
         let mut s = manifest_minimal(kind, name, version);
         s.push_str("\n[requires.packages]\n");
         for r in requires {
@@ -429,14 +453,10 @@ mod tests {
     #[test]
     fn resolves_single_root_with_no_deps() {
         let p = MapProvider::new();
-        p.seed(
-            PackageKind::Flow,
-            "wal",
-            &manifest_minimal("flow", "wal", "0.1.0"),
-        );
+        p.seed("wal", &manifest_minimal("flow", "wal", "0.1.0"));
         let solver = NaiveDepSolver::new(p);
         let graph = solver
-            .solve(&[PackageRef::parse("flow:wal").unwrap()])
+            .solve(&[PackageRef::parse("org.vibevm/wal").unwrap()])
             .unwrap();
         assert_eq!(graph.packages.len(), 1);
         assert!(graph.packages[0].is_root);
@@ -448,61 +468,36 @@ mod tests {
     fn resolves_chain_of_three() {
         let p = MapProvider::new();
         p.seed(
-            PackageKind::Feat,
             "ui",
-            &manifest_with_requires("feat", "ui", "0.1.0", &["stack:rust@^0.1"]),
+            &manifest_with_requires("feat", "ui", "0.1.0", &["org.vibevm/rust@^0.1"]),
         );
         p.seed(
-            PackageKind::Stack,
             "rust",
-            &manifest_with_requires("stack", "rust", "0.1.0", &["flow:wal@^0.1"]),
+            &manifest_with_requires("stack", "rust", "0.1.0", &["org.vibevm/wal@^0.1"]),
         );
-        p.seed(
-            PackageKind::Flow,
-            "wal",
-            &manifest_minimal("flow", "wal", "0.1.0"),
-        );
+        p.seed("wal", &manifest_minimal("flow", "wal", "0.1.0"));
 
         let solver = NaiveDepSolver::new(p);
         let graph = solver
-            .solve(&[PackageRef::parse("feat:ui").unwrap()])
+            .solve(&[PackageRef::parse("org.vibevm/ui").unwrap()])
             .unwrap();
         assert_eq!(graph.packages.len(), 3);
-        assert!(graph.find(PackageKind::Feat, "ui").unwrap().is_root);
-        assert!(!graph.find(PackageKind::Stack, "rust").unwrap().is_root);
-        assert!(!graph.find(PackageKind::Flow, "wal").unwrap().is_root);
-        assert_eq!(
-            graph
-                .find(PackageKind::Feat, "ui")
-                .unwrap()
-                .dependencies
-                .len(),
-            1
-        );
+        assert!(graph.find(&org(), "ui").unwrap().is_root);
+        assert!(!graph.find(&org(), "rust").unwrap().is_root);
+        assert!(!graph.find(&org(), "wal").unwrap().is_root);
+        assert_eq!(graph.find(&org(), "ui").unwrap().dependencies.len(), 1);
     }
 
     #[test]
     fn picks_highest_matching_for_range() {
         let p = MapProvider::new();
-        p.seed(
-            PackageKind::Flow,
-            "wal",
-            &manifest_minimal("flow", "wal", "0.1.0"),
-        );
-        p.seed(
-            PackageKind::Flow,
-            "wal",
-            &manifest_minimal("flow", "wal", "0.1.5"),
-        );
-        p.seed(
-            PackageKind::Flow,
-            "wal",
-            &manifest_minimal("flow", "wal", "0.2.0"),
-        );
+        p.seed("wal", &manifest_minimal("flow", "wal", "0.1.0"));
+        p.seed("wal", &manifest_minimal("flow", "wal", "0.1.5"));
+        p.seed("wal", &manifest_minimal("flow", "wal", "0.2.0"));
 
         let solver = NaiveDepSolver::new(p);
         let graph = solver
-            .solve(&[PackageRef::parse("flow:wal@^0.1").unwrap()])
+            .solve(&[PackageRef::parse("org.vibevm/wal@^0.1").unwrap()])
             .unwrap();
         assert_eq!(graph.packages[0].version.to_string(), "0.1.5");
     }
@@ -513,27 +508,19 @@ mod tests {
         // the first root's version (0.1.5) and the second's constraint
         // is checked against it — fails because 0.2.0 doesn't match ^0.1.
         let p = MapProvider::new();
-        p.seed(
-            PackageKind::Flow,
-            "wal",
-            &manifest_minimal("flow", "wal", "0.1.5"),
-        );
-        p.seed(
-            PackageKind::Flow,
-            "wal",
-            &manifest_minimal("flow", "wal", "0.2.0"),
-        );
+        p.seed("wal", &manifest_minimal("flow", "wal", "0.1.5"));
+        p.seed("wal", &manifest_minimal("flow", "wal", "0.2.0"));
 
         let solver = NaiveDepSolver::new(p);
         let err = solver
             .solve(&[
-                PackageRef::parse("flow:wal@^0.1").unwrap(),
-                PackageRef::parse("flow:wal@^0.2").unwrap(),
+                PackageRef::parse("org.vibevm/wal@^0.1").unwrap(),
+                PackageRef::parse("org.vibevm/wal@^0.2").unwrap(),
             ])
             .unwrap_err();
         match err {
             SolveError::VersionConflict { package, .. } => {
-                assert_eq!(package, "flow:wal");
+                assert_eq!(package, "org.vibevm/wal");
             }
             other => panic!("expected VersionConflict, got: {other:?}"),
         }
@@ -541,8 +528,8 @@ mod tests {
 
     #[test]
     fn detects_conflicts_declaration() {
-        // feat:ui declares conflicts with flow:legacy-wal; if both are
-        // roots, solver refuses.
+        // org.vibevm/ui declares conflicts with org.vibevm/legacy-wal; if
+        // both are roots, solver refuses.
         let m_ui = r#"
 [package]
 group = "org.vibevm"
@@ -551,12 +538,11 @@ kind = "feat"
 version = "0.1.0"
 
 [conflicts]
-packages = ["flow:legacy-wal"]
+packages = ["org.vibevm/legacy-wal"]
 "#;
         let p = MapProvider::new();
-        p.seed(PackageKind::Feat, "ui", m_ui);
+        p.seed("ui", m_ui);
         p.seed(
-            PackageKind::Flow,
             "legacy-wal",
             &manifest_minimal("flow", "legacy-wal", "0.0.1"),
         );
@@ -564,8 +550,8 @@ packages = ["flow:legacy-wal"]
         let solver = NaiveDepSolver::new(p);
         let err = solver
             .solve(&[
-                PackageRef::parse("flow:legacy-wal").unwrap(),
-                PackageRef::parse("feat:ui").unwrap(),
+                PackageRef::parse("org.vibevm/legacy-wal").unwrap(),
+                PackageRef::parse("org.vibevm/ui").unwrap(),
             ])
             .unwrap_err();
         match err {
@@ -576,9 +562,9 @@ packages = ["flow:legacy-wal"]
 
     #[test]
     fn capability_requires_satisfied_by_already_seen_provider() {
-        // Order matters: stack:rust provides ui:landing-page, then
-        // feat:home requires it. Naive provider-then-consumer ordering
-        // succeeds. Reversed order would fail (limitation).
+        // Order matters: org.vibevm/rust provides ui:landing-page, then
+        // org.vibevm/home requires it. Naive provider-then-consumer
+        // ordering succeeds. Reversed order would fail (limitation).
         let m_stack = r#"
 [package]
 group = "org.vibevm"
@@ -600,14 +586,14 @@ version = "0.1.0"
 capabilities = ["ui:landing-page@^0.3"]
 "#;
         let p = MapProvider::new();
-        p.seed(PackageKind::Stack, "rust", m_stack);
-        p.seed(PackageKind::Feat, "home", m_feat);
+        p.seed("rust", m_stack);
+        p.seed("home", m_feat);
 
         let solver = NaiveDepSolver::new(p);
         let graph = solver
             .solve(&[
-                PackageRef::parse("stack:rust").unwrap(),
-                PackageRef::parse("feat:home").unwrap(),
+                PackageRef::parse("org.vibevm/rust").unwrap(),
+                PackageRef::parse("org.vibevm/home").unwrap(),
             ])
             .unwrap();
         assert_eq!(graph.packages.len(), 2);
@@ -631,10 +617,10 @@ capabilities = ["x:y@0.1.0"]
 capabilities = ["x:y@^0.1"]
 "#;
         let p = MapProvider::new();
-        p.seed(PackageKind::Feat, "magic", m);
+        p.seed("magic", m);
         let solver = NaiveDepSolver::new(p);
         let graph = solver
-            .solve(&[PackageRef::parse("feat:magic").unwrap()])
+            .solve(&[PackageRef::parse("org.vibevm/magic").unwrap()])
             .unwrap();
         assert_eq!(graph.packages.len(), 1);
     }
@@ -652,10 +638,10 @@ version = "0.1.0"
 capabilities = ["ui:landing-page@^0.3"]
 "#;
         let p = MapProvider::new();
-        p.seed(PackageKind::Feat, "home", m);
+        p.seed("home", m);
         let solver = NaiveDepSolver::new(p);
         let err = solver
-            .solve(&[PackageRef::parse("feat:home").unwrap()])
+            .solve(&[PackageRef::parse("org.vibevm/home").unwrap()])
             .unwrap_err();
         match err {
             SolveError::CapabilityUnmet { capability, .. } => {
@@ -670,7 +656,7 @@ capabilities = ["ui:landing-page@^0.3"]
         let p = MapProvider::new();
         let solver = NaiveDepSolver::new(p);
         let err = solver
-            .solve(&[PackageRef::parse("flow:ghost").unwrap()])
+            .solve(&[PackageRef::parse("org.vibevm/ghost").unwrap()])
             .unwrap_err();
         match err {
             SolveError::Provider(crate::DepProviderError::UnknownPackage { .. }) => {}
@@ -680,8 +666,8 @@ capabilities = ["ui:landing-page@^0.3"]
 
     #[test]
     fn obsoletes_drops_obsolete_entry() {
-        // root: feat:welcome-page that obsoletes feat:welcome-page-legacy.
-        // legacy: standalone, also a root.
+        // root: org.vibevm/welcome-page that obsoletes
+        // org.vibevm/welcome-page-legacy. legacy: standalone, also a root.
         // After solve, legacy is removed via obsoletes.
         let m_new = r#"
 [package]
@@ -691,12 +677,11 @@ kind = "feat"
 version = "0.2.0"
 
 [obsoletes]
-packages = ["feat:welcome-page-legacy"]
+packages = ["org.vibevm/welcome-page-legacy"]
 "#;
         let p = MapProvider::new();
-        p.seed(PackageKind::Feat, "welcome-page", m_new);
+        p.seed("welcome-page", m_new);
         p.seed(
-            PackageKind::Feat,
             "welcome-page-legacy",
             &manifest_minimal("feat", "welcome-page-legacy", "0.1.0"),
         );
@@ -704,8 +689,8 @@ packages = ["feat:welcome-page-legacy"]
         let solver = NaiveDepSolver::new(p);
         let graph = solver
             .solve(&[
-                PackageRef::parse("feat:welcome-page-legacy").unwrap(),
-                PackageRef::parse("feat:welcome-page").unwrap(),
+                PackageRef::parse("org.vibevm/welcome-page-legacy").unwrap(),
+                PackageRef::parse("org.vibevm/welcome-page").unwrap(),
             ])
             .unwrap();
         assert_eq!(graph.packages.len(), 1);
@@ -714,7 +699,8 @@ packages = ["feat:welcome-page-legacy"]
 
     #[test]
     fn requires_any_picks_first_alternative() {
-        // feat:x requires_any [stack:a, stack:b]; only stack:a available.
+        // org.vibevm/x requires_any [org.vibevm/a, org.vibevm/b]; only
+        // org.vibevm/a available.
         let m_x = r#"
 [package]
 group = "org.vibevm"
@@ -723,41 +709,35 @@ kind = "feat"
 version = "0.1.0"
 
 [[requires_any]]
-one_of = ["stack:a@^0.1", "stack:b@^0.1"]
+one_of = ["org.vibevm/a@^0.1", "org.vibevm/b@^0.1"]
 "#;
         let p = MapProvider::new();
-        p.seed(PackageKind::Feat, "x", m_x);
-        p.seed(
-            PackageKind::Stack,
-            "a",
-            &manifest_minimal("stack", "a", "0.1.0"),
-        );
+        p.seed("x", m_x);
+        p.seed("a", &manifest_minimal("stack", "a", "0.1.0"));
 
         let solver = NaiveDepSolver::new(p);
         let graph = solver
-            .solve(&[PackageRef::parse("feat:x").unwrap()])
+            .solve(&[PackageRef::parse("org.vibevm/x").unwrap()])
             .unwrap();
         // First alternative gets enqueued; resolution succeeds.
         assert_eq!(graph.packages.len(), 2);
-        assert!(graph.find(PackageKind::Stack, "a").is_some());
+        assert!(graph.find(&org(), "a").is_some());
     }
 
     #[test]
     fn root_dependencies_marked() {
         let p = MapProvider::new();
         p.seed(
-            PackageKind::Flow,
             "wal",
-            &manifest_with_requires("flow", "wal", "0.1.0", &["flow:atomic-commits@^0.1"]),
+            &manifest_with_requires("flow", "wal", "0.1.0", &["org.vibevm/atomic-commits@^0.1"]),
         );
         p.seed(
-            PackageKind::Flow,
             "atomic-commits",
             &manifest_minimal("flow", "atomic-commits", "0.1.0"),
         );
         let solver = NaiveDepSolver::new(p);
         let graph = solver
-            .solve(&[PackageRef::parse("flow:wal").unwrap()])
+            .solve(&[PackageRef::parse("org.vibevm/wal").unwrap()])
             .unwrap();
         let roots: Vec<_> = graph.roots().collect();
         assert_eq!(roots.len(), 1);
@@ -768,33 +748,30 @@ one_of = ["stack:a@^0.1", "stack:b@^0.1"]
     fn dependencies_are_exact_pinned_after_solve() {
         let p = MapProvider::new();
         p.seed(
-            PackageKind::Flow,
             "wal",
-            &manifest_with_requires("flow", "wal", "0.1.0", &["flow:atomic-commits@^0.1"]),
+            &manifest_with_requires("flow", "wal", "0.1.0", &["org.vibevm/atomic-commits@^0.1"]),
         );
         // Two versions of atomic-commits; ^0.1 should resolve to 0.1.5.
         p.seed(
-            PackageKind::Flow,
             "atomic-commits",
             &manifest_minimal("flow", "atomic-commits", "0.1.0"),
         );
         p.seed(
-            PackageKind::Flow,
             "atomic-commits",
             &manifest_minimal("flow", "atomic-commits", "0.1.5"),
         );
 
         let solver = NaiveDepSolver::new(p);
         let graph = solver
-            .solve(&[PackageRef::parse("flow:wal").unwrap()])
+            .solve(&[PackageRef::parse("org.vibevm/wal").unwrap()])
             .unwrap();
-        let wal = graph.find(PackageKind::Flow, "wal").unwrap();
+        let wal = graph.find(&org(), "wal").unwrap();
         assert_eq!(wal.dependencies.len(), 1);
         // Dep must be pinned to the exact version chosen, not the
         // original `^0.1` constraint. A future re-install reads this
         // pin verbatim to reproduce the same graph.
         let dep = &wal.dependencies[0];
-        assert_eq!(dep.qualified_name(), "flow:atomic-commits");
+        assert_eq!(dep.qualified_name(), "org.vibevm/atomic-commits");
         let pinned = semver::Version::parse("0.1.5").unwrap();
         assert!(dep.version.matches(&pinned));
         let other = semver::Version::parse("0.1.0").unwrap();

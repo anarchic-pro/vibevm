@@ -623,7 +623,10 @@ fn dry_run_outcome(config: &PublishConfig, org_url: &str) -> Result<vibe_publish
     let meta = manifest
         .require_package()
         .map_err(|e| anyhow!("staged manifest is not a package: {e}"))?;
-    let repo_name = config.naming.repo_name(meta.kind, &meta.name);
+    let repo_name = config
+        .naming
+        .repo_name(Some(meta.kind), &meta.group, &meta.name)
+        .with_context(|| format!("deriving the repo name for `{}/{}`", meta.group, meta.name))?;
     let tag = format!("{}{}", config.tag_prefix, meta.version);
     let repo_url = format!("{}/{}.git", org_url.trim_end_matches('/'), repo_name);
     Ok(vibe_publish::PublishOutcome {
@@ -793,6 +796,7 @@ mod tests {
                     "stack" => vibe_core::PackageKind::Stack,
                     _ => vibe_core::PackageKind::Tool,
                 },
+                group: vibe_core::Group::parse("org.vibevm").unwrap(),
                 name: name.to_string(),
             },
             source_dir: src_root.join(rel),
@@ -821,10 +825,10 @@ mod tests {
         })
         .expect("publish loop should succeed");
         assert_eq!(published.len(), 2);
-        assert_eq!(published[0].pkgref, "flow:a");
-        assert_eq!(published[1].pkgref, "feat:b");
+        assert_eq!(published[0].pkgref, "org.vibevm/a");
+        assert_eq!(published[1].pkgref, "org.vibevm/b");
         // Progress callback fired once per node, in order.
-        assert_eq!(seen, vec!["flow:a", "feat:b"]);
+        assert_eq!(seen, vec!["org.vibevm/a", "org.vibevm/b"]);
         // Repos created in order: flow-a then feat-b (kind-name naming).
         assert_eq!(*creator.created.borrow(), vec!["flow-a", "feat-b"]);
     }
@@ -853,12 +857,15 @@ mod tests {
             .expect_err("publish loop should fail on the middle node");
         // Only `a` published before the failure.
         assert_eq!(failure.published.len(), 1);
-        assert_eq!(failure.published[0].pkgref, "flow:a");
+        assert_eq!(failure.published[0].pkgref, "org.vibevm/a");
         // The failed node is index 1 (`b`) — `b` and `c` are the
         // `remaining` set when finish_failure slices `ordered[1..]`.
         assert_eq!(failure.failed_idx, 1);
         let msg = format!("{}", failure.error);
-        assert!(msg.contains("feat:b"), "error names the failed node: {msg}");
+        assert!(
+            msg.contains("org.vibevm/b"),
+            "error names the failed node: {msg}"
+        );
         // `c` was never reached — create_repo never called for it.
         assert!(!creator.created.borrow().iter().any(|n| n == "tool-c"));
     }
@@ -879,7 +886,7 @@ mod tests {
         let published = publish_loop(None, &inputs, &plan, &mut |_, _| {})
             .expect("dry-run publish loop should succeed");
         assert_eq!(published.len(), 2);
-        assert_eq!(published[0].pkgref, "flow:a");
+        assert_eq!(published[0].pkgref, "org.vibevm/a");
         assert_eq!(published[0].repo_name, "flow-a");
         assert_eq!(published[0].tag, "v0.1.0");
         assert_eq!(published[1].repo_name, "stack-b");

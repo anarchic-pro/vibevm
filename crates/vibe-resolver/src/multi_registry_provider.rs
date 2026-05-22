@@ -8,7 +8,7 @@
 //! through the same shallow primitive for overrides.
 
 use vibe_core::manifest::Manifest;
-use vibe_core::{PackageKind, PackageRef};
+use vibe_core::{Group, PackageRef};
 use vibe_registry::{MultiRegistryResolver, RegistryError};
 
 use crate::{DepProvider, DepProviderError};
@@ -32,12 +32,12 @@ impl<'a> DepProvider for MultiRegistryProvider<'a> {
         // `resolver.resolve` separately when it needs to fetch.
         match self.resolver.resolve(pkgref) {
             Ok(r) => Ok(r.resolved.version),
-            Err(RegistryError::UnknownPackage { kind, name }) => {
-                Err(DepProviderError::UnknownPackage { kind, name })
+            Err(RegistryError::UnknownPackage { group, name }) => {
+                Err(DepProviderError::UnknownPackage { group, name })
             }
-            Err(RegistryError::NoMatchingVersion { kind, name, req }) => {
+            Err(RegistryError::NoMatchingVersion { group, name, req }) => {
                 Err(DepProviderError::NoMatchingVersion {
-                    kind,
+                    group,
                     name,
                     constraint: req,
                 })
@@ -47,12 +47,12 @@ impl<'a> DepProvider for MultiRegistryProvider<'a> {
             // verbatim. The summary string carries the same data
             // for prose-only consumers (text mode + `Display`).
             Err(RegistryError::PackageNotFoundEverywhere {
-                kind,
+                group,
                 name,
                 summary,
                 attempts,
             }) => Err(DepProviderError::AggregateNotFound {
-                kind,
+                group,
                 name,
                 summary,
                 attempts,
@@ -63,7 +63,7 @@ impl<'a> DepProvider for MultiRegistryProvider<'a> {
 
     fn fetch_manifest(
         &self,
-        kind: PackageKind,
+        group: &Group,
         name: &str,
         version: &semver::Version,
     ) -> Result<Manifest, DepProviderError> {
@@ -73,14 +73,14 @@ impl<'a> DepProvider for MultiRegistryProvider<'a> {
         // returns the target's manifest. Overrides are not read here —
         // they short-circuit at `resolve_version` time and the install
         // pipeline handles their content fetch separately.
-        match self.resolver.fetch_manifest(kind, name, version) {
+        match self.resolver.fetch_manifest(group, name, version) {
             Ok(m) => Ok(m),
-            Err(RegistryError::UnknownPackage { kind, name }) => {
-                Err(DepProviderError::UnknownPackage { kind, name })
+            Err(RegistryError::UnknownPackage { group, name }) => {
+                Err(DepProviderError::UnknownPackage { group, name })
             }
-            Err(RegistryError::NoMatchingVersion { kind, name, req }) => {
+            Err(RegistryError::NoMatchingVersion { group, name, req }) => {
                 Err(DepProviderError::NoMatchingVersion {
-                    kind,
+                    group,
                     name,
                     constraint: req,
                 })

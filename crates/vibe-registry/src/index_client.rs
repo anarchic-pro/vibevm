@@ -14,7 +14,7 @@ use std::time::Duration;
 use semver::Version;
 use serde::Deserialize;
 use thiserror::Error;
-use vibe_core::PackageKind;
+use vibe_core::{Group, PackageKind};
 
 const PROBE_TIMEOUT_SECS: u64 = 5;
 const FETCH_TIMEOUT_SECS: u64 = 10;
@@ -101,17 +101,25 @@ impl IndexClient {
         &self.server_base
     }
 
-    /// Fetch `by-name/<kind>/<name>.json` and return the versions in
+    /// Fetch `by-name/<group>/<name>.json` and return the versions in
     /// ascending semver order. Returns `Ok(None)` for 404 (package
     /// absent in the index — the caller should fall through to
     /// `git ls-remote`); `Ok(Some(versions))` for 200; `Err(...)`
     /// for any other failure.
+    ///
+    /// The index lookup is keyed by `(group, name)` identity — the
+    /// group-native shape after PROP-008.
     pub fn list_versions(
         &self,
-        kind: PackageKind,
+        group: &Group,
         name: &str,
     ) -> Result<Option<Vec<Version>>, IndexError> {
-        let url = format!("{}/by-name/{}/{}.json", self.file_base, kind.as_str(), name);
+        let url = format!(
+            "{}/by-name/{}/{}.json",
+            self.file_base,
+            group.as_str(),
+            name
+        );
         let client = Self::build_client(Duration::from_secs(FETCH_TIMEOUT_SECS)).map_err(|e| {
             IndexError::Http {
                 url: url.clone(),

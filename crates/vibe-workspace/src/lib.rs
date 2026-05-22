@@ -463,7 +463,7 @@ fn finalize_one(
             var: dep.var.clone(),
             constraint: constraint.clone(),
         })?;
-        let pkgref = PackageRef::new(dep.kind, dep.name, spec)
+        let pkgref = PackageRef::new(dep.kind, Some(dep.group), dep.name, spec)
             .expect("var-dep name was validated when the manifest was parsed");
         requires.packages.push(pkgref);
     }
@@ -815,7 +815,7 @@ mod tests {
             tmp.path(),
             "pkg/vibe.toml",
             "[package]\ngroup = \"org.vibevm\"\nname = \"pkg\"\nkind = \"flow\"\nversion = \"0.1.0\"\n\n\
-             [requires.packages]\n\"flow:wal\" = { version.var = \"core\" }\n",
+             [requires.packages]\n\"org.vibevm/wal\" = { version.var = \"core\" }\n",
         );
         let ws = Workspace::load(tmp.path()).unwrap();
         let pkg = ws.member_by_rel_path("pkg").unwrap();
@@ -824,7 +824,7 @@ mod tests {
         assert_eq!(pkg.manifest.requires.packages.len(), 1);
         assert_eq!(
             pkg.manifest.requires.packages[0].to_string(),
-            "flow:wal@^0.2"
+            "org.vibevm/wal@^0.2"
         );
     }
 
@@ -850,14 +850,14 @@ mod tests {
             tmp.path(),
             "sub/leaf/vibe.toml",
             "[package]\ngroup = \"org.vibevm\"\nname = \"leaf\"\nkind = \"flow\"\nversion = \"0.1.0\"\n\n\
-             [requires.packages]\n\"flow:wal\" = { version.var = \"core\" }\n",
+             [requires.packages]\n\"org.vibevm/wal\" = { version.var = \"core\" }\n",
         );
         let ws = Workspace::load(tmp.path()).unwrap();
         let leaf = ws.member_by_rel_path("sub/leaf").unwrap();
         // The nearest enclosing [workspace.versions] — sub's — wins.
         assert_eq!(
             leaf.manifest.requires.packages[0].to_string(),
-            "flow:wal@^0.9"
+            "org.vibevm/wal@^0.9"
         );
     }
 
@@ -874,7 +874,7 @@ mod tests {
             tmp.path(),
             "pkg/vibe.toml",
             "[package]\ngroup = \"org.vibevm\"\nname = \"pkg\"\nkind = \"flow\"\nversion = \"0.1.0\"\n\n\
-             [requires.packages]\n\"flow:wal\" = { version.var = \"ghost\" }\n",
+             [requires.packages]\n\"org.vibevm/wal\" = { version.var = \"ghost\" }\n",
         );
         let err = Workspace::load(tmp.path()).unwrap_err();
         assert!(

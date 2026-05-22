@@ -19,9 +19,9 @@ use std::collections::{HashMap, HashSet, VecDeque};
 use std::fs;
 use std::path::{Path, PathBuf};
 
-use vibe_core::PackageKind;
 use vibe_core::manifest::{BootCategory, Manifest};
 use vibe_core::user_config::SlotIntegrity;
+use vibe_core::{Group, PackageKind};
 
 use crate::boot::{self, AuthoredBoot, DependencyBoot, NodeBootInputs};
 use crate::{Workspace, WorkspaceError, boot_artifacts, vibedeps};
@@ -31,7 +31,11 @@ use crate::{Workspace, WorkspaceError, boot_artifacts, vibedeps};
 /// `CachedPackage`.
 #[derive(Debug, Clone)]
 pub struct ResolvedDep {
+    /// The package's `kind` — metadata; used only for its `vibedeps/` slot
+    /// directory name, never for identity (PROP-008 §2.3).
     pub kind: PackageKind,
+    /// Reverse-FQDN group — with `name`, the `(group, name)` identity.
+    pub group: Group,
     pub name: String,
     pub version: semver::Version,
     /// On-disk directory holding the package's fetched content tree — the
@@ -40,9 +44,9 @@ pub struct ResolvedDep {
     /// The package's parsed manifest (its `vibe.toml`) — read for the
     /// `[boot_snippet]` contribution.
     pub manifest: Manifest,
-    /// `(kind, name)` of every package this one directly requires — the
+    /// `(group, name)` of every package this one directly requires — the
     /// edges of the dependency-boot topological order.
-    pub requires: Vec<(PackageKind, String)>,
+    pub requires: Vec<(Group, String)>,
 }
 
 /// What [`apply_resolution`] did — for the caller to report.
@@ -253,13 +257,18 @@ fn read_materialised(workspace_root: &Path) -> Result<Vec<ResolvedDep>, Workspac
             let Some(pkg) = &manifest.package else {
                 continue;
             };
-            let requires: Vec<(PackageKind, String)> = manifest
+            // A `[requires.packages]` key is group-qualified at parse time
+            // (PROP-008 §2.6), so every `iter_pkgrefs` entry carries a
+            // group; a defensive `filter_map` drops any that somehow does
+            // not rather than panicking.
+            let requires: Vec<(Group, String)> = manifest
                 .requires
                 .iter_pkgrefs()
-                .map(|(k, n)| (k, n.to_string()))
+                .filter_map(|(g, n)| g.map(|g| (g.clone(), n.to_string())))
                 .collect();
             out.push(ResolvedDep {
                 kind: pkg.kind,
+                group: pkg.group.clone(),
                 name: pkg.name.clone(),
                 version: pkg.version.clone(),
                 content_dir: slot.clone(),
@@ -329,27 +338,29 @@ fn node_dependency_boot(
     node_manifest: &Manifest,
     resolution: &[ResolvedDep],
 ) -> Vec<DependencyBoot> {
-    let index: HashMap<(PackageKind, &str), &ResolvedDep> = resolution
+    let index: HashMap<(&Group, &str), &ResolvedDep> = resolution
         .iter()
-        .map(|d| ((d.kind, d.name.as_str()), d))
+        .map(|d| ((&d.group, d.name.as_str()), d))
         .collect();
 
     // Breadth-first transitive closure from the node's direct requires.
-    let mut visited: HashSet<(PackageKind, String)> = HashSet::new();
-    let mut queue: VecDeque<(PackageKind, String)> = node_manifest
+    // A `[requires.packages]` key is group-qualified (PROP-008 §2.6), so
+    // every `iter_pkgrefs` entry carries a group.
+    let mut visited: HashSet<(Group, String)> = HashSet::new();
+    let mut queue: VecDeque<(Group, String)> = node_manifest
         .requires
         .iter_pkgrefs()
-        .map(|(k, n)| (k, n.to_string()))
+        .filter_map(|(g, n)| g.map(|g| (g.clone(), n.to_string())))
         .collect();
     let mut closure: Vec<&ResolvedDep> = Vec::new();
-    while let Some((kind, name)) = queue.pop_front() {
-        if !visited.insert((kind, name.clone())) {
+    while let Some((group, name)) = queue.pop_front() {
+        if !visited.insert((group.clone(), name.clone())) {
             continue;
         }
-        if let Some(dep) = index.get(&(kind, name.as_str())) {
+        if let Some(dep) = index.get(&(&group, name.as_str())) {
             closure.push(dep);
-            for (rk, rn) in &dep.requires {
-                queue.push_back((*rk, rn.clone()));
+            for (rg, rn) in &dep.requires {
+                queue.push_back((rg.clone(), rn.clone()));
             }
         }
     }
@@ -363,12 +374,13 @@ fn node_dependency_boot(
                 .map(|bs| format!("{slot}/{}", bs.source.to_string_lossy().replace('\\', "/")));
             DependencyBoot {
                 kind: dep.kind,
+                group: dep.group.clone(),
                 name: dep.name.clone(),
                 boot_path,
                 category: snippet.and_then(|bs| bs.category),
                 // Only a direct requirement carries a consumer-declared
                 // `link`; a transitive dependency reads back as `None`.
-                declared_link: node_manifest.requires.declared_link(dep.kind, &dep.name),
+                declared_link: node_manifest.requires.declared_link(&dep.group, &dep.name),
                 suggested_link: snippet.and_then(|bs| bs.link),
                 // The package's `[boot_snippet].when` OS gate, if any — it
                 // forces the entry `dynamic` (PROP-009 §2.4).
@@ -448,6 +460,7 @@ mod tests {
         let manifest = Manifest::read(pkg.path().join("vibe.toml")).unwrap();
         let dep = ResolvedDep {
             kind: PackageKind::Flow,
+            group: Group::parse("org.vibevm").unwrap(),
             name: name.to_string(),
             version: ver(version),
             content_dir: pkg.path().to_path_buf(),
@@ -464,7 +477,7 @@ mod tests {
             ws_dir.path(),
             "vibe.toml",
             "[project]\nname = \"demo\"\nversion = \"0.1.0\"\n\n\
-             [requires.packages]\n\"flow:wal\" = \"^0.3\"\n",
+             [requires.packages]\n\"org.vibevm/wal\" = \"^0.3\"\n",
         );
         write(ws_dir.path(), "spec/boot/00-core.md", "# core");
 
@@ -533,7 +546,7 @@ mod tests {
             ws_dir.path(),
             "vibe.toml",
             "[project]\nname = \"demo\"\nversion = \"0.1.0\"\n\n\
-             [requires.packages]\n\"flow:crit\" = { version = \"^1.0\", link = \"inline\" }\n",
+             [requires.packages]\n\"org.vibevm/crit\" = { version = \"^1.0\", link = \"inline\" }\n",
         );
         write(ws_dir.path(), "spec/boot/00-core.md", "# core");
 
@@ -566,7 +579,7 @@ mod tests {
             ws_dir.path(),
             "vibe.toml",
             "[project]\nname = \"demo\"\nversion = \"0.1.0\"\n\n\
-             [requires.packages]\n\"flow:win\" = \"^1.0\"\n",
+             [requires.packages]\n\"org.vibevm/win\" = \"^1.0\"\n",
         );
         write(ws_dir.path(), "spec/boot/00-core.md", "# core");
 
@@ -607,7 +620,7 @@ mod tests {
             ws_dir.path(),
             "vibe.toml",
             "[project]\nname = \"demo\"\nversion = \"0.1.0\"\n\n\
-             [requires.packages]\n\"flow:wal\" = \"^0.3\"\n",
+             [requires.packages]\n\"org.vibevm/wal\" = \"^0.3\"\n",
         );
         write(ws_dir.path(), "spec/boot/00-core.md", "# core");
 
@@ -651,7 +664,7 @@ mod tests {
             ws_dir.path(),
             "vibe.toml",
             "[project]\nname = \"demo\"\nversion = \"0.1.0\"\n\n\
-             [requires.packages]\n\"flow:wal\" = \"^0\"\n",
+             [requires.packages]\n\"org.vibevm/wal\" = \"^0\"\n",
         );
         write(ws_dir.path(), "spec/boot/00-core.md", "# core");
         let ws = Workspace::load(ws_dir.path()).unwrap();
@@ -702,7 +715,7 @@ mod tests {
             ws_dir.path(),
             "vibe.toml",
             "[project]\nname = \"demo\"\nversion = \"0.1.0\"\n\n\
-             [requires.packages]\n\"flow:wal\" = \"^0.3\"\n",
+             [requires.packages]\n\"org.vibevm/wal\" = \"^0.3\"\n",
         );
         write(ws_dir.path(), "spec/boot/00-core.md", "# core");
         let (dep, _pkg) = dep_with_boot(
@@ -755,7 +768,7 @@ mod tests {
             ws_dir.path(),
             "vibe.toml",
             "[project]\nname = \"demo\"\nversion = \"0.1.0\"\n\n\
-             [requires.packages]\n\"flow:wal\" = \"^0.3\"\n",
+             [requires.packages]\n\"org.vibevm/wal\" = \"^0.3\"\n",
         );
         write(ws_dir.path(), "spec/boot/00-core.md", "# core");
         let (dep, _pkg) = dep_with_boot(

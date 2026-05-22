@@ -18,15 +18,17 @@ use axum::routing::get;
 use tempfile::tempdir;
 use tokio::net::TcpListener;
 
-use vibe_core::PackageKind;
 use vibe_core::manifest::NamingConvention;
+use vibe_core::{Group, PackageKind};
 use vibe_registry::git_backend::GitBackend;
 use vibe_registry::{GitError, GitPackageRegistry, IndexClient};
 
 #[derive(Default)]
 struct CannedFiles {
     repomd_status: u16,
-    by_name: HashMap<(PackageKind, String), Option<serde_json::Value>>,
+    /// Keyed by `(group, name)` — the index lookup path is
+    /// `by-name/<group>/<name>.json` after PROP-008.
+    by_name: HashMap<(String, String), Option<serde_json::Value>>,
 }
 
 #[derive(Clone)]
@@ -59,17 +61,13 @@ async fn repomd_handler(State(state): State<MockState>) -> impl IntoResponse {
 
 async fn by_name_handler(
     State(state): State<MockState>,
-    AxumPath((kind_str, name_with_ext)): AxumPath<(String, String)>,
+    AxumPath((group_str, name_with_ext)): AxumPath<(String, String)>,
 ) -> axum::response::Response {
-    let kind: PackageKind = match kind_str.parse() {
-        Ok(k) => k,
-        Err(_) => return (StatusCode::NOT_FOUND, "unknown kind").into_response(),
-    };
     let name = match name_with_ext.strip_suffix(".json") {
         Some(n) => n,
         None => return (StatusCode::NOT_FOUND, "expected .json").into_response(),
     };
-    let key = (kind, name.to_string());
+    let key = (group_str, name.to_string());
     let payload = state.files.lock().unwrap().by_name.get(&key).cloned();
     match payload {
         Some(Some(v)) => (StatusCode::OK, axum::Json(v)).into_response(),
@@ -176,12 +174,13 @@ impl GitBackend for AlwaysMissing {
 
 #[test]
 fn index_fast_path_serves_versions() {
+    let org = Group::parse("org.vibevm").unwrap();
     let mut canned = CannedFiles {
         repomd_status: 200,
         by_name: HashMap::new(),
     };
     canned.by_name.insert(
-        (PackageKind::Flow, "wal".into()),
+        ("org.vibevm".into(), "wal".into()),
         Some(package_entry_json(
             PackageKind::Flow,
             "wal",
@@ -195,7 +194,7 @@ fn index_fast_path_serves_versions() {
         "vibespecs",
         "https://example.invalid/vibespecs",
         "main",
-        NamingConvention::KindName,
+        NamingConvention::Fqdn,
         Vec::new(),
         cache.path(),
         backend,
@@ -204,7 +203,7 @@ fn index_fast_path_serves_versions() {
     .unwrap()
     .with_index_client(IndexClient::at(&mock.base_url));
 
-    let versions = registry.list_versions(PackageKind::Flow, "wal").unwrap();
+    let versions = registry.list_versions(&org, "wal").unwrap();
     assert_eq!(
         versions.iter().map(|v| v.to_string()).collect::<Vec<_>>(),
         vec!["0.1.0".to_string(), "0.2.0".to_string()]
@@ -216,6 +215,7 @@ fn index_404_falls_through_to_git_backend() {
     // Index responds 404 for the named package; git backend says
     // RepoNotFound. The result must be the canonical UnknownPackage
     // error from the git path — the index 404 alone does not abort.
+    let org = Group::parse("org.vibevm").unwrap();
     let canned = CannedFiles {
         repomd_status: 200,
         by_name: HashMap::new(),
@@ -227,7 +227,7 @@ fn index_404_falls_through_to_git_backend() {
         "vibespecs",
         "https://example.invalid/vibespecs",
         "main",
-        NamingConvention::KindName,
+        NamingConvention::Fqdn,
         Vec::new(),
         cache.path(),
         backend,
@@ -237,11 +237,11 @@ fn index_404_falls_through_to_git_backend() {
     .with_index_client(IndexClient::at(&mock.base_url));
 
     let err = registry
-        .list_versions(PackageKind::Flow, "ghost")
+        .list_versions(&org, "ghost")
         .expect_err("expected UnknownPackage from git fall-through");
     match err {
-        vibe_registry::RegistryError::UnknownPackage { kind, name } => {
-            assert_eq!(kind, PackageKind::Flow);
+        vibe_registry::RegistryError::UnknownPackage { group, name } => {
+            assert_eq!(group, org);
             assert_eq!(name, "ghost");
         }
         other => panic!("unexpected error variant: {other:?}"),
@@ -287,17 +287,18 @@ fn index_5xx_falls_through_to_git_backend() {
     // mentions 5xx; let's adapt to "non-200 for by-name returns
     // gracefully" by toggling status.
     canned.by_name.insert(
-        (PackageKind::Flow, "wal".into()),
+        ("org.vibevm".into(), "wal".into()),
         None, // explicit "404 expected" marker
     );
     let mock = spawn_mock(canned);
     let cache = tempdir().unwrap();
     let backend = Arc::new(AlwaysMissing);
+    let org = Group::parse("org.vibevm").unwrap();
     let registry = GitPackageRegistry::open_with_mirrors(
         "vibespecs",
         "https://example.invalid/vibespecs",
         "main",
-        NamingConvention::KindName,
+        NamingConvention::Fqdn,
         Vec::new(),
         cache.path(),
         backend,
@@ -306,9 +307,7 @@ fn index_5xx_falls_through_to_git_backend() {
     .unwrap()
     .with_index_client(IndexClient::at(&mock.base_url));
 
-    let err = registry
-        .list_versions(PackageKind::Flow, "wal")
-        .unwrap_err();
+    let err = registry.list_versions(&org, "wal").unwrap_err();
     match err {
         vibe_registry::RegistryError::UnknownPackage { name, .. } => {
             assert_eq!(name, "wal");
@@ -324,9 +323,7 @@ fn index_5xx_falls_through_to_git_backend() {
         let mut f = mock.files.lock().unwrap();
         f.repomd_status = 500;
     }
-    let err = registry
-        .list_versions(PackageKind::Flow, "wal")
-        .unwrap_err();
+    let err = registry.list_versions(&org, "wal").unwrap_err();
     assert!(matches!(
         err,
         vibe_registry::RegistryError::UnknownPackage { .. }

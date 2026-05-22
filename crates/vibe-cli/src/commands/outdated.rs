@@ -20,7 +20,7 @@ use std::path::Path;
 use anyhow::{Context, Result, bail};
 use serde::Serialize;
 use vibe_core::manifest::{Lockfile, Manifest};
-use vibe_core::{PackageKind, PackageRef, VersionSpec};
+use vibe_core::{Group, PackageRef, VersionSpec};
 use vibe_registry::MultiRegistryResolver;
 
 use crate::cli::OutdatedArgs;
@@ -28,7 +28,7 @@ use crate::output;
 
 #[derive(Debug, Serialize)]
 struct OutdatedEntry {
-    kind: String,
+    group: String,
     name: String,
     installed: String,
     latest: Option<String>,
@@ -81,12 +81,12 @@ pub fn run(ctx: &output::Context, args: OutdatedArgs) -> Result<()> {
     let mut update_available = 0usize;
     for p in &lockfile.packages {
         let installed = p.version.clone();
-        let latest = match probe_latest(&mrr, p.kind, &p.name) {
+        let latest = match probe_latest(&mrr, &p.group, &p.name) {
             Ok(v) => v,
             Err(e) => {
                 tracing::debug!(
                     target: "vibe_outdated",
-                    package = %format!("{}:{}", p.kind, p.name),
+                    package = %format!("{}/{}", p.group, p.name),
                     error = %e,
                     "could not probe latest version"
                 );
@@ -102,7 +102,7 @@ pub fn run(ctx: &output::Context, args: OutdatedArgs) -> Result<()> {
             None => "unknown",
         };
         entries.push(OutdatedEntry {
-            kind: p.kind.to_string(),
+            group: p.group.to_string(),
             name: p.name.clone(),
             installed: installed.to_string(),
             latest: latest.map(|v| v.to_string()),
@@ -110,7 +110,7 @@ pub fn run(ctx: &output::Context, args: OutdatedArgs) -> Result<()> {
         });
     }
     entries.sort_by(|a, b| {
-        (a.kind.as_str(), a.name.as_str()).cmp(&(b.kind.as_str(), b.name.as_str()))
+        (a.group.as_str(), a.name.as_str()).cmp(&(b.group.as_str(), b.name.as_str()))
     });
 
     if ctx.is_json() {
@@ -138,11 +138,13 @@ pub fn run(ctx: &output::Context, args: OutdatedArgs) -> Result<()> {
         return Ok(());
     }
 
-    println!("KIND    NAME                          INSTALLED      LATEST         STATUS");
+    println!(
+        "GROUP                 NAME                          INSTALLED      LATEST         STATUS"
+    );
     for e in &entries {
         println!(
-            "{:<6}  {:<28}  {:<14}  {:<14}  {}",
-            e.kind,
+            "{:<20}  {:<28}  {:<14}  {:<14}  {}",
+            e.group,
             e.name,
             e.installed,
             e.latest.as_deref().unwrap_or("-"),
@@ -160,11 +162,16 @@ pub fn run(ctx: &output::Context, args: OutdatedArgs) -> Result<()> {
 
 fn probe_latest(
     mrr: &MultiRegistryResolver,
-    kind: PackageKind,
+    group: &Group,
     name: &str,
 ) -> Result<Option<semver::Version>> {
-    let pkgref = PackageRef::new(kind, name.to_string(), VersionSpec::Latest)
-        .with_context(|| format!("constructing pkgref for {kind}:{name}"))?;
+    let pkgref = PackageRef::new(
+        None,
+        Some(group.clone()),
+        name.to_string(),
+        VersionSpec::Latest,
+    )
+    .with_context(|| format!("constructing pkgref for {group}/{name}"))?;
     match mrr.resolve(&pkgref) {
         Ok(res) => Ok(Some(res.resolved.version)),
         Err(_) => Ok(None),

@@ -1,6 +1,7 @@
-//! Package identity: `<kind>:<name>[@<version>]`.
+//! Package identity — the pkgref grammar `[<kind>:][<group>/]<name>[@<version>]`
+//! (PROP-008 §2.4) and its components: [`PackageKind`], [`Group`], [`PackageRef`].
 //!
-//! Spec: `VIBEVM-SPEC.md` §4.1, §7.1.
+//! Spec: `VIBEVM-SPEC.md` §4.1, §7.1; PROP-008.
 
 use std::fmt;
 use std::str::FromStr;
@@ -202,26 +203,56 @@ impl fmt::Display for VersionSpec {
 
 /// A reference to an installable package.
 ///
-/// Parsed from strings like `flow:wal`, `flow:wal@0.3.0`, or `flow:wal@^0.3`.
+/// The pkgref grammar (PROP-008 §2.4):
 ///
-/// Serde support goes via the string wire form: on the wire a `PackageRef`
-/// is always a single string, parsed through [`PackageRef::parse`]. This
-/// lets it appear inline in TOML arrays (e.g. `requires.packages =
-/// ["flow:wal@^0.1"]`) and makes the schema self-documenting.
+/// ```text
+/// pkgref := [ <kind> ":" ] [ <group> "/" ] <name> [ "@" <version> ]
+/// ```
+///
+/// - `org.vibevm/wal` — qualified; the form written into manifests.
+/// - `flow:org.vibevm/wal` — qualified, with a `kind` prefix (validated
+///   against the resolved manifest, never used to disambiguate — `(group,
+///   name)` is already unique).
+/// - `wal` — short; CLI-only sugar, resolved to the qualified form at the
+///   input boundary via the index (PROP-008 §2.6).
+/// - `flow:wal` — short, with a `kind` prefix.
+///
+/// `group` is `None` only for a short ref still awaiting resolution; once
+/// resolved — and always inside a manifest — it is `Some`. `kind` is `None`
+/// whenever the optional prefix was omitted.
+///
+/// Serde goes via the string wire form, so a `PackageRef` appears inline in
+/// TOML (e.g. as a `[requires.packages]` key) and the schema is
+/// self-documenting.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(try_from = "String", into = "String")]
 pub struct PackageRef {
-    pub kind: PackageKind,
+    /// Optional `kind` prefix. Present only when the pkgref was written with
+    /// one; it is validated against the resolved manifest (a `KindMismatch`)
+    /// but never disambiguates — `(group, name)` is already unique
+    /// (PROP-008 §2.3 / §2.4).
+    pub kind: Option<PackageKind>,
+    /// Reverse-FQDN group. `None` only for an unresolved short CLI ref; a
+    /// manifest pkgref is always qualified (PROP-008 §2.6).
+    pub group: Option<Group>,
     pub name: String,
     pub version: VersionSpec,
 }
 
 impl PackageRef {
-    pub fn new(kind: PackageKind, name: impl Into<String>, version: VersionSpec) -> Result<Self> {
+    /// Construct a `PackageRef` from already-typed parts. `name` is
+    /// re-validated as kebab-case.
+    pub fn new(
+        kind: Option<PackageKind>,
+        group: Option<Group>,
+        name: impl Into<String>,
+        version: VersionSpec,
+    ) -> Result<Self> {
         let name = name.into();
         validate_package_name(&name)?;
         Ok(PackageRef {
             kind,
+            group,
             name,
             version,
         })
@@ -241,12 +272,16 @@ impl PackageRef {
             None => (trimmed, None),
         };
 
-        let (kind_str, name_str) = prefix.split_once(':').ok_or_else(|| Error::BadPackageRef {
-            input: input.to_owned(),
-            reason: "expected `<kind>:<name>[@<version>]` — missing `:`".into(),
-        })?;
-
-        let kind = PackageKind::from_str(kind_str)?;
+        // `[ <kind> ":" ] [ <group> "/" ] <name>` — the `kind` prefix is
+        // delimited by `:`, the `group` by `/`. Both are optional.
+        let (kind, after_kind) = match prefix.split_once(':') {
+            Some((k, rest)) => (Some(PackageKind::from_str(k)?), rest),
+            None => (None, prefix),
+        };
+        let (group, name_str) = match after_kind.split_once('/') {
+            Some((g, n)) => (Some(Group::parse(g)?), n),
+            None => (None, after_kind),
+        };
         validate_package_name(name_str)?;
 
         let version = match version_part {
@@ -256,20 +291,40 @@ impl PackageRef {
 
         Ok(PackageRef {
             kind,
+            group,
             name: name_str.to_owned(),
             version,
         })
     }
 
-    /// Just the `<kind>:<name>` portion, no version. Useful as a key.
+    /// The version-stripped identity string. For a qualified ref this is
+    /// `<group>/<name>` — the `(group, name)` identity (PROP-008 §2.2); for
+    /// an unresolved short ref (no group) it is the bare `<name>`. The
+    /// `kind` prefix is never part of it — `kind` is metadata, not identity.
+    /// Useful as a map key once refs are qualified.
     pub fn qualified_name(&self) -> String {
-        format!("{}:{}", self.kind, self.name)
+        match &self.group {
+            Some(group) => format!("{group}/{}", self.name),
+            None => self.name.clone(),
+        }
+    }
+
+    /// `true` when this ref carries a `group` — fully qualified, no index
+    /// resolution needed.
+    pub fn is_qualified(&self) -> bool {
+        self.group.is_some()
     }
 }
 
 impl fmt::Display for PackageRef {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        write!(f, "{}:{}", self.kind, self.name)?;
+        if let Some(kind) = self.kind {
+            write!(f, "{kind}:")?;
+        }
+        if let Some(group) = &self.group {
+            write!(f, "{group}/")?;
+        }
+        f.write_str(&self.name)?;
         match &self.version {
             VersionSpec::Latest => Ok(()),
             VersionSpec::Req(req) => write!(f, "@{req}"),
@@ -425,41 +480,72 @@ mod tests {
     }
 
     #[test]
-    fn parse_bare() {
-        let r = PackageRef::parse("flow:wal").unwrap();
-        assert_eq!(r.kind, PackageKind::Flow);
+    fn parse_short_bare() {
+        let r = PackageRef::parse("wal").unwrap();
+        assert_eq!(r.kind, None);
+        assert_eq!(r.group, None);
         assert_eq!(r.name, "wal");
         assert_eq!(r.version, VersionSpec::Latest);
+        assert_eq!(r.to_string(), "wal");
+        assert!(!r.is_qualified());
+    }
+
+    #[test]
+    fn parse_short_with_kind() {
+        let r = PackageRef::parse("flow:wal").unwrap();
+        assert_eq!(r.kind, Some(PackageKind::Flow));
+        assert_eq!(r.group, None);
+        assert_eq!(r.name, "wal");
         assert_eq!(r.to_string(), "flow:wal");
     }
 
     #[test]
-    fn parse_bare_semver_is_caret_per_cargo() {
-        // Cargo / npm / Poetry semantics: a bare semver like `0.3.0`
-        // is shorthand for `^0.3.0` (caret — compatible release).
-        // To pin strictly equal, write `=0.3.0`. This matches what
-        // every mainstream package manager does and avoids the
-        // surprising "I wrote 0.3.0, why won't 0.3.1 install?" footgun.
-        let r = PackageRef::parse("flow:wal@0.3.0").unwrap();
-        assert_eq!(r.kind, PackageKind::Flow);
+    fn parse_qualified() {
+        let r = PackageRef::parse("org.vibevm/wal").unwrap();
+        assert_eq!(r.kind, None);
+        assert_eq!(r.group.as_ref().unwrap().as_str(), "org.vibevm");
         assert_eq!(r.name, "wal");
-        // `0.3.0` matches itself.
-        assert!(r.version.matches(&semver::Version::parse("0.3.0").unwrap()));
-        // Caret behaviour for pre-1.0: matches the same minor, no farther.
-        assert!(
-            r.version.matches(&semver::Version::parse("0.3.5").unwrap()),
-            "0.3.0 caret must accept 0.3.5"
-        );
-        assert!(
-            !r.version.matches(&semver::Version::parse("0.4.0").unwrap()),
-            "0.3.0 caret must reject 0.4.0 (different pre-1.0 minor)"
-        );
+        assert!(r.is_qualified());
+        assert_eq!(r.to_string(), "org.vibevm/wal");
+    }
+
+    #[test]
+    fn parse_qualified_with_kind() {
+        let r = PackageRef::parse("flow:org.vibevm/wal").unwrap();
+        assert_eq!(r.kind, Some(PackageKind::Flow));
+        assert_eq!(r.group.as_ref().unwrap().as_str(), "org.vibevm");
+        assert_eq!(r.name, "wal");
+        assert_eq!(r.to_string(), "flow:org.vibevm/wal");
+    }
+
+    #[test]
+    fn parse_bare_semver_is_caret_per_cargo() {
+        // Cargo / npm / Poetry semantics: a bare semver like `0.3.0` is
+        // shorthand for `^0.3.0` (caret — compatible release). To pin
+        // strictly equal, write `=0.3.0`. Holds across every pkgref form.
+        for s in [
+            "wal@0.3.0",
+            "flow:wal@0.3.0",
+            "org.vibevm/wal@0.3.0",
+            "flow:org.vibevm/wal@0.3.0",
+        ] {
+            let r = PackageRef::parse(s).unwrap();
+            assert_eq!(r.name, "wal");
+            assert!(r.version.matches(&semver::Version::parse("0.3.0").unwrap()));
+            assert!(
+                r.version.matches(&semver::Version::parse("0.3.5").unwrap()),
+                "{s}: 0.3.0 caret must accept 0.3.5"
+            );
+            assert!(
+                !r.version.matches(&semver::Version::parse("0.4.0").unwrap()),
+                "{s}: 0.3.0 caret must reject 0.4.0"
+            );
+        }
     }
 
     #[test]
     fn parse_eq_version_is_exact() {
-        // `=0.3.0` is the explicit exact form. Same Cargo notation.
-        let r = PackageRef::parse("flow:wal@=0.3.0").unwrap();
+        let r = PackageRef::parse("org.vibevm/wal@=0.3.0").unwrap();
         assert!(r.version.matches(&semver::Version::parse("0.3.0").unwrap()));
         assert!(
             !r.version.matches(&semver::Version::parse("0.3.1").unwrap()),
@@ -468,73 +554,115 @@ mod tests {
     }
 
     #[test]
-    fn parse_range_version() {
-        let r = PackageRef::parse("flow:wal@^0.3").unwrap();
-        let v = semver::Version::parse("0.3.5").unwrap();
-        assert!(r.version.matches(&v));
-        let v2 = semver::Version::parse("0.4.0").unwrap();
-        assert!(!r.version.matches(&v2));
+    fn parse_range_and_tilde_versions() {
+        let caret = PackageRef::parse("org.vibevm/wal@^0.3").unwrap();
+        assert!(
+            caret
+                .version
+                .matches(&semver::Version::parse("0.3.5").unwrap())
+        );
+        assert!(
+            !caret
+                .version
+                .matches(&semver::Version::parse("0.4.0").unwrap())
+        );
+        let tilde = PackageRef::parse("org.vibevm/wal@~0.3.1").unwrap();
+        assert!(
+            tilde
+                .version
+                .matches(&semver::Version::parse("0.3.5").unwrap())
+        );
+        assert!(
+            !tilde
+                .version
+                .matches(&semver::Version::parse("0.4.0").unwrap())
+        );
     }
 
     #[test]
-    fn parse_tilde_version() {
-        // Tilde: `~0.3.1` → `>=0.3.1, <0.4.0`. Same Cargo / npm.
-        let r = PackageRef::parse("flow:wal@~0.3.1").unwrap();
-        assert!(r.version.matches(&semver::Version::parse("0.3.1").unwrap()));
-        assert!(r.version.matches(&semver::Version::parse("0.3.5").unwrap()));
-        assert!(!r.version.matches(&semver::Version::parse("0.4.0").unwrap()));
-    }
-
-    #[test]
-    fn parse_all_kinds() {
+    fn parse_all_kinds_in_prefix() {
         for kind in PackageKind::ALL {
-            let s = format!("{kind}:thing");
-            let r = PackageRef::parse(&s).unwrap();
-            assert_eq!(r.kind, kind);
+            let r = PackageRef::parse(&format!("{kind}:org.vibevm/thing")).unwrap();
+            assert_eq!(r.kind, Some(kind));
         }
     }
 
     #[test]
-    fn parse_rejects_missing_colon() {
-        let err = PackageRef::parse("flow.wal").unwrap_err();
-        assert!(matches!(err, Error::BadPackageRef { .. }));
-    }
-
-    #[test]
     fn parse_rejects_bad_kind() {
-        let err = PackageRef::parse("widget:thing").unwrap_err();
-        assert!(matches!(err, Error::BadPackageKind(_)));
+        assert!(matches!(
+            PackageRef::parse("widget:wal").unwrap_err(),
+            Error::BadPackageKind(_)
+        ));
+        assert!(matches!(
+            PackageRef::parse("widget:org.vibevm/wal").unwrap_err(),
+            Error::BadPackageKind(_)
+        ));
     }
 
     #[test]
-    fn parse_rejects_empty_name() {
-        let err = PackageRef::parse("flow:").unwrap_err();
-        assert!(matches!(err, Error::BadPackageName(_)));
+    fn parse_rejects_bad_group() {
+        // Uppercase in the group segment — `Group::parse` rejects it.
+        assert!(matches!(
+            PackageRef::parse("Org.Vibevm/wal").unwrap_err(),
+            Error::BadGroup { .. }
+        ));
     }
 
     #[test]
-    fn display_roundtrips_latest() {
-        let r = PackageRef::parse("flow:wal").unwrap();
-        assert_eq!(r.to_string(), "flow:wal");
+    fn parse_rejects_bad_name() {
+        // Empty name after the group separator.
+        assert!(PackageRef::parse("org.vibevm/").is_err());
+        // Empty name after the kind prefix.
+        assert!(matches!(
+            PackageRef::parse("flow:").unwrap_err(),
+            Error::BadPackageName(_)
+        ));
+        // A dot in the name — no `:`/`/`, so the whole token is the name,
+        // and kebab-case forbids the dot.
+        assert!(matches!(
+            PackageRef::parse("flow.wal").unwrap_err(),
+            Error::BadPackageName(_)
+        ));
     }
 
     #[test]
-    fn display_roundtrips_exact() {
-        let r = PackageRef::parse("flow:wal@0.3.0").unwrap();
-        let back = r.to_string();
-        let r2 = PackageRef::parse(&back).unwrap();
-        assert_eq!(r, r2);
+    fn display_round_trips_every_form() {
+        for s in [
+            "wal",
+            "flow:wal",
+            "org.vibevm/wal",
+            "flow:org.vibevm/wal",
+            "org.vibevm/wal@^0.3",
+            "flow:org.vibevm/wal@=0.3.0",
+        ] {
+            let r = PackageRef::parse(s).unwrap();
+            let r2 = PackageRef::parse(&r.to_string()).unwrap();
+            assert_eq!(r, r2, "round-trip failed for `{s}`");
+        }
     }
 
     #[test]
-    fn qualified_name_strips_version() {
-        let r = PackageRef::parse("stack:rust-cli@0.1.0").unwrap();
-        assert_eq!(r.qualified_name(), "stack:rust-cli");
+    fn qualified_name_is_the_identity_string() {
+        // kind and version drop; `<group>/<name>` is the identity.
+        let q = PackageRef::parse("flow:org.vibevm/wal@0.1.0").unwrap();
+        assert_eq!(q.qualified_name(), "org.vibevm/wal");
+        // No group yet — the bare name is the best identity available.
+        let short = PackageRef::parse("wal@0.1.0").unwrap();
+        assert_eq!(short.qualified_name(), "wal");
     }
 
     #[test]
     fn empty_input_rejected() {
         assert!(PackageRef::parse("").is_err());
         assert!(PackageRef::parse("   ").is_err());
+    }
+
+    #[test]
+    fn serde_round_trips_via_string() {
+        let r = PackageRef::parse("flow:org.vibevm/wal@^0.3").unwrap();
+        let json = serde_json::to_string(&r).unwrap();
+        assert_eq!(json, r#""flow:org.vibevm/wal@^0.3""#);
+        let back: PackageRef = serde_json::from_str(&json).unwrap();
+        assert_eq!(r, back);
     }
 }

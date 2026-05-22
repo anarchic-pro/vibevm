@@ -31,7 +31,7 @@ prefer-loose = []
 strictness = ["prefer-strict", "prefer-loose"]
 
 # Conditional dep: when the project graph contains stack:integration-rust,
-# pull in flow:integration-beta. Tests the conditional-dep fixed-point
+# pull in org.vibevm/integration-beta. Tests the conditional-dep fixed-point
 # loop end-to-end.
 [target."context(stack:integration-rust)".dependencies]
-packages = { "flow:integration-beta" = "^0.1" }
+packages = { "org.vibevm/integration-beta" = "^0.1" }

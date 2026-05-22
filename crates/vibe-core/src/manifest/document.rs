@@ -396,8 +396,8 @@ version = "0.0.1"
 authors = ["Oleg <oleg@example.com>"]
 
 [requires.packages]
-"flow:wal" = "^0.3"
-"stack:rust-cli" = "^0.1.0"
+"org.vibevm/wal" = "^0.3"
+"org.vibevm/rust-cli" = "^0.1.0"
 
 [active]
 stack = "rust-cli"
@@ -421,7 +421,7 @@ url = "https://mirror.internal/vibespecs"
 priority = 1
 
 [[override]]
-pkgref = "flow:wal"
+pkgref = "org.vibevm/wal"
 source_url = "git@mycompany:forks/wal"
 ref = "my-fix"
 reason = "pending upstream PR"
@@ -462,7 +462,7 @@ category = "flow"
 capabilities = ["discipline:wal@0.3.0"]
 
 [requires.packages]
-"flow:atomic-commits" = "^0.1"
+"org.vibevm/atomic-commits" = "^0.1"
 "#;
         let m = Manifest::parse_str(raw).unwrap();
         let pkg = m.require_package().unwrap();
@@ -623,7 +623,7 @@ kind = "flow"
 version = "0.1.0"
 
 [target."context(stack:rust)".dependencies]
-packages = { "flow:rust-best-practices" = "^0.1" }
+packages = { "org.vibevm/rust-best-practices" = "^0.1" }
 "#;
         let m = Manifest::parse_str(raw).unwrap();
         assert_eq!(m.conditional_deps.len(), 1);

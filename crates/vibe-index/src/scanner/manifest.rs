@@ -78,20 +78,20 @@ pub fn provides_from(p: &Provides) -> ProvidesEntry {
 }
 
 /// Flatten `[requires]` into the index entry's string lists. Registry
-/// dependencies keep their `<kind>:<name>@<constraint>` form; git / path
+/// dependencies keep their `<group>/<name>@<constraint>` form; git / path
 /// / `version.var` sources — which have no single constraint string —
-/// degrade to the bare `<kind>:<name>`. Both lists are sorted, so the
+/// degrade to the bare `<group>/<name>`. Both lists are sorted, so the
 /// index is byte-deterministic.
 pub fn requires_from(r: &Requires) -> RequiresEntry {
     let mut packages: Vec<String> = r.packages.iter().map(|p| p.to_string()).collect();
-    for (kind, name) in r
+    for (group, name) in r
         .git_packages
         .iter()
-        .map(|g| (g.kind, g.name.as_str()))
-        .chain(r.path_packages.iter().map(|p| (p.kind, p.name.as_str())))
-        .chain(r.var_packages.iter().map(|v| (v.kind, v.name.as_str())))
+        .map(|g| (&g.group, g.name.as_str()))
+        .chain(r.path_packages.iter().map(|p| (&p.group, p.name.as_str())))
+        .chain(r.var_packages.iter().map(|v| (&v.group, v.name.as_str())))
     {
-        packages.push(format!("{kind}:{name}"));
+        packages.push(format!("{group}/{name}"));
     }
     packages.sort();
     let mut capabilities: Vec<String> = r.capabilities.iter().map(|c| c.to_string()).collect();
@@ -268,17 +268,17 @@ capabilities = ["ui:landing-page@0.3.0"]
 capabilities = ["db:any@>=1.0"]
 
 [requires.packages]
-"flow:wal" = "^0.1"
+"org.vibevm/wal" = "^0.1"
 
 [[requires_any]]
-one_of = ["stack:rust-cli@^0.1", "stack:rust-axum@^0.2"]
+one_of = ["org.vibevm/rust-cli@^0.1", "org.vibevm/rust-axum@^0.2"]
 "#;
         let m = parse_manifest(body).unwrap();
         assert_eq!(provides_from(&m.provides).capabilities.len(), 1);
         let req = requires_from(&m.requires);
         // The modern `[requires.packages]` table flattens to a
-        // `<kind>:<name>@<constraint>` pkgref string.
-        assert_eq!(req.packages, vec!["flow:wal@^0.1".to_string()]);
+        // `<group>/<name>@<constraint>` pkgref string.
+        assert_eq!(req.packages, vec!["org.vibevm/wal@^0.1".to_string()]);
         assert_eq!(req.capabilities, vec!["db:any@>=1.0".to_string()]);
         assert_eq!(requires_any_from(&m.requires_any).len(), 1);
     }

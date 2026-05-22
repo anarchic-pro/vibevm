@@ -4,7 +4,9 @@
 //! URL by:
 //!
 //! 1. Composing the per-package repo URL via the registry's [`NamingConvention`]
-//!    (`flow:wal` + `KindName` → `<org>/flow-wal.git`).
+//!    (`org.vibevm/wal` + `Fqdn` → `<org>/org.vibevm.wal.git`). The registry is
+//!    group-native (PROP-008): identity is `(group, name)`, `kind` plays no part
+//!    in URL composition or resolution.
 //! 2. Listing tags on that repo via the cheap [`GitBackend::list_tags`]
 //!    primitive — no clone.
 //! 3. Filtering tags to `v<semver>` and picking the highest match for the
@@ -19,14 +21,15 @@
 //! The cache layout follows PROP-002 §2.6:
 //!
 //! ```text
-//! <cache_root>/<canonical_url_hash>/packages/<kind>-<name>/clone/
+//! <cache_root>/<canonical_url_hash>/packages/<group>.<name>/clone/
 //! ```
 //!
 //! `<canonical_url_hash>` is keyed off the **canonical organization URL** of
 //! the registry (not the mirror URL), so a transparent mirror does not
-//! invalidate the cache. The internal cache subpath uses `<kind>-<name>`
+//! invalidate the cache. The internal cache subpath uses `<group>.<name>`
 //! always, decoupled from the registry's URL-shape `naming` — the cache is
-//! organized by our identity, the URLs are just one routing decision.
+//! organized by `(group, name)` identity, the URLs are just one routing
+//! decision.
 //!
 //! Spec: [PROP-002 §2.5 / §2.6 / §2.12](../../../spec/modules/vibe-registry/PROP-002-decentralized-registry.md).
 
@@ -37,7 +40,7 @@ use std::sync::Arc;
 
 use sha2::{Digest, Sha256};
 use vibe_core::manifest::{Manifest, NamingConvention};
-use vibe_core::{PackageKind, PackageRef, VersionSpec};
+use vibe_core::{Group, PackageRef, VersionSpec};
 
 use crate::git_backend::{GitBackend, GitError, ShellGit};
 use crate::git_registry::{
@@ -87,8 +90,8 @@ pub struct GitPackageRegistry {
     /// `content_hash` verification lands.
     mirror_urls: Vec<String>,
     /// When `Some`, this registry holds **exactly one package** at the
-    /// given URL — `package_repo_url(kind, name)` returns this verbatim
-    /// without applying `naming` to compose `<org>/<kind>-<name>.git`.
+    /// given URL — `package_repo_url(group, name)` returns this verbatim
+    /// without applying `naming` to compose `<org>/<group>.<name>.git`.
     /// Used for git-source declarations from `[requires.packages]`
     /// table-form (PROP-002 §2.4.1). When `None`, this is a normal
     /// multi-package registry and naming applies as before.
@@ -313,21 +316,22 @@ impl GitPackageRegistry {
     /// Open a registry that holds **exactly one package** at `repo_url`.
     /// Used for git-source declarations from `[requires.packages]`
     /// table-form (PROP-002 §2.4.1) — the consumer's `vibe.toml`
-    /// declares `"flow:internal" = { git = "...", tag = "..." }` and
-    /// the resolver synthesises a `GitPackageRegistry` pointing
+    /// declares `"org.vibevm/internal" = { git = "...", tag = "..." }`
+    /// and the resolver synthesises a `GitPackageRegistry` pointing
     /// directly at that URL, bypassing the org-level `naming`-driven
     /// URL composition.
     ///
     /// Differences from `open_with_auth`:
     /// - `repo_url` is the per-package URL (not an org URL).
-    /// - `naming` is irrelevant — the synthetic registry stores
-    ///   `KindName` as a placeholder; `package_repo_url(kind, name)`
-    ///   returns `repo_url` verbatim.
+    /// - `naming` is irrelevant — the synthetic registry stores `Fqdn`
+    ///   as a placeholder; `package_repo_url(group, name)` returns
+    ///   `repo_url` verbatim because `single_package_url` short-circuits
+    ///   the naming step entirely.
     /// - `mirror_urls` are empty (mirrors are an org-level concept;
     ///   git-source has no mirror chain — see PROP-002 §2.4.1
     ///   "Out of scope").
     /// - `name` is a synthetic local label such as
-    ///   `"git-source-flow-internal"` — not a registry org name.
+    ///   `"git-source-org.vibevm-internal"` — not a registry org name.
     #[allow(clippy::too_many_arguments)]
     pub fn open_single_package(
         synthetic_name: &str,
@@ -343,7 +347,7 @@ impl GitPackageRegistry {
             synthetic_name,
             repo_url,
             repo_ref,
-            NamingConvention::KindName,
+            NamingConvention::Fqdn,
             Vec::new(),
             cache_root,
             backend,
@@ -389,7 +393,7 @@ impl GitPackageRegistry {
         self.cache_root.join(&self.canonical_hash)
     }
 
-    /// Compose the per-package repo URL — `<org_url>/<naming(kind, name)>.git`
+    /// Compose the per-package repo URL — `<org_url>/<naming(group, name)>.git`
     /// for normal multi-package registries, or the verbatim single-package
     /// URL for git-source registries (PROP-002 §2.4.1). Trailing slashes
     /// on `org_url` are tolerated. **No credentials are embedded** —
@@ -397,13 +401,22 @@ impl GitPackageRegistry {
     /// humans. For URLs that drive git invocations (`ls-remote` /
     /// `clone` / `fetch`) under `auth = AuthKind::TokenEnv`, callers
     /// reach for [`Self::credentialed_url`] instead.
-    pub fn package_repo_url(&self, kind: PackageKind, name: &str) -> String {
+    ///
+    /// The registry is group-native (PROP-008): `kind` plays no part in
+    /// URL composition. `repo_name` is always called with `kind = None` —
+    /// the default `Fqdn` convention is infallible there; a registry
+    /// configured with a legacy `kind-*` convention surfaces a
+    /// [`RegistryError::Core`] instead.
+    pub fn package_repo_url(&self, group: &Group, name: &str) -> Result<String, RegistryError> {
         if let Some(url) = &self.single_package_url {
-            return url.clone();
+            return Ok(url.clone());
         }
-        let repo_name = self.naming.repo_name(kind, name);
+        let repo_name = self
+            .naming
+            .repo_name(None, group, name)
+            .map_err(RegistryError::Core)?;
         let trimmed = self.org_url.trim_end_matches('/');
-        format!("{trimmed}/{repo_name}.git")
+        Ok(format!("{trimmed}/{repo_name}.git"))
     }
 
     /// True when this registry was constructed via `open_single_package`
@@ -426,12 +439,12 @@ impl GitPackageRegistry {
     /// URL recorded in error messages.
     pub fn fetch_manifest_at_ref(
         &self,
-        kind: PackageKind,
+        group: &Group,
         name: &str,
         refname: &str,
     ) -> Result<Manifest, RegistryError> {
         self.ensure_token_loaded()?;
-        let plain_url = self.package_repo_url(kind, name);
+        let plain_url = self.package_repo_url(group, name)?;
         let fetch_url = self.credentialed_url(&plain_url);
         let bytes = match self
             .backend
@@ -447,8 +460,8 @@ impl GitPackageRegistry {
                 // requested ref and read `vibe.toml` from the
                 // working tree. Slower than archive but works on every
                 // host that accepts `git clone`.
-                self.refresh_package(kind, name, refname)?;
-                let clone_dir = self.package_clone_dir(kind, name);
+                self.refresh_package(group, name, refname)?;
+                let clone_dir = self.package_clone_dir(group, name);
                 let manifest_path = clone_dir.join(Manifest::FILENAME);
                 fs::read(&manifest_path).map_err(|source| RegistryError::Io {
                     path: manifest_path.clone(),
@@ -626,17 +639,24 @@ impl GitPackageRegistry {
         }
     }
 
-    /// All URLs to try for a `(kind, name)` lookup, primary first.
+    /// All URLs to try for a `(group, name)` lookup, primary first.
     /// Mirrors are composed using the same naming convention as the
     /// primary, since the mirror is meant to be a transparent
     /// alternative to the primary's content. Single-package registries
     /// (PROP-002 §2.4.1) return a single-element vec with the verbatim
     /// URL — mirrors do not apply.
-    fn package_urls(&self, kind: PackageKind, name: &str) -> Vec<String> {
+    ///
+    /// Group-native (PROP-008): `repo_name` is called with `kind = None`
+    /// — the registry resolves by `(group, name)`. A legacy `kind-*`
+    /// naming convention surfaces a [`RegistryError::Core`].
+    fn package_urls(&self, group: &Group, name: &str) -> Result<Vec<String>, RegistryError> {
         if let Some(url) = &self.single_package_url {
-            return vec![url.clone()];
+            return Ok(vec![url.clone()]);
         }
-        let repo_name = self.naming.repo_name(kind, name);
+        let repo_name = self
+            .naming
+            .repo_name(None, group, name)
+            .map_err(RegistryError::Core)?;
         let mut urls = Vec::with_capacity(1 + self.mirror_urls.len());
         urls.push(format!(
             "{}/{}.git",
@@ -650,7 +670,7 @@ impl GitPackageRegistry {
                 repo_name
             ));
         }
-        urls
+        Ok(urls)
     }
 
     /// Run a read-only lookup `f` against the primary URL first, then
@@ -664,11 +684,11 @@ impl GitPackageRegistry {
     /// `f` MUST be a pure read against the host (no cache writes, no
     /// per-package clone state) — the fetch / refresh paths use
     /// dedicated logic with content-hash verification across mirrors.
-    fn try_lookup<T, F>(&self, kind: PackageKind, name: &str, f: F) -> Result<T, RegistryError>
+    fn try_lookup<T, F>(&self, group: &Group, name: &str, f: F) -> Result<T, RegistryError>
     where
         F: Fn(&str) -> Result<T, RegistryError>,
     {
-        let urls = self.package_urls(kind, name);
+        let urls = self.package_urls(group, name)?;
         let mut primary_err: Option<RegistryError> = None;
         for (i, url) in urls.iter().enumerate() {
             match f(url) {
@@ -797,12 +817,12 @@ impl GitPackageRegistry {
     /// gate on top when a lockfile pin is available.
     fn ensure_clone_against_sources(
         &self,
-        kind: PackageKind,
+        group: &Group,
         name: &str,
         refname: &str,
     ) -> Result<String, RegistryError> {
-        let urls = self.package_urls(kind, name);
-        let clone_dir = self.package_clone_dir(kind, name);
+        let urls = self.package_urls(group, name)?;
+        let clone_dir = self.package_clone_dir(group, name);
         let mut primary_err: Option<RegistryError> = None;
         for (i, url) in urls.iter().enumerate() {
             match self.bootstrap_or_update_at(url, refname, &clone_dir) {
@@ -838,18 +858,19 @@ impl GitPackageRegistry {
     }
 
     /// Where this package's clone lives on disk —
-    /// `<cache_dir>/packages/<kind>-<name>/clone/`. Note the internal
-    /// subdirectory is always `<kind>-<name>`, regardless of registry naming
-    /// (which may have produced a different *URL*-side name).
-    pub fn package_clone_dir(&self, kind: PackageKind, name: &str) -> PathBuf {
-        let internal = format!("{}-{}", kind.as_str(), name);
+    /// `<cache_dir>/packages/<group>.<name>/clone/`. Note the internal
+    /// subdirectory is always `<group>.<name>`, regardless of registry
+    /// naming (which may have produced a different *URL*-side name) — the
+    /// cache is organised by `(group, name)` identity (PROP-008).
+    pub fn package_clone_dir(&self, group: &Group, name: &str) -> PathBuf {
+        let internal = format!("{group}.{name}");
         self.cache_dir()
             .join("packages")
             .join(internal)
             .join("clone")
     }
 
-    /// Enumerate available versions for `<kind>:<name>` *without cloning*.
+    /// Enumerate available versions for `<group>/<name>` *without cloning*.
     /// Tags that don't match `v<semver>` are silently dropped.
     ///
     /// Mirror-aware: tries the primary URL first, then each mirror in
@@ -858,7 +879,7 @@ impl GitPackageRegistry {
     /// (treated identically to the primary-only path).
     pub fn list_versions(
         &self,
-        kind: PackageKind,
+        group: &Group,
         name: &str,
     ) -> Result<Vec<semver::Version>, RegistryError> {
         // Index fast path (PROP-005 §2.10 slice 10). When the
@@ -868,12 +889,12 @@ impl GitPackageRegistry {
         // mean "absent" — the index may be stale); other errors →
         // also fall through with a debug-level log.
         if let Some(client) = &self.index_client {
-            match client.list_versions(kind, name) {
+            match client.list_versions(group, name) {
                 Ok(Some(versions)) => {
                     tracing::debug!(
                         target: "vibe_registry::index",
                         registry = %self.name,
-                        kind = %kind,
+                        group = %group,
                         name = %name,
                         count = versions.len(),
                         "list_versions served from index"
@@ -884,7 +905,7 @@ impl GitPackageRegistry {
                     tracing::debug!(
                         target: "vibe_registry::index",
                         registry = %self.name,
-                        kind = %kind,
+                        group = %group,
                         name = %name,
                         "index returned 404; falling through to git ls-remote"
                     );
@@ -904,14 +925,15 @@ impl GitPackageRegistry {
         // we burn a network round-trip on a guaranteed-401.
         self.ensure_token_loaded()?;
         let backend = Arc::clone(&self.backend);
+        let owned_group = group.clone();
         let owned_name = name.to_owned();
         let token = self.effective_token.clone();
-        self.try_lookup(kind, name, move |url| {
+        self.try_lookup(group, name, move |url| {
             let plain = strip_git_plus_prefix(url);
             let fetch_url = inject_token(plain, token.as_deref());
             let tags = backend.list_tags(&fetch_url).map_err(|e| match e {
                 GitError::RepoNotFound { .. } => RegistryError::UnknownPackage {
-                    kind,
+                    group: owned_group.clone(),
                     name: owned_name.clone(),
                 },
                 other => RegistryError::Git(other),
@@ -931,8 +953,17 @@ impl GitPackageRegistry {
     /// Pick the best tag matching `pkgref.version` from the upstream tag list.
     /// Returns a [`ResolvedPackage`] whose `source_dir` points at the
     /// (not-yet-populated) clone directory under the cache bucket.
+    ///
+    /// The registry resolves by `(group, name)` identity (PROP-008); a
+    /// pkgref reaching this point without a `group` is an
+    /// [`RegistryError::UnqualifiedPkgref`] — short names must be
+    /// qualified at the CLI boundary first.
     pub fn resolve(&self, pkgref: &PackageRef) -> Result<ResolvedPackage, RegistryError> {
-        let versions = self.list_versions(pkgref.kind, &pkgref.name)?;
+        let group = pkgref
+            .group
+            .as_ref()
+            .ok_or_else(|| RegistryError::UnqualifiedPkgref(pkgref.to_string()))?;
+        let versions = self.list_versions(group, &pkgref.name)?;
         let picked = match &pkgref.version {
             VersionSpec::Latest => versions.iter().rev().find(|v| v.pre.is_empty()).cloned(),
             VersionSpec::Req(req) => versions
@@ -944,7 +975,7 @@ impl GitPackageRegistry {
         };
         let Some(version) = picked else {
             return Err(RegistryError::NoMatchingVersion {
-                kind: pkgref.kind,
+                group: group.clone(),
                 name: pkgref.name.clone(),
                 req: match &pkgref.version {
                     VersionSpec::Latest => "latest".to_string(),
@@ -953,10 +984,10 @@ impl GitPackageRegistry {
             });
         };
         Ok(ResolvedPackage {
-            kind: pkgref.kind,
+            group: group.clone(),
             name: pkgref.name.clone(),
             version,
-            source_dir: self.package_clone_dir(pkgref.kind, &pkgref.name),
+            source_dir: self.package_clone_dir(group, &pkgref.name),
         })
     }
 
@@ -973,7 +1004,7 @@ impl GitPackageRegistry {
     /// cross-source verification has not yet landed (Phase B v0).
     pub fn fetch_dep_manifest(
         &self,
-        kind: PackageKind,
+        group: &Group,
         name: &str,
         version: &semver::Version,
     ) -> Result<Manifest, RegistryError> {
@@ -982,14 +1013,14 @@ impl GitPackageRegistry {
         let backend = Arc::clone(&self.backend);
         let tag_for_lookup = tag.clone();
         let token = self.effective_token.clone();
-        let archive_result = self.try_lookup(kind, name, move |url| {
+        let archive_result = self.try_lookup(group, name, move |url| {
             let plain = strip_git_plus_prefix(url);
             let fetch_url = inject_token(plain, token.as_deref());
             backend
                 .fetch_file_at_ref(&fetch_url, &tag_for_lookup, Manifest::FILENAME)
                 .map_err(RegistryError::from)
         });
-        let url = self.package_repo_url(kind, name);
+        let url = self.package_repo_url(group, name)?;
         let bytes = match archive_result {
             Ok(bytes) => bytes,
             Err(RegistryError::Git(GitError::ArchiveUnsupported { .. })) => {
@@ -1008,8 +1039,8 @@ impl GitPackageRegistry {
                 // primary URL. Mirror dispatch for the clone path
                 // requires the cross-source `content_hash` check to
                 // come along with it, so it lands together with that.
-                self.refresh_package(kind, name, &tag)?;
-                let clone_dir = self.package_clone_dir(kind, name);
+                self.refresh_package(group, name, &tag)?;
+                let clone_dir = self.package_clone_dir(group, name);
                 let manifest_path = clone_dir.join(Manifest::FILENAME);
                 fs::read(&manifest_path).map_err(|source| RegistryError::Io {
                     path: manifest_path.clone(),
@@ -1028,7 +1059,7 @@ impl GitPackageRegistry {
         })
     }
 
-    /// Refresh the per-package clone for `(kind, name)` against `refname`
+    /// Refresh the per-package clone for `(group, name)` against `refname`
     /// without touching the per-project cache. If the clone exists, runs
     /// `update`; otherwise bootstraps a fresh clone. Mirror-aware:
     /// the primary URL is tried first, then each mirror in priority
@@ -1039,11 +1070,11 @@ impl GitPackageRegistry {
     /// re-applying writes (that's `vibe update`'s job, not sync's).
     pub fn refresh_package(
         &self,
-        kind: PackageKind,
+        group: &Group,
         name: &str,
         refname: &str,
     ) -> Result<(), RegistryError> {
-        self.ensure_clone_against_sources(kind, name, refname)?;
+        self.ensure_clone_against_sources(group, name, refname)?;
         Ok(())
     }
 
@@ -1110,12 +1141,12 @@ impl GitPackageRegistry {
         // registry is `auth = "token-env"` but the env-var resolved
         // empty.
         self.ensure_token_loaded()?;
-        let canonical_url = self.package_repo_url(resolved.kind, &resolved.name);
+        let canonical_url = self.package_repo_url(&resolved.group, &resolved.name)?;
         let tag = format!("v{}", resolved.version);
-        let urls = self.package_urls(resolved.kind, &resolved.name);
-        let clone_dir = self.package_clone_dir(resolved.kind, &resolved.name);
+        let urls = self.package_urls(&resolved.group, &resolved.name)?;
+        let clone_dir = self.package_clone_dir(&resolved.group, &resolved.name);
         let dest_cache = cache_root
-            .join(resolved.kind.as_str())
+            .join(resolved.group.as_str())
             .join(&resolved.name)
             .join(format!("v{}", resolved.version));
 
@@ -1242,10 +1273,10 @@ impl GitPackageRegistry {
 impl Registry for GitPackageRegistry {
     fn list_versions(
         &self,
-        kind: PackageKind,
+        group: &Group,
         name: &str,
     ) -> Result<Vec<semver::Version>, RegistryError> {
-        GitPackageRegistry::list_versions(self, kind, name)
+        GitPackageRegistry::list_versions(self, group, name)
     }
     fn resolve(&self, pkgref: &PackageRef) -> Result<ResolvedPackage, RegistryError> {
         GitPackageRegistry::resolve(self, pkgref)
@@ -1467,6 +1498,13 @@ mod tests {
         )
     }
 
+    /// The canonical group every fixture package in these tests belongs
+    /// to. The registry is group-native (PROP-008): identity is
+    /// `(group, name)`, `kind` plays no part in resolution.
+    fn org() -> Group {
+        Group::parse("org.vibevm").unwrap()
+    }
+
     fn registry_with(
         cache: &Path,
         org_url: &str,
@@ -1489,17 +1527,17 @@ mod tests {
 
     #[test]
     fn inject_token_adds_x_access_token_to_https() {
-        let url = "https://gitlab.company.com/vibespecs/flow-wal.git";
+        let url = "https://gitlab.company.com/vibespecs/org.vibevm.wal.git";
         let out = inject_token(url, Some("ghp_xxx"));
         assert_eq!(
             out,
-            "https://x-access-token:ghp_xxx@gitlab.company.com/vibespecs/flow-wal.git"
+            "https://x-access-token:ghp_xxx@gitlab.company.com/vibespecs/org.vibevm.wal.git"
         );
     }
 
     #[test]
     fn inject_token_returns_url_unchanged_when_no_token() {
-        let url = "https://gitlab.company.com/vibespecs/flow-wal.git";
+        let url = "https://gitlab.company.com/vibespecs/org.vibevm.wal.git";
         assert_eq!(inject_token(url, None), url);
         assert_eq!(
             inject_token(url, Some("")).len(),
@@ -1510,10 +1548,10 @@ mod tests {
     #[test]
     fn inject_token_skips_non_https() {
         for url in [
-            "git@github.com:vibespecs/flow-wal.git",
-            "ssh://git@host/org/flow-wal.git",
+            "git@github.com:vibespecs/org.vibevm.wal.git",
+            "ssh://git@host/org/org.vibevm.wal.git",
             "file:///tmp/registry/flow-wal",
-            "http://insecure.example.com/flow-wal.git",
+            "http://insecure.example.com/org.vibevm.wal.git",
         ] {
             assert_eq!(
                 inject_token(url, Some("token")),
@@ -1565,7 +1603,7 @@ mod tests {
             "internal",
             "https://internal.example.com/vibespecs",
             "main",
-            NamingConvention::KindName,
+            NamingConvention::Fqdn,
             Vec::new(),
             cache.path(),
             fake.clone(),
@@ -1575,7 +1613,7 @@ mod tests {
         )
         .unwrap();
         assert!(reg.token_env_required_but_absent());
-        let err = reg.list_versions(PackageKind::Flow, "wal").unwrap_err();
+        let err = reg.list_versions(&org(), "wal").unwrap_err();
         match err {
             RegistryError::MissingToken { registry, env_var } => {
                 assert_eq!(registry, "internal");
@@ -1645,9 +1683,9 @@ mod tests {
         )
         .unwrap();
         let credentialed_url =
-            "https://x-access-token:secret-token-xyz@scrub.example/vibespecs/flow-wal.git"
+            "https://x-access-token:secret-token-xyz@scrub.example/vibespecs/org.vibevm.wal.git"
                 .to_string();
-        let plain_url = "https://scrub.example/vibespecs/flow-wal.git";
+        let plain_url = "https://scrub.example/vibespecs/org.vibevm.wal.git";
         fake.seed_bootstrap(&credentialed_url, pkg_src.path().to_path_buf());
         fake.seed_tags(&credentialed_url, vec!["v0.1.0".to_string()]);
         let backend = Arc::new(ScrubTrackingBackend {
@@ -1658,7 +1696,7 @@ mod tests {
             "internal",
             "https://scrub.example/vibespecs",
             "main",
-            NamingConvention::KindName,
+            NamingConvention::Fqdn,
             Vec::new(),
             cache.path(),
             backend.clone(),
@@ -1671,10 +1709,10 @@ mod tests {
         assert_eq!(reg.effective_token_value(), Some("secret-token-xyz"));
 
         let resolved = ResolvedPackage {
-            kind: PackageKind::Flow,
+            group: org(),
             name: "wal".to_string(),
             version: semver::Version::parse("0.1.0").unwrap(),
-            source_dir: reg.package_clone_dir(PackageKind::Flow, "wal"),
+            source_dir: reg.package_clone_dir(&org(), "wal"),
         };
         let cache_root = tempdir().unwrap();
         reg.fetch(&resolved, cache_root.path()).unwrap();
@@ -1700,21 +1738,24 @@ mod tests {
 
     #[test]
     fn package_repo_url_default_naming() {
+        // Group-native default (PROP-008): `Fqdn` composes the repo name
+        // as `<group>.<name>`, collision-free because `(group, name)` is
+        // unique.
         let cache = tempdir().unwrap();
         let fake = Arc::new(FakeBackend::default());
         let r = registry_with(
             cache.path(),
             "git@gitverse.ru:vibespecs",
-            NamingConvention::KindName,
+            NamingConvention::Fqdn,
             fake,
         );
         assert_eq!(
-            r.package_repo_url(PackageKind::Flow, "wal"),
-            "git@gitverse.ru:vibespecs/flow-wal.git"
+            r.package_repo_url(&org(), "wal").unwrap(),
+            "git@gitverse.ru:vibespecs/org.vibevm.wal.git"
         );
         assert_eq!(
-            r.package_repo_url(PackageKind::Stack, "rust-cli"),
-            "git@gitverse.ru:vibespecs/stack-rust-cli.git"
+            r.package_repo_url(&org(), "rust-cli").unwrap(),
+            "git@gitverse.ru:vibespecs/org.vibevm.rust-cli.git"
         );
     }
 
@@ -1725,12 +1766,12 @@ mod tests {
         let r = registry_with(
             cache.path(),
             "https://gitverse.ru/vibespecs/",
-            NamingConvention::KindName,
+            NamingConvention::Fqdn,
             fake,
         );
         assert_eq!(
-            r.package_repo_url(PackageKind::Stack, "rust-cli"),
-            "https://gitverse.ru/vibespecs/stack-rust-cli.git"
+            r.package_repo_url(&org(), "rust-cli").unwrap(),
+            "https://gitverse.ru/vibespecs/org.vibevm.rust-cli.git"
         );
     }
 
@@ -1752,14 +1793,14 @@ mod tests {
         )
         .unwrap();
         assert!(r.is_single_package());
-        // The repo URL is the URL we passed, regardless of (kind, name).
+        // The repo URL is the URL we passed, regardless of (group, name).
         assert_eq!(
-            r.package_repo_url(PackageKind::Flow, "internal"),
+            r.package_repo_url(&org(), "internal").unwrap(),
             "https://github.com/me/flow-internal"
         );
-        // (kind, name) does not even matter — naming is skipped.
+        // (group, name) does not even matter — naming is skipped.
         assert_eq!(
-            r.package_repo_url(PackageKind::Stack, "totally-different"),
+            r.package_repo_url(&org(), "totally-different").unwrap(),
             "https://github.com/me/flow-internal"
         );
     }
@@ -1779,7 +1820,7 @@ mod tests {
             None,
         )
         .unwrap();
-        let urls = r.package_urls(PackageKind::Flow, "internal");
+        let urls = r.package_urls(&org(), "internal").unwrap();
         assert_eq!(
             urls.len(),
             1,
@@ -1790,17 +1831,25 @@ mod tests {
 
     #[test]
     fn package_repo_url_name_only_naming() {
+        // The `Name` convention is kind-free, so it composes fine even
+        // though the registry is group-native — `repo_name` is called
+        // with `kind = None` and yields the bare `name`.
         let cache = tempdir().unwrap();
         let fake = Arc::new(FakeBackend::default());
         let r = registry_with(cache.path(), "git@host:org", NamingConvention::Name, fake);
         assert_eq!(
-            r.package_repo_url(PackageKind::Flow, "wal"),
+            r.package_repo_url(&org(), "wal").unwrap(),
             "git@host:org/wal.git"
         );
     }
 
     #[test]
-    fn package_repo_url_kind_slash_name_naming() {
+    fn package_repo_url_legacy_kind_convention_errors_on_group_native_registry() {
+        // PROP-008: the registry resolves by `(group, name)` and always
+        // composes URLs with `kind = None`. A registry still configured
+        // with a legacy `kind/name` convention therefore cannot compose
+        // a URL — `package_repo_url` surfaces a `RegistryError::Core`
+        // rather than silently producing a kind-shaped name.
         let cache = tempdir().unwrap();
         let fake = Arc::new(FakeBackend::default());
         let r = registry_with(
@@ -1809,9 +1858,10 @@ mod tests {
             NamingConvention::KindSlashName,
             fake,
         );
-        assert_eq!(
-            r.package_repo_url(PackageKind::Feat, "welcome-page"),
-            "git@host:org/feat/welcome-page.git"
+        let err = r.package_repo_url(&org(), "welcome-page").unwrap_err();
+        assert!(
+            matches!(err, RegistryError::Core(_)),
+            "legacy kind-* naming on a group-native registry must error: {err:?}"
         );
     }
 
@@ -1819,7 +1869,7 @@ mod tests {
     fn list_versions_filters_non_semver_and_sorts() {
         let cache = tempdir().unwrap();
         let fake = Arc::new(FakeBackend::default());
-        let url = "git@host:org/flow-wal.git";
+        let url = "git@host:org/org.vibevm.wal.git";
         fake.seed_tags(
             url,
             vec![
@@ -1832,13 +1882,8 @@ mod tests {
                 "1.2.3".into(), // missing `v` prefix — dropped
             ],
         );
-        let r = registry_with(
-            cache.path(),
-            "git@host:org",
-            NamingConvention::KindName,
-            fake,
-        );
-        let versions = r.list_versions(PackageKind::Flow, "wal").unwrap();
+        let r = registry_with(cache.path(), "git@host:org", NamingConvention::Fqdn, fake);
+        let versions = r.list_versions(&org(), "wal").unwrap();
         let strs: Vec<String> = versions.iter().map(|v| v.to_string()).collect();
         assert_eq!(strs, vec!["0.1.0", "0.2.0", "0.10.0", "1.0.0-rc.1"]);
     }
@@ -1847,14 +1892,9 @@ mod tests {
     fn list_versions_empty_when_repo_has_no_tags() {
         let cache = tempdir().unwrap();
         let fake = Arc::new(FakeBackend::default());
-        fake.seed_tags("git@host:org/flow-wal.git", vec![]);
-        let r = registry_with(
-            cache.path(),
-            "git@host:org",
-            NamingConvention::KindName,
-            fake,
-        );
-        let v = r.list_versions(PackageKind::Flow, "wal").unwrap();
+        fake.seed_tags("git@host:org/org.vibevm.wal.git", vec![]);
+        let r = registry_with(cache.path(), "git@host:org", NamingConvention::Fqdn, fake);
+        let v = r.list_versions(&org(), "wal").unwrap();
         assert!(v.is_empty());
     }
 
@@ -1863,13 +1903,8 @@ mod tests {
         let cache = tempdir().unwrap();
         let fake = Arc::new(FakeBackend::default());
         // No seed for the URL → FakeBackend returns RepoNotFound.
-        let r = registry_with(
-            cache.path(),
-            "git@host:org",
-            NamingConvention::KindName,
-            fake,
-        );
-        let err = r.list_versions(PackageKind::Flow, "ghost").unwrap_err();
+        let r = registry_with(cache.path(), "git@host:org", NamingConvention::Fqdn, fake);
+        let err = r.list_versions(&org(), "ghost").unwrap_err();
         assert!(matches!(err, RegistryError::UnknownPackage { .. }));
     }
 
@@ -1901,17 +1936,17 @@ mod tests {
         let cache = tempdir().unwrap();
         let fake = Arc::new(FakeBackend::default());
         fake.seed_tags(
-            "https://mirror.example/vibespecs/flow-wal.git",
+            "https://mirror.example/vibespecs/org.vibevm.wal.git",
             vec!["v0.1.0".into(), "v0.2.0".into()],
         );
         let r = registry_with_mirrors(
             cache.path(),
             "https://primary.example/vibespecs",
-            NamingConvention::KindName,
+            NamingConvention::Fqdn,
             vec!["https://mirror.example/vibespecs".to_string()],
             fake,
         );
-        let versions = r.list_versions(PackageKind::Flow, "wal").unwrap();
+        let versions = r.list_versions(&org(), "wal").unwrap();
         assert_eq!(versions.len(), 2);
         assert_eq!(versions[0].to_string(), "0.1.0");
         assert_eq!(versions[1].to_string(), "0.2.0");
@@ -1927,21 +1962,21 @@ mod tests {
         let cache = tempdir().unwrap();
         let fake = Arc::new(FakeBackend::default());
         fake.seed_tags(
-            "https://primary.example/vibespecs/flow-wal.git",
+            "https://primary.example/vibespecs/org.vibevm.wal.git",
             vec!["v0.1.0".into()],
         );
         fake.seed_tags(
-            "https://mirror.example/vibespecs/flow-wal.git",
+            "https://mirror.example/vibespecs/org.vibevm.wal.git",
             vec!["v0.1.0".into(), "v0.2.0".into()],
         );
         let r = registry_with_mirrors(
             cache.path(),
             "https://primary.example/vibespecs",
-            NamingConvention::KindName,
+            NamingConvention::Fqdn,
             vec!["https://mirror.example/vibespecs".to_string()],
             fake,
         );
-        let versions = r.list_versions(PackageKind::Flow, "wal").unwrap();
+        let versions = r.list_versions(&org(), "wal").unwrap();
         assert_eq!(versions.len(), 1);
         assert_eq!(versions[0].to_string(), "0.1.0");
     }
@@ -1956,11 +1991,11 @@ mod tests {
         let r = registry_with_mirrors(
             cache.path(),
             "https://primary.example/vibespecs",
-            NamingConvention::KindName,
+            NamingConvention::Fqdn,
             vec!["https://mirror.example/vibespecs".to_string()],
             fake,
         );
-        let err = r.list_versions(PackageKind::Flow, "ghost").unwrap_err();
+        let err = r.list_versions(&org(), "ghost").unwrap_err();
         assert!(matches!(err, RegistryError::UnknownPackage { .. }));
     }
 
@@ -1975,13 +2010,13 @@ mod tests {
         let cache = tempdir().unwrap();
         let fake = Arc::new(FakeBackend::default());
         fake.seed_tags(
-            "https://m3.example/vibespecs/flow-wal.git",
+            "https://m3.example/vibespecs/org.vibevm.wal.git",
             vec!["v0.3.0".into()],
         );
         let r = registry_with_mirrors(
             cache.path(),
             "https://primary.example/vibespecs",
-            NamingConvention::KindName,
+            NamingConvention::Fqdn,
             vec![
                 "https://m1.example/vibespecs".to_string(),
                 "https://m2.example/vibespecs".to_string(),
@@ -1989,7 +2024,7 @@ mod tests {
             ],
             fake,
         );
-        let versions = r.list_versions(PackageKind::Flow, "wal").unwrap();
+        let versions = r.list_versions(&org(), "wal").unwrap();
         assert_eq!(versions.len(), 1);
         assert_eq!(versions[0].to_string(), "0.3.0");
     }
@@ -1999,16 +2034,11 @@ mod tests {
         let cache = tempdir().unwrap();
         let fake = Arc::new(FakeBackend::default());
         fake.seed_tags(
-            "git@host:org/flow-wal.git",
+            "git@host:org/org.vibevm.wal.git",
             vec!["v0.1.0".into(), "v0.2.0".into(), "v1.0.0-rc.1".into()],
         );
-        let r = registry_with(
-            cache.path(),
-            "git@host:org",
-            NamingConvention::KindName,
-            fake,
-        );
-        let p = PackageRef::parse("flow:wal").unwrap();
+        let r = registry_with(cache.path(), "git@host:org", NamingConvention::Fqdn, fake);
+        let p = PackageRef::parse("org.vibevm/wal").unwrap();
         let resolved = r.resolve(&p).unwrap();
         // 1.0.0-rc.1 is pre-release; latest stable wins.
         assert_eq!(resolved.version.to_string(), "0.2.0");
@@ -2019,16 +2049,11 @@ mod tests {
         let cache = tempdir().unwrap();
         let fake = Arc::new(FakeBackend::default());
         fake.seed_tags(
-            "git@host:org/flow-wal.git",
+            "git@host:org/org.vibevm.wal.git",
             vec!["v0.1.0".into(), "v0.2.0".into(), "v0.3.0".into()],
         );
-        let r = registry_with(
-            cache.path(),
-            "git@host:org",
-            NamingConvention::KindName,
-            fake,
-        );
-        let p = PackageRef::parse("flow:wal@0.2.0").unwrap();
+        let r = registry_with(cache.path(), "git@host:org", NamingConvention::Fqdn, fake);
+        let p = PackageRef::parse("org.vibevm/wal@0.2.0").unwrap();
         let resolved = r.resolve(&p).unwrap();
         assert_eq!(resolved.version.to_string(), "0.2.0");
     }
@@ -2038,16 +2063,11 @@ mod tests {
         let cache = tempdir().unwrap();
         let fake = Arc::new(FakeBackend::default());
         fake.seed_tags(
-            "git@host:org/flow-wal.git",
+            "git@host:org/org.vibevm.wal.git",
             vec!["v0.1.0".into(), "v0.1.5".into(), "v0.2.0".into()],
         );
-        let r = registry_with(
-            cache.path(),
-            "git@host:org",
-            NamingConvention::KindName,
-            fake,
-        );
-        let p = PackageRef::parse("flow:wal@^0.1").unwrap();
+        let r = registry_with(cache.path(), "git@host:org", NamingConvention::Fqdn, fake);
+        let p = PackageRef::parse("org.vibevm/wal@^0.1").unwrap();
         let resolved = r.resolve(&p).unwrap();
         assert_eq!(resolved.version.to_string(), "0.1.5");
     }
@@ -2056,14 +2076,9 @@ mod tests {
     fn resolve_no_match_errors() {
         let cache = tempdir().unwrap();
         let fake = Arc::new(FakeBackend::default());
-        fake.seed_tags("git@host:org/flow-wal.git", vec!["v0.1.0".into()]);
-        let r = registry_with(
-            cache.path(),
-            "git@host:org",
-            NamingConvention::KindName,
-            fake,
-        );
-        let p = PackageRef::parse("flow:wal@^9.0").unwrap();
+        fake.seed_tags("git@host:org/org.vibevm.wal.git", vec!["v0.1.0".into()]);
+        let r = registry_with(cache.path(), "git@host:org", NamingConvention::Fqdn, fake);
+        let p = PackageRef::parse("org.vibevm/wal@^9.0").unwrap();
         let err = r.resolve(&p).unwrap_err();
         assert!(matches!(err, RegistryError::NoMatchingVersion { .. }));
     }
@@ -2076,8 +2091,8 @@ mod tests {
         // manifest without a clone.
         let cache = tempdir().unwrap();
         let fake = Arc::new(FakeBackend::default());
-        let primary_url = "https://primary.example/vibespecs/flow-wal.git";
-        let mirror_url = "https://mirror.example/vibespecs/flow-wal.git";
+        let primary_url = "https://primary.example/vibespecs/org.vibevm.wal.git";
+        let mirror_url = "https://mirror.example/vibespecs/org.vibevm.wal.git";
         // Tag list seeded only on the mirror — list_versions will land
         // on the mirror first too.
         fake.seed_tags(mirror_url, vec!["v0.1.0".into()]);
@@ -2091,12 +2106,12 @@ mod tests {
         let r = registry_with_mirrors(
             cache.path(),
             "https://primary.example/vibespecs",
-            NamingConvention::KindName,
+            NamingConvention::Fqdn,
             vec!["https://mirror.example/vibespecs".to_string()],
             fake.clone(),
         );
         let v = semver::Version::parse("0.1.0").unwrap();
-        let manifest = r.fetch_dep_manifest(PackageKind::Flow, "wal", &v).unwrap();
+        let manifest = r.fetch_dep_manifest(&org(), "wal", &v).unwrap();
         assert_eq!(manifest.require_package().unwrap().name, "wal");
         // No clone — the mirror served the manifest via the archive
         // path, same as the primary-only test asserts.
@@ -2108,7 +2123,7 @@ mod tests {
     fn fetch_dep_manifest_reads_via_archive_without_clone() {
         let cache = tempdir().unwrap();
         let fake = Arc::new(FakeBackend::default());
-        let url = "git@host:org/flow-wal.git";
+        let url = "git@host:org/org.vibevm.wal.git";
         fake.seed_tags(url, vec!["v0.1.0".into()]);
         fake.seed_file(
             url,
@@ -2119,11 +2134,11 @@ mod tests {
         let r = registry_with(
             cache.path(),
             "git@host:org",
-            NamingConvention::KindName,
+            NamingConvention::Fqdn,
             fake.clone(),
         );
         let v = semver::Version::parse("0.1.0").unwrap();
-        let manifest = r.fetch_dep_manifest(PackageKind::Flow, "wal", &v).unwrap();
+        let manifest = r.fetch_dep_manifest(&org(), "wal", &v).unwrap();
         assert_eq!(manifest.require_package().unwrap().name, "wal");
         assert_eq!(
             manifest.require_package().unwrap().version.to_string(),
@@ -2154,18 +2169,18 @@ mod tests {
         // dest after copying; we want to verify our extractor strips it.
 
         let fake = Arc::new(FakeBackend::default());
-        let url = "git@host:org/flow-wal.git";
+        let url = "git@host:org/org.vibevm.wal.git";
         fake.seed_tags(url, vec!["v0.1.0".into()]);
         fake.seed_bootstrap(url, pkg_root.clone());
 
         let r = registry_with(
             cache.path(),
             "git@host:org",
-            NamingConvention::KindName,
+            NamingConvention::Fqdn,
             fake.clone(),
         );
 
-        let p = PackageRef::parse("flow:wal@0.1.0").unwrap();
+        let p = PackageRef::parse("org.vibevm/wal@0.1.0").unwrap();
         let resolved = r.resolve(&p).unwrap();
         let cached = r.fetch(&resolved, pkg_cache.path()).unwrap();
 
@@ -2204,8 +2219,8 @@ mod tests {
         )
         .unwrap();
 
-        let primary_url = "https://primary.example/vibespecs/flow-wal.git";
-        let mirror_url = "https://mirror.example/vibespecs/flow-wal.git";
+        let primary_url = "https://primary.example/vibespecs/org.vibevm.wal.git";
+        let mirror_url = "https://mirror.example/vibespecs/org.vibevm.wal.git";
 
         let fake = Arc::new(FakeBackend::default());
         // Tags on both — list_versions hits primary first and finds it.
@@ -2217,12 +2232,12 @@ mod tests {
         let r = registry_with_mirrors(
             cache.path(),
             "https://primary.example/vibespecs",
-            NamingConvention::KindName,
+            NamingConvention::Fqdn,
             vec!["https://mirror.example/vibespecs".to_string()],
             fake.clone(),
         );
 
-        let p = PackageRef::parse("flow:wal@0.1.0").unwrap();
+        let p = PackageRef::parse("org.vibevm/wal@0.1.0").unwrap();
         let resolved = r.resolve(&p).unwrap();
         let cached = r.fetch(&resolved, pkg_cache.path()).unwrap();
 
@@ -2256,8 +2271,8 @@ mod tests {
         )
         .unwrap();
 
-        let primary_url = "https://primary.example/vibespecs/flow-wal.git";
-        let mirror_url = "https://mirror.example/vibespecs/flow-wal.git";
+        let primary_url = "https://primary.example/vibespecs/org.vibevm.wal.git";
+        let mirror_url = "https://mirror.example/vibespecs/org.vibevm.wal.git";
 
         let fake = Arc::new(FakeBackend::default());
         fake.seed_tags(primary_url, vec!["v0.1.0".into()]);
@@ -2269,12 +2284,12 @@ mod tests {
         let r = registry_with_mirrors(
             cache.path(),
             "https://primary.example/vibespecs",
-            NamingConvention::KindName,
+            NamingConvention::Fqdn,
             vec!["https://mirror.example/vibespecs".to_string()],
             fake.clone(),
         );
 
-        let p = PackageRef::parse("flow:wal@0.1.0").unwrap();
+        let p = PackageRef::parse("org.vibevm/wal@0.1.0").unwrap();
         let resolved = r.resolve(&p).unwrap();
         let _ = r.fetch(&resolved, pkg_cache.path()).unwrap();
 
@@ -2308,8 +2323,8 @@ mod tests {
         )
         .unwrap();
 
-        let primary_url = "https://primary.example/vibespecs/flow-wal.git";
-        let mirror_url = "https://mirror.example/vibespecs/flow-wal.git";
+        let primary_url = "https://primary.example/vibespecs/org.vibevm.wal.git";
+        let mirror_url = "https://mirror.example/vibespecs/org.vibevm.wal.git";
 
         let fake = Arc::new(FakeBackend::default());
         fake.seed_tags(primary_url, vec!["v0.1.0".into()]);
@@ -2320,13 +2335,13 @@ mod tests {
         let r = registry_with_mirrors(
             cache.path(),
             "https://primary.example/vibespecs",
-            NamingConvention::KindName,
+            NamingConvention::Fqdn,
             vec!["https://mirror.example/vibespecs".to_string()],
             fake.clone(),
         );
 
         // First fetch lands the clone via primary.
-        let p = PackageRef::parse("flow:wal@0.1.0").unwrap();
+        let p = PackageRef::parse("org.vibevm/wal@0.1.0").unwrap();
         let resolved = r.resolve(&p).unwrap();
         let _ = r.fetch(&resolved, pkg_cache.path()).unwrap();
         assert_eq!(fake.bootstrap_count(), 1);
@@ -2373,18 +2388,18 @@ mod tests {
         .unwrap();
 
         let fake = Arc::new(FakeBackend::default());
-        let url = "git@host:org/flow-wal.git";
+        let url = "git@host:org/org.vibevm.wal.git";
         fake.seed_tags(url, vec!["v0.1.0".into()]);
         fake.seed_bootstrap(url, pkg_root.clone());
 
         let r = registry_with(
             cache.path(),
             "git@host:org",
-            NamingConvention::KindName,
+            NamingConvention::Fqdn,
             fake.clone(),
         );
 
-        let p = PackageRef::parse("flow:wal@0.1.0").unwrap();
+        let p = PackageRef::parse("org.vibevm/wal@0.1.0").unwrap();
         let resolved = r.resolve(&p).unwrap();
         let cached = r
             .fetch_with_expected_hash(&resolved, pkg_cache.path(), None)
@@ -2433,9 +2448,9 @@ mod tests {
         copy_dir_excluding_git(&pkg_a, temp_for_hash.path()).unwrap();
         let expected_hash = compute_content_hash(temp_for_hash.path()).unwrap();
 
-        let primary_url = "https://primary.example/vibespecs/flow-wal.git";
-        let mirror_a_url = "https://mirror-bad.example/vibespecs/flow-wal.git";
-        let mirror_b_url = "https://mirror-ok.example/vibespecs/flow-wal.git";
+        let primary_url = "https://primary.example/vibespecs/org.vibevm.wal.git";
+        let mirror_a_url = "https://mirror-bad.example/vibespecs/org.vibevm.wal.git";
+        let mirror_b_url = "https://mirror-ok.example/vibespecs/org.vibevm.wal.git";
 
         let fake = Arc::new(FakeBackend::default());
         // All sources seed tags so the resolver reaches them in order.
@@ -2451,7 +2466,7 @@ mod tests {
         let r = registry_with_mirrors(
             cache.path(),
             "https://primary.example/vibespecs",
-            NamingConvention::KindName,
+            NamingConvention::Fqdn,
             vec![
                 "https://mirror-bad.example/vibespecs".to_string(),
                 "https://mirror-ok.example/vibespecs".to_string(),
@@ -2459,7 +2474,7 @@ mod tests {
             fake.clone(),
         );
 
-        let p = PackageRef::parse("flow:wal@0.1.0").unwrap();
+        let p = PackageRef::parse("org.vibevm/wal@0.1.0").unwrap();
         let resolved = r.resolve(&p).unwrap();
         let cached = r
             .fetch_with_expected_hash(&resolved, pkg_cache.path(), Some(&expected_hash))
@@ -2499,8 +2514,8 @@ mod tests {
         )
         .unwrap();
 
-        let primary_url = "https://primary.example/vibespecs/flow-wal.git";
-        let mirror_url = "https://mirror.example/vibespecs/flow-wal.git";
+        let primary_url = "https://primary.example/vibespecs/org.vibevm.wal.git";
+        let mirror_url = "https://mirror.example/vibespecs/org.vibevm.wal.git";
 
         let fake = Arc::new(FakeBackend::default());
         fake.seed_tags(primary_url, vec!["v0.1.0".into()]);
@@ -2511,13 +2526,13 @@ mod tests {
         let r = registry_with_mirrors(
             cache.path(),
             "https://primary.example/vibespecs",
-            NamingConvention::KindName,
+            NamingConvention::Fqdn,
             vec!["https://mirror.example/vibespecs".to_string()],
             fake.clone(),
         );
 
         let bogus_pin = "sha256:0000000000000000000000000000000000000000000000000000000000000000";
-        let p = PackageRef::parse("flow:wal@0.1.0").unwrap();
+        let p = PackageRef::parse("org.vibevm/wal@0.1.0").unwrap();
         let resolved = r.resolve(&p).unwrap();
         let cached = r
             .fetch_with_expected_hash(&resolved, pkg_cache.path(), Some(bogus_pin))
@@ -2547,8 +2562,8 @@ mod tests {
         )
         .unwrap();
 
-        let primary_url = "https://primary.example/vibespecs/flow-wal.git";
-        let mirror_url = "https://mirror.example/vibespecs/flow-wal.git";
+        let primary_url = "https://primary.example/vibespecs/org.vibevm.wal.git";
+        let mirror_url = "https://mirror.example/vibespecs/org.vibevm.wal.git";
 
         let fake = Arc::new(FakeBackend::default());
         fake.seed_bootstrap(mirror_url, pkg_root.clone());
@@ -2556,13 +2571,12 @@ mod tests {
         let r = registry_with_mirrors(
             cache.path(),
             "https://primary.example/vibespecs",
-            NamingConvention::KindName,
+            NamingConvention::Fqdn,
             vec!["https://mirror.example/vibespecs".to_string()],
             fake.clone(),
         );
 
-        r.refresh_package(PackageKind::Flow, "wal", "v0.1.0")
-            .unwrap();
+        r.refresh_package(&org(), "wal", "v0.1.0").unwrap();
 
         // Primary (fail) + mirror (succeed).
         assert_eq!(
@@ -2587,8 +2601,8 @@ mod tests {
         )
         .unwrap();
 
-        let primary_url = "https://primary.example/vibespecs/flow-wal.git";
-        let mirror_url = "https://mirror.example/vibespecs/flow-wal.git";
+        let primary_url = "https://primary.example/vibespecs/org.vibevm.wal.git";
+        let mirror_url = "https://mirror.example/vibespecs/org.vibevm.wal.git";
 
         // FakeBackend's `fetch_file_at_ref` returns FileNotFoundInRef
         // when not seeded. To trigger the clone fallback we need an
@@ -2628,7 +2642,7 @@ mod tests {
             "vibespecs",
             "https://primary.example/vibespecs",
             "main",
-            NamingConvention::KindName,
+            NamingConvention::Fqdn,
             vec!["https://mirror.example/vibespecs".to_string()],
             cache.path(),
             backend,
@@ -2637,7 +2651,7 @@ mod tests {
         .unwrap();
 
         let v = semver::Version::parse("0.1.0").unwrap();
-        let manifest = r.fetch_dep_manifest(PackageKind::Flow, "wal", &v).unwrap();
+        let manifest = r.fetch_dep_manifest(&org(), "wal", &v).unwrap();
         assert_eq!(manifest.require_package().unwrap().name, "wal");
 
         // Clone-fallback walked primary (fail) + mirror (ok).
@@ -2661,17 +2675,17 @@ mod tests {
         .unwrap();
 
         let fake = Arc::new(FakeBackend::default());
-        let url = "git@host:org/flow-wal.git";
+        let url = "git@host:org/org.vibevm.wal.git";
         fake.seed_tags(url, vec!["v0.1.0".into()]);
         fake.seed_bootstrap(url, pkg_root.clone());
 
         let r = registry_with(
             cache.path(),
             "git@host:org",
-            NamingConvention::KindName,
+            NamingConvention::Fqdn,
             fake.clone(),
         );
-        let p = PackageRef::parse("flow:wal@0.1.0").unwrap();
+        let p = PackageRef::parse("org.vibevm/wal@0.1.0").unwrap();
         let resolved = r.resolve(&p).unwrap();
 
         let _ = r.fetch(&resolved, pkg_cache.path()).unwrap();

@@ -24,7 +24,7 @@ use std::path::{Path, PathBuf};
 use sha2::{Digest, Sha256};
 use thiserror::Error;
 use vibe_core::manifest::Manifest;
-use vibe_core::{PackageKind, PackageRef, VersionSpec};
+use vibe_core::{Group, PackageRef, VersionSpec};
 use walkdir::WalkDir;
 
 pub mod git_backend;
@@ -50,15 +50,23 @@ pub enum RegistryError {
     #[error("registry root `{0}` does not exist or is not a directory")]
     MissingRoot(PathBuf),
 
-    #[error("package `{kind}:{name}` is not in the registry")]
-    UnknownPackage { kind: PackageKind, name: String },
+    #[error("package `{group}/{name}` is not in the registry")]
+    UnknownPackage { group: Group, name: String },
 
-    #[error("no version of `{kind}:{name}` matches `{req}`")]
+    #[error("no version of `{group}/{name}` matches `{req}`")]
     NoMatchingVersion {
-        kind: PackageKind,
+        group: Group,
         name: String,
         req: String,
     },
+
+    /// A pkgref reached registry resolution without a `group`. A registry
+    /// resolves by `(group, name)` identity (PROP-008 §2.2); a bare short
+    /// name must be qualified at the CLI boundary first.
+    #[error(
+        "package reference `{0}` is not group-qualified — registry resolution needs `<group>/<name>`"
+    )]
+    UnqualifiedPkgref(String),
 
     #[error(
         "registry entry at `{path}` has an invalid directory name `{name}` — expected `v<semver>`"
@@ -101,9 +109,9 @@ pub enum RegistryError {
     /// registry was walked; the no-registries-at-all path still
     /// returns the simpler `UnknownPackage` variant for back-compat
     /// with downstream consumers that match on it.
-    #[error("package `{kind}:{name}` not found in any configured registry.\nTried:\n{summary}")]
+    #[error("package `{group}/{name}` not found in any configured registry.\nTried:\n{summary}")]
     PackageNotFoundEverywhere {
-        kind: PackageKind,
+        group: Group,
         name: String,
         summary: String,
         attempts: Vec<crate::multi_registry_resolver::RegistryWalkAttempt>,
@@ -124,7 +132,7 @@ pub enum RegistryError {
 pub trait Registry {
     fn list_versions(
         &self,
-        kind: PackageKind,
+        group: &Group,
         name: &str,
     ) -> Result<Vec<semver::Version>, RegistryError>;
 
@@ -140,7 +148,10 @@ pub trait Registry {
 /// A package pinned to a concrete version, located in the registry on disk.
 #[derive(Debug, Clone)]
 pub struct ResolvedPackage {
-    pub kind: PackageKind,
+    /// Reverse-FQDN group — the identity qualifier (PROP-008 §2.2). With
+    /// `name` it forms the `(group, name)` identity the registry resolves
+    /// by; `kind` is metadata, read off the manifest once fetched.
+    pub group: Group,
     pub name: String,
     pub version: semver::Version,
     /// Absolute path to the package's source directory inside the registry.
@@ -158,7 +169,7 @@ pub struct CachedPackage {
     pub manifest: Manifest,
     /// `sha256:<hex>` content hash over every file in the package, using
     /// relative paths for stability. The **identity** half of the
-    /// `(kind, name, version, content_hash)` tuple per PROP-002 §2.1.
+    /// `(group, name, version, content_hash)` tuple per PROP-002 §2.1.
     pub content_hash: String,
     /// Source URI recorded in the lockfile under the `source_url` field.
     /// Informational — package identity does not depend on this string.
@@ -237,16 +248,16 @@ impl LocalRegistry {
         &self.root
     }
 
-    /// List every version available for `<kind>:<name>`, sorted ascending.
+    /// List every version available for `<group>/<name>`, sorted ascending.
     pub fn list_versions(
         &self,
-        kind: PackageKind,
+        group: &Group,
         name: &str,
     ) -> Result<Vec<semver::Version>, RegistryError> {
-        let dir = self.root.join(kind.as_str()).join(name);
+        let dir = self.root.join(group.as_str()).join(name);
         if !dir.is_dir() {
             return Err(RegistryError::UnknownPackage {
-                kind,
+                group: group.clone(),
                 name: name.to_owned(),
             });
         }
@@ -284,7 +295,11 @@ impl LocalRegistry {
 
     /// Pick the highest version that satisfies `req`.
     pub fn resolve(&self, pkgref: &PackageRef) -> Result<ResolvedPackage, RegistryError> {
-        let versions = self.list_versions(pkgref.kind, &pkgref.name)?;
+        let group = pkgref
+            .group
+            .as_ref()
+            .ok_or_else(|| RegistryError::UnqualifiedPkgref(pkgref.to_string()))?;
+        let versions = self.list_versions(group, &pkgref.name)?;
         let picked = match &pkgref.version {
             VersionSpec::Latest => {
                 // Latest stable = highest version with no pre-release segment.
@@ -299,7 +314,7 @@ impl LocalRegistry {
         };
         let Some(version) = picked else {
             return Err(RegistryError::NoMatchingVersion {
-                kind: pkgref.kind,
+                group: group.clone(),
                 name: pkgref.name.clone(),
                 req: match &pkgref.version {
                     VersionSpec::Latest => "latest".to_string(),
@@ -309,18 +324,18 @@ impl LocalRegistry {
         };
         let source_dir = self
             .root
-            .join(pkgref.kind.as_str())
+            .join(group.as_str())
             .join(&pkgref.name)
             .join(format!("v{version}"));
         Ok(ResolvedPackage {
-            kind: pkgref.kind,
+            group: group.clone(),
             name: pkgref.name.clone(),
             version,
             source_dir,
         })
     }
 
-    /// Copy a resolved package into `<cache_root>/<kind>/<name>/<version>/`
+    /// Copy a resolved package into `<cache_root>/<group>/<name>/<version>/`
     /// and return a `CachedPackage` with manifest and content hash populated.
     pub fn fetch(
         &self,
@@ -328,7 +343,7 @@ impl LocalRegistry {
         cache_root: &Path,
     ) -> Result<CachedPackage, RegistryError> {
         let cache_dir = cache_root
-            .join(resolved.kind.as_str())
+            .join(resolved.group.as_str())
             .join(&resolved.name)
             .join(format!("v{}", resolved.version));
 
@@ -377,10 +392,10 @@ impl LocalRegistry {
 impl Registry for LocalRegistry {
     fn list_versions(
         &self,
-        kind: PackageKind,
+        group: &Group,
         name: &str,
     ) -> Result<Vec<semver::Version>, RegistryError> {
-        LocalRegistry::list_versions(self, kind, name)
+        LocalRegistry::list_versions(self, group, name)
     }
     fn resolve(&self, pkgref: &PackageRef) -> Result<ResolvedPackage, RegistryError> {
         LocalRegistry::resolve(self, pkgref)
@@ -472,12 +487,17 @@ mod tests {
     use std::fs;
     use tempfile::tempdir;
 
+    /// The canonical group every fixture package in these tests belongs to.
+    fn org() -> Group {
+        Group::parse("org.vibevm").unwrap()
+    }
+
     fn make_fixture_registry() -> (tempfile::TempDir, PathBuf) {
         let dir = tempdir().unwrap();
         let root = dir.path().to_path_buf();
 
-        // flow/wal/v0.1.0
-        let v1 = root.join("flow/wal/v0.1.0");
+        // org.vibevm/wal/v0.1.0
+        let v1 = root.join("org.vibevm/wal/v0.1.0");
         fs::create_dir_all(&v1).unwrap();
         fs::write(
             v1.join("vibe.toml"),
@@ -492,8 +512,8 @@ description = "WAL v0.1.0"
         .unwrap();
         fs::write(v1.join("README.md"), "# wal 0.1.0\n").unwrap();
 
-        // flow/wal/v0.2.0
-        let v2 = root.join("flow/wal/v0.2.0");
+        // org.vibevm/wal/v0.2.0
+        let v2 = root.join("org.vibevm/wal/v0.2.0");
         fs::create_dir_all(&v2).unwrap();
         fs::write(
             v2.join("vibe.toml"),
@@ -515,7 +535,7 @@ description = "WAL v0.2.0"
     fn lists_versions_sorted() {
         let (_guard, root) = make_fixture_registry();
         let reg = LocalRegistry::new(root).unwrap();
-        let versions = reg.list_versions(PackageKind::Flow, "wal").unwrap();
+        let versions = reg.list_versions(&org(), "wal").unwrap();
         assert_eq!(
             versions.iter().map(|v| v.to_string()).collect::<Vec<_>>(),
             vec!["0.1.0", "0.2.0"]
@@ -526,7 +546,7 @@ description = "WAL v0.2.0"
     fn resolves_latest() {
         let (_guard, root) = make_fixture_registry();
         let reg = LocalRegistry::new(root).unwrap();
-        let pkgref = PackageRef::parse("flow:wal").unwrap();
+        let pkgref = PackageRef::parse("org.vibevm/wal").unwrap();
         let r = reg.resolve(&pkgref).unwrap();
         assert_eq!(r.version.to_string(), "0.2.0");
     }
@@ -535,7 +555,7 @@ description = "WAL v0.2.0"
     fn resolves_exact_version() {
         let (_guard, root) = make_fixture_registry();
         let reg = LocalRegistry::new(root).unwrap();
-        let pkgref = PackageRef::parse("flow:wal@0.1.0").unwrap();
+        let pkgref = PackageRef::parse("org.vibevm/wal@0.1.0").unwrap();
         let r = reg.resolve(&pkgref).unwrap();
         assert_eq!(r.version.to_string(), "0.1.0");
     }
@@ -544,7 +564,7 @@ description = "WAL v0.2.0"
     fn resolves_range_to_highest_match() {
         let (_guard, root) = make_fixture_registry();
         let reg = LocalRegistry::new(root).unwrap();
-        let pkgref = PackageRef::parse("flow:wal@^0.1").unwrap();
+        let pkgref = PackageRef::parse("org.vibevm/wal@^0.1").unwrap();
         let r = reg.resolve(&pkgref).unwrap();
         // ^0.1 → >=0.1.0, <0.2.0 — so only 0.1.0 qualifies.
         assert_eq!(r.version.to_string(), "0.1.0");
@@ -554,7 +574,7 @@ description = "WAL v0.2.0"
     fn unknown_package_errors_clearly() {
         let (_guard, root) = make_fixture_registry();
         let reg = LocalRegistry::new(root).unwrap();
-        let pkgref = PackageRef::parse("flow:nope").unwrap();
+        let pkgref = PackageRef::parse("org.vibevm/nope").unwrap();
         let err = reg.resolve(&pkgref).unwrap_err();
         assert!(matches!(err, RegistryError::UnknownPackage { .. }));
     }
@@ -563,7 +583,7 @@ description = "WAL v0.2.0"
     fn no_matching_version_errors() {
         let (_guard, root) = make_fixture_registry();
         let reg = LocalRegistry::new(root).unwrap();
-        let pkgref = PackageRef::parse("flow:wal@^9.0").unwrap();
+        let pkgref = PackageRef::parse("org.vibevm/wal@^9.0").unwrap();
         let err = reg.resolve(&pkgref).unwrap_err();
         assert!(matches!(err, RegistryError::NoMatchingVersion { .. }));
     }
@@ -573,7 +593,7 @@ description = "WAL v0.2.0"
         let (_guard, root) = make_fixture_registry();
         let reg = LocalRegistry::new(root).unwrap();
         let cache_dir = tempdir().unwrap();
-        let pkgref = PackageRef::parse("flow:wal@0.2.0").unwrap();
+        let pkgref = PackageRef::parse("org.vibevm/wal@0.2.0").unwrap();
         let resolved = reg.resolve(&pkgref).unwrap();
         let cached = reg.fetch(&resolved, cache_dir.path()).unwrap();
         assert!(cached.cache_dir.join("vibe.toml").exists());
@@ -589,7 +609,7 @@ description = "WAL v0.2.0"
         let reg = LocalRegistry::new(root).unwrap();
         let cache_a = tempdir().unwrap();
         let cache_b = tempdir().unwrap();
-        let pkgref = PackageRef::parse("flow:wal@0.2.0").unwrap();
+        let pkgref = PackageRef::parse("org.vibevm/wal@0.2.0").unwrap();
         let resolved = reg.resolve(&pkgref).unwrap();
         let a = reg.fetch(&resolved, cache_a.path()).unwrap();
         let b = reg.fetch(&resolved, cache_b.path()).unwrap();

@@ -73,7 +73,12 @@ impl PackageMeta {
     pub fn as_package_ref(&self) -> Result<PackageRef> {
         let req = semver::VersionReq::parse(&format!("={}", self.version))
             .expect("exact version string always parses as VersionReq");
-        PackageRef::new(self.kind, self.name.clone(), VersionSpec::Req(req))
+        PackageRef::new(
+            Some(self.kind),
+            Some(self.group.clone()),
+            self.name.clone(),
+            VersionSpec::Req(req),
+        )
     }
 }
 
@@ -368,7 +373,7 @@ pub struct Requires {
     /// once a workspace has finalised the manifest. PROP-007 §2.6.
     pub var_packages: Vec<VarRegistryDep>,
     /// Per-dependency inclusion type the consumer declared (PROP-009 §2.4),
-    /// keyed by the bare `<kind>:<name>` pkgref. Every declared `link` is
+    /// keyed by the `<group>/<name>` identity. Every declared `link` is
     /// stored, **including an explicit `static`** — so a consumer's explicit
     /// choice can be told apart from an absent one. The distinction is
     /// load-bearing: an explicit `link` overrides a workspace
@@ -391,33 +396,48 @@ impl Requires {
             && self.links.is_empty()
     }
 
-    /// Return every root pkgref (registry-resolved + git-source) in a single
-    /// iterator. Order: `packages` first, `git_packages` after.
-    pub fn iter_pkgrefs(&self) -> impl Iterator<Item = (PackageKind, &str)> {
+    /// Return every root dependency's `(group, name)` identity in a single
+    /// iterator. Order: `packages`, `git_packages`, `path_packages`,
+    /// `var_packages`. The group is `Option` only because a `packages`
+    /// entry's `PackageRef` carries an optional group — a well-formed
+    /// `[requires]` always qualifies it.
+    pub fn iter_pkgrefs(&self) -> impl Iterator<Item = (Option<&Group>, &str)> {
         self.packages
             .iter()
-            .map(|p| (p.kind, p.name.as_str()))
-            .chain(self.git_packages.iter().map(|g| (g.kind, g.name.as_str())))
-            .chain(self.path_packages.iter().map(|p| (p.kind, p.name.as_str())))
-            .chain(self.var_packages.iter().map(|v| (v.kind, v.name.as_str())))
+            .map(|p| (p.group.as_ref(), p.name.as_str()))
+            .chain(
+                self.git_packages
+                    .iter()
+                    .map(|g| (Some(&g.group), g.name.as_str())),
+            )
+            .chain(
+                self.path_packages
+                    .iter()
+                    .map(|p| (Some(&p.group), p.name.as_str())),
+            )
+            .chain(
+                self.var_packages
+                    .iter()
+                    .map(|v| (Some(&v.group), v.name.as_str())),
+            )
     }
 
-    /// The inclusion type (PROP-009 §2.4) in effect for `<kind>:<name>` in
-    /// this `[requires]`, with the contract default applied — an absent
-    /// declaration resolves to [`LinkType::Static`].
-    pub fn link_for(&self, kind: PackageKind, name: &str) -> LinkType {
-        self.declared_link(kind, name).unwrap_or_default()
+    /// The inclusion type (PROP-009 §2.4) in effect for the `<group>/<name>`
+    /// dependency in this `[requires]`, with the contract default applied —
+    /// an absent declaration resolves to [`LinkType::Static`].
+    pub fn link_for(&self, group: &Group, name: &str) -> LinkType {
+        self.declared_link(group, name).unwrap_or_default()
     }
 
     /// The inclusion type the consumer **explicitly declared** for
-    /// `<kind>:<name>`, or `None` if it declared none. Unlike
+    /// `<group>/<name>`, or `None` if it declared none. Unlike
     /// [`Requires::link_for`], an explicit `link = "static"` returns
     /// `Some(LinkType::Static)`, not `None`: the loading-model precedence
     /// (PROP-009 §2.4) lets an explicit declaration override a workspace
     /// `[boot].default_link` or a package-suggested link, and that
     /// distinction is lost if explicit `static` is folded into "absent".
-    pub fn declared_link(&self, kind: PackageKind, name: &str) -> Option<LinkType> {
-        self.links.get(&format!("{kind}:{name}")).copied()
+    pub fn declared_link(&self, group: &Group, name: &str) -> Option<LinkType> {
+        self.links.get(&link_key(group, name)).copied()
     }
 }
 
@@ -427,7 +447,10 @@ impl Requires {
 /// Spec: PROP-002 §2.4.1.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct GitPackageDep {
-    pub kind: PackageKind,
+    /// Optional `kind` prefix carried by the pkgref key (PROP-008 §2.4).
+    pub kind: Option<PackageKind>,
+    /// Reverse-FQDN group — a manifest pkgref is always qualified.
+    pub group: Group,
     pub name: String,
     /// Full git URL of the single-package repository.
     pub url: String,
@@ -472,7 +495,10 @@ impl GitRefKind {
 /// in a local directory — typically a sibling workspace member. PROP-007 §2.5.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct PathPackageDep {
-    pub kind: PackageKind,
+    /// Optional `kind` prefix carried by the pkgref key (PROP-008 §2.4).
+    pub kind: Option<PackageKind>,
+    /// Reverse-FQDN group — a manifest pkgref is always qualified.
+    pub group: Group,
     pub name: String,
     /// Path to the package directory, relative to the manifest that declares
     /// this dependency. Forward-slashed; portable across machines.
@@ -491,7 +517,10 @@ pub struct PathPackageDep {
 /// the unresolved placeholder name; `vibe-workspace` resolves it. PROP-007 §2.6.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct VarRegistryDep {
-    pub kind: PackageKind,
+    /// Optional `kind` prefix carried by the pkgref key (PROP-008 §2.4).
+    pub kind: Option<PackageKind>,
+    /// Reverse-FQDN group — a manifest pkgref is always qualified.
+    pub group: Group,
     pub name: String,
     /// The `[workspace.versions]` placeholder name this dependency references.
     pub var: String,
@@ -560,12 +589,16 @@ impl From<Requires> for RequiresWire {
     fn from(r: Requires) -> Self {
         let mut packages: BTreeMap<String, RequiresPackageEntryWire> = BTreeMap::new();
         for p in &r.packages {
-            let key = format!("{}:{}", p.kind, p.name);
+            let key = wire_key(p.kind, p.group.as_ref(), &p.name);
+            let link = p
+                .group
+                .as_ref()
+                .and_then(|g| r.links.get(&link_key(g, &p.name)).copied());
             let constraint = version_spec_to_constraint_str(&p.version);
             // A registry dep carrying a declared `link` cannot use the
             // bare constraint-string form — it must round-trip as an
             // inline table so the `link` field has somewhere to live.
-            let value = match r.links.get(&key).copied() {
+            let value = match link {
                 Some(link) => RequiresPackageEntryWire::Inline(InlinePackageDepWire {
                     version: Some(VersionFieldWire::Constraint(constraint)),
                     link: Some(link),
@@ -576,7 +609,7 @@ impl From<Requires> for RequiresWire {
             packages.insert(key, value);
         }
         for g in &r.git_packages {
-            let key = format!("{}:{}", g.kind, g.name);
+            let key = wire_key(g.kind, Some(&g.group), &g.name);
             let inline = InlinePackageDepWire {
                 version: g
                     .version
@@ -602,28 +635,28 @@ impl From<Requires> for RequiresWire {
                     Some(g.auth)
                 },
                 token_env: g.token_env.clone(),
-                link: r.links.get(&key).copied(),
+                link: r.links.get(&link_key(&g.group, &g.name)).copied(),
             };
             packages.insert(key, RequiresPackageEntryWire::Inline(inline));
         }
         for p in &r.path_packages {
-            let key = format!("{}:{}", p.kind, p.name);
+            let key = wire_key(p.kind, Some(&p.group), &p.name);
             let inline = InlinePackageDepWire {
                 version: p
                     .version
                     .as_ref()
                     .map(|v| VersionFieldWire::Constraint(version_spec_to_constraint_str(v))),
                 path: Some(p.path.clone()),
-                link: r.links.get(&key).copied(),
+                link: r.links.get(&link_key(&p.group, &p.name)).copied(),
                 ..Default::default()
             };
             packages.insert(key, RequiresPackageEntryWire::Inline(inline));
         }
         for v in &r.var_packages {
-            let key = format!("{}:{}", v.kind, v.name);
+            let key = wire_key(v.kind, Some(&v.group), &v.name);
             let inline = InlinePackageDepWire {
                 version: Some(VersionFieldWire::Var { var: v.var.clone() }),
-                link: r.links.get(&key).copied(),
+                link: r.links.get(&link_key(&v.group, &v.name)).copied(),
                 ..Default::default()
             };
             packages.insert(key, RequiresPackageEntryWire::Inline(inline));
@@ -645,11 +678,14 @@ impl TryFrom<RequiresWire> for Requires {
         let mut var_packages: Vec<VarRegistryDep> = Vec::new();
         let mut links: BTreeMap<String, LinkType> = BTreeMap::new();
         for (key, entry) in w.packages {
-            let (kind, name) = parse_pkgref_key(&key).map_err(|e| e.to_string())?;
+            let (kind, group, name) = parse_pkgref_key(&key).map_err(|e| e.to_string())?;
             match entry {
                 RequiresPackageEntryWire::Constraint(spec_str) => {
                     let version = VersionSpec::parse(&spec_str).map_err(|e| e.to_string())?;
-                    packages.push(PackageRef::new(kind, name, version).map_err(|e| e.to_string())?);
+                    packages.push(
+                        PackageRef::new(kind, Some(group), name, version)
+                            .map_err(|e| e.to_string())?,
+                    );
                 }
                 RequiresPackageEntryWire::Inline(inline) => {
                     // Record the consumer's `link` declaration (PROP-009
@@ -660,7 +696,7 @@ impl TryFrom<RequiresWire> for Requires {
                     // `[boot].default_link` / a package-suggested link, and
                     // that intent is lost if explicit `static` is dropped.
                     if let Some(link) = inline.link {
-                        links.insert(format!("{kind}:{name}"), link);
+                        links.insert(link_key(&group, &name), link);
                     }
                     // Dispatch on source-kind: path wins over git wins over
                     // registry. A registry-resolved entry whose version is a
@@ -669,41 +705,54 @@ impl TryFrom<RequiresWire> for Requires {
                     // rejects fields belonging to a different source-kind.
                     if inline.path.is_some() {
                         path_packages.push(
-                            inline_to_path_dep(kind, name, inline).map_err(|e| e.to_string())?,
+                            inline_to_path_dep(kind, group, name, inline)
+                                .map_err(|e| e.to_string())?,
                         );
                     } else if inline.git.is_some() {
                         git_packages.push(
-                            inline_to_git_dep(kind, name, inline).map_err(|e| e.to_string())?,
+                            inline_to_git_dep(kind, group, name, inline)
+                                .map_err(|e| e.to_string())?,
                         );
                     } else if matches!(inline.version, Some(VersionFieldWire::Var { .. })) {
                         var_packages.push(
-                            inline_to_var_dep(kind, name, inline).map_err(|e| e.to_string())?,
+                            inline_to_var_dep(kind, group, name, inline)
+                                .map_err(|e| e.to_string())?,
                         );
                     } else {
                         packages.push(
-                            inline_to_registry_pkgref(kind, name, inline)
+                            inline_to_registry_pkgref(kind, group, name, inline)
                                 .map_err(|e| e.to_string())?,
                         );
                     }
                 }
             }
         }
-        // Defence-in-depth: one `(kind, name)` cannot land in two buckets.
+        // Defence-in-depth: one `(group, name)` cannot land in two buckets.
         // The wire form is a single TOML table with unique keys, so this is
         // unreachable from a valid manifest — kept against a future wire shape.
-        let mut seen: std::collections::HashSet<(PackageKind, String)> =
-            std::collections::HashSet::new();
-        for (kind, name) in packages
+        let mut seen: std::collections::HashSet<(Group, String)> = std::collections::HashSet::new();
+        for (group, name) in packages
             .iter()
-            .map(|p| (p.kind, p.name.clone()))
-            .chain(git_packages.iter().map(|g| (g.kind, g.name.clone())))
-            .chain(path_packages.iter().map(|p| (p.kind, p.name.clone())))
-            .chain(var_packages.iter().map(|v| (v.kind, v.name.clone())))
+            .filter_map(|p| p.group.clone().map(|g| (g, p.name.clone())))
+            .chain(
+                git_packages
+                    .iter()
+                    .map(|g| (g.group.clone(), g.name.clone())),
+            )
+            .chain(
+                path_packages
+                    .iter()
+                    .map(|p| (p.group.clone(), p.name.clone())),
+            )
+            .chain(
+                var_packages
+                    .iter()
+                    .map(|v| (v.group.clone(), v.name.clone())),
+            )
         {
-            if !seen.insert((kind, name.clone())) {
-                return Err(format!(
-                    "dependency `{kind}:{name}` declared more than once"
-                ));
+            let label = link_key(&group, &name);
+            if !seen.insert((group, name)) {
+                return Err(format!("dependency `{label}` declared more than once"));
             }
         }
         Ok(Requires {
@@ -717,7 +766,7 @@ impl TryFrom<RequiresWire> for Requires {
     }
 }
 
-fn parse_pkgref_key(key: &str) -> Result<(PackageKind, String)> {
+fn parse_pkgref_key(key: &str) -> Result<(Option<PackageKind>, Group, String)> {
     if key.contains('@') {
         return Err(Error::BadDependencyDecl {
             input: key.to_string(),
@@ -725,15 +774,21 @@ fn parse_pkgref_key(key: &str) -> Result<(PackageKind, String)> {
         });
     }
     let pr = PackageRef::parse(key)?;
-    Ok((pr.kind, pr.name))
+    let group = pr.group.ok_or_else(|| Error::BadDependencyDecl {
+        input: key.to_string(),
+        reason: "a manifest dependency must be group-qualified — write `<group>/<name>`"
+            .to_string(),
+    })?;
+    Ok((pr.kind, group, pr.name))
 }
 
 fn inline_to_registry_pkgref(
-    kind: PackageKind,
+    kind: Option<PackageKind>,
+    group: Group,
     name: String,
     inline: InlinePackageDepWire,
 ) -> Result<PackageRef> {
-    let key_for_err = format!("{kind}:{name}");
+    let key_for_err = link_key(&group, &name);
     if inline.tag.is_some() || inline.branch.is_some() || inline.rev.is_some() {
         return Err(Error::BadDependencyDecl {
             input: key_for_err,
@@ -755,15 +810,16 @@ fn inline_to_registry_pkgref(
         }
         None => VersionSpec::Latest,
     };
-    PackageRef::new(kind, name, version)
+    PackageRef::new(kind, Some(group), name, version)
 }
 
 fn inline_to_git_dep(
-    kind: PackageKind,
+    kind: Option<PackageKind>,
+    group: Group,
     name: String,
     inline: InlinePackageDepWire,
 ) -> Result<GitPackageDep> {
-    let key_for_err = format!("{kind}:{name}");
+    let key_for_err = link_key(&group, &name);
     let url = inline.git.expect("caller checked git is Some");
     let ref_kind = match (inline.tag, inline.branch, inline.rev) {
         (Some(t), None, None) => GitRefKind::Tag(t),
@@ -786,6 +842,7 @@ fn inline_to_git_dep(
     let version = constraint_only_version(&key_for_err, inline.version, "a git-source dependency")?;
     Ok(GitPackageDep {
         kind,
+        group,
         name,
         url,
         ref_kind,
@@ -796,11 +853,12 @@ fn inline_to_git_dep(
 }
 
 fn inline_to_path_dep(
-    kind: PackageKind,
+    kind: Option<PackageKind>,
+    group: Group,
     name: String,
     inline: InlinePackageDepWire,
 ) -> Result<PathPackageDep> {
-    let key_for_err = format!("{kind}:{name}");
+    let key_for_err = link_key(&group, &name);
     let path = inline.path.expect("caller checked path is Some");
     if inline.git.is_some()
         || inline.tag.is_some()
@@ -823,6 +881,7 @@ fn inline_to_path_dep(
         constraint_only_version(&key_for_err, inline.version, "a path-source dependency")?;
     Ok(PathPackageDep {
         kind,
+        group,
         name,
         path,
         version,
@@ -830,11 +889,12 @@ fn inline_to_path_dep(
 }
 
 fn inline_to_var_dep(
-    kind: PackageKind,
+    kind: Option<PackageKind>,
+    group: Group,
     name: String,
     inline: InlinePackageDepWire,
 ) -> Result<VarRegistryDep> {
-    let key_for_err = format!("{kind}:{name}");
+    let key_for_err = link_key(&group, &name);
     if inline.git.is_some()
         || inline.path.is_some()
         || inline.tag.is_some()
@@ -854,7 +914,12 @@ fn inline_to_var_dep(
         Some(VersionFieldWire::Var { var }) => var,
         _ => unreachable!("caller checked version is a Var"),
     };
-    Ok(VarRegistryDep { kind, name, var })
+    Ok(VarRegistryDep {
+        kind,
+        group,
+        name,
+        var,
+    })
 }
 
 /// Extract an optional concrete [`VersionSpec`] from a wire `version` field,
@@ -876,6 +941,26 @@ fn constraint_only_version(
             ),
         }),
     }
+}
+
+/// The `[requires.packages]` table key for a dependency — the canonical
+/// version-less pkgref `[<kind>:]<group>/<name>` (PROP-008 §2.4 / §2.6).
+fn wire_key(kind: Option<PackageKind>, group: Option<&Group>, name: &str) -> String {
+    let base = match group {
+        Some(g) => format!("{g}/{name}"),
+        None => name.to_string(),
+    };
+    match kind {
+        Some(k) => format!("{k}:{base}"),
+        None => base,
+    }
+}
+
+/// The `Requires::links` map key — the kind-free `<group>/<name>` identity
+/// (PROP-008 §2.2). Version-independent, so it survives the
+/// `var_packages` → `packages` resolution the workspace loader performs.
+fn link_key(group: &Group, name: &str) -> String {
+    format!("{group}/{name}")
 }
 
 fn version_spec_to_constraint_str(spec: &VersionSpec) -> String {
@@ -1028,6 +1113,11 @@ mod tests {
         toml::from_str(body).unwrap()
     }
 
+    /// The canonical group every fixture package in these tests belongs to.
+    fn org() -> Group {
+        Group::parse("org.vibevm").unwrap()
+    }
+
     #[test]
     fn publish_posture_default_is_all_true() {
         assert!(PublishPosture::default().is_default());
@@ -1073,40 +1163,43 @@ mod tests {
     fn requires_map_bare_constraint_parses() {
         let r = requires_from_toml(
             r#"[packages]
-"flow:wal" = "^0.3"
-"feat:auth" = "*"
+"org.vibevm/wal" = "^0.3"
+"org.vibevm/auth" = "*"
 "#,
         );
         assert_eq!(r.packages.len(), 2);
         assert!(r.git_packages.is_empty());
-        // BTreeMap ordering: feat:auth < flow:wal alphabetically.
-        assert_eq!(r.packages[0].qualified_name(), "feat:auth");
-        assert_eq!(r.packages[1].qualified_name(), "flow:wal");
+        // BTreeMap ordering: org.vibevm/auth < org.vibevm/wal alphabetically.
+        assert_eq!(r.packages[0].qualified_name(), "org.vibevm/auth");
+        assert_eq!(r.packages[1].qualified_name(), "org.vibevm/wal");
     }
 
     #[test]
     fn requires_inline_table_with_version_parses() {
         let r = requires_from_toml(
             r#"[packages]
-"flow:wal" = { version = "^0.3" }
+"org.vibevm/wal" = { version = "^0.3" }
 "#,
         );
         assert_eq!(r.packages.len(), 1);
-        assert_eq!(r.packages[0].qualified_name(), "flow:wal");
+        assert_eq!(r.packages[0].qualified_name(), "org.vibevm/wal");
         assert!(r.git_packages.is_empty());
     }
 
     #[test]
     fn git_source_with_tag_parses() {
+        // A kind-prefixed manifest key — the prefix is optional (PROP-008
+        // §2.4) and, when present, is parsed onto the dependency.
         let r = requires_from_toml(
             r#"[packages]
-"flow:internal" = { git = "https://github.com/me/flow-internal", tag = "v0.1.0" }
+"flow:org.vibevm/internal" = { git = "https://github.com/me/flow-internal", tag = "v0.1.0" }
 "#,
         );
         assert!(r.packages.is_empty());
         assert_eq!(r.git_packages.len(), 1);
         let g = &r.git_packages[0];
-        assert_eq!(g.kind, PackageKind::Flow);
+        assert_eq!(g.kind, Some(PackageKind::Flow));
+        assert_eq!(g.group, org());
         assert_eq!(g.name, "internal");
         assert_eq!(g.url, "https://github.com/me/flow-internal");
         assert!(matches!(&g.ref_kind, GitRefKind::Tag(t) if t == "v0.1.0"));
@@ -1119,13 +1212,13 @@ mod tests {
     fn git_source_with_branch_and_rev_parse() {
         let b = requires_from_toml(
             r#"[packages]
-"flow:experimental" = { git = "https://github.com/x/y", branch = "main" }
+"org.vibevm/experimental" = { git = "https://github.com/x/y", branch = "main" }
 "#,
         );
         assert!(matches!(&b.git_packages[0].ref_kind, GitRefKind::Branch(s) if s == "main"));
         let v = requires_from_toml(
             r#"[packages]
-"flow:fork" = { git = "https://github.com/x/y", rev = "abc12345" }
+"org.vibevm/fork" = { git = "https://github.com/x/y", rev = "abc12345" }
 "#,
         );
         assert!(matches!(&v.git_packages[0].ref_kind, GitRefKind::Rev(s) if s == "abc12345"));
@@ -1135,7 +1228,7 @@ mod tests {
     fn git_source_with_auth_and_version_parse() {
         let r = requires_from_toml(
             r#"[packages]
-"flow:secret" = { git = "https://gitlab.acme.example/x/y", tag = "v1.0", auth = "token-env", token_env = "MY_TOKEN", version = "^1.0" }
+"org.vibevm/secret" = { git = "https://gitlab.acme.example/x/y", tag = "v1.0", auth = "token-env", token_env = "MY_TOKEN", version = "^1.0" }
 "#,
         );
         let g = &r.git_packages[0];
@@ -1148,14 +1241,14 @@ mod tests {
     fn git_source_rejects_no_ref_and_multiple_refs() {
         let no_ref = toml::from_str::<Requires>(
             r#"[packages]
-"flow:bad" = { git = "https://x/y" }
+"org.vibevm/bad" = { git = "https://x/y" }
 "#,
         )
         .unwrap_err();
         assert!(no_ref.to_string().contains("requires exactly one of"));
         let multi = toml::from_str::<Requires>(
             r#"[packages]
-"flow:bad" = { git = "https://x/y", tag = "v1", branch = "main" }
+"org.vibevm/bad" = { git = "https://x/y", tag = "v1", branch = "main" }
 "#,
         )
         .unwrap_err();
@@ -1166,7 +1259,7 @@ mod tests {
     fn registry_inline_rejects_git_fields() {
         let err = toml::from_str::<Requires>(
             r#"[packages]
-"flow:bad" = { version = "^0.3", tag = "v1" }
+"org.vibevm/bad" = { version = "^0.3", tag = "v1" }
 "#,
         )
         .unwrap_err();
@@ -1177,7 +1270,7 @@ mod tests {
     fn rejects_at_in_pkgref_key() {
         let err = toml::from_str::<Requires>(
             r#"[packages]
-"flow:wal@^0.3" = "*"
+"org.vibevm/wal@^0.3" = "*"
 "#,
         )
         .unwrap_err();
@@ -1191,14 +1284,15 @@ mod tests {
     fn path_source_parses() {
         let r = requires_from_toml(
             r#"[packages]
-"flow:wal" = { path = "../flow-wal" }
+"flow:org.vibevm/wal" = { path = "../flow-wal" }
 "#,
         );
         assert!(r.packages.is_empty());
         assert!(r.git_packages.is_empty());
         assert_eq!(r.path_packages.len(), 1);
         let p = &r.path_packages[0];
-        assert_eq!(p.kind, PackageKind::Flow);
+        assert_eq!(p.kind, Some(PackageKind::Flow));
+        assert_eq!(p.group, org());
         assert_eq!(p.name, "wal");
         assert_eq!(p.path, "../flow-wal");
         assert!(p.version.is_none());
@@ -1208,7 +1302,7 @@ mod tests {
     fn path_source_dual_form_parses() {
         let r = requires_from_toml(
             r#"[packages]
-"flow:wal" = { path = "../flow-wal", version = "^0.1" }
+"org.vibevm/wal" = { path = "../flow-wal", version = "^0.1" }
 "#,
         );
         assert_eq!(r.path_packages.len(), 1);
@@ -1219,7 +1313,7 @@ mod tests {
     fn path_source_rejects_git_alongside() {
         let err = toml::from_str::<Requires>(
             r#"[packages]
-"flow:bad" = { path = "../x", git = "https://x/y" }
+"org.vibevm/bad" = { path = "../x", git = "https://x/y" }
 "#,
         )
         .unwrap_err();
@@ -1230,8 +1324,8 @@ mod tests {
     fn path_source_round_trips() {
         let original = requires_from_toml(
             r#"[packages]
-"flow:wal" = { path = "../flow-wal", version = "^0.1" }
-"feat:auth" = { path = "../feat-auth" }
+"org.vibevm/wal" = { path = "../flow-wal", version = "^0.1" }
+"org.vibevm/auth" = { path = "../feat-auth" }
 "#,
         );
         let rendered = toml::to_string_pretty(&original).unwrap();
@@ -1244,7 +1338,7 @@ mod tests {
     fn version_var_parses() {
         let r = requires_from_toml(
             r#"[packages]
-"flow:wal" = { version.var = "core" }
+"flow:org.vibevm/wal" = { version.var = "core" }
 "#,
         );
         assert!(r.packages.is_empty());
@@ -1252,7 +1346,8 @@ mod tests {
         assert!(r.path_packages.is_empty());
         assert_eq!(r.var_packages.len(), 1);
         let v = &r.var_packages[0];
-        assert_eq!(v.kind, PackageKind::Flow);
+        assert_eq!(v.kind, Some(PackageKind::Flow));
+        assert_eq!(v.group, org());
         assert_eq!(v.name, "wal");
         assert_eq!(v.var, "core");
     }
@@ -1261,8 +1356,8 @@ mod tests {
     fn version_var_round_trips() {
         let original = requires_from_toml(
             r#"[packages]
-"flow:wal" = { version.var = "core" }
-"feat:auth" = "^0.2"
+"org.vibevm/wal" = { version.var = "core" }
+"org.vibevm/auth" = "^0.2"
 "#,
         );
         let rendered = toml::to_string_pretty(&original).unwrap();
@@ -1276,7 +1371,7 @@ mod tests {
     fn version_var_rejected_on_git_source() {
         let err = toml::from_str::<Requires>(
             r#"[packages]
-"flow:bad" = { git = "https://x/y", tag = "v1", version.var = "core" }
+"org.vibevm/bad" = { git = "https://x/y", tag = "v1", version.var = "core" }
 "#,
         )
         .unwrap_err();
@@ -1287,7 +1382,7 @@ mod tests {
     fn version_var_rejects_extra_fields() {
         let err = toml::from_str::<Requires>(
             r#"[packages]
-"flow:bad" = { version.var = "core", tag = "v1" }
+"org.vibevm/bad" = { version.var = "core", tag = "v1" }
 "#,
         )
         .unwrap_err();
@@ -1300,8 +1395,8 @@ mod tests {
             r#"capabilities = ["db:any@>=1.0"]
 
 [packages]
-"flow:internal" = { git = "https://github.com/me/flow-internal", tag = "v0.1.0", auth = "token-env", token_env = "MY" }
-"flow:wal" = "^0.3"
+"flow:org.vibevm/internal" = { git = "https://github.com/me/flow-internal", tag = "v0.1.0", auth = "token-env", token_env = "MY" }
+"org.vibevm/wal" = "^0.3"
 "#,
         );
         let rendered = toml::to_string_pretty(&original).unwrap();
@@ -1329,7 +1424,8 @@ mod tests {
             publish: PublishPosture::default(),
         };
         let r = meta.as_package_ref().unwrap();
-        assert_eq!(r.kind, PackageKind::Flow);
+        assert_eq!(r.kind, Some(PackageKind::Flow));
+        assert_eq!(r.group, Some(org()));
         assert_eq!(r.name, "wal");
         assert!(r.version.matches(&semver::Version::parse("0.3.0").unwrap()));
         assert!(!r.version.matches(&semver::Version::parse("0.3.1").unwrap()));
@@ -1365,32 +1461,32 @@ stacks = ["rust-stack", "python-stack"]
     fn requires_link_on_registry_dep_parses() {
         let r = requires_from_toml(
             r#"[packages]
-"flow:wal" = { version = "^0.3", link = "inline" }
+"org.vibevm/wal" = { version = "^0.3", link = "inline" }
 "#,
         );
         assert_eq!(r.packages.len(), 1);
-        assert_eq!(r.link_for(PackageKind::Flow, "wal"), LinkType::Inline);
+        assert_eq!(r.link_for(&org(), "wal"), LinkType::Inline);
     }
 
     #[test]
     fn requires_link_dynamic_parses() {
         let r = requires_from_toml(
             r#"[packages]
-"stack:rust" = { version = "^2.0", link = "dynamic" }
+"org.vibevm/rust" = { version = "^2.0", link = "dynamic" }
 "#,
         );
-        assert_eq!(r.link_for(PackageKind::Stack, "rust"), LinkType::Dynamic);
+        assert_eq!(r.link_for(&org(), "rust"), LinkType::Dynamic);
     }
 
     #[test]
     fn requires_link_absent_is_static() {
         let r = requires_from_toml(
             r#"[packages]
-"flow:wal" = "^0.3"
+"org.vibevm/wal" = "^0.3"
 "#,
         );
         assert!(r.links.is_empty());
-        assert_eq!(r.link_for(PackageKind::Flow, "wal"), LinkType::Static);
+        assert_eq!(r.link_for(&org(), "wal"), LinkType::Static);
     }
 
     #[test]
@@ -1401,19 +1497,13 @@ stacks = ["rust-stack", "python-stack"]
         // survives a serialize round-trip as an inline table.
         let r = requires_from_toml(
             r#"[packages]
-"flow:wal" = { version = "^0.3", link = "static" }
+"org.vibevm/wal" = { version = "^0.3", link = "static" }
 "#,
         );
-        assert_eq!(
-            r.declared_link(PackageKind::Flow, "wal"),
-            Some(LinkType::Static)
-        );
-        assert_eq!(r.link_for(PackageKind::Flow, "wal"), LinkType::Static);
+        assert_eq!(r.declared_link(&org(), "wal"), Some(LinkType::Static));
+        assert_eq!(r.link_for(&org(), "wal"), LinkType::Static);
         let back: Requires = toml::from_str(&toml::to_string_pretty(&r).unwrap()).unwrap();
-        assert_eq!(
-            back.declared_link(PackageKind::Flow, "wal"),
-            Some(LinkType::Static)
-        );
+        assert_eq!(back.declared_link(&org(), "wal"), Some(LinkType::Static));
     }
 
     #[test]
@@ -1422,51 +1512,51 @@ stacks = ["rust-stack", "python-stack"]
         // while `link_for` applies the `static` default.
         let r = requires_from_toml(
             r#"[packages]
-"flow:wal" = "^0.3"
+"org.vibevm/wal" = "^0.3"
 "#,
         );
-        assert_eq!(r.declared_link(PackageKind::Flow, "wal"), None);
-        assert_eq!(r.link_for(PackageKind::Flow, "wal"), LinkType::Static);
+        assert_eq!(r.declared_link(&org(), "wal"), None);
+        assert_eq!(r.link_for(&org(), "wal"), LinkType::Static);
     }
 
     #[test]
     fn requires_link_on_git_source_parses() {
         let r = requires_from_toml(
             r#"[packages]
-"flow:internal" = { git = "https://github.com/me/flow-internal", tag = "v0.1.0", link = "dynamic" }
+"org.vibevm/internal" = { git = "https://github.com/me/flow-internal", tag = "v0.1.0", link = "dynamic" }
 "#,
         );
         assert_eq!(r.git_packages.len(), 1);
-        assert_eq!(r.link_for(PackageKind::Flow, "internal"), LinkType::Dynamic);
+        assert_eq!(r.link_for(&org(), "internal"), LinkType::Dynamic);
     }
 
     #[test]
     fn requires_link_on_path_source_parses() {
         let r = requires_from_toml(
             r#"[packages]
-"flow:wal" = { path = "../flow-wal", link = "inline" }
+"org.vibevm/wal" = { path = "../flow-wal", link = "inline" }
 "#,
         );
         assert_eq!(r.path_packages.len(), 1);
-        assert_eq!(r.link_for(PackageKind::Flow, "wal"), LinkType::Inline);
+        assert_eq!(r.link_for(&org(), "wal"), LinkType::Inline);
     }
 
     #[test]
     fn requires_link_on_var_dep_parses() {
         let r = requires_from_toml(
             r#"[packages]
-"flow:wal" = { version.var = "core", link = "dynamic" }
+"org.vibevm/wal" = { version.var = "core", link = "dynamic" }
 "#,
         );
         assert_eq!(r.var_packages.len(), 1);
-        assert_eq!(r.link_for(PackageKind::Flow, "wal"), LinkType::Dynamic);
+        assert_eq!(r.link_for(&org(), "wal"), LinkType::Dynamic);
     }
 
     #[test]
     fn requires_link_rejects_unknown_value() {
         let err = toml::from_str::<Requires>(
             r#"[packages]
-"flow:wal" = { version = "^0.3", link = "weird" }
+"org.vibevm/wal" = { version = "^0.3", link = "weird" }
 "#,
         )
         .unwrap_err();
@@ -1482,7 +1572,7 @@ stacks = ["rust-stack", "python-stack"]
         // form — it must serialise as an inline table so `link` survives.
         let r = requires_from_toml(
             r#"[packages]
-"flow:wal" = { version = "^0.3", link = "inline" }
+"org.vibevm/wal" = { version = "^0.3", link = "inline" }
 "#,
         );
         let rendered = toml::to_string_pretty(&r).unwrap();
@@ -1493,11 +1583,11 @@ stacks = ["rust-stack", "python-stack"]
     fn requires_link_round_trips_across_all_source_kinds() {
         let original = requires_from_toml(
             r#"[packages]
-"flow:wal" = { version = "^0.3", link = "inline" }
-"flow:internal" = { git = "https://github.com/me/flow-internal", tag = "v0.1.0", link = "dynamic" }
-"feat:auth" = { path = "../feat-auth", link = "dynamic" }
-"stack:rust" = { version.var = "core", link = "inline" }
-"flow:plain" = "^0.1"
+"org.vibevm/wal" = { version = "^0.3", link = "inline" }
+"org.vibevm/internal" = { git = "https://github.com/me/flow-internal", tag = "v0.1.0", link = "dynamic" }
+"org.vibevm/auth" = { path = "../feat-auth", link = "dynamic" }
+"org.vibevm/rust" = { version.var = "core", link = "inline" }
+"org.vibevm/plain" = "^0.1"
 "#,
         );
         let rendered = toml::to_string_pretty(&original).unwrap();
@@ -1505,14 +1595,11 @@ stacks = ["rust-stack", "python-stack"]
         assert_eq!(original, back);
         // Four declared links survive; the bare entry stays implicitly static.
         assert_eq!(back.links.len(), 4);
-        assert_eq!(back.link_for(PackageKind::Flow, "wal"), LinkType::Inline);
-        assert_eq!(
-            back.link_for(PackageKind::Flow, "internal"),
-            LinkType::Dynamic
-        );
-        assert_eq!(back.link_for(PackageKind::Feat, "auth"), LinkType::Dynamic);
-        assert_eq!(back.link_for(PackageKind::Stack, "rust"), LinkType::Inline);
-        assert_eq!(back.link_for(PackageKind::Flow, "plain"), LinkType::Static);
+        assert_eq!(back.link_for(&org(), "wal"), LinkType::Inline);
+        assert_eq!(back.link_for(&org(), "internal"), LinkType::Dynamic);
+        assert_eq!(back.link_for(&org(), "auth"), LinkType::Dynamic);
+        assert_eq!(back.link_for(&org(), "rust"), LinkType::Inline);
+        assert_eq!(back.link_for(&org(), "plain"), LinkType::Static);
     }
 
     #[test]

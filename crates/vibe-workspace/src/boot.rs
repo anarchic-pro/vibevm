@@ -34,8 +34,8 @@
 //! condition can only be honoured by the dynamic INCLUDE form, never by
 //! the verbatim `inline` lane or a direct `static` read.
 
-use vibe_core::PackageKind;
 use vibe_core::manifest::{BootCategory, LinkType, WhenCondition};
+use vibe_core::{Group, PackageKind};
 
 use crate::WorkspaceError;
 
@@ -76,7 +76,11 @@ pub struct AuthoredBoot {
 /// `vibedeps/` slot.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct DependencyBoot {
+    /// The dependency's `kind` — metadata; used only for its `vibedeps/`
+    /// slot directory name, never for identity (PROP-008 §2.3).
     pub kind: PackageKind,
+    /// Reverse-FQDN group — with `name`, the `(group, name)` identity.
+    pub group: Group,
     pub name: String,
     /// Workspace-root-relative path of the dependency's boot file inside
     /// its `vibedeps/` slot — `None` when the package ships no boot
@@ -97,9 +101,9 @@ pub struct DependencyBoot {
     /// rendered `dynamic` irrespective of `link` — a condition implies the
     /// dynamic INCLUDE form.
     pub when: Option<WhenCondition>,
-    /// The `(kind, name)` of every package this one directly requires —
+    /// The `(group, name)` of every package this one directly requires —
     /// the edges of the topological order.
-    pub requires: Vec<(PackageKind, String)>,
+    pub requires: Vec<(Group, String)>,
 }
 
 /// One entry in a node's computed effective boot sequence.
@@ -115,7 +119,7 @@ pub struct BootEntry {
     /// (PROP-009 §2.3). `None` for an unconditional entry. A `Some` here
     /// implies `link == LinkType::Dynamic` — the engine forces it.
     pub when: Option<WhenCondition>,
-    /// Provenance — a node `rel_path` for authored boot, a `<kind>:<name>`
+    /// Provenance — a node `rel_path` for authored boot, a `<group>/<name>`
     /// pkgref for a dependency.
     pub origin: String,
 }
@@ -229,7 +233,7 @@ pub fn compute_effective_boot(inputs: NodeBootInputs<'_>) -> Result<EffectiveBoo
             band: band_for(dep.category, BootBand::Dependency),
             link,
             when: dep.when,
-            origin: format!("{}:{}", dep.kind, dep.name),
+            origin: format!("{}/{}", dep.group, dep.name),
         });
     }
 
@@ -254,14 +258,14 @@ fn band_for(category: Option<BootCategory>, default_band: BootBand) -> BootBand 
 }
 
 /// Topologically sort the dependency boot graph — a dependency before its
-/// dependents. Ties break on the `<kind>:<name>` pkgref, so the order is
+/// dependents. Ties break on the `<group>/<name>` pkgref, so the order is
 /// deterministic. Returns indices into `deps`; a cycle is an error.
 fn topo_order(deps: &[DependencyBoot]) -> Result<Vec<usize>, WorkspaceError> {
     use std::cmp::Reverse;
     use std::collections::{BinaryHeap, HashMap};
 
     let n = deps.len();
-    let key = |i: usize| format!("{}:{}", deps[i].kind, deps[i].name);
+    let key = |i: usize| format!("{}/{}", deps[i].group, deps[i].name);
     let index: HashMap<String, usize> = (0..n).map(|i| (key(i), i)).collect();
 
     // `in_degree[i]` counts the in-set packages `i` requires; `dependents`
@@ -270,8 +274,8 @@ fn topo_order(deps: &[DependencyBoot]) -> Result<Vec<usize>, WorkspaceError> {
     let mut in_degree = vec![0usize; n];
     let mut dependents: Vec<Vec<usize>> = vec![Vec::new(); n];
     for (i, dep) in deps.iter().enumerate() {
-        for (rk, rn) in &dep.requires {
-            if let Some(&j) = index.get(&format!("{rk}:{rn}")) {
+        for (rg, rn) in &dep.requires {
+            if let Some(&j) = index.get(&format!("{rg}/{rn}")) {
                 // `i` requires `j` → `j` must precede `i`.
                 in_degree[i] += 1;
                 dependents[j].push(i);
@@ -319,20 +323,23 @@ mod tests {
         }
     }
 
+    /// The canonical first-party `Group` for tests.
+    fn org() -> Group {
+        Group::parse("org.vibevm").unwrap()
+    }
+
     /// A dependency with a boot snippet, no link declarations, given edges.
     fn dep(name: &str, has_boot: bool, requires: &[&str]) -> DependencyBoot {
         DependencyBoot {
             kind: PackageKind::Flow,
+            group: org(),
             name: name.to_string(),
             boot_path: has_boot.then(|| format!("vibedeps/flow-{name}/1.0.0/boot.md")),
             category: None,
             declared_link: None,
             suggested_link: None,
             when: None,
-            requires: requires
-                .iter()
-                .map(|r| (PackageKind::Flow, r.to_string()))
-                .collect(),
+            requires: requires.iter().map(|r| (org(), r.to_string())).collect(),
         }
     }
 
@@ -411,7 +418,7 @@ mod tests {
         let deps = vec![dep("a", true, &["b"]), dep("b", true, &[])];
         let boot = compute(&[], &[], &deps, None);
         let origins: Vec<&str> = boot.entries.iter().map(|e| e.origin.as_str()).collect();
-        assert_eq!(origins, vec!["flow:b", "flow:a"]);
+        assert_eq!(origins, vec!["org.vibevm/b", "org.vibevm/a"]);
         assert!(boot.entries.iter().all(|e| e.band == BootBand::Dependency));
     }
 
@@ -427,7 +434,7 @@ mod tests {
         ];
         let boot = compute(&[], &[], &deps, None);
         let origins: Vec<&str> = boot.entries.iter().map(|e| e.origin.as_str()).collect();
-        assert_eq!(origins, vec!["flow:b", "flow:a"]);
+        assert_eq!(origins, vec!["org.vibevm/b", "org.vibevm/a"]);
     }
 
     #[test]
@@ -481,8 +488,8 @@ mod tests {
         .unwrap_err();
         match err {
             WorkspaceError::BootDependencyCycle { packages } => {
-                assert!(packages.contains("flow:a"), "{packages}");
-                assert!(packages.contains("flow:b"), "{packages}");
+                assert!(packages.contains("org.vibevm/a"), "{packages}");
+                assert!(packages.contains("org.vibevm/b"), "{packages}");
             }
             other => panic!("expected a boot dependency cycle, got {other}"),
         }
@@ -498,12 +505,12 @@ mod tests {
         let boot = compute(&[], &[], &[inline, dynamic, plain], None);
 
         let inline_origins: Vec<&str> = boot.inline_entries().map(|e| e.origin.as_str()).collect();
-        assert_eq!(inline_origins, vec!["flow:crit"]);
+        assert_eq!(inline_origins, vec!["org.vibevm/crit"]);
 
         let indexed_origins: Vec<&str> =
             boot.indexed_entries().map(|e| e.origin.as_str()).collect();
         // `static` and `dynamic` both land in the index, in composed order.
-        assert_eq!(indexed_origins, vec!["flow:rust", "flow:wal"]);
+        assert_eq!(indexed_origins, vec!["org.vibevm/rust", "org.vibevm/wal"]);
     }
 
     #[test]
@@ -533,7 +540,7 @@ mod tests {
             ]
         );
         let origins: Vec<&str> = boot.entries.iter().map(|e| e.origin.as_str()).collect();
-        assert_eq!(origins, vec![".", ".", "flow:b", "flow:a", "."]);
+        assert_eq!(origins, vec![".", ".", "org.vibevm/b", "org.vibevm/a", "."]);
     }
 
     // --- PROP-009 §2.4 / §2.6 — the `when` OS gate ----------------------
@@ -566,7 +573,7 @@ mod tests {
         // And it lands in the index, not the inline lane.
         assert_eq!(boot.inline_entries().count(), 0);
         let indexed: Vec<&str> = boot.indexed_entries().map(|e| e.origin.as_str()).collect();
-        assert_eq!(indexed, vec!["flow:win-only"]);
+        assert_eq!(indexed, vec!["org.vibevm/win-only"]);
     }
 
     #[test]

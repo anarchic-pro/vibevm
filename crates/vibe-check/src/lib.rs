@@ -1342,10 +1342,11 @@ url = "https://example/vibespecs"
         let lockfile = r#"[meta]
 generated_by = "vibe-test"
 generated_at = "2026-05-04T00:00:00Z"
-schema_version = 4
+schema_version = 5
 
 [[package]]
 kind = "flow"
+group = "org.vibevm"
 name = "wal"
 version = "0.1.0"
 source_url = "file:///fake"
@@ -1374,7 +1375,7 @@ files_written = []
         // An empty lockfile, but a vibedeps/ slot on disk — orphan.
         fs::write(
             project.path().join("vibe.lock"),
-            "[meta]\ngenerated_by = \"vibe-test\"\ngenerated_at = \"2026-05-04T00:00:00Z\"\nschema_version = 4\n",
+            "[meta]\ngenerated_by = \"vibe-test\"\ngenerated_at = \"2026-05-04T00:00:00Z\"\nschema_version = 5\n",
         )
         .unwrap();
         fs::create_dir_all(project.path().join("vibedeps/flow-ghost/1.0.0")).unwrap();

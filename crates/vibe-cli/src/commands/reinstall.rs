@@ -33,7 +33,7 @@ use anyhow::{Context, Result, bail};
 use dialoguer::Confirm;
 use vibe_core::manifest::{Lockfile, Manifest};
 use vibe_core::user_config::SlotIntegrity;
-use vibe_core::{PackageKind, PackageRef, VersionSpec};
+use vibe_core::{Group, PackageKind, PackageRef, VersionSpec};
 use vibe_workspace::Workspace;
 use vibe_workspace::install::{ResolvedDep, apply_resolution, regenerate_boot};
 use vibe_workspace::vibedeps;
@@ -180,27 +180,29 @@ fn run_force(
     // is rejected: `vibe reinstall` reproduces the lock, never drifts it.
     let mut resolution: Vec<ResolvedDep> = Vec::with_capacity(lockfile.packages.len());
     for locked in &lockfile.packages {
-        let pkgref = exact_pkgref(locked.kind, &locked.name, &locked.version)?;
+        let pkgref = exact_pkgref(locked.kind, &locked.group, &locked.name, &locked.version)?;
         let cached = resolver
             .resolve_and_fetch(&pkgref, &cache_root, Some(&locked.content_hash))
             .with_context(|| {
                 format!(
-                    "re-fetching `{}:{}@{}` from source",
-                    locked.kind, locked.name, locked.version
+                    "re-fetching `{}/{}@{}` from source",
+                    locked.group, locked.name, locked.version
                 )
             })?;
         resolution.push(ResolvedDep {
-            kind: cached.resolved.kind,
+            kind: cached.package_meta().kind,
+            group: cached.resolved.group.clone(),
             name: cached.resolved.name.clone(),
             version: cached.resolved.version.clone(),
             content_dir: cached.cache_dir.clone(),
             manifest: cached.manifest.clone(),
             // The recorded resolution edges — `apply_resolution` walks
-            // them to compose each node's dependency boot.
+            // them to compose each node's dependency boot. A lockfile
+            // dependency pkgref is group-qualified (PROP-008 §2.6).
             requires: locked
                 .dependencies
                 .iter()
-                .map(|p| (p.kind, p.name.clone()))
+                .filter_map(|p| p.group.clone().map(|g| (g, p.name.clone())))
                 .collect(),
         });
     }
@@ -216,11 +218,17 @@ fn run_force(
 
 /// Build the `=<version>` pkgref that re-fetches exactly the locked
 /// version — `vibe reinstall` never re-resolves.
-fn exact_pkgref(kind: PackageKind, name: &str, version: &semver::Version) -> Result<PackageRef> {
+fn exact_pkgref(
+    kind: PackageKind,
+    group: &Group,
+    name: &str,
+    version: &semver::Version,
+) -> Result<PackageRef> {
     let req = semver::VersionReq::parse(&format!("={version}"))
         .expect("`=<version>` always parses as a VersionReq");
     Ok(PackageRef::new(
-        kind,
+        Some(kind),
+        Some(group.clone()),
         name.to_string(),
         VersionSpec::Req(req),
     )?)

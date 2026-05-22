@@ -1,12 +1,12 @@
 //! `DepProvider` adapter over a [`vibe_registry::LocalRegistry`].
 //!
 //! For the `--registry <path>` install path. Reads manifests directly off
-//! disk under `<root>/<kind>/<name>/v<ver>/vibe.toml`.
+//! disk under `<root>/<group>/<name>/v<ver>/vibe.toml`.
 
 use std::path::PathBuf;
 
 use vibe_core::manifest::Manifest;
-use vibe_core::{PackageKind, PackageRef};
+use vibe_core::{Group, PackageRef};
 use vibe_registry::{LocalRegistry, RegistryError};
 
 use crate::{DepProvider, DepProviderError};
@@ -26,12 +26,12 @@ impl<'a> DepProvider for LocalRegistryProvider<'a> {
     fn resolve_version(&self, pkgref: &PackageRef) -> Result<semver::Version, DepProviderError> {
         match self.registry.resolve(pkgref) {
             Ok(r) => Ok(r.version),
-            Err(RegistryError::UnknownPackage { kind, name }) => {
-                Err(DepProviderError::UnknownPackage { kind, name })
+            Err(RegistryError::UnknownPackage { group, name }) => {
+                Err(DepProviderError::UnknownPackage { group, name })
             }
-            Err(RegistryError::NoMatchingVersion { kind, name, req }) => {
+            Err(RegistryError::NoMatchingVersion { group, name, req }) => {
                 Err(DepProviderError::NoMatchingVersion {
-                    kind,
+                    group,
                     name,
                     constraint: req,
                 })
@@ -42,14 +42,14 @@ impl<'a> DepProvider for LocalRegistryProvider<'a> {
 
     fn fetch_manifest(
         &self,
-        kind: PackageKind,
+        group: &Group,
         name: &str,
         version: &semver::Version,
     ) -> Result<Manifest, DepProviderError> {
         let path: PathBuf = self
             .registry
             .root()
-            .join(kind.as_str())
+            .join(group.as_str())
             .join(name)
             .join(format!("v{version}"))
             .join(Manifest::FILENAME);
