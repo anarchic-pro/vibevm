@@ -24,16 +24,27 @@ pub const TYPE_MISMATCH: u8 = 4;
 pub const USER_DECLINED: u8 = 5;
 #[allow(dead_code)]
 pub const LLM_PROVIDER: u8 = 6;
+/// PROP-008 §2.7 — a short name (`wal`) matched two or more packages
+/// across different groups. Distinct from `3` (a real package
+/// conflict): a collision is a naming ambiguity the operator clears by
+/// qualifying the pkgref, not a dependency-graph failure.
+pub const AMBIGUOUS_PACKAGE: u8 = 7;
 
 /// A structured `vibe install` / `vibe uninstall` failure the CLI maps to
-/// a specific process exit code (`VIBEVM-SPEC.md` §9.4). Until PROP-009
-/// retired the `[writes]` install machinery this lived in a separate
-/// `vibe-install` crate; with that machinery gone it is this one variant.
+/// a specific process exit code (`VIBEVM-SPEC.md` §9.4).
 #[derive(Debug, Error)]
 pub enum InstallError {
     /// The user declined the plan at the interactive confirmation prompt.
     #[error("user declined the plan")]
     UserDeclined,
+    /// A bare short name resolved to two or more packages in different
+    /// groups (PROP-008 §2.7) — the resolver never guesses past a
+    /// collision. The payload is the fully-rendered, multi-line
+    /// operator message (the numbered candidate list and the re-run
+    /// hint), built at the resolution site where the candidate groups
+    /// are in hand.
+    #[error("{0}")]
+    AmbiguousPackage(String),
 }
 
 impl InstallError {
@@ -41,6 +52,7 @@ impl InstallError {
     pub fn exit_code(&self) -> u8 {
         match self {
             InstallError::UserDeclined => USER_DECLINED,
+            InstallError::AmbiguousPackage(_) => AMBIGUOUS_PACKAGE,
         }
     }
 }
@@ -85,6 +97,14 @@ mod tests {
     fn install_declined_maps_to_five() {
         let err = anyhow::Error::from(InstallError::UserDeclined);
         assert_eq!(code_of_install(err.downcast_ref().unwrap()), USER_DECLINED);
+    }
+
+    #[test]
+    fn ambiguous_package_maps_to_seven() {
+        let err = anyhow::Error::from(InstallError::AmbiguousPackage(
+            "the short name `wal` is ambiguous".to_string(),
+        ));
+        assert_eq!(as_exit_code(&err), ExitCode::from(AMBIGUOUS_PACKAGE));
     }
 
     #[test]

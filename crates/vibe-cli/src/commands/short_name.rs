@@ -21,6 +21,7 @@ use vibe_core::manifest::Lockfile;
 use vibe_core::{Group, PackageRef};
 
 use super::install::InstallResolver;
+use crate::exit_code::InstallError;
 
 /// The outcome of resolving one bare package name to its `group`.
 enum ShortNameOutcome {
@@ -88,6 +89,28 @@ fn resolve(
     })
 }
 
+/// Render the PROP-008 §2.7 collision message: the ambiguous bare
+/// name, a numbered list of the qualified candidates, and a re-run
+/// hint. Pure — unit-tested without a registry.
+fn render_collision(name: &str, candidates: &[Group]) -> String {
+    use std::fmt::Write as _;
+    let mut msg = format!(
+        "the short name `{name}` is ambiguous — {} packages match it:\n",
+        candidates.len(),
+    );
+    for (i, group) in candidates.iter().enumerate() {
+        let _ = writeln!(msg, "  {}. {group}/{name}", i + 1);
+    }
+    let first = candidates
+        .first()
+        .expect("a collision carries at least two candidates");
+    let _ = write!(
+        msg,
+        "Re-run with the qualified form, e.g. `vibe install {first}/{name}`.",
+    );
+    msg
+}
+
 /// Qualify one CLI-supplied pkgref. A pkgref that already carries a
 /// `group` passes through untouched. A bare pkgref is resolved
 /// through [`resolve`]; the discovered `group` is spliced in, with
@@ -118,17 +141,14 @@ pub fn qualify(
             name = pkgref.name,
         ),
         // PROP-008 §2.7 — a short name matching two groups is a
-        // collision the resolver never guesses past. Phase 6 gives
-        // this its own exit code (`7`) and the spec's alternatives
-        // block; Phase 5 fails clearly at the generic exit code.
-        ShortNameOutcome::Ambiguous(groups) => bail!(
-            "the short name `{name}` is ambiguous — {n} groups publish a package \
-             called `{name}`. Re-run with the qualified form, e.g. \
-             `vibe install {first}/{name}`.",
-            name = pkgref.name,
-            n = groups.len(),
-            first = groups.first().expect("Ambiguous carries >= 2 groups"),
-        ),
+        // collision the resolver refuses to guess past. It carries a
+        // dedicated exit code (`7`, via `InstallError::AmbiguousPackage`)
+        // distinct from a `3` dependency conflict, and the rendered
+        // message lists the qualified alternatives so the operator can
+        // pick one.
+        ShortNameOutcome::Ambiguous(groups) => {
+            Err(InstallError::AmbiguousPackage(render_collision(&pkgref.name, &groups)).into())
+        }
     }
 }
 
@@ -158,5 +178,23 @@ mod tests {
     fn distinct_sorted_single_group_collapses() {
         let input = [g("org.vibevm"), g("org.vibevm"), g("org.vibevm")];
         assert_eq!(distinct_sorted(input.iter()), vec![g("org.vibevm")]);
+    }
+
+    #[test]
+    fn render_collision_numbers_every_candidate() {
+        let msg = render_collision("wal", &[g("com.acme"), g("org.vibevm")]);
+        assert!(
+            msg.contains("`wal` is ambiguous — 2 packages match"),
+            "missing the header line:\n{msg}"
+        );
+        assert!(msg.contains("  1. com.acme/wal"), "missing item 1:\n{msg}");
+        assert!(
+            msg.contains("  2. org.vibevm/wal"),
+            "missing item 2:\n{msg}"
+        );
+        assert!(
+            msg.contains("`vibe install com.acme/wal`"),
+            "missing the re-run hint:\n{msg}"
+        );
     }
 }

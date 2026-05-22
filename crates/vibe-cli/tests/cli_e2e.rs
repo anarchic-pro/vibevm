@@ -520,6 +520,36 @@ fn install_unresolvable_short_name_fails_with_hint() {
         .stderr(predicate::str::contains("could not resolve the short name"));
 }
 
+/// PROP-008 §2.7 — a short name matching two groups is a collision.
+/// `vibe install` refuses to guess: it fails with the dedicated exit
+/// code `7` ("ambiguous package", distinct from `3`) and prints the
+/// numbered qualified alternatives so the operator can pick one.
+#[test]
+fn install_ambiguous_short_name_fails_with_exit_code_seven() {
+    // A two-group registry: `org.vibevm/wal` and `com.example/wal`
+    // both exist, so the bare `wal` cannot be resolved to one group.
+    let registry = tempfile::tempdir().unwrap();
+    for group in ["org.vibevm", "com.example"] {
+        fs::create_dir_all(registry.path().join(group).join("wal").join("v0.1.0")).unwrap();
+    }
+    let project = tempfile::tempdir().unwrap();
+    init_project(project.path());
+
+    vibe()
+        .arg("install")
+        .arg("wal")
+        .arg("--path")
+        .arg(project.path())
+        .arg("--registry")
+        .arg(registry.path())
+        .arg("--assume-yes")
+        .assert()
+        .code(7)
+        .stderr(predicate::str::contains("is ambiguous"))
+        .stderr(predicate::str::contains("com.example/wal"))
+        .stderr(predicate::str::contains("org.vibevm/wal"));
+}
+
 /// `vibe install <pkgref>@^0.1` (explicit constraint) records the
 /// constraint verbatim — we don't tighten or override what the
 /// operator typed. Symmetric guard around the

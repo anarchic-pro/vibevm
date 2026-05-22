@@ -1051,6 +1051,7 @@ A `--quiet` flag reduces output to one line of summary. Useful in CI and in scri
 - `4` — type mismatch in graph construction.
 - `5` — user declined confirmation.
 - `6` — LLM provider error (rate limit, auth failure, etc.).
+- `7` — ambiguous package: a short name matched two or more packages across different groups ([PROP-008 §2.7](spec/modules/vibe-registry/PROP-008-qualified-naming.md)). Distinct from `3` — a collision is a naming ambiguity, not a dependency conflict.
 - `10+` — reserved for specific failure modes documented per command.
 
 ### 9.5 Configuration sources, in precedence order
