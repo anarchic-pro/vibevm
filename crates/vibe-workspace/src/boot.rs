@@ -28,9 +28,14 @@
 //! suggestion; then the workspace `[boot].default_link`; then `static`. A
 //! node's own authored boot is always `static` — it already lives in the
 //! node's tree, so there is nothing to inline or defer.
+//!
+//! A dependency whose `[boot_snippet]` carries a `when` condition
+//! (PROP-009 §2.6) overrides that precedence and is always `dynamic`: a
+//! condition can only be honoured by the dynamic INCLUDE form, never by
+//! the verbatim `inline` lane or a direct `static` read.
 
 use vibe_core::PackageKind;
-use vibe_core::manifest::{BootCategory, LinkType};
+use vibe_core::manifest::{BootCategory, LinkType, WhenCondition};
 
 use crate::WorkspaceError;
 
@@ -87,6 +92,11 @@ pub struct DependencyBoot {
     /// The package's own suggested `link` (`[boot_snippet].link`) — a hint,
     /// below any consumer declaration.
     pub suggested_link: Option<LinkType>,
+    /// The package's declared `[boot_snippet].when` activation condition,
+    /// if any (PROP-009 §2.4 / §2.6). A snippet carrying a `when` is
+    /// rendered `dynamic` irrespective of `link` — a condition implies the
+    /// dynamic INCLUDE form.
+    pub when: Option<WhenCondition>,
     /// The `(kind, name)` of every package this one directly requires —
     /// the edges of the topological order.
     pub requires: Vec<(PackageKind, String)>,
@@ -101,6 +111,10 @@ pub struct BootEntry {
     pub band: BootBand,
     /// The resolved inclusion type.
     pub link: LinkType,
+    /// The activation condition carried into a `dynamic` `INDEX.md` entry
+    /// (PROP-009 §2.3). `None` for an unconditional entry. A `Some` here
+    /// implies `link == LinkType::Dynamic` — the engine forces it.
+    pub when: Option<WhenCondition>,
     /// Provenance — a node `rel_path` for authored boot, a `<kind>:<name>`
     /// pkgref for a dependency.
     pub origin: String,
@@ -170,6 +184,7 @@ pub fn compute_effective_boot(
             path: boot.path.clone(),
             band: BootBand::Foundation,
             link: LinkType::Static,
+            when: None,
             origin: boot.origin.clone(),
         });
     }
@@ -181,6 +196,7 @@ pub fn compute_effective_boot(
             path: boot.path.clone(),
             band: band_for(boot.category, BootBand::NodeOwn),
             link: LinkType::Static,
+            when: None,
             origin: boot.origin.clone(),
         });
     }
@@ -201,10 +217,20 @@ pub fn compute_effective_boot(
             .or(dep.suggested_link)
             .or(inputs.default_link)
             .unwrap_or_default();
+        // A conditional snippet is `dynamic` by nature (PROP-009 §2.4): a
+        // `when` cannot be honoured by the verbatim `inline` lane or a
+        // direct `static` read, so it forces the dynamic INCLUDE form
+        // whatever the `link` precedence resolved to.
+        let link = if dep.when.is_some() {
+            LinkType::Dynamic
+        } else {
+            link
+        };
         entries.push(BootEntry {
             path: path.clone(),
             band: band_for(dep.category, BootBand::Dependency),
             link,
+            when: dep.when,
             origin: format!("{}:{}", dep.kind, dep.name),
         });
     }
@@ -288,6 +314,7 @@ fn topo_order(deps: &[DependencyBoot]) -> Result<Vec<usize>, WorkspaceError> {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use vibe_core::manifest::TargetOs;
 
     fn authored(path: &str, category: Option<BootCategory>) -> AuthoredBoot {
         AuthoredBoot {
@@ -306,6 +333,7 @@ mod tests {
             category: None,
             declared_link: None,
             suggested_link: None,
+            when: None,
             requires: requires
                 .iter()
                 .map(|r| (PackageKind::Flow, r.to_string()))
@@ -499,5 +527,48 @@ mod tests {
         );
         let origins: Vec<&str> = boot.entries.iter().map(|e| e.origin.as_str()).collect();
         assert_eq!(origins, vec![".", ".", "flow:b", "flow:a", "."]);
+    }
+
+    // --- PROP-009 §2.4 / §2.6 — the `when` OS gate ----------------------
+
+    #[test]
+    fn when_propagates_to_the_boot_entry_and_forces_dynamic() {
+        // A dependency with a `when` and no link declaration at all: the
+        // condition rides through to the entry, and the entry is `dynamic`
+        // even though the precedence chain would otherwise pick `static`.
+        let mut d = dep("rust", true, &[]);
+        d.when = Some(WhenCondition::Os(TargetOs::Linux));
+        let boot = compute(&[], &[], &[d], None);
+        assert_eq!(boot.entries[0].link, LinkType::Dynamic);
+        assert_eq!(
+            boot.entries[0].when,
+            Some(WhenCondition::Os(TargetOs::Linux))
+        );
+    }
+
+    #[test]
+    fn when_forces_dynamic_even_over_an_explicit_inline() {
+        // The consumer asked for `inline`, but the package's snippet is
+        // OS-conditional — `when` wins, because a condition cannot be
+        // honoured by the verbatim inline lane.
+        let mut d = dep("win-only", true, &[]);
+        d.declared_link = Some(LinkType::Inline);
+        d.when = Some(WhenCondition::Os(TargetOs::Windows));
+        let boot = compute(&[], &[], &[d], Some(LinkType::Static));
+        assert_eq!(boot.entries[0].link, LinkType::Dynamic);
+        // And it lands in the index, not the inline lane.
+        assert_eq!(boot.inline_entries().count(), 0);
+        let indexed: Vec<&str> = boot.indexed_entries().map(|e| e.origin.as_str()).collect();
+        assert_eq!(indexed, vec!["flow:win-only"]);
+    }
+
+    #[test]
+    fn authored_boot_never_carries_a_when() {
+        // `when` is a property of a dependency's `[boot_snippet]`; a node's
+        // own and inherited authored boot are unconditional.
+        let inherited = vec![authored("spec/boot/00-core.md", Some(BootCategory::Foundation))];
+        let own = vec![authored("spec/boot/notes.md", None)];
+        let boot = compute(&own, &inherited, &[], None);
+        assert!(boot.entries.iter().all(|e| e.when.is_none()));
     }
 }

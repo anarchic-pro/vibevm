@@ -107,9 +107,10 @@ model). To begin a session, read these files in order:
 1. `spec/boot/INLINE.md` — if it exists. The priority lane: read it first
    and in full.
 2. `spec/boot/INDEX.md` — a generated TOML manifest. Read every file named
-   by its `[[entry]]` tables, in the listed order. A `kind = "dynamic"`
-   entry is an INCLUDE to resolve at boot; a `kind = "static"` entry is
-   read directly.
+   by its `[[entry]]` tables, in the listed order. A `kind = "static"`
+   entry is read directly; a `kind = "dynamic"` entry is an INCLUDE
+   resolved at boot, and one carrying a `when` condition is read only when
+   that condition holds for the current session.
 
 Boot is pure file-reading — there is nothing to execute.
 </vibevm>

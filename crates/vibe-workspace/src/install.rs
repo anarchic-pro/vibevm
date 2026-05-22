@@ -342,6 +342,9 @@ fn node_dependency_boot(
                 // `link`; a transitive dependency reads back as `None`.
                 declared_link: node_manifest.requires.declared_link(dep.kind, &dep.name),
                 suggested_link: snippet.and_then(|bs| bs.link),
+                // The package's `[boot_snippet].when` OS gate, if any — it
+                // forces the entry `dynamic` (PROP-009 §2.4).
+                when: snippet.and_then(|bs| bs.when),
                 requires: dep.requires.clone(),
             }
         })
@@ -511,6 +514,40 @@ mod tests {
         // boot is concatenated into INLINE.md.
         let inline = fs::read_to_string(ws_dir.path().join("spec/boot/INLINE.md")).unwrap();
         assert!(inline.contains("# critical discipline"), "{inline}");
+    }
+
+    #[test]
+    fn apply_resolution_renders_when_from_a_boot_snippet() {
+        let ws_dir = TempDir::new().unwrap();
+        write(
+            ws_dir.path(),
+            "vibe.toml",
+            "[project]\nname = \"demo\"\nversion = \"0.1.0\"\n\n\
+             [requires.packages]\n\"flow:win\" = \"^1.0\"\n",
+        );
+        write(ws_dir.path(), "spec/boot/00-core.md", "# core");
+
+        let (dep, _pkg) = dep_with_boot(
+            "win",
+            "1.0.0",
+            "[boot_snippet]\nsource = \"boot/win.md\"\nwhen = \"os:windows\"\n",
+            "boot/win.md",
+            "# windows-only guidance",
+        );
+
+        let ws = Workspace::load(ws_dir.path()).unwrap();
+        apply_resolution(&ws, std::slice::from_ref(&dep)).unwrap();
+
+        // The `[boot_snippet].when` rides into INDEX.md, and the entry is
+        // dynamic — a condition forces the dynamic INCLUDE form even with
+        // no `link` declared anywhere.
+        let index = fs::read_to_string(ws_dir.path().join("spec/boot/INDEX.md")).unwrap();
+        assert!(
+            index.contains("vibedeps/flow-win/1.0.0/boot/win.md"),
+            "{index}"
+        );
+        assert!(index.contains("kind = \"dynamic\""), "{index}");
+        assert!(index.contains("when = \"os:windows\""), "{index}");
     }
 
     #[test]
