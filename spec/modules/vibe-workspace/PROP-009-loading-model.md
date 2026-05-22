@@ -1,7 +1,7 @@
 # PROP-009: Loading model — computed boot composition and the effective spec {#root}
 
 **Milestone:** design proposal; targets a new `M1.18` ([`ROADMAP.md`](../../../ROADMAP.md)). Not implementation-locked.
-**Status:** DRAFT — requirements resolved 2026-05-21; M1.18 phases 1–7 shipped 2026-05-22. Phase 8 (the effective-spec view) is v1.5 scope.
+**Status:** DRAFT — requirements resolved 2026-05-21; M1.18 phases 1–7 shipped 2026-05-22. The dynamic-entry `when` gate (OS-scoped) shipped 2026-05-22 — see §8. Phase 8 (the effective-spec view) is v1.5 scope.
 **Related:** [`VIBEVM-SPEC.md` §4.2 / §4.6 / §6 / §13.1](../../../VIBEVM-SPEC.md); [PROP-007](PROP-007-workspace.md) (workspace — PROP-009 answers its [§6 question 3](PROP-007-workspace.md#open)); [PROP-003 §2.5](../vibe-resolver/PROP-003-dep-evolution.md) (subskills, delivery modes, the `[activation]` vocabulary); [PROP-002](../vibe-registry/PROP-002-decentralized-registry.md) (identity, registry).
 **Design rationale:** [`spec/design/loading-and-boot-model.md`](../../design/loading-and-boot-model.md) — the *why*, the static/dynamic-linking metaphor, the fork-by-fork record. Non-normative; this PROP is the contract.
 **Owner sanction:** PROP-009 reshapes the owner-frozen `VIBEVM-SPEC.md` (§6 boot model, §4.2 layout, §4.6 effective spec, §13.1 package layout). The `VIBEVM-SPEC.md` edits required explicit owner sanction; it was **granted 2026-05-22** — for a full consistency pass, not only those four sections — and landed in Phase 7. See §5 item 8.
@@ -58,9 +58,9 @@ path = "spec/boot/00-core.md"
 kind = "static"
 
 [[entry]]
-path = "vibedeps/stack-rust/2.1.0/boot/rust.md"
+path = "vibedeps/stack-windows/2.1.0/boot/windows.md"
 kind = "dynamic"
-when = "rust"
+when = "os:windows"
 ```
 
 Both artifacts are generated, git-tracked, and marked "generated — do not edit". Authored boot files (the user-owned snippets, the node's own authored boot) continue to live alongside as ordinary files; `INDEX.md` references them in computed order.
@@ -82,9 +82,11 @@ Both artifacts are generated, git-tracked, and marked "generated — do not edit
 
 - `link = "static"` — **default.** `vibe` resolves the contribution to a concrete path in `INDEX.md`. The agent reads it directly; reads parallelise across one turn.
 - `link = "inline"` — the contribution's boot text is concatenated verbatim into `INLINE.md`. Read first, one read, maximum attention weight. The **emergency priority lane** — for top-level skills and critical disciplines whose priority must be guaranteed by position, not by trusting agent-side resolution. Used sparingly; it duplicates the text on disk.
-- `link = "dynamic"` — `INDEX.md` carries an INCLUDE pointer; the agent resolves it at boot. Supports **conditional boot** (load only when a context probe fires) — mechanically the subskill `lazy-pull` delivery mode. The `when` condition reuses the subskill `[activation]` probe vocabulary verbatim (PROP-003 §2.5) — one probe grammar across both mechanisms, no parallel one.
+- `link = "dynamic"` — `INDEX.md` carries an INCLUDE pointer; the agent resolves it at boot. Supports **conditional boot** (load only when a `when` condition holds) — mechanically the subskill `lazy-pull` delivery mode. The `when` condition draws on the subskill `[activation]` probe vocabulary (PROP-003 §2.5) — one probe grammar across both mechanisms, no parallel one. **v1 implements the `os:` probe end-to-end** — `when = "os:windows"` matches the session's operating system (`windows` / `macos` / `linux`), enough to ship OS-specific packages and subskills; the remaining probes are reserved until PROP-003's activation engine is built.
 
 A package MAY declare a suggested default inclusion type in its own `[boot_snippet]`; the consumer's declaration always wins. Absent both, the type is `static`.
+
+A `[boot_snippet]` that declares a `when` condition (§2.6) is **always `dynamic`**, irrespective of `link`: a condition cannot be honoured by the verbatim `inline` lane or a direct `static` read, so a `when` overrides the precedence above. It is a correctness constraint, not a preference — OS-specific content must never reach a session on the wrong OS.
 
 ### 2.5 Ordering by category — the `NN-` prefix is retired {#ordering}
 
@@ -100,7 +102,7 @@ A package MAY declare a suggested default inclusion type in its own `[boot_snipp
 **Decision.**
 
 - `[requires.packages]` inline-table entries accept an optional `link` field (§2.4): `"inline" | "static" | "dynamic"`, default `static`. Valid on registry-, path-, and git-source dependencies.
-- `[boot_snippet]` (package-role) drops the `filename` field (the `NN-` target name) and gains `category` (§2.5); `source` — the path to the boot file inside the package — is retained. It may carry an optional suggested `link` default.
+- `[boot_snippet]` (package-role) drops the `filename` field (the `NN-` target name) and gains `category` (§2.5); `source` — the path to the boot file inside the package — is retained. It may carry an optional suggested `link` default, and an optional **`when`** activation condition — the declaration site for §2.3's dynamic-entry `when`, closing the gap Phase 4 flagged. For v1 the only `when` is an operating-system match, the wire string `"os:<name>"` with `<name>` one of `windows` / `macos` / `linux`; a snippet carrying a `when` is `dynamic` (§2.4). The package author owns this declaration: whether a boot snippet is OS-specific is the author's knowledge, not the consumer's.
 - `[writes]` (package-role) is **removed** (§2.1, §2.7) — a package's materialised footprint is its verbatim tree under its `vibedeps/` slot; a per-file write list has nothing left to declare.
 - A minimal project-level `[boot]` table carries workspace-wide loading settings — for v1, only a default `link` override. Room to grow; nothing more is added now.
 - A `vibe.lock` schema bump may be required to record materialisation slots and inclusion types — assessed in Phase 1.
@@ -209,3 +211,4 @@ Targets M1.18. PROP-008 (qualified naming) shifts to M1.19. **Phases 1–7 shipp
 - **2026-05-21 — draft 1.** Requirements captured in an owner design session: the loading-model redesign answering PROP-007 §6 question 3, the static/dynamic-linking spine, the four-fork resolution. Rationale recorded in [`spec/design/loading-and-boot-model.md`](../../design/loading-and-boot-model.md).
 - **2026-05-21 — draft 2.** The eight §5 open questions resolved in a follow-up owner session: `vibedeps/`, `vibe reinstall`, the TOML `INDEX.md`, `[writes]` retired, dynamic conditions reusing the subskill `[activation]` vocabulary, a minimal `[boot]` table, the effective-spec view kept v1.5-scoped. The `VIBEVM-SPEC.md` sanction (§5 item 8) is the one item carried to Phase 7. Ready for M1.18 implementation.
 - **2026-05-22 — Phase 7 shipped.** The migration-and-docs phase landed in M1.18: the vibevm self-migration, the `VIBEVM-SPEC.md` consistency pass (owner sanction granted — §5 item 8), and [PROP-012](PROP-012-managed-redirect-block.md), which refines §2.3's redirect into a managed `<vibevm>` block. Phases 1–7 are shipped; phase 8 (the effective-spec view) remains v1.5 scope.
+- **2026-05-22 — the `when` declaration site.** §2.3's dynamic-entry `when` is pinned to `[boot_snippet].when` (§2.6), closing the contract gap Phase 4 flagged — §2.3 showed `when` but no field declared it. v1 scope is deliberately small: the only condition is an operating-system match (`when = "os:<name>"`), shipped end-to-end through the `vibe-core` schema, the computed-view engine, and the `INDEX.md` renderer. A `[boot_snippet]` carrying a `when` is `dynamic` irrespective of `link` (§2.4). The OS probe is also reserved as `if_os` in the subskill `[activation]` vocabulary (PROP-003 §2.5.2), so the two mechanisms share one grammar. The wider probe set follows when PROP-003's activation engine is built.

@@ -258,6 +258,9 @@ context.if_provides = ["interface/build-system"]
 context.if_files = ["**/Cargo.toml"]
 context.if_command = ["cargo"]
 context.if_env = ["RUST_LOG"]
+context.if_os = ["linux", "macos"]           # OS scope — the same probe
+                                              # the [boot_snippet] `when`
+                                              # gate ships (PROP-009 §2.4).
 context.if_describes_match = true            # match if any package in
                                               # the graph `describes` an
                                               # upstream PURL whose `type`
@@ -309,6 +312,7 @@ A subskill becomes "active" if any one of these channels matches. Channels compo
 - **Context-based: `if_files`.** New in r2. Activates if the project tree matches one of the supplied glob patterns (`**/Cargo.toml`, `package.json`, `requirements.txt`). This is what `tessl init` infers implicitly when it auto-detects "you are in a Rust project, you are in a Python project" — vibevm makes the probe explicit and per-subskill.
 - **Context-based: `if_command`.** New in r2. Activates if any of the listed commands resolve on the user's `PATH` (`cargo`, `python3`, `pnpm`). This is a **machine-state** trigger, distinct from project-state triggers — useful for tooling subskills that document a CLI the agent might shell out to.
 - **Context-based: `if_env`.** New in r2. Activates if any of the listed env-vars are set (`RUST_LOG`, `CI`, `KUBECONFIG`). Useful for environment-specific guidance ("you're in CI, here's the CI-specific gotchas subskill").
+- **Context-based: `if_os`.** Activates if the session's operating system is in the listed set — `windows`, `macos`, `linux` (`std::env::consts::OS` names). A **machine-state** trigger, alongside `if_command` / `if_env`. This is the same OS probe the `[boot_snippet]` `when` gate ships end-to-end (PROP-009 §2.4 / §2.6) — one OS grammar across both mechanisms. On the subskill side it is reserved in the schema for forward compatibility, inert until the activation engine is built.
 - **Context-based: `if_describes_match`.** New in r2. Activates if any package in the graph (or the consumer project itself) declares `describes` with a PURL whose `type` matches this subskill's `describes` type. This is the bridge between the project's "I document FastAPI 0.116" PURL and a subskill's "I'm the Rust-specific cut of FastAPI guidance."
 - **Context-based: `if_language`.** Activates if the consumer's resolved language preference (§2.7.3) is in the listed set. Carried over from r1.
 - **LLM-emitted virtual capability.** New shape in r2 (replacing r1's "LLM-inferred" channel — see §2.5.3 below). Equivalent expressive power, single audit point.
