@@ -625,6 +625,27 @@ delta.
 **Order.** No dependency beyond PROP-009 (M1.18, shipped) — the M1.21
 number is nominal; it can be resequenced earlier.
 
+### M1.22 — Managed redirect block (PROP-012) — DRAFT design
+
+**Thesis.** `vibe install` must stop overwriting the whole of
+`CLAUDE.md` / `AGENTS.md` / `GEMINI.md`. Those files are a shared
+contact surface — hand-authored instructions, other tools, the four
+non-negotiable rules in vibevm's own copy — and the PROP-009 Phase-4
+code replaces every byte of them on each install. vibevm must own only
+a `<vibevm>`-delimited block and leave the rest to its co-tenants.
+Design lock: [PROP-012](spec/modules/vibe-workspace/PROP-012-managed-redirect-block.md).
+
+**Scope (DRAFT — a small §5 open-question set, chiefly the marker
+syntax).** A machine-locatable `<vibevm>` … `</vibevm>` block; exactly
+one per file, a hard stop on a malformed file; absent → create,
+present → splice; plan-time validation; migration of the old
+whole-file generated redirect.
+
+**Order.** PROP-012 corrects a destructive defect already shipped in
+PROP-009 Phase 4, so it is a prerequisite for the M1.18 Phase-7
+redirect rewrite — recommended to land **within M1.18 Phase 7**. The
+M1.22 number is nominal and exists only to register the PROP.
+
 ---
 
 ## M1.5 — Generation

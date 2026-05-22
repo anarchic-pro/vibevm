@@ -61,3 +61,9 @@ rationale document links to it from its `Related` header.
     `vibe install` lockfile-respecting), re-materialise only the changed
     `vibedeps/` slots; boot regeneration stays whole-tree, the cheap
     phase. **Status: DRAFT 2026-05-21.**
+  - [PROP-012: Managed redirect block](vibe-workspace/PROP-012-managed-redirect-block.md)
+    — vibevm owns only a `<vibevm>`-delimited block of each shared agent
+    instruction file (`CLAUDE.md` / `AGENTS.md` / `GEMINI.md`), never the
+    whole file: exactly one block, a hard stop on a malformed file,
+    absent → create. Corrects the destructive whole-file overwrite
+    shipped in PROP-009 Phase 4. **Status: DRAFT 2026-05-22.**
