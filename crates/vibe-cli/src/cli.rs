@@ -92,6 +92,10 @@ pub enum Command {
     /// Re-fetch and apply changes for one or more installed packages.
     Update(UpdateArgs),
 
+    /// Recompute the materialised dependencies and the boot artifacts
+    /// of a workspace without re-resolving (PROP-009 §2.10).
+    Reinstall(ReinstallArgs),
+
     /// Run the spec-consistency linter against the project tree.
     Check(CheckArgs),
 
@@ -101,8 +105,62 @@ pub enum Command {
     /// Manage the registry cache (clone, sync).
     Registry(RegistryArgs),
 
+    /// Operate on a multi-package workspace (PROP-007). Today the one
+    /// subcommand is `publish` — walk the workspace's self-publishing
+    /// members in dependency order and publish each as its own
+    /// repository.
+    Workspace(WorkspaceArgs),
+
     /// Print version information.
     Version,
+}
+
+#[derive(Debug, clap::Args)]
+pub struct WorkspaceArgs {
+    #[command(subcommand)]
+    pub command: WorkspaceSubcommand,
+}
+
+#[derive(Debug, Subcommand)]
+pub enum WorkspaceSubcommand {
+    /// Publish the workspace's self-publishing members. Discovers the
+    /// workspace enclosing the current directory, selects every node
+    /// (root and members) carrying `[package]` whose `publish` posture
+    /// does not exclude it, orders them dependency-first via inter-member
+    /// `path` dependencies, and publishes each as its own repository in
+    /// the workspace's primary `[[registry]]` org — reusing the same
+    /// per-package machinery as `vibe registry publish`. Each published
+    /// copy carries an `[origin]` provenance marker, a "generated copy"
+    /// README banner, and a `.github/PULL_REQUEST_TEMPLATE.md` STOP
+    /// notice. Publishing is **not atomic**: on the first failure the
+    /// command stops and reports which nodes were already published and
+    /// which remain (PROP-007 §2.7). Maintainers only — needs the same
+    /// publish token used by `vibe registry publish`.
+    Publish(WorkspacePublishArgs),
+}
+
+#[derive(Debug, clap::Args)]
+pub struct WorkspacePublishArgs {
+    /// Restrict the publish to a single workspace node by its
+    /// root-relative path (`.` selects the workspace root, e.g.
+    /// `packages/flow-wal` selects that member). When omitted, every
+    /// self-publishing node is published. A node whose `publish`
+    /// posture excludes it is reported as skipped even when named
+    /// explicitly here.
+    #[arg(long = "member")]
+    pub member: Option<String>,
+
+    /// Project directory to discover the workspace from. Discovery
+    /// walks up to the enclosing `[workspace]`. Defaults to the
+    /// current directory.
+    #[arg(long, default_value = ".")]
+    pub path: PathBuf,
+
+    /// Describe what would be published — selection, dependency order,
+    /// staged content — but make no API calls and push nothing. No
+    /// repository is created.
+    #[arg(long = "dry-run")]
+    pub dry_run: bool,
 }
 
 #[derive(Debug, clap::Args)]
@@ -490,7 +548,7 @@ pub struct RegistryRemoveMirrorArgs {
 
 #[derive(Debug, clap::Args)]
 pub struct RegistryPublishArgs {
-    /// Path to the package directory (containing `vibe-package.toml`).
+    /// Path to the package directory (containing `vibe.toml`).
     #[arg(required = true)]
     pub source: PathBuf,
 
@@ -752,7 +810,7 @@ pub struct SearchArgs {
     /// fall back to a naive org-walk via the host's REST API. v0
     /// supports GitHub-hosted registries only (`github.com`); other
     /// hosts are reported as unsupported. Slower than an index;
-    /// rate-limited; reads `vibe-package.toml` from each repo's HEAD
+    /// rate-limited; reads `vibe.toml` from each repo's HEAD
     /// via the GitHub Contents API. Ignored on `--purl` lookups.
     #[arg(long = "full-scan")]
     pub full_scan: bool,
@@ -1103,6 +1161,30 @@ pub struct UpdateArgs {
     /// registry outage.
     #[arg(long)]
     pub auth_required: bool,
+}
+
+#[derive(Debug, clap::Args)]
+pub struct ReinstallArgs {
+    /// Any directory inside the workspace. Discovery bubbles up to the
+    /// absolute workspace root; `vibe reinstall` regenerates the boot
+    /// artifacts of every node. Defaults to the current directory.
+    #[arg(default_value = ".")]
+    pub path: PathBuf,
+
+    /// Re-fetch every locked package's content from its source
+    /// repository — at the version `vibe.lock` pins, never re-resolving
+    /// — bypassing the local cache and overwriting the current
+    /// `vibedeps/` files. The escape hatch for a corrupted or
+    /// hand-edited `vibedeps/` subtree. Without this flag,
+    /// `vibe reinstall` only recomputes the boot artifacts from the
+    /// materialised tree already on disk — no fetch, no network — which
+    /// is the fix for a stale or wrongly-generated `INDEX.md`.
+    #[arg(long)]
+    pub force: bool,
+
+    /// Skip the interactive confirmation prompt.
+    #[arg(long, alias = "yes")]
+    pub assume_yes: bool,
 }
 
 #[derive(Debug, clap::Args)]

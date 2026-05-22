@@ -15,7 +15,7 @@ vibe list [--kind <kind>] [--path <dir>]
 | --- | --- | --- |
 | `--kind <kind>` | Filter to one of `flow` / `feat` / `stack` / `tool`. | show all kinds |
 | `--path <dir>` | Project directory containing `vibe.lock`. | `.` |
-| `--json` | Structured payload. Schema: [`schemas/list_report.jtd.json`](../../schemas/list_report.jtd.json). Carries every lockfile-v2 provenance field — registry, source_url, source_ref, resolved_commit, overridden — for scripted analysis. | off |
+| `--json` | Structured payload. Schema: [`schemas/list_report.jtd.json`](../../schemas/list_report.jtd.json). Carries every lockfile provenance field — registry, source_kind, source_url, source_ref, resolved_commit, overridden — for scripted analysis. | off |
 | `--quiet` | One-line comma-separated list of `kind:name@version` labels. | off |
 
 ## Default output

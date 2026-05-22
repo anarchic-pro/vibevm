@@ -11,6 +11,7 @@ The `vibe` binary is the single entry point for every operation. Global flags `-
 | [`vibe init`](commands/init.md) | Scaffold a new vibevm project tree. |
 | [`vibe install`](commands/install.md) | Resolve and apply one or more packages from a registry. |
 | [`vibe update`](commands/update.md) | Re-fetch installed packages, diff project files, apply the update. |
+| [`vibe reinstall`](commands/reinstall.md) | Recompute the materialised `vibedeps/` tree and boot artifacts without re-resolving. |
 | [`vibe check`](commands/check.md) | Run the spec-consistency linter against the project tree. |
 | [`vibe show`](commands/show.md) | Inspect computed project state — effective spec, configuration. |
 | [`vibe list`](commands/list.md) | Show the packages currently locked into the project. |
@@ -27,6 +28,7 @@ The `vibe` binary is the single entry point for every operation. Global flags `-
 | [`vibe registry redirect`](commands/registry-redirect.md) | Maintainer-side: create a registry stub that delegates a package to an external target URL (PROP-002 §2.4.2). |
 | [`vibe registry redirect-sync`](commands/registry-redirect-sync.md) | Maintainer-side: mirror target tags into an existing redirect stub. |
 | [`vibe registry redirect-update`](commands/registry-redirect-update.md) | Maintainer-side: rewrite an existing stub's `vibe-redirect.toml` (retarget, switch policy, edit description). |
+| [`vibe workspace publish`](commands/workspace-publish.md) | Maintainer-side: publish a multi-package workspace's self-publishing members, each as its own repository, in dependency order (PROP-007 §2.7). |
 | [`vibe mcp install`](commands/mcp-install.md) | Wire vibevm into a coding agent (Claude Code, Claude Desktop, Cursor, OpenCode, Codex) — writes per-agent MCP config + optional `vibevm` SKILL.md. Scope axes: project / user / both. Wizard-driven without flags; fully scriptable. |
 | [`vibe mcp upgrade`](commands/mcp-upgrade.md) | Refresh existing vibevm integrations to the version shipped in this binary. Scans installed places, rewrites only the diverged ones; never creates new installations. |
 | [`vibe mcp uninstall`](commands/mcp-uninstall.md) | Remove vibevm from one or more agents — drops the `vibevm` MCP block and deletes SKILL.md, foreign keys preserved. |
@@ -64,7 +66,7 @@ End-to-end walkthroughs that compose multiple commands into a real scenario. Eac
 
 ## Lockfile reference
 
-[`lockfile-format.md`](lockfile-format.md) — exhaustive reference for `vibe.lock` v2. Field-by-field semantics, identity model, v1 → v2 migration, tooling examples (jq snippets), worked example.
+[`lockfile-format.md`](lockfile-format.md) — exhaustive reference for `vibe.lock` v4. Field-by-field semantics, identity model, schema versioning, tooling examples (jq snippets), worked example.
 
 ## Troubleshooting
 
@@ -73,6 +75,10 @@ End-to-end walkthroughs that compose multiple commands into a real scenario. Eac
 ## Glossary
 
 [`glossary.md`](glossary.md) — vocabulary reference for the project. Every term that has a specific meaning in vibevm — `kind`, `pkgref`, `capability`, `mirror`, `override`, `content_hash`, `transitive`, `user-owned`, etc. — defined in one place. Includes an "anti-vocabulary" of adjacent-ecosystem terms we deliberately don't use.
+
+## Loading model
+
+[`loading-model.md`](loading-model.md) — how a vibevm project boots. The two trees (authored `spec/` vs the committed `vibedeps/` materialised-dependency tree), the per-node *computed* boot sequence, the generated `INLINE.md` / `INDEX.md` artifacts, the `inline` / `static` / `dynamic` link types, ordering by `category`, and the managed `<vibevm>` block vibevm owns inside `CLAUDE.md` / `AGENTS.md` / `GEMINI.md`. Read this to understand what `vibe install` produces and what an agent reads at session start. Spec: [PROP-009](../spec/modules/vibe-workspace/PROP-009-loading-model.md) / [PROP-012](../spec/modules/vibe-workspace/PROP-012-managed-redirect-block.md).
 
 ## Authoring a package
 

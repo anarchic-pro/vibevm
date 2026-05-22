@@ -80,10 +80,11 @@ really two tests — split them.
 | --- | --- | --- |
 | [`M1.1-git-registry-smoke.md`](M1.1-git-registry-smoke.md) | M1.1 | Install from the real GitVerse registry (legacy monorepo shape), `vibe registry sync`, lockfile `source_uri` shape. |
 | [`M1.5-gate-multi-package-smoke.md`](M1.5-gate-multi-package-smoke.md) | M1.5-gate | Install three flows from the legacy monorepo registry; distinct boot-snippet prefixes; one shared clone; symmetric uninstall. |
-| [`M1.5-gate-v2-per-package-smoke.md`](M1.5-gate-v2-per-package-smoke.md) | M1.1-revision | Install three flows from the new per-package `vibespecs/` org; lockfile v2 provenance; per-package cache layout; `vibe registry sync` walks; symmetric uninstall with root_dependencies tracking. |
+| [`M1.5-gate-v2-per-package-smoke.md`](M1.5-gate-v2-per-package-smoke.md) | M1.1-revision | Install three flows from the new per-package `vibespecs/` org; lockfile provenance (schema v4); per-package cache layout; `vibe registry sync` walks; symmetric uninstall with root_dependencies tracking. |
 | [`M1.6-mirror-vendor-smoke.md`](M1.6-mirror-vendor-smoke.md) | M1.6 (Phase B v0) | `vibe registry vendor` → wire as `file://` `[[mirror]]` → install with the canonical primary deliberately broken (mirror fallback dispatch). Plus a multi-`[[registry]]` priority-walk scenario built on local fixture-backed bare repos. |
 | [`M1.15-git-source-smoke.md`](M1.15-git-source-smoke.md) | M1.15 | `vibe install <pkgref> --git <url> --tag <tag>` against a real GitHub repo; verifies `[requires.packages]` git-source recording, `source_kind = "git"` lockfile, and the `git archive --remote` → shallow-clone fall-back the GitHub case forces. |
 | [`M1.16-redirect-smoke.md`](M1.16-redirect-smoke.md) | M1.16 | `vibe registry redirect <pkgref> --to <url>` (stub creation), `vibe registry redirect-sync` (target-tag mirroring), and `vibe install` resolving through the stub against `vibespecs` org plus an external `olegchir/...` target. |
+| [`M1.17-workspace-publish-smoke.md`](M1.17-workspace-publish-smoke.md) | M1.17 | `vibe workspace publish` against a real GitHub org — selective dependency-first publish of a multi-package workspace's self-publishing members, `[origin]` provenance markers, generated-copy README banner + PR-template STOP notice. |
 
 Add a row to this table when you add a test. Keep the table sorted by
 milestone.

@@ -533,23 +533,50 @@ hash/source/ref lines in the lockfile).
 
 ---
 
-### M1.17 — Workspace (multi-package projects) — DRAFT design
+### M1.17 — Workspace (multi-package projects) — 🚧 Phases 1–5 shipped (2026-05-21)
 
 **Thesis.** Bring vibevm in line with cargo `[workspace]` / Maven multi-module: a project decomposes into modules, each published independently — or not at all — with the whole structure declared in one manifest. Design lock: [PROP-007](spec/modules/vibe-workspace/PROP-007-workspace.md).
 
-**Scope (requirements locked 2026-05-20; implementation pending).**
+**Shipped (2026-05-21)** — the workspace data model and tooling, in six phases:
 
-- `[workspace] members = [...]` section; one unified `vibe.toml` per node (retires `vibe-package.toml`); recursive nesting to arbitrary depth.
-- Single `vibe.lock` at the absolute root — unified resolution; commands inside a member bubble up to the root.
-- `path`-source cross-member deps with dual-form (`{ path, version }`); resolution priority `override > path > git-source > registry`.
-- `[workspace.versions]` named placeholders, resolved recursively (matryoshka).
-- Selective publish (`[package].publish`); `vibe workspace publish` topological walk.
-- Published-package-repository signalling (`[origin]` marker, "do not contribute here" banners, optional `--archive`).
-- `vibe.lock` schema v4 (`source_kind = "path"`); `VIBEVM-SPEC.md` §4.2 / §7.3–7.5 edits under owner sanction.
+- **Phase 1** — one unified `vibe.toml` per node (`vibe-package.toml` retired); `[project]` ⊕ `[package]`; `[workspace]` / `[origin]` / `[package].publish` parsed; all manifest legacy deleted.
+- **Phase 2** — the `vibe-workspace` crate: `Workspace::discover` (bubble to the absolute root), recursive nesting, glob members, cycle detection.
+- **Phase 3** — `path`-source cross-member deps with dual-form `{ path, version }`; resolution priority `override > path > git-source > registry`; `vibe.lock` schema v4 (`source_kind = "path"`; legacy readers removed).
+- **Phase 4** — `[workspace.versions]` named placeholders, resolved recursively (matryoshka, nearest wins).
+- **Phase 5** — selective publish (`[package].publish`); `vibe workspace publish` — topological walk, `[origin]` marker, "contribute upstream" signalling.
+- **Phase 6** — `VIBEVM-SPEC.md` §4.2 / §7.6 workspace documentation; docs sweep.
 
-**Order.** PROP-007 has no dependency on the index and can land before M1.18. It delivers the bulk of the multi-package request on its own.
+**Remaining.** Wiring `vibe install` / `vibe build` to discover the workspace and run unified multi-member resolution — a follow-up milestone, gated on a per-member materialisation decision PROP-007 §2.4 / §3 leaves open; the path-source resolver it builds on is already implemented and tested. Smaller deferrals: `version = { workspace = true }` member-version inheritance (PROP-007 §2.6 names no source table) and the `--archive` host-API publish lockdown.
 
-### M1.18 — Qualified package naming — DRAFT design
+**Order.** PROP-007 has no dependency on the index and landed before M1.18. It delivers the bulk of the multi-package request on its own.
+
+### M1.18 — Loading model (PROP-009) — ✅ SHIPPED (2026-05-22)
+
+**Thesis.** Replace the flat `spec/boot/NN-*.md` boot model with a
+computed loading model: two physically separate trees — authored
+`spec/` and a committed `vibedeps/` — with each node's boot sequence
+*computed* from the unified resolution and projected into generated
+`INLINE.md` / `INDEX.md` artifacts. Answers PROP-007 §6 question 3 and
+subsumes the workspace-aware `vibe install` left open by M1.17. Design
+lock: [PROP-009](spec/modules/vibe-workspace/PROP-009-loading-model.md).
+
+**Shipped (2026-05-22), phases 1–7.** Phases 1–6 — the schema (`link`
+types, boot `category`, retired `[writes]` and `NN-` prefix), the
+`vibedeps/` materialisation tree, the computed-view boot engine,
+`INLINE.md` / `INDEX.md` / redirect generation, workspace-aware
+`vibe install` (plus five follow-ups), `vibe reinstall`, and
+published-copy boot regeneration in `vibe workspace publish`. Phase 7 —
+the vibevm self-migration, the `VIBEVM-SPEC.md` consistency pass (owner
+sanction granted), the `docs/` sweep, and
+[PROP-012](spec/modules/vibe-workspace/PROP-012-managed-redirect-block.md)
+(the managed `<vibevm>` redirect block) folded in.
+
+**Remaining.** Phase 8 — the effective-spec view — is v1.5 scope; it
+shares the computed-view engine and rides with the M1.5 milestone.
+
+**Order.** Followed M1.17 directly; no dependency on the index.
+
+### M1.19 — Qualified package naming — DRAFT design
 
 **Thesis.** Replace the flat `<kind>:<name>` namespace with reverse-FQDN `group` qualification (Maven `groupId` shape), keeping short names as CLI sugar. Design lock: [PROP-008](spec/modules/vibe-registry/PROP-008-qualified-naming.md).
 
@@ -561,7 +588,62 @@ hash/source/ref lines in the lockfile).
 - Index-backed short-name resolution (depends on PROP-005 being implemented); collision detection with new exit code `7`.
 - Migration of the three canonical packages to `group = "org.vibevm"`; lockfile schema v4 (shared bump with M1.17).
 
-**Order.** Depends on [PROP-005](spec/modules/vibe-index/PROP-005-package-index.md) implementation for short-name resolution. Sequence: M1.17 → PROP-005 impl → M1.18.
+**Order.** Depends on [PROP-005](spec/modules/vibe-index/PROP-005-package-index.md) implementation for short-name resolution. Sequence: M1.17 → M1.18 → PROP-005 impl → M1.19.
+
+### M1.20 — Local package cache (PROP-010) — DRAFT design
+
+**Thesis.** Elevate the registry cache to a first-class,
+machine-global, accretive package store with an offline mode — so a
+new workspace member or an entirely new project resolves and
+materialises its dependencies from the cache with no network, reusing
+whatever earlier, unrelated projects pulled. Design lock:
+[PROP-010](spec/modules/vibe-registry/PROP-010-local-package-cache.md).
+
+**Scope (DRAFT — five §5 open questions pending an owner design
+session).** The cache keyed by PROP-008 qualified package identity, so
+it is registry-config-independent; a `--offline` policy flag
+(`VIBE_OFFLINE`); offline resolution against the cache; a user-level
+default registry configuration that seeds new projects; a `vibe cache`
+management surface (`path` / `list` / `add` / `clean`).
+
+**Order.** The identity-keyed cache depends on PROP-008 (M1.19);
+sequenced after it.
+
+### M1.21 — Incremental install (PROP-011) — DRAFT design
+
+**Thesis.** Refine PROP-009's whole-tree `vibe install` into an
+incremental operation: skip the depsolver when `vibe.lock` is fresh —
+which also makes `vibe install` lockfile-respecting — and
+re-materialise only the `vibedeps/` slots that actually changed, so
+`vibe install` on a large workspace stops paying whole-tree cost.
+Boot-artifact regeneration deliberately stays whole-tree: it is the
+cheap phase. Design lock:
+[PROP-011](spec/modules/vibe-workspace/PROP-011-incremental-install.md).
+
+**Scope (DRAFT — three §5 open questions pending an owner design
+session).** A content-based lockfile-freshness check; the slot-present
+materialisation skip; incremental re-resolution on a `[requires]`
+delta.
+
+**Order.** No dependency beyond PROP-009 (M1.18, shipped) — the M1.21
+number is nominal; it can be resequenced earlier.
+
+### M1.22 — Managed redirect block (PROP-012) — ✅ SHIPPED (2026-05-22, within M1.18)
+
+**Thesis.** `vibe install` overwrote the whole of `CLAUDE.md` /
+`AGENTS.md` / `GEMINI.md` on every run — destroying hand-authored
+instructions, other tools' content, and vibevm's own four rules.
+vibevm now owns only a `<vibevm>`-delimited block and leaves the rest
+to its co-tenants. Design lock:
+[PROP-012](spec/modules/vibe-workspace/PROP-012-managed-redirect-block.md).
+
+**Shipped.** A machine-locatable `<vibevm>` … `</vibevm>` block;
+exactly one per file, a hard stop on a malformed file; absent →
+create, present → splice; plan-time validation; migration of the old
+whole-file generated redirect. PROP-012 corrects a defect shipped in
+PROP-009 Phase 4, so it was a prerequisite for the Phase-7 redirect
+rewrite and landed **inside M1.18 Phase 7**. The M1.22 number is
+nominal — the work is part of M1.18.
 
 ---
 

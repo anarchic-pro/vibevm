@@ -15,10 +15,10 @@ A stack is **feat-agnostic at authoring time** — the same `stack:rust-cli` sho
 
 ```
 stack-<name>/
-├── vibe-package.toml
+├── vibe.toml                        # manifest, carries a [package] table
 ├── README.md
 ├── boot/
-│   └── <prefix>-stack-<name>.md       # optional — surfaces the active stack at boot
+│   └── stack-<name>.md               # optional — surfaces the active stack at boot
 └── spec/
     └── stacks/
         └── <name>/
@@ -32,14 +32,19 @@ stack-<name>/
             └── deployment.md          # how to ship a build of this stack
 ```
 
-After `vibe install stack:<name>`:
+After `vibe install stack:<name>`, the package's whole published tree is materialised verbatim into a slot under the workspace-root `vibedeps/` tree:
 
 ```
-<consumer>/
-├── spec/
-│   ├── boot/<prefix>-stack-<name>.md       # if the stack ships one
-│   └── stacks/<name>/                       # mirror of all spec/ files
+<workspace-root>/
+└── vibedeps/
+    └── stack-<name>/
+        └── <version>/                  # the stack's published tree, verbatim
+            ├── vibe.toml
+            ├── boot/stack-<name>.md
+            └── spec/stacks/<name>/
 ```
+
+A materialised package *is* its verbatim subtree under its `vibedeps/` slot — `vibe install` never writes into a consuming node's authored `spec/` ([the loading model](loading-model.md)).
 
 ## What goes in `STACK.md`
 
@@ -57,7 +62,9 @@ Concrete sections:
 
 A consumer who installs your stack and reads STACK.md should know how to add a hand-written file that fits the stack's conventions, even before the build LLM ships.
 
-## Manifest: `vibe-package.toml`
+## Manifest: `vibe.toml`
+
+A publishable package carries a `vibe.toml` with a `[package]` table.
 
 ```toml
 [package]
@@ -72,20 +79,12 @@ keywords = ["rust", "cli", "stack"]
 [compatibility]
 min_vibe_version = "0.1.0"
 
-[writes]
-files = [
-    "spec/stacks/rust-cli/STACK.md",
-    "spec/stacks/rust-cli/conventions.md",
-    "spec/stacks/rust-cli/capabilities/cli-entrypoint.md",
-    "spec/stacks/rust-cli/capabilities/log-structured.md",
-    "spec/stacks/rust-cli/tooling.md",
-    "spec/stacks/rust-cli/deployment.md",
-]
-
 # Optional — surface "you are building against rust-cli" at session start.
+# `category` sets the band in the computed boot sequence; `source` is the
+# path to the boot file inside the package. No `filename`, no `[writes]`.
 [boot_snippet]
-filename = "50-stack-rust-cli.md"
-source = "boot/50-stack-rust-cli.md"
+category = "stack"
+source = "boot/stack-rust-cli.md"
 
 # Stacks are providers — this is where most of the value lands.
 [provides]
@@ -100,8 +99,11 @@ capabilities = [
 # flow (e.g. a coding-discipline flow) every project using this stack
 # is expected to follow.
 [requires]
-packages     = ["flow:atomic-commits@^0.1"]
 capabilities = []
+
+# [requires.packages] is a table: pkgref → constraint string.
+[requires.packages]
+"flow:atomic-commits" = "^0.1"
 ```
 
 The `[provides].capabilities` list is the stack's most important manifest entry. Every capability listed here is a contract the stack promises to satisfy at build time, so any feat that requires the same capability can be paired with this stack.

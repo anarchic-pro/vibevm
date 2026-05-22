@@ -18,11 +18,12 @@ Everything below is plumbing connecting these three concepts.
 
 | Crate | What lives here | Depends on |
 | --- | --- | --- |
-| `vibe-core` | Manifest schemas (`PackageManifest`, `ProjectManifest`, `Lockfile`), package identity (`PackageRef`, `CapabilityRef`, `VersionSpec`, `PackageKind`), error types. The shared vocabulary every other crate speaks. | (no internal deps) |
+| `vibe-core` | Manifest schemas (one `vibe.toml` per node, parsed into `PackageManifest` / `ProjectManifest` / workspace shapes, plus `Lockfile`), package identity (`PackageRef`, `CapabilityRef`, `VersionSpec`, `PackageKind`), error types. The shared vocabulary every other crate speaks. | (no internal deps) |
 | `vibe-graph` | Task-graph builder and sequential runner. Drives the `install` and (eventually M1.5) `build` workflows. | `vibe-core` |
 | `vibe-registry` | Git operations behind the `GitBackend` trait (`ShellGit` impl). `LocalRegistry`, `GitRegistry` (legacy monorepo, retired), `GitPackageRegistry` (per-package, current), `MultiRegistryResolver`. The `Registry` trait + `CachedPackage` value type. | `vibe-core` |
 | `vibe-resolver` | `DepProvider` / `DepSolver` traits. `NaiveDepSolver` (DFS, no backtracking) is today's impl; resolvo / libsolv slots reserved. `MultiRegistryProvider` and `LocalRegistryProvider` adapt the registry layer for the solver. | `vibe-core`, `vibe-registry` |
-| `vibe-install` | `plan_install` / `apply_install` / `register_installed` / `unregister_installed`. The user-owned-paths guard, boot-snippet-prefix collision detection, content_hash integrity check. | `vibe-core`, `vibe-registry` |
+| `vibe-install` | `plan_install` / `apply_install` / `register_installed` / `unregister_installed`. The content_hash integrity check. Under the loading model ([PROP-009](../spec/modules/vibe-workspace/PROP-009-loading-model.md)) materialisation and boot-artifact generation move into `vibe-workspace`; the boot-snippet-prefix collision check is retired (the `NN-` prefix no longer exists). | `vibe-core`, `vibe-registry` |
+| `vibe-workspace` | Workspace discovery (`Workspace::discover`), the unified-resolution finalize pass, the computed-view engine. Materialises resolved packages into the `vibedeps/` tree and generates the per-node boot artifacts (`INLINE.md` / `INDEX.md`) and the managed `<vibevm>` redirect block ([PROP-009](../spec/modules/vibe-workspace/PROP-009-loading-model.md), [PROP-012](../spec/modules/vibe-workspace/PROP-012-managed-redirect-block.md)). | `vibe-core`, `vibe-registry` |
 | `vibe-publish` | `RepoCreator` trait + `GitVerseCreator` impl. `Publisher` orchestrator. `Token` (with debug/display redaction). Inline `git_publish` module for staging / push / tag. | `vibe-core`, `vibe-registry` |
 | `vibe-llm` | LLM provider abstraction. Stubs today; M1.5 lights it up with Anthropic / OpenAI / OpenRouter / Ollama adapters. | `vibe-core` |
 | `vibe-check` | Spec linter (`vibe check`). Stubs today; M1.3 implements the full §12 check list. | `vibe-core` |
@@ -54,12 +55,12 @@ Methods:
 `list_versions` / `resolve` / `fetch`. Three implementations:
 
 - **`LocalRegistry`** — M0 local-directory layout (`<root>/<kind>/<name>/v<ver>/...`). Used by `--registry <path>` and the in-tree `fixtures/registry/` for hermetic e2e tests.
-- **`GitRegistry`** (legacy) — clones one big monorepo, treats its working tree as a `LocalRegistry`. M1.1-shipping. Retired in favour of `GitPackageRegistry`; kept around until consumer lockfiles in v1 schema have all migrated.
+- **`GitRegistry`** (legacy) — clones one big monorepo, treats its working tree as a `LocalRegistry`. M1.1-shipping. Retired in favour of `GitPackageRegistry`.
 - **`GitPackageRegistry`** (current) — one repo per package under an organization URL. Versions are git tags. Cache layout `<bucket>/packages/<kind>-<name>/clone/`.
 
 ### `MultiRegistryResolver` ([`vibe-registry::multi_registry_resolver`](../crates/vibe-registry/src/multi_registry_resolver.rs))
 
-Sits on top of an ordered set of `GitPackageRegistry` instances and threads `[[mirror]]` and `[[override]]` resolution. `resolve(pkgref)` returns a `MultiResolution` with provenance (which registry served, source URL, source ref, override flag). `fetch(&MultiResolution)` materialises a `CachedPackage` with the full lockfile-v2 provenance fields filled. `refresh_lockfile_clones` drives `vibe registry sync`.
+Sits on top of an ordered set of `GitPackageRegistry` instances and threads `[[mirror]]` and `[[override]]` resolution. `resolve(pkgref)` returns a `MultiResolution` with provenance (which registry served, source URL, source ref, override flag). `fetch(&MultiResolution)` materialises a `CachedPackage` with the full lockfile provenance fields filled. `refresh_lockfile_clones` drives `vibe registry sync`.
 
 ### `DepProvider` / `DepSolver` ([`vibe-resolver`](../crates/vibe-resolver/src/lib.rs))
 
@@ -100,11 +101,11 @@ for each node in graph:
     [CachedPackage]                              ← provenance: registry_name, source_url, source_ref, overridden
     │
     ▼
-    [vibe-install::plan_install]
+    [plan]
     │   - lockfile content_hash integrity check  ← PROP-002 §2.1
-    │   - regular writes vs. user-owned-paths guard
-    │   - boot snippet name + numeric prefix collision detection
-    │   - cross-plan target conflict detection
+    │   - the unit is the set of packages to materialise into vibedeps/
+    │     plus the boot artifacts to regenerate — not a per-file write list
+    │   - plan-time <vibevm> instruction-file block validation ← PROP-012 §2.5
     ▼
     [InstallPlan]
     │
@@ -112,12 +113,15 @@ for each node in graph:
 [present plans, ask user (or --assume-yes / --json)]
     │
     ▼
-for each plan:
-    [vibe-install::apply_install]                ← writes files, no lockfile mutation
+[apply — vibe-workspace]                         ← PROP-009 §2.7
+    - materialise each resolved package verbatim into its vibedeps/ slot
+    - regenerate INLINE.md / INDEX.md for every entry-point node
+    - splice the managed <vibevm> redirect block into each instruction file
+    - prune stale vibedeps/ slots
     │
     ▼
-    [vibe-install::register_installed]
-        - LockedPackage built with full v2 provenance
+    [register_installed]
+        - LockedPackage built with full provenance
         - lockfile.meta.root_dependencies merged
     │
     ▼
@@ -141,7 +145,7 @@ for each plan:
     ▼
 [Publisher::publish(config)]
     │
-    ├─ [PackageManifest::read]                  ← legacy [dependencies] migrates inline
+    ├─ [PackageManifest::read]                  ← reads the package's vibe.toml ([package] table)
     │
     ├─ [extract_org_segment(org_url)]           ← strips git+ prefix, ssh shorthand, scheme
     │
@@ -197,7 +201,7 @@ for each lockfile entry:
 
 | Format | Where |
 | --- | --- |
-| **TOML** for human-edited configs: [`vibe.toml`](../VIBEVM-SPEC.md), [`vibe.lock`](../VIBEVM-SPEC.md), [`vibe-package.toml`](../VIBEVM-SPEC.md). Schemas in `VIBEVM-SPEC.md` §7; serde-driven via `vibe-core::manifest`. |
+| **TOML** for human-edited configs: [`vibe.toml`](../VIBEVM-SPEC.md) (the single manifest — `[project]` for a consumer, `[package]` for a publishable artifact, `[workspace]` for a coordinator) and [`vibe.lock`](../VIBEVM-SPEC.md). Schemas in `VIBEVM-SPEC.md` §7; serde-driven via `vibe-core::manifest`. |
 | **JTD** for machine-to-machine wire contracts: every CLI `--json` output, every HTTP API request/response, future LLM provider wrappers, future telemetry. Schemas committed under [`schemas/`](../schemas/); generated Rust under `crates/vibe-wire/src/generated/` once `jtd-codegen` is installed. |
 
 The split is deliberate per [PROP-000 §16](../spec/common/PROP-000.md#jtd) — TOML for humans, JTD for machines.
@@ -223,7 +227,7 @@ Per-project, under `<project>/.vibe/cache/`:
 └── <kind>/
     └── <name>/
         └── v<version>/                        # materialised package contents (no .git)
-            ├── vibe-package.toml
+            ├── vibe.toml
             └── …
 ```
 
@@ -251,7 +255,7 @@ The per-project cache is the lockfile's mirror — every entry there has a corre
 
 1. [`README.md`](../README.md) at repo root — what is this, status, quick start.
 2. [`CLAUDE.md`](../CLAUDE.md) — the four non-negotiable rules. Read before your first commit.
-3. [`spec/boot/00-core.md`](../spec/boot/00-core.md) and [`90-user.md`](../spec/boot/90-user.md) — project boot snippets.
+3. [`spec/boot/00-core.md`](../spec/boot/00-core.md) and [`90-user.md`](../spec/boot/90-user.md) — the project's authored boot files (the generated `INDEX.md` / `INLINE.md` join them — see [`docs/loading-model.md`](loading-model.md)).
 4. [`VIBEVM-SPEC.md`](../VIBEVM-SPEC.md) §1–§4 — what vibevm is, the package model.
 5. This document.
 6. [`spec/WAL.md`](../spec/WAL.md) — current state.

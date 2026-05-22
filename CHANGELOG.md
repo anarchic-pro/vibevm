@@ -8,6 +8,35 @@ Format roughly follows [Keep a Changelog](https://keepachangelog.com/), grouped 
 
 ## [Unreleased]
 
+### M1.18 — Loading model (PROP-009 + PROP-012) (2026-05-22)
+
+The flat `spec/boot/NN-*.md` boot model is replaced by a computed loading model. Design locks: [PROP-009](spec/modules/vibe-workspace/PROP-009-loading-model.md), [PROP-012](spec/modules/vibe-workspace/PROP-012-managed-redirect-block.md). Shipped across seven phases.
+
+- **Two trees.** A node's authored `spec/` and its materialised dependencies are physically separate. `vibe install` copies each resolved package's published tree verbatim into a committed `vibedeps/<kind>-<name>/<version>/` slot at the workspace root, and never writes into authored `spec/`. The `[writes]` package section is retired — a materialised package *is* its subtree.
+- **Computed boot.** Each node's boot sequence is computed from the unified resolution — inherited foundation + the node's own authored boot + dependency boot + user overrides — and projected into generated `spec/boot/INLINE.md` (the verbatim inline priority lane) and `spec/boot/INDEX.md` (a TOML manifest of `static` / `dynamic` entries). Three inclusion types — `inline` / `static` / `dynamic` — are declared per dependency via `link`. The `NN-` filename prefix is retired; `vibe` owns ordering by `category` band.
+- **`vibe reinstall`.** Regenerates the materialised state and boot artifacts without re-resolving; `--force` re-fetches every locked package from source.
+- **The managed `<vibevm>` block (PROP-012).** `vibe` no longer overwrites the whole of `CLAUDE.md` / `AGENTS.md` / `GEMINI.md` — it owns only a delimited `<vibevm>` … `</vibevm>` block and preserves every byte outside it, so the developer and other tools can co-tenant the file. A malformed block is a hard error, validated before any mutation; `vibe install` maps it to exit code 3.
+- **The boot-directory linter** (`vibe check`) stops enforcing the retired `NN-` filename pattern; it now verifies only that `spec/boot/` exists and holds markdown.
+- **vibevm self-migration.** vibevm migrated to its own loading model — `spec/boot/INDEX.md` generated, a `<vibevm>` block appended to its `CLAUDE.md` / `AGENTS.md` / `GEMINI.md` (every hand-authored line, the four rules included, preserved).
+- **Docs.** `VIBEVM-SPEC.md` §6 and the rest of the retired-model footprint rewritten for the loading model; the `docs/` sweep covers the new model and `vibe reinstall`.
+
+Every phase landed clippy-clean (`-D warnings`) with its full test suite green.
+
+### M1.17 — Workspace (multi-package projects) (2026-05-21)
+
+The cargo-`[workspace]` / Maven-multi-module shape: a project decomposes into member packages, each published independently — or not at all. Design lock: [PROP-007](spec/modules/vibe-workspace/PROP-007-workspace.md). Shipped in five implementation phases plus documentation.
+
+- **Unified manifest.** The two manifest files — `vibe.toml` and `vibe-package.toml` — collapse into **one file, `vibe.toml`**, carried by every node. The role is set by which sections are present: `[project]` (a consumer) and `[package]` (a publishable artifact) are mutually exclusive; `[workspace]` composes with either or neither. One `Manifest` type in `vibe-core` replaces `ProjectManifest` + `PackageManifest`; `Manifest::validate` enforces the role rules.
+- **Hard compatibility break — all manifest legacy removed.** vibevm is pre-release; there is no migration path and none is needed. Gone: the `vibe-package.toml` filename, the `[dependencies]` section, the array-form `packages = ["…"]`, the singleton `[registry]` table, and the `vibe.lock` v1/v2/v3 readers. A manifest or lockfile using a removed form is a hard error.
+- **Workspace model + discovery.** A new `vibe-workspace` crate. `Workspace::discover` walks up from anywhere inside the tree to the topmost `[workspace]` that transitively encloses the start node — the absolute root, where the single `vibe.lock` lives. `[workspace] members` accepts glob patterns; nesting recurses to arbitrary depth; nesting cycles are rejected. A standalone single-package project is a degenerate workspace, so discovery is the universal entry point.
+- **Path-source dependencies.** A `[requires.packages]` entry may be `{ path = "../sibling", version = "^0.1" }` — a third source-kind beside registry-resolved and git-source. Resolution priority is `[[override]]` > path > git-source > registry-walk. `vibe.lock` bumps to schema v4 with `source_kind = "path"`, whose `source_url` is the member's path relative to the workspace root — portable, never absolute.
+- **`[workspace.versions]` placeholders.** Named version-constraint placeholders (Maven `<properties>`). A member references one as `{ version.var = "core" }`; it resolves bottom-up through the enclosing-workspace chain, nearest wins.
+- **Selective publish.** `[package].publish` (`true` / `false` / `["registry"]`) declares each node's posture. `vibe workspace publish` walks the self-publishing members dependency-first and publishes each as its own repository, reusing the per-package publish machinery; the development monorepo is never modified. Each published copy carries an `[origin]` provenance marker, a "generated copy — contribute upstream" README banner, and a `PULL_REQUEST_TEMPLATE.md` STOP notice.
+- `VIBEVM-SPEC.md` §4.2 / §7 document the workspace model.
+- **Not yet wired:** `vibe install` / `vibe build` do not yet discover the workspace for unified multi-member resolution — a follow-up milestone that turns on a per-member materialisation decision PROP-007 §2.4 / §3 leaves open. Standalone single-package projects — every project today — are unaffected.
+
+Every phase landed clippy-clean (`-D warnings`) with its full test suite green.
+
 ### M1.16 closer — `vibe registry redirect-update` (2026-05-19)
 
 Closes the v0 manual-procedure gap surfaced in the M1.16 ship-complete WAL: editing an existing stub's marker used to require a hand-driven `git clone` / edit / `git commit` / `git push` recipe. The new CLI command automates it.

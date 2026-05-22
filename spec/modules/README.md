@@ -22,6 +22,12 @@ rationale document links to it from its `Related` header.
     `(group, name, version, content_hash)`, optional `kind` prefix,
     `naming = "fqdn"` repo names, index-backed short-name resolution,
     collision detection. **Status: DRAFT 2026-05-20.**
+  - [PROP-010: Local package cache](vibe-registry/PROP-010-local-package-cache.md)
+    — the registry cache elevated to a first-class, machine-global,
+    accretive, identity-keyed package store; a `--offline` policy flag,
+    offline resolution, a user-level default registry configuration, and
+    a `vibe cache` surface — so new modules and new projects resolve
+    their dependencies offline. **Status: DRAFT 2026-05-21.**
 - [`vibe-resolver/`](vibe-resolver/) — dep solver, features, subskills.
   - [PROP-003: Dep-model evolution](vibe-resolver/PROP-003-dep-evolution.md)
     — SAT solver via libsolv (BSD-3-Clause), cargo-style features,
@@ -41,3 +47,23 @@ rationale document links to it from its `Related` header.
     absolute root, `path`-source cross-member deps, `[workspace.versions]`
     placeholders, selective publish, published-package-repo signalling.
     **Status: DRAFT 2026-05-20.**
+  - [PROP-009: Loading model](vibe-workspace/PROP-009-loading-model.md)
+    — computed boot composition across a workspace hierarchy: two trees
+    (authored `spec/` vs committed `deps/`), the per-node effective boot
+    sequence, generated `INLINE.md` / `INDEX.md` artifacts, the
+    `inline` / `static` / `dynamic` inclusion types, category-based
+    ordering (retires `NN-` prefixes), workspace-aware `vibe install`,
+    one computed-view engine for boot and the effective spec. Answers
+    PROP-007 §6 question 3. **Status: DRAFT 2026-05-21.**
+  - [PROP-011: Incremental install](vibe-workspace/PROP-011-incremental-install.md)
+    — refine PROP-009's whole-tree `vibe install` into an incremental
+    operation: skip the depsolver when `vibe.lock` is fresh (making
+    `vibe install` lockfile-respecting), re-materialise only the changed
+    `vibedeps/` slots; boot regeneration stays whole-tree, the cheap
+    phase. **Status: DRAFT 2026-05-21.**
+  - [PROP-012: Managed redirect block](vibe-workspace/PROP-012-managed-redirect-block.md)
+    — vibevm owns only a `<vibevm>`-delimited block of each shared agent
+    instruction file (`CLAUDE.md` / `AGENTS.md` / `GEMINI.md`), never the
+    whole file: exactly one block, a hard stop on a malformed file,
+    absent → create. Corrects the destructive whole-file overwrite
+    shipped in PROP-009 Phase 4. **Status: DRAFT 2026-05-22.**

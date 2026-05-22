@@ -1,217 +1,130 @@
-//! `vibe update [<pkgref>...] [--all]` — re-fetch installed packages
-//! against their original root constraint, diff project files, apply.
+//! `vibe update [<pkgref>...] [--all]` — re-resolve and re-materialise.
 //!
-//! Spec: `VIBEVM-SPEC.md` §16 (M1 acceptance), ROADMAP §M1.2.
+//! `vibe update` with no arguments, or `--all`, re-resolves the whole
+//! declared graph — exactly the `vibe install` from-manifest path, so it
+//! delegates there.
 //!
-//! v0 contract (this commit):
+//! `vibe update <pkgref>...` is **scoped**: only the named packages — and
+//! the transitive subtree each pulls — are re-resolved against their
+//! declared constraints and re-materialised. Every other package keeps
+//! its lockfile version and its `vibedeps/` slot untouched. A package
+//! whose version moves has its superseded slot removed, and the boot
+//! artifacts are regenerated from the new `vibedeps/` state.
 //!
-//! - Updates one or more named pkgrefs OR every root via `--all`.
-//! - Per package: re-resolves through the project's
-//!   `MultiRegistryResolver` (mirror dispatch + cross-source
-//!   `content_hash` gate inherited transparently from the install
-//!   path), fetches the new content into the per-project cache, then
-//!   asks `vibe-install::plan_update` for a per-file diff (added /
-//!   removed / modified / identical / user-edited).
-//! - Refuses to apply when any project file is user-edited (bytes
-//!   diverge from the install-time cache) — the operator runs
-//!   `vibe uninstall && vibe install` to consciously discard the
-//!   edits or back them up.
-//! - Refuses to apply when the new manifest's `[requires]` shape
-//!   differs from the locked transitive set — narrow v0 does not
-//!   cascade graph changes.
-//! - `vibe update` does not touch transitive packages directly. They
-//!   get re-fetched on `--all` only insofar as they are roots
-//!   themselves; non-root transitives stay where the install pinned
-//!   them. Broader graph evolution lands later.
+//! Spec: spec://vibevm/modules/vibe-workspace/PROP-009-loading-model.
 
 use std::fs;
 use std::path::{Path, PathBuf};
 
-use anyhow::{Context, Result, anyhow, bail};
+use anyhow::{Context, Result, bail};
 use dialoguer::Confirm;
-use serde::Serialize;
-use vibe_core::manifest::{Lockfile, ProjectManifest};
-use vibe_core::{PackageKind, PackageRef};
-use vibe_install::{
-    InstallError, UpdateChange, UpdatePlan, apply_update, plan_update, register_updated,
-};
-use vibe_registry::{LocalRegistry, MultiRegistryResolver};
+use vibe_core::manifest::{Lockfile, LockedPackage, Manifest, SourceKind};
+use vibe_core::{PackageRef, VersionSpec};
+use vibe_registry::CachedPackage;
+use vibe_workspace::Workspace;
+use vibe_workspace::install::regenerate_boot;
+use vibe_workspace::vibedeps;
 
-use crate::cli::UpdateArgs;
+use crate::cli::{InstallArgs, UpdateArgs};
+use crate::commands::install::{build_install_resolver, exact_pinned_pkgref};
+use crate::exit_code::InstallError;
 use crate::output;
 
 pub fn run(ctx: &output::Context, args: UpdateArgs) -> Result<()> {
+    // No arguments / `--all`: re-resolve the whole graph. That is the
+    // `vibe install` from-manifest path exactly, so delegate to it.
+    if args.all || args.packages.is_empty() {
+        return super::install::run(ctx, install_args_from(&args));
+    }
+
+    // Scoped update: only the named packages and their subtrees move.
     let project_root = resolve_project_root(&args.path)?;
-    let mut manifest = load_project_manifest(&project_root)?;
-    let mut lockfile = load_or_empty_lockfile(&project_root)?;
-
-    if !args.all && args.packages.is_empty() {
-        bail!(
-            "vibe update: pass at least one `<kind>:<name>` argument or `--all`"
-        );
-    }
-
-    if lockfile.packages.is_empty() {
-        bail!(
-            "vibe update: lockfile in `{}` is empty — nothing to update",
-            project_root.display()
-        );
-    }
+    let workspace = Workspace::discover(&project_root)
+        .context("discovering the workspace enclosing the project")?;
+    let manifest = load_project_manifest(&project_root)?;
+    let mut lockfile = load_lockfile(&workspace.root)?;
 
     if manifest.registries.is_empty() {
         bail!(
-            "no `[[registry]]` configured in `{}/vibe.toml`. `vibe update` re-fetches from the registry; \
-             configure one with `vibe registry add <name> <url>` before retrying.",
+            "no `[[registry]]` configured in `{}/vibe.toml` — `vibe update` re-fetches \
+             from the registry.",
             project_root.display()
         );
     }
 
-    let resolver = MultiRegistryResolver::open(
-        &manifest.registries,
-        &manifest.mirrors,
-        &manifest.overrides,
-    )
-    .context("opening multi-registry resolver")?
-    .with_strict_auth(args.auth_required)
-    .with_git_packages(manifest.requires.git_packages.clone());
-
-    // 1. Decide which packages to update. `--all` walks every entry
-    // in the lockfile (roots + any transitives). Named pkgrefs walk
-    // exactly those. The user constraint we re-resolve against is
-    // the original `root_dependencies` entry's `version`, falling
-    // back to `Latest` when the package isn't recorded as a root
-    // (transitives in v0 of update — re-resolved at the same exact
-    // version they were locked at, which usually means a no-op).
-    let targets: Vec<UpdateTarget> = if args.all {
-        lockfile
+    // Each named package must already be installed; re-resolve it against
+    // its original root constraint so a caret bumps within range.
+    let mut roots: Vec<PackageRef> = Vec::with_capacity(args.packages.len());
+    for raw in &args.packages {
+        let pkgref = PackageRef::parse(raw).with_context(|| format!("parsing `{raw}`"))?;
+        if lockfile.find(pkgref.kind, &pkgref.name).is_none() {
+            bail!(
+                "package `{}:{}` is not installed — `vibe update` only refreshes installed \
+                 packages; use `vibe install {}:{}` to add it.",
+                pkgref.kind,
+                pkgref.name,
+                pkgref.kind,
+                pkgref.name,
+            );
+        }
+        // The constraint to re-resolve against: the manifest `[requires]`
+        // declaration is authoritative — the operator edits it to widen a
+        // pin before updating — and the lockfile's `root_dependencies`
+        // mirror is only the fallback.
+        let constraint = manifest
+            .requires
             .packages
             .iter()
-            .map(|entry| UpdateTarget::for_locked(entry, &lockfile.meta.root_dependencies))
-            .collect()
-    } else {
-        let mut v: Vec<UpdateTarget> = Vec::with_capacity(args.packages.len());
-        for raw in &args.packages {
-            let pkgref =
-                PackageRef::parse(raw).with_context(|| format!("parsing `{raw}`"))?;
-            let entry = lockfile
-                .find(pkgref.kind, &pkgref.name)
-                .ok_or_else(|| {
-                    anyhow!(
-                        "package `{}:{}` is not installed in `{}`. \
-                         Use `vibe install {}:{}` first, or `vibe list` to see what's installed.",
-                        pkgref.kind,
-                        pkgref.name,
-                        project_root.display(),
-                        pkgref.kind,
-                        pkgref.name
-                    )
-                })?;
-            v.push(UpdateTarget::for_locked(entry, &lockfile.meta.root_dependencies));
-        }
-        v
-    };
+            .find(|r| r.kind == pkgref.kind && r.name == pkgref.name)
+            .or_else(|| {
+                lockfile
+                    .meta
+                    .root_dependencies
+                    .iter()
+                    .find(|r| r.kind == pkgref.kind && r.name == pkgref.name)
+            })
+            .map(|r| r.version.clone())
+            .unwrap_or(VersionSpec::Latest);
+        roots.push(PackageRef::new(pkgref.kind, pkgref.name, constraint)?);
+    }
 
-    let cache_root = project_root.join(".vibe/cache");
-    fs::create_dir_all(&cache_root)
-        .with_context(|| format!("creating cache dir `{}`", cache_root.display()))?;
-
-    // 2. For each target: re-resolve, fetch, build UpdatePlan, accumulate.
-    let mut plans: Vec<UpdatePlan> = Vec::new();
-    let mut up_to_date: Vec<UpdateTarget> = Vec::new();
+    let resolver = build_install_resolver(&install_args_from(&args), &manifest)?;
 
     ctx.heading(&format!(
         "Re-resolving {} package{}…",
-        targets.len(),
-        if targets.len() == 1 { "" } else { "s" },
+        roots.len(),
+        if roots.len() == 1 { "" } else { "s" },
     ));
+    let graph = resolver
+        .solve(&roots)
+        .context("dependency resolution failed")?;
 
-    for target in &targets {
-        let pkgref = target.constraint_pkgref();
-        let resolution = resolver
-            .resolve(&pkgref)
-            .with_context(|| format!("resolving `{}:{}`", target.kind, target.name))?;
-        // Pass None for expected_hash here: a tag-rewrite (force-push
-        // upstream) producing a different content_hash for the same
-        // version is exactly what the diff is supposed to surface, not
-        // hard-fail on. The cross-source gate at install time is the
-        // mirror-supply-chain check; update is a deliberate refresh.
-        let new_cached = resolver
-            .fetch_with_expected_hash(&resolution, &cache_root, None)
-            .with_context(|| format!("fetching `{}:{}`", target.kind, target.name))?;
+    let cache_root = workspace.root.join(".vibe/cache");
+    fs::create_dir_all(&cache_root)
+        .with_context(|| format!("creating cache dir `{}`", cache_root.display()))?;
 
-        if new_cached.resolved.version == target.from_version
-            && new_cached.content_hash == target.from_content_hash
-        {
-            up_to_date.push(target.clone());
-            continue;
-        }
-
-        let old_cache_dir = cache_root
-            .join(target.kind.as_str())
-            .join(&target.name)
-            .join(format!("v{}", target.from_version));
-        let plan = plan_update(&project_root, &lockfile, new_cached, &old_cache_dir)
-            .with_context(|| format!("planning update for `{}:{}`", target.kind, target.name))?;
-        plans.push(plan);
+    // Fetch every node of the named subtree.
+    let mut updated: Vec<(CachedPackage, Vec<PackageRef>)> =
+        Vec::with_capacity(graph.packages.len());
+    for node in graph.iter() {
+        let pkgref = exact_pinned_pkgref(node);
+        let cached = resolver.resolve_and_fetch(&pkgref, &cache_root, None)?;
+        updated.push((cached, node.dependencies.clone()));
     }
 
-    // 3. Present what we'd do.
-    present_plans(ctx, &project_root, &plans, &up_to_date);
-
-    if plans.iter().all(|p| !p.has_changes()) {
-        // Every plan is pure-Identical (or the version bumped but the
-        // payload didn't change at all). Nothing to write to disk.
-        // Still bump the lockfile's `generated_at` + version on each
-        // entry so a force-push (same version, new content_hash) gets
-        // recorded — that's a real metadata change even if no file
-        // bytes shift.
-        if !plans.is_empty() {
-            for plan in &plans {
-                register_updated(
-                    &mut lockfile,
-                    plan,
-                    plan.changes
-                        .iter()
-                        .filter_map(|c| match c {
-                            UpdateChange::Identical { target_rel } => Some(target_rel.clone()),
-                            _ => None,
-                        })
-                        .collect(),
-                    crate::commands::init::current_timestamp_utc(),
-                )?;
-            }
-            lockfile.write(project_root.join(Lockfile::FILENAME))?;
-        }
-        emit_report(ctx, &plans, &up_to_date, &project_root, &[])?;
-        return Ok(());
-    }
-
-    // 4. Confirm.
     let approved = if args.assume_yes || ctx.is_unattended() || ctx.is_json() {
         true
     } else if !console::user_attended() {
         bail!(
-            "no TTY available for confirmation; re-run with `--assume-yes` to apply this plan non-interactively"
+            "no TTY available for confirmation; re-run with `--assume-yes` to update non-interactively"
         );
     } else {
-        let total_changes: usize = plans
-            .iter()
-            .map(|p| {
-                p.changes
-                    .iter()
-                    .filter(|c| !matches!(c, UpdateChange::Identical { .. }))
-                    .count()
-            })
-            .sum();
-        let prompt = format!(
-            "Apply this update plan ({} change{} across {} package{})?",
-            total_changes,
-            if total_changes == 1 { "" } else { "s" },
-            plans.len(),
-            if plans.len() == 1 { "" } else { "s" },
-        );
         Confirm::new()
-            .with_prompt(prompt)
+            .with_prompt(format!(
+                "Re-materialise {} package{} into vibedeps/ and regenerate boot?",
+                updated.len(),
+                if updated.len() == 1 { "" } else { "s" },
+            ))
             .default(false)
             .interact()
             .context("reading user confirmation")?
@@ -220,297 +133,152 @@ pub fn run(ctx: &output::Context, args: UpdateArgs) -> Result<()> {
         return Err(InstallError::UserDeclined.into());
     }
 
-    // 5. Apply each plan; update lockfile after each success.
-    let mut applied: Vec<AppliedReport> = Vec::new();
-    for plan in &plans {
-        let label = plan.package_label();
-        ctx.step(&format!(
-            "Updating {label} from {} to {}",
-            plan.from_version, plan.to_version
-        ));
-        let written = apply_update(plan)?;
-        register_updated(
-            &mut lockfile,
-            plan,
-            written.clone(),
-            crate::commands::init::current_timestamp_utc(),
-        )?;
-        applied.push(AppliedReport {
-            package: label,
-            from_version: plan.from_version.to_string(),
-            to_version: plan.to_version.to_string(),
-            added: count_changes(plan, |c| matches!(c, UpdateChange::Added { .. })),
-            removed: count_changes(plan, |c| matches!(c, UpdateChange::Removed { .. })),
-            modified: count_changes(plan, |c| matches!(c, UpdateChange::Modified { .. })),
-            identical: count_changes(plan, |c| matches!(c, UpdateChange::Identical { .. })),
-        });
+    // Materialise the subtree. A package whose version moved has its
+    // superseded slot removed first, so a bump leaves no stale slot.
+    let mut bumps: Vec<String> = Vec::new();
+    for (cached, _) in &updated {
+        if let Some(old) = lockfile.find(cached.resolved.kind, &cached.resolved.name)
+            && old.version != cached.resolved.version
+        {
+            vibedeps::remove_slot(
+                &workspace.root,
+                cached.resolved.kind,
+                &cached.resolved.name,
+                &old.version,
+            )
+            .context("removing the superseded vibedeps/ slot")?;
+            bumps.push(format!(
+                "{}:{} {} -> {}",
+                cached.resolved.kind, cached.resolved.name, old.version, cached.resolved.version
+            ));
+        }
+        vibedeps::materialise(
+            &workspace.root,
+            cached.resolved.kind,
+            &cached.resolved.name,
+            &cached.resolved.version,
+            &cached.cache_dir,
+        )
+        .context("materialising the updated package")?;
     }
 
-    // `--exact`: tighten each updated root's manifest constraint to
-    // the freshly-resolved exact version. Equivalent of cargo's
-    // `cargo update --precise X.Y.Z` plus a manifest pin in one
-    // step. Only applied to packages declared in `vibe.toml`
-    // `[requires].packages` — non-root transitives are not in the
-    // manifest. No-op when --exact wasn't passed.
-    if args.exact && !plans.is_empty() {
-        let mut manifest_changed = false;
-        for plan in &plans {
-            let kind = plan.kind;
-            let name = plan.name.clone();
-            let version = plan.to_version.clone();
-            let pos = manifest
-                .requires
-                .packages
-                .iter()
-                .position(|r| r.kind == kind && r.name == name);
-            if let Some(i) = pos {
-                let req = semver::VersionReq::parse(&format!("={version}"))
-                    .expect("`=<version>` always parses as VersionReq");
-                manifest.requires.packages[i] = vibe_core::PackageRef {
-                    kind,
-                    name,
-                    version: vibe_core::VersionSpec::Req(req),
-                };
-                manifest_changed = true;
-            }
-        }
-        if manifest_changed {
-            manifest.write(project_root.join(vibe_core::manifest::ProjectManifest::FILENAME))?;
+    // Regenerate every node's boot from the new `vibedeps/` state.
+    regenerate_boot(&workspace).context("regenerating boot artifacts")?;
+
+    // Replace each subtree package's lockfile entry, carrying the
+    // install-scoped metadata (features / language) the version bump does
+    // not change.
+    for (cached, deps) in &updated {
+        let old = lockfile.find(cached.resolved.kind, &cached.resolved.name);
+        let entry = locked_package(cached, deps, old);
+        match lockfile
+            .packages
+            .iter()
+            .position(|p| p.kind == entry.kind && p.name == entry.name)
+        {
+            Some(i) => lockfile.packages[i] = entry,
+            None => lockfile.packages.push(entry),
         }
     }
+    lockfile.meta.generated_at = crate::commands::init::current_timestamp_utc();
+    lockfile.write(workspace.lockfile_path())?;
 
-    lockfile.write(project_root.join(Lockfile::FILENAME))?;
-    emit_report(ctx, &plans, &up_to_date, &project_root, &applied)?;
+    emit_report(ctx, updated.len(), &bumps);
     Ok(())
 }
 
-fn count_changes<F: Fn(&UpdateChange) -> bool>(plan: &UpdatePlan, pred: F) -> usize {
-    plan.changes.iter().filter(|c| pred(c)).count()
-}
-
-#[derive(Debug, Clone)]
-struct UpdateTarget {
-    kind: PackageKind,
-    name: String,
-    from_version: semver::Version,
-    from_content_hash: String,
-    /// Original root constraint typed by the user, if this package
-    /// is recorded under `[meta].root_dependencies`. `None` when the
-    /// package is a non-root transitive — re-resolved at the exact
-    /// pinned version (treats transitive update as a no-op unless
-    /// upstream force-pushed).
-    root_constraint: Option<PackageRef>,
-}
-
-impl UpdateTarget {
-    fn for_locked(
-        entry: &vibe_core::manifest::LockedPackage,
-        roots: &[PackageRef],
-    ) -> Self {
-        let root_constraint = roots
-            .iter()
-            .find(|r| r.kind == entry.kind && r.name == entry.name)
-            .cloned();
-        UpdateTarget {
-            kind: entry.kind,
-            name: entry.name.clone(),
-            from_version: entry.version.clone(),
-            from_content_hash: entry.content_hash.clone(),
-            root_constraint,
-        }
-    }
-
-    /// Pkgref to feed `MultiRegistryResolver::resolve` with. For roots,
-    /// preserve the original constraint (`Latest` / `^0.1` / etc.).
-    /// For non-roots, pin to the exact locked version — they only
-    /// move on a force-push.
-    fn constraint_pkgref(&self) -> PackageRef {
-        if let Some(root) = &self.root_constraint {
-            return root.clone();
-        }
-        let req = semver::VersionReq::parse(&format!("={}", self.from_version))
-            .expect("exact version always parses as VersionReq");
-        PackageRef {
-            kind: self.kind,
-            name: self.name.clone(),
-            version: vibe_core::VersionSpec::Req(req),
-        }
+/// Build the `InstallArgs` that `vibe update`'s whole-graph path delegates
+/// with, and that `build_install_resolver` reads. `vibe update` carries no
+/// `--registry` / `--git` / feature flags, so those default off.
+fn install_args_from(args: &UpdateArgs) -> InstallArgs {
+    InstallArgs {
+        packages: Vec::new(),
+        path: args.path.clone(),
+        registry: None,
+        assume_yes: args.assume_yes,
+        language: None,
+        features: Vec::new(),
+        no_default_features: false,
+        all_features: false,
+        exact: args.exact,
+        auth_required: args.auth_required,
+        git: None,
+        tag: None,
+        branch: None,
+        rev: None,
+        git_auth: None,
+        git_token_env: None,
     }
 }
 
-#[derive(Debug, Serialize)]
-struct AppliedReport {
-    package: String,
-    from_version: String,
-    to_version: String,
-    added: usize,
-    removed: usize,
-    modified: usize,
-    identical: usize,
+/// Build the lockfile entry for a re-resolved package. Version, hash and
+/// source come from the fresh fetch; the install-scoped `features` /
+/// `subskills_active` / `language` are carried from the previous entry —
+/// a version bump does not re-evaluate them.
+fn locked_package(
+    cached: &CachedPackage,
+    dependencies: &[PackageRef],
+    old: Option<&LockedPackage>,
+) -> LockedPackage {
+    let source_kind = if cached.overridden {
+        SourceKind::Override
+    } else if cached.is_path_source {
+        SourceKind::Path
+    } else if cached.is_git_source {
+        SourceKind::Git
+    } else {
+        SourceKind::Registry
+    };
+    LockedPackage {
+        kind: cached.resolved.kind,
+        name: cached.resolved.name.clone(),
+        version: cached.resolved.version.clone(),
+        registry: cached.registry_name.clone(),
+        source_url: cached.source_uri.clone(),
+        source_ref: cached.source_ref.clone(),
+        resolved_commit: cached.resolved_commit.clone(),
+        content_hash: cached.content_hash.clone(),
+        boot_snippet: None,
+        files_written: Vec::new(),
+        dependencies: dependencies.to_vec(),
+        overridden: cached.overridden,
+        source_kind: Some(source_kind),
+        via_redirect: cached.via_redirect.clone(),
+        features: old.map(|o| o.features.clone()).unwrap_or_default(),
+        subskills_active: old.map(|o| o.subskills_active.clone()).unwrap_or_default(),
+        describes: cached.package_meta().describes.as_ref().map(|p| p.to_string()),
+        language: old.and_then(|o| o.language.clone()),
+    }
 }
 
-fn present_plans(
-    ctx: &output::Context,
-    project_root: &Path,
-    plans: &[UpdatePlan],
-    up_to_date: &[UpdateTarget],
-) {
+fn emit_report(ctx: &output::Context, count: usize, bumps: &[String]) {
     if ctx.is_json() {
-        #[derive(Serialize)]
-        struct JsonPlanEntry<'a> {
-            package: String,
-            from_version: String,
-            to_version: String,
-            from_content_hash: &'a str,
-            to_content_hash: &'a str,
-            changes: Vec<JsonChange<'a>>,
-        }
-        #[derive(Serialize)]
-        struct JsonChange<'a> {
-            kind: &'static str, // "added" | "removed" | "modified" | "identical"
-            target: String,
-            #[serde(skip_serializing_if = "Option::is_none")]
-            source: Option<&'a Path>,
-        }
-        let payload: Vec<JsonPlanEntry<'_>> = plans
-            .iter()
-            .map(|p| JsonPlanEntry {
-                package: p.package_label(),
-                from_version: p.from_version.to_string(),
-                to_version: p.to_version.to_string(),
-                from_content_hash: &p.from_content_hash,
-                to_content_hash: &p.to_content_hash,
-                changes: p
-                    .changes
-                    .iter()
-                    .map(|c| match c {
-                        UpdateChange::Added { target_rel, source_abs, .. } => JsonChange {
-                            kind: "added",
-                            target: target_rel.to_string_lossy().replace('\\', "/"),
-                            source: Some(source_abs.as_path()),
-                        },
-                        UpdateChange::Removed { target_rel, .. } => JsonChange {
-                            kind: "removed",
-                            target: target_rel.to_string_lossy().replace('\\', "/"),
-                            source: None,
-                        },
-                        UpdateChange::Modified { target_rel, source_abs, .. } => JsonChange {
-                            kind: "modified",
-                            target: target_rel.to_string_lossy().replace('\\', "/"),
-                            source: Some(source_abs.as_path()),
-                        },
-                        UpdateChange::Identical { target_rel } => JsonChange {
-                            kind: "identical",
-                            target: target_rel.to_string_lossy().replace('\\', "/"),
-                            source: None,
-                        },
-                    })
-                    .collect(),
-            })
-            .collect();
-        let envelope = serde_json::json!({
-            "command": "update:plan",
-            "plans": payload,
-            "up_to_date": up_to_date
-                .iter()
-                .map(|t| format!("{}:{}@{}", t.kind, t.name, t.from_version))
-                .collect::<Vec<_>>(),
-        });
-        let _ = ctx.emit_json(&envelope);
-        return;
-    }
-    if ctx.is_quiet() {
-        return;
-    }
-    for t in up_to_date {
-        ctx.step(&format!("up-to-date  {}:{}@{}", t.kind, t.name, t.from_version));
-    }
-    for plan in plans {
-        ctx.heading(&format!(
-            "\nPlan for {} ({} → {})",
-            plan.package_label(),
-            plan.from_version,
-            plan.to_version,
-        ));
-        for change in &plan.changes {
-            let (sigil, rel_path) = match change {
-                UpdateChange::Added { target_rel, .. } => ("[+]", target_rel),
-                UpdateChange::Removed { target_rel, .. } => ("[-]", target_rel),
-                UpdateChange::Modified { target_rel, .. } => ("[~]", target_rel),
-                UpdateChange::Identical { target_rel } => ("[=]", target_rel),
-            };
-            let rel_s = rel_path.to_string_lossy().replace('\\', "/");
-            // `rel_s` is already project-relative; project_root only
-            // rendered for absolute-path debugging.
-            let _ = project_root;
-            println!("  {sigil}  {}", rel_s);
-        }
-    }
-    println!();
-}
-
-fn emit_report(
-    ctx: &output::Context,
-    plans: &[UpdatePlan],
-    up_to_date: &[UpdateTarget],
-    project_root: &Path,
-    applied: &[AppliedReport],
-) -> Result<()> {
-    if ctx.is_json() {
-        let payload = serde_json::json!({
+        let _ = ctx.emit_json(&serde_json::json!({
             "ok": true,
             "command": "update",
-            "project": project_root.display().to_string(),
-            "updated": applied,
-            "up_to_date": up_to_date
-                .iter()
-                .map(|t| format!("{}:{}@{}", t.kind, t.name, t.from_version))
-                .collect::<Vec<_>>(),
-        });
-        ctx.emit_json(&payload)?;
-        return Ok(());
+            "packages_resolved": count,
+            "version_bumps": bumps,
+        }));
+        return;
     }
     if ctx.is_quiet() {
         ctx.summary(&format!(
-            "vibe update: {} updated, {} already up-to-date",
-            applied.len(),
-            up_to_date.len()
+            "vibe update: {count} package{} re-resolved, {} bump{}",
+            if count == 1 { "" } else { "s" },
+            bumps.len(),
+            if bumps.len() == 1 { "" } else { "s" },
         ));
-        return Ok(());
+        return;
     }
-    if plans.is_empty() && !up_to_date.is_empty() {
-        ctx.summary(&format!(
-            "\nvibe update: {} package{} already up-to-date.",
-            up_to_date.len(),
-            if up_to_date.len() == 1 { "" } else { "s" },
-        ));
-        return Ok(());
+    for b in bumps {
+        ctx.created(b);
     }
-    for a in applied {
-        ctx.created(&format!(
-            "{} {}→{} (+{} -{} ~{}{})",
-            a.package,
-            a.from_version,
-            a.to_version,
-            a.added,
-            a.removed,
-            a.modified,
-            if a.identical > 0 {
-                format!(" ={}", a.identical)
-            } else {
-                String::new()
-            },
-        ));
-    }
-    if !applied.is_empty() {
-        ctx.summary(&format!(
-            "\nUpdated {} package{} ({} up-to-date).",
-            applied.len(),
-            if applied.len() == 1 { "" } else { "s" },
-            up_to_date.len(),
-        ));
-    }
-    Ok(())
+    ctx.summary(&format!(
+        "\nUpdated {count} package{} ({} version bump{}).",
+        if count == 1 { "" } else { "s" },
+        bumps.len(),
+        if bumps.len() == 1 { "" } else { "s" },
+    ));
 }
 
 fn resolve_project_root(path: &Path) -> Result<PathBuf> {
@@ -518,7 +286,7 @@ fn resolve_project_root(path: &Path) -> Result<PathBuf> {
         .canonicalize()
         .with_context(|| format!("canonicalizing `{}`", path.display()))?;
     let stripped = super::init::strip_unc_public(canonical);
-    if !stripped.join(ProjectManifest::FILENAME).exists() {
+    if !stripped.join(Manifest::FILENAME).exists() {
         bail!(
             "no `vibe.toml` in `{}`; run `vibe init` first",
             stripped.display()
@@ -527,32 +295,18 @@ fn resolve_project_root(path: &Path) -> Result<PathBuf> {
     Ok(stripped)
 }
 
-fn load_project_manifest(root: &Path) -> Result<ProjectManifest> {
-    let path = root.join(ProjectManifest::FILENAME);
-    Ok(ProjectManifest::read(&path)?)
+fn load_project_manifest(root: &Path) -> Result<Manifest> {
+    Ok(Manifest::read(root.join(Manifest::FILENAME))?)
 }
 
-fn load_or_empty_lockfile(root: &Path) -> Result<Lockfile> {
+fn load_lockfile(root: &Path) -> Result<Lockfile> {
     let path = root.join(Lockfile::FILENAME);
     if path.exists() {
         Ok(Lockfile::read(&path)?)
     } else {
-        Ok(Lockfile::empty(
-            format!("vibe {}", env!("CARGO_PKG_VERSION")),
-            crate::commands::init::current_timestamp_utc(),
-        ))
+        bail!(
+            "no `vibe.lock` in `{}` — nothing to update; run `vibe install` first",
+            root.display()
+        );
     }
-}
-
-// `LocalRegistry` is intentionally *not* used here: vibe update only
-// makes sense against a real registry that can present new versions.
-// Bringing it in would let `--registry <path>` reach `vibe update`,
-// but the local-directory model has no version-bump mechanism — every
-// new version requires a manual fixture rewrite. Leaving the import
-// stubbed out keeps the contract honest. If someone needs local-dir
-// updates, that's a separate slice with explicit `--registry <path>`
-// support.
-#[allow(dead_code)]
-fn _unused_imports_keepalive() {
-    let _ = std::any::type_name::<LocalRegistry>();
 }

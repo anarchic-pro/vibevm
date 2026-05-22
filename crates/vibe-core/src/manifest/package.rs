@@ -1,22 +1,26 @@
-//! `vibe-package.toml` — the package manifest.
+//! Package-role sections of a `vibe.toml` manifest.
+//!
+//! A node whose `vibe.toml` carries a `[package]` table is a **publishable
+//! artifact**. The types in this module are the building blocks of that role —
+//! identity (`[package]`), declared writes, the capability vocabulary
+//! (`[provides]` / `[requires]` / `[[requires_any]]` / `[obsoletes]` /
+//! `[conflicts]`), `[features]`, and conditional dependencies. They are
+//! assembled into the unified [`Manifest`](super::Manifest) document; this
+//! module owns no file I/O.
 //!
 //! Schema: `VIBEVM-SPEC.md` §7.3. The capability-based dependency vocabulary
 //! (`[provides]` / `[requires]` / `[[requires_any]]` / `[obsoletes]` /
 //! `[conflicts]`) is defined in [PROP-002 §2.9](../../../spec/modules/vibe-registry/PROP-002-decentralized-registry.md#capability).
 //!
-//! Legacy M0 / M1.1 compact form — `[dependencies] required = [...] conflicts =
-//! [...]` — is still accepted on parse: values migrate transparently into
-//! `requires.packages` / `conflicts.packages` via [`PackageManifest::normalize_legacy_deps`],
-//! which is called from [`PackageManifest::read`]. On the next write the
-//! manifest round-trips in modern form; the `[dependencies]` section
-//! disappears.
-//!
-//! Rationale for the migration: empty-deps packages (every live v0.1.0 flow
-//! today) round-trip unchanged because `PackageDependencies::is_empty()` is
-//! true for them, and the modern serializer skips empty sections too.
+//! `[requires.packages]` is a TOML table — each key a bare `<kind>:<name>`
+//! pkgref, each value either a version-constraint string (registry-resolved)
+//! or an inline-table (registry-resolved with options, or a git-source
+//! declaration per PROP-002 §2.4.1). There is no legacy array form. An
+//! inline-table value may also carry a `link` field — the dependency's
+//! inclusion type (PROP-009 §2.4).
 
 use std::collections::BTreeMap;
-use std::path::{Path, PathBuf};
+use std::path::PathBuf;
 
 use serde::{Deserialize, Serialize};
 
@@ -24,90 +28,14 @@ use crate::capability_ref::CapabilityRef;
 use crate::error::{Error, Result};
 use crate::package_ref::{PackageKind, PackageRef, VersionSpec};
 
-use super::i18n::I18nDecl;
 use super::project::AuthKind;
 use super::purl::Purl;
-use super::{read_toml, write_toml};
 
-/// The package manifest — `vibe-package.toml` inside a package directory.
-#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
-#[serde(deny_unknown_fields)]
-pub struct PackageManifest {
-    pub package: PackageMeta,
-
-    #[serde(default)]
-    pub compatibility: Compatibility,
-
-    #[serde(default)]
-    pub writes: WritesSection,
-
-    #[serde(default, skip_serializing_if = "Option::is_none")]
-    pub boot_snippet: Option<BootSnippet>,
-
-    /// Capabilities this package advertises. Consumers reference them via
-    /// `[requires].capabilities` and `[[requires_any]]`.
-    #[serde(default, skip_serializing_if = "Provides::is_empty")]
-    pub provides: Provides,
-
-    /// Packages and capabilities this package requires. Resolved transitively
-    /// by the depsolver at install time.
-    #[serde(default, skip_serializing_if = "Requires::is_empty")]
-    pub requires: Requires,
-
-    /// Disjunctive requirements — any `one_of` list must be satisfied by at
-    /// least one of its entries. Each `[[requires_any]]` is an independent
-    /// disjunction.
-    #[serde(default, skip_serializing_if = "Vec::is_empty")]
-    pub requires_any: Vec<RequiresAny>,
-
-    /// Packages this package supersedes. On upgrade, the solver treats an
-    /// installed `obsoletes` target as evidence to remove it.
-    #[serde(default, skip_serializing_if = "Obsoletes::is_empty")]
-    pub obsoletes: Obsoletes,
-
-    /// Direct exclusion — these cannot coexist with this package.
-    #[serde(default, skip_serializing_if = "ConflictsList::is_empty")]
-    pub conflicts: ConflictsList,
-
-    /// Legacy v1 compact form — accepted for back-compat; migrated into
-    /// `requires.packages` / `conflicts.packages` by
-    /// [`PackageManifest::normalize_legacy_deps`]. After normalization this
-    /// field is empty; serialization skips it.
-    #[serde(default, skip_serializing_if = "PackageDependencies::is_empty")]
-    pub dependencies: PackageDependencies,
-
-    /// `[features]` — optional, conditionally-activated components per
-    /// PROP-003 §2.4. Empty by default; absent on round-trip.
-    #[serde(default, skip_serializing_if = "FeaturesTable::is_empty")]
-    pub features: FeaturesTable,
-
-    /// `[i18n]` — language preferences declared by this package.
-    /// Per PROP-003 §2.7. Empty default = English-only.
-    #[serde(default, skip_serializing_if = "I18nDecl::is_default")]
-    pub i18n: I18nDecl,
-
-    /// Conditional dependencies — `[target."context(<probe>)".dependencies]`
-    /// per PROP-003 §2.6.1. Each key is a context predicate string; the
-    /// value carries `[dependencies]` in `[requires]`-shape that get
-    /// added to the dep graph when the predicate matches the resolved
-    /// project state. Predicate language: `context(<key>)` where
-    /// `<key>` is a capability/pkgref/interface tag that probes the
-    /// `present` / `provides` channels of the activation context.
-    /// Richer predicates (`if_files`, boolean composition) reserved for
-    /// follow-up slices.
-    #[serde(default, rename = "target", skip_serializing_if = "BTreeMap::is_empty")]
-    pub conditional_deps: BTreeMap<String, ConditionalTarget>,
-}
-
-/// `[target."<predicate>"]` body — currently just `[dependencies]`,
-/// shaped like `[requires]`.
-#[derive(Debug, Clone, Default, PartialEq, Eq, Serialize, Deserialize)]
-#[serde(deny_unknown_fields)]
-pub struct ConditionalTarget {
-    #[serde(default, skip_serializing_if = "Requires::is_empty")]
-    pub dependencies: Requires,
-}
-
+/// `[package]` — the identity of a publishable artifact.
+///
+/// A `vibe.toml` carrying this table is a package; one carrying `[project]`
+/// is a plain consumer. The two are mutually exclusive — see
+/// [`Manifest::validate`](super::Manifest::validate).
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(deny_unknown_fields)]
 pub struct PackageMeta {
@@ -129,6 +57,61 @@ pub struct PackageMeta {
     /// version to a specific upstream artefact.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub describes: Option<Purl>,
+    /// Publish posture — whether `vibe workspace publish` ships this node,
+    /// and to which registries. PROP-007 §2.7. Default `true` (published
+    /// into every configured registry).
+    #[serde(default, skip_serializing_if = "PublishPosture::is_default")]
+    pub publish: PublishPosture,
+}
+
+impl PackageMeta {
+    /// Produce a `PackageRef` pinning this package to its exact version.
+    pub fn as_package_ref(&self) -> Result<PackageRef> {
+        let req = semver::VersionReq::parse(&format!("={}", self.version))
+            .expect("exact version string always parses as VersionReq");
+        PackageRef::new(self.kind, self.name.clone(), VersionSpec::Req(req))
+    }
+}
+
+/// `[package].publish` — whether and where `vibe workspace publish` ships a
+/// node. PROP-007 §2.7. Cargo's `publish` shape: a bool or a registry list.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(untagged)]
+pub enum PublishPosture {
+    /// `publish = true` — published into every configured registry.
+    /// `publish = false` — never published (workspace-internal).
+    All(bool),
+    /// `publish = ["vibespecs", ...]` — published only into these named
+    /// registries.
+    Registries(Vec<String>),
+}
+
+impl Default for PublishPosture {
+    fn default() -> Self {
+        PublishPosture::All(true)
+    }
+}
+
+impl PublishPosture {
+    /// `true` for the default posture (`publish = true`) — lets the
+    /// serializer skip the field on unchanged manifests.
+    pub fn is_default(&self) -> bool {
+        matches!(self, PublishPosture::All(true))
+    }
+
+    /// `true` iff this node is never published (`publish = false`).
+    pub fn is_never(&self) -> bool {
+        matches!(self, PublishPosture::All(false))
+    }
+
+    /// `true` iff this node should be published into the registry with the
+    /// given local name.
+    pub fn includes(&self, registry_name: &str) -> bool {
+        match self {
+            PublishPosture::All(all) => *all,
+            PublishPosture::Registries(names) => names.iter().any(|n| n == registry_name),
+        }
+    }
 }
 
 #[derive(Debug, Clone, Default, PartialEq, Eq, Serialize, Deserialize)]
@@ -137,25 +120,76 @@ pub struct Compatibility {
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub min_vibe_version: Option<String>,
 
-    #[serde(default)]
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
     pub requires_kinds: Vec<PackageKind>,
 }
 
-#[derive(Debug, Clone, Default, PartialEq, Eq, Serialize, Deserialize)]
-#[serde(deny_unknown_fields)]
-pub struct WritesSection {
-    #[serde(default)]
-    pub files: Vec<PathBuf>,
+impl Compatibility {
+    pub fn is_empty(&self) -> bool {
+        self.min_vibe_version.is_none() && self.requires_kinds.is_empty()
+    }
 }
 
+/// Inclusion type for a dependency's boot contribution — the point on the
+/// static/dynamic-linking spectrum at which `vibe` resolves it (PROP-009
+/// §2.4).
+///
+/// Set by the consumer on a `[requires.packages]` entry (`link = "…"`); a
+/// package may suggest a default on its own `[boot_snippet]`; a workspace
+/// may set a fallback in `[boot].default_link`. Absent everywhere, the
+/// type is [`LinkType::Static`].
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, Default)]
+#[serde(rename_all = "lowercase")]
+pub enum LinkType {
+    /// Concatenated verbatim into the generated `INLINE.md`, read first —
+    /// the emergency priority lane. Duplicates the text on disk, so used
+    /// sparingly, for critical disciplines and top-level skills.
+    Inline,
+    /// The default. `vibe` resolves the contribution to a concrete path in
+    /// the generated `INDEX.md`; the agent reads it directly.
+    #[default]
+    Static,
+    /// `INDEX.md` carries an INCLUDE pointer the agent resolves at boot —
+    /// supports conditional, context-gated loading.
+    Dynamic,
+}
+
+/// Ordering band for a package's boot snippet within the computed boot
+/// sequence (PROP-009 §2.5). Replaces the author-chosen `NN-` numeric
+/// prefix, which cannot survive a workspace's combined namespace.
+///
+/// `vibe` composes the sequence `foundation` → the node's own boot →
+/// dependency boot → `user-override`.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "kebab-case")]
+pub enum BootCategory {
+    /// Project-wide foundation — conventions, the four rules, technology
+    /// choices. Composed first.
+    Foundation,
+    /// A `flow` package's discipline contribution.
+    Flow,
+    /// A `stack` package's technology contribution.
+    Stack,
+    /// User-owned overrides — composed last, so they win.
+    UserOverride,
+}
+
+/// `[boot_snippet]` — the boot contribution a package ships (package-role).
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(deny_unknown_fields)]
 pub struct BootSnippet {
-    /// Target filename inside `spec/boot/`, e.g. `10-flow-wal.md`.
-    pub filename: String,
     /// Path to the source file inside the package directory, e.g.
     /// `boot/10-flow-wal.md`.
     pub source: PathBuf,
+    /// Ordering category for the computed boot sequence (PROP-009 §2.5).
+    /// Absent on pre-PROP-009 manifests; the computed-view engine derives
+    /// a fallback from the package kind when this is `None`.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub category: Option<BootCategory>,
+    /// Suggested default inclusion type (PROP-009 §2.4). Only a hint — the
+    /// consumer's own `link` declaration always wins.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub link: Option<LinkType>,
 }
 
 /// `[provides]` — capabilities this package advertises.
@@ -174,54 +208,88 @@ impl Provides {
 
 /// `[requires]` — concrete package pkgrefs plus capability requirements.
 ///
-/// Wire form (what lands in TOML on disk) accepts two shapes for the
-/// `packages` field:
+/// Wire form: `[requires.packages]` is a TOML table — each key a bare pkgref
+/// (`<kind>:<name>` without `@version`), each value either:
 ///
-/// 1. **Legacy array of pkgref strings** — `packages = ["flow:wal@^0.3"]`.
-///    The pre-M1.15 shape; still parses for back-compat.
-/// 2. **Modern table** — `[requires.packages]` with each key a bare pkgref
-///    (`<kind>:<name>` without `@version`) and the value either:
-///    - a constraint string (`"^0.3"`, `"=1.0"`, `"*"`) — registry-resolved,
-///    - or an inline-table — registry-resolved with options
-///      (`{ version = "..." }`) **or** git-source dependency declaration
-///      (`{ git = "...", tag = "..." }` etc., per PROP-002 §2.4.1).
+/// - a constraint string (`"^0.3"`, `"=1.0"`, `"*"`) — registry-resolved, or
+/// - an inline-table — registry-resolved with options (`{ version = "..." }`)
+///   **or** a git-source dependency (`{ git = "...", tag = "..." }` etc.,
+///   per PROP-002 §2.4.1).
 ///
-/// Round-trip writes the modern table form. Both shapes parse forever; the
-/// array form is just never produced on write. Manifests that mix git-source
-/// and registry-resolved declarations require the modern table form.
+/// `capabilities` carries abstract requirements satisfied by any provider.
 #[derive(Debug, Clone, Default, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(into = "RequiresWire", try_from = "RequiresWire")]
 pub struct Requires {
-    /// Registry-resolved package dependencies (legacy or modern shape).
+    /// Registry-resolved package dependencies.
     pub packages: Vec<PackageRef>,
     /// Abstract capability requirements (RPM-family `Requires:` semantics).
     pub capabilities: Vec<CapabilityRef>,
     /// Git-source package dependencies — one git repository = one package
-    /// (PROP-002 §2.4.1). Stored separately from `packages` so existing
-    /// downstream code that iterates registry-resolved roots stays
-    /// untouched; resolver and CLI code paths consult both fields when
-    /// they need the full root set.
+    /// (PROP-002 §2.4.1). Stored separately from `packages` so code that
+    /// iterates registry-resolved roots stays untouched; resolver and CLI
+    /// code consult both when they need the full root set.
     pub git_packages: Vec<GitPackageDep>,
+    /// Path-source package dependencies — a package living in a local
+    /// directory, typically a sibling workspace member (PROP-007 §2.5).
+    /// Its own bucket, for the same reason as `git_packages`.
+    pub path_packages: Vec<PathPackageDep>,
+    /// Registry-resolved dependencies whose version is a `[workspace.versions]`
+    /// placeholder — `{ version.var = "core" }`. Unresolved at parse time;
+    /// `vibe-workspace`'s loader resolves each against the recursive
+    /// placeholder chain into a concrete `PackageRef` in `packages`. Empty
+    /// once a workspace has finalised the manifest. PROP-007 §2.6.
+    pub var_packages: Vec<VarRegistryDep>,
+    /// Per-dependency inclusion type the consumer declared (PROP-009 §2.4),
+    /// keyed by the bare `<kind>:<name>` pkgref. Every declared `link` is
+    /// stored, **including an explicit `static`** — so a consumer's explicit
+    /// choice can be told apart from an absent one. The distinction is
+    /// load-bearing: an explicit `link` overrides a workspace
+    /// `[boot].default_link` and a package-suggested link, while an absent
+    /// one yields to them. The key is version-independent, so it survives
+    /// the `var_packages` → `packages` resolution the workspace loader
+    /// performs. Read it through [`Requires::link_for`] (resolved, with the
+    /// default applied) or [`Requires::declared_link`] (raw — distinguishes
+    /// an absent declaration from an explicit one).
+    pub links: BTreeMap<String, LinkType>,
 }
 
 impl Requires {
     pub fn is_empty(&self) -> bool {
-        self.packages.is_empty() && self.capabilities.is_empty() && self.git_packages.is_empty()
+        self.packages.is_empty()
+            && self.capabilities.is_empty()
+            && self.git_packages.is_empty()
+            && self.path_packages.is_empty()
+            && self.var_packages.is_empty()
+            && self.links.is_empty()
     }
 
-    /// Return every root pkgref (registry-resolved + git-source) in a
-    /// single iterator. Order: `packages` first (insertion order),
-    /// `git_packages` after, matching the wire-form serialization order
-    /// when both are non-empty.
+    /// Return every root pkgref (registry-resolved + git-source) in a single
+    /// iterator. Order: `packages` first, `git_packages` after.
     pub fn iter_pkgrefs(&self) -> impl Iterator<Item = (PackageKind, &str)> {
         self.packages
             .iter()
             .map(|p| (p.kind, p.name.as_str()))
-            .chain(
-                self.git_packages
-                    .iter()
-                    .map(|g| (g.kind, g.name.as_str())),
-            )
+            .chain(self.git_packages.iter().map(|g| (g.kind, g.name.as_str())))
+            .chain(self.path_packages.iter().map(|p| (p.kind, p.name.as_str())))
+            .chain(self.var_packages.iter().map(|v| (v.kind, v.name.as_str())))
+    }
+
+    /// The inclusion type (PROP-009 §2.4) in effect for `<kind>:<name>` in
+    /// this `[requires]`, with the contract default applied — an absent
+    /// declaration resolves to [`LinkType::Static`].
+    pub fn link_for(&self, kind: PackageKind, name: &str) -> LinkType {
+        self.declared_link(kind, name).unwrap_or_default()
+    }
+
+    /// The inclusion type the consumer **explicitly declared** for
+    /// `<kind>:<name>`, or `None` if it declared none. Unlike
+    /// [`Requires::link_for`], an explicit `link = "static"` returns
+    /// `Some(LinkType::Static)`, not `None`: the loading-model precedence
+    /// (PROP-009 §2.4) lets an explicit declaration override a workspace
+    /// `[boot].default_link` or a package-suggested link, and that
+    /// distinction is lost if explicit `static` is folded into "absent".
+    pub fn declared_link(&self, kind: PackageKind, name: &str) -> Option<LinkType> {
+        self.links.get(&format!("{kind}:{name}")).copied()
     }
 }
 
@@ -272,6 +340,35 @@ impl GitRefKind {
     }
 }
 
+/// A `[requires.packages.<pkgref>]` inline-table value pointing at a package
+/// in a local directory — typically a sibling workspace member. PROP-007 §2.5.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct PathPackageDep {
+    pub kind: PackageKind,
+    pub name: String,
+    /// Path to the package directory, relative to the manifest that declares
+    /// this dependency. Forward-slashed; portable across machines.
+    pub path: String,
+    /// Optional version constraint — the dual-form `{ path, version }`.
+    /// `path` drives local development inside the workspace; `version` takes
+    /// effect when the consuming node is itself published (the published copy
+    /// references the registry version — an external consumer has no access
+    /// to the local path). Required for any path-dep whose consumer is itself
+    /// publishable; that is enforced at publish time, not here.
+    pub version: Option<VersionSpec>,
+}
+
+/// A `[requires.packages.<pkgref>]` registry-resolved entry whose version is
+/// a `[workspace.versions]` placeholder — `{ version.var = "core" }`. Carries
+/// the unresolved placeholder name; `vibe-workspace` resolves it. PROP-007 §2.6.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct VarRegistryDep {
+    pub kind: PackageKind,
+    pub name: String,
+    /// The `[workspace.versions]` placeholder name this dependency references.
+    pub var: String,
+}
+
 // ---------------------------------------------------------------------------
 // Wire types for `Requires` — private; reached only via Serialize / Deserialize.
 // ---------------------------------------------------------------------------
@@ -279,62 +376,10 @@ impl GitRefKind {
 #[derive(Debug, Serialize, Deserialize)]
 #[serde(deny_unknown_fields)]
 struct RequiresWire {
-    #[serde(default, skip_serializing_if = "Option::is_none")]
-    packages: Option<RequiresPackagesWire>,
+    #[serde(default, skip_serializing_if = "BTreeMap::is_empty")]
+    packages: BTreeMap<String, RequiresPackageEntryWire>,
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
     capabilities: Vec<CapabilityRef>,
-}
-
-#[derive(Debug, Serialize)]
-#[serde(untagged)]
-enum RequiresPackagesWire {
-    /// Legacy: `packages = ["flow:wal@^0.3", ...]`.
-    LegacyArray(Vec<PackageRef>),
-    /// Modern: `[requires.packages]` table.
-    ModernMap(BTreeMap<String, RequiresPackageEntryWire>),
-}
-
-// Manual `Deserialize` so that the inner `BadPackageRef` error from
-// pkgref parsing surfaces directly instead of being wrapped in a
-// generic "data did not match any variant of untagged enum" — TOML
-// distinguishes array from table at parse time, so we can dispatch on
-// that without trial-and-error.
-impl<'de> Deserialize<'de> for RequiresPackagesWire {
-    fn deserialize<D>(deserializer: D) -> std::result::Result<Self, D::Error>
-    where
-        D: serde::Deserializer<'de>,
-    {
-        struct Visitor;
-        impl<'de> serde::de::Visitor<'de> for Visitor {
-            type Value = RequiresPackagesWire;
-            fn expecting(&self, f: &mut std::fmt::Formatter) -> std::fmt::Result {
-                f.write_str(
-                    "an array of `<kind>:<name>[@<version>]` strings (legacy) \
-                     or a table mapping `<kind>:<name>` to a constraint string \
-                     or an inline-table",
-                )
-            }
-            fn visit_seq<A>(self, seq: A) -> std::result::Result<Self::Value, A::Error>
-            where
-                A: serde::de::SeqAccess<'de>,
-            {
-                let v = Vec::<PackageRef>::deserialize(
-                    serde::de::value::SeqAccessDeserializer::new(seq),
-                )?;
-                Ok(RequiresPackagesWire::LegacyArray(v))
-            }
-            fn visit_map<A>(self, map: A) -> std::result::Result<Self::Value, A::Error>
-            where
-                A: serde::de::MapAccess<'de>,
-            {
-                let m = BTreeMap::<String, RequiresPackageEntryWire>::deserialize(
-                    serde::de::value::MapAccessDeserializer::new(map),
-                )?;
-                Ok(RequiresPackagesWire::ModernMap(m))
-            }
-        }
-        deserializer.deserialize_any(Visitor)
-    }
 }
 
 #[derive(Debug, Serialize, Deserialize)]
@@ -350,7 +395,9 @@ enum RequiresPackageEntryWire {
 #[serde(deny_unknown_fields)]
 struct InlinePackageDepWire {
     #[serde(default, skip_serializing_if = "Option::is_none")]
-    version: Option<String>,
+    version: Option<VersionFieldWire>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    path: Option<String>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     git: Option<String>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
@@ -363,21 +410,51 @@ struct InlinePackageDepWire {
     auth: Option<AuthKind>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     token_env: Option<String>,
+    /// Inclusion type (PROP-009 §2.4). Valid on every source kind; lifted
+    /// into `Requires::links` by the `TryFrom` conversion.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    link: Option<LinkType>,
+}
+
+/// The `version` field of an inline `[requires.packages]` entry — either a
+/// concrete constraint string or a `[workspace.versions]` placeholder
+/// reference (`version.var = "core"`).
+#[derive(Debug, Serialize, Deserialize)]
+#[serde(untagged)]
+enum VersionFieldWire {
+    /// `version = "^0.3"` — a concrete constraint.
+    Constraint(String),
+    /// `version.var = "core"` — a `[workspace.versions]` placeholder.
+    Var { var: String },
 }
 
 impl From<Requires> for RequiresWire {
     fn from(r: Requires) -> Self {
-        let mut map: BTreeMap<String, RequiresPackageEntryWire> = BTreeMap::new();
+        let mut packages: BTreeMap<String, RequiresPackageEntryWire> = BTreeMap::new();
         for p in &r.packages {
             let key = format!("{}:{}", p.kind, p.name);
-            let value =
-                RequiresPackageEntryWire::Constraint(version_spec_to_constraint_str(&p.version));
-            map.insert(key, value);
+            let constraint = version_spec_to_constraint_str(&p.version);
+            // A registry dep carrying a declared `link` cannot use the
+            // bare constraint-string form — it must round-trip as an
+            // inline table so the `link` field has somewhere to live.
+            let value = match r.links.get(&key).copied() {
+                Some(link) => RequiresPackageEntryWire::Inline(InlinePackageDepWire {
+                    version: Some(VersionFieldWire::Constraint(constraint)),
+                    link: Some(link),
+                    ..Default::default()
+                }),
+                None => RequiresPackageEntryWire::Constraint(constraint),
+            };
+            packages.insert(key, value);
         }
         for g in &r.git_packages {
             let key = format!("{}:{}", g.kind, g.name);
             let inline = InlinePackageDepWire {
-                version: g.version.as_ref().map(version_spec_to_constraint_str),
+                version: g
+                    .version
+                    .as_ref()
+                    .map(|v| VersionFieldWire::Constraint(version_spec_to_constraint_str(v))),
+                path: None,
                 git: Some(g.url.clone()),
                 tag: match &g.ref_kind {
                     GitRefKind::Tag(s) => Some(s.clone()),
@@ -397,14 +474,32 @@ impl From<Requires> for RequiresWire {
                     Some(g.auth)
                 },
                 token_env: g.token_env.clone(),
+                link: r.links.get(&key).copied(),
             };
-            map.insert(key, RequiresPackageEntryWire::Inline(inline));
+            packages.insert(key, RequiresPackageEntryWire::Inline(inline));
         }
-        let packages = if map.is_empty() {
-            None
-        } else {
-            Some(RequiresPackagesWire::ModernMap(map))
-        };
+        for p in &r.path_packages {
+            let key = format!("{}:{}", p.kind, p.name);
+            let inline = InlinePackageDepWire {
+                version: p
+                    .version
+                    .as_ref()
+                    .map(|v| VersionFieldWire::Constraint(version_spec_to_constraint_str(v))),
+                path: Some(p.path.clone()),
+                link: r.links.get(&key).copied(),
+                ..Default::default()
+            };
+            packages.insert(key, RequiresPackageEntryWire::Inline(inline));
+        }
+        for v in &r.var_packages {
+            let key = format!("{}:{}", v.kind, v.name);
+            let inline = InlinePackageDepWire {
+                version: Some(VersionFieldWire::Var { var: v.var.clone() }),
+                link: r.links.get(&key).copied(),
+                ..Default::default()
+            };
+            packages.insert(key, RequiresPackageEntryWire::Inline(inline));
+        }
         RequiresWire {
             packages,
             capabilities: r.capabilities,
@@ -418,51 +513,74 @@ impl TryFrom<RequiresWire> for Requires {
     fn try_from(w: RequiresWire) -> std::result::Result<Self, Self::Error> {
         let mut packages: Vec<PackageRef> = Vec::new();
         let mut git_packages: Vec<GitPackageDep> = Vec::new();
-        match w.packages {
-            None => {}
-            Some(RequiresPackagesWire::LegacyArray(arr)) => packages = arr,
-            Some(RequiresPackagesWire::ModernMap(map)) => {
-                for (key, entry) in map {
-                    let (kind, name) = parse_pkgref_key(&key).map_err(|e| e.to_string())?;
-                    match entry {
-                        RequiresPackageEntryWire::Constraint(spec_str) => {
-                            let version =
-                                VersionSpec::parse(&spec_str).map_err(|e| e.to_string())?;
-                            packages.push(
-                                PackageRef::new(kind, name, version).map_err(|e| e.to_string())?,
-                            );
-                        }
-                        RequiresPackageEntryWire::Inline(inline) => {
-                            if inline.git.is_some() {
-                                git_packages.push(
-                                    inline_to_git_dep(kind, name, inline)
-                                        .map_err(|e| e.to_string())?,
-                                );
-                            } else {
-                                packages.push(
-                                    inline_to_registry_pkgref(kind, name, inline)
-                                        .map_err(|e| e.to_string())?,
-                                );
-                            }
-                        }
+        let mut path_packages: Vec<PathPackageDep> = Vec::new();
+        let mut var_packages: Vec<VarRegistryDep> = Vec::new();
+        let mut links: BTreeMap<String, LinkType> = BTreeMap::new();
+        for (key, entry) in w.packages {
+            let (kind, name) = parse_pkgref_key(&key).map_err(|e| e.to_string())?;
+            match entry {
+                RequiresPackageEntryWire::Constraint(spec_str) => {
+                    let version = VersionSpec::parse(&spec_str).map_err(|e| e.to_string())?;
+                    packages.push(PackageRef::new(kind, name, version).map_err(|e| e.to_string())?);
+                }
+                RequiresPackageEntryWire::Inline(inline) => {
+                    // Record the consumer's `link` declaration (PROP-009
+                    // §2.4) before the source-kind dispatch — `link` is
+                    // valid on every source kind. Every declared value is
+                    // stored, an explicit `static` included: writing
+                    // `link = "static"` overrides a workspace
+                    // `[boot].default_link` / a package-suggested link, and
+                    // that intent is lost if explicit `static` is dropped.
+                    if let Some(link) = inline.link {
+                        links.insert(format!("{kind}:{name}"), link);
+                    }
+                    // Dispatch on source-kind: path wins over git wins over
+                    // registry. A registry-resolved entry whose version is a
+                    // `[workspace.versions]` placeholder is held in var_packages
+                    // for the workspace loader to resolve. Each `inline_to_*`
+                    // rejects fields belonging to a different source-kind.
+                    if inline.path.is_some() {
+                        path_packages.push(
+                            inline_to_path_dep(kind, name, inline).map_err(|e| e.to_string())?,
+                        );
+                    } else if inline.git.is_some() {
+                        git_packages
+                            .push(inline_to_git_dep(kind, name, inline).map_err(|e| e.to_string())?);
+                    } else if matches!(inline.version, Some(VersionFieldWire::Var { .. })) {
+                        var_packages
+                            .push(inline_to_var_dep(kind, name, inline).map_err(|e| e.to_string())?);
+                    } else {
+                        packages.push(
+                            inline_to_registry_pkgref(kind, name, inline)
+                                .map_err(|e| e.to_string())?,
+                        );
                     }
                 }
             }
         }
-        // Reject duplicate (kind, name) across packages and git_packages —
-        // the resolver would otherwise have to pick one arbitrarily.
-        for g in &git_packages {
-            if packages.iter().any(|p| p.kind == g.kind && p.name == g.name) {
-                return Err(format!(
-                    "dependency `{}:{}` declared as both registry-resolved and git-source",
-                    g.kind, g.name
-                ));
+        // Defence-in-depth: one `(kind, name)` cannot land in two buckets.
+        // The wire form is a single TOML table with unique keys, so this is
+        // unreachable from a valid manifest — kept against a future wire shape.
+        let mut seen: std::collections::HashSet<(PackageKind, String)> =
+            std::collections::HashSet::new();
+        for (kind, name) in packages
+            .iter()
+            .map(|p| (p.kind, p.name.clone()))
+            .chain(git_packages.iter().map(|g| (g.kind, g.name.clone())))
+            .chain(path_packages.iter().map(|p| (p.kind, p.name.clone())))
+            .chain(var_packages.iter().map(|v| (v.kind, v.name.clone())))
+        {
+            if !seen.insert((kind, name.clone())) {
+                return Err(format!("dependency `{kind}:{name}` declared more than once"));
             }
         }
         Ok(Requires {
             packages,
             capabilities: w.capabilities,
             git_packages,
+            path_packages,
+            var_packages,
+            links,
         })
     }
 }
@@ -474,8 +592,6 @@ fn parse_pkgref_key(key: &str) -> Result<(PackageKind, String)> {
             reason: "version constraint must be the value, not part of the key".to_string(),
         });
     }
-    // PackageRef::parse handles `<kind>:<name>` and yields VersionSpec::Latest
-    // for keys without `@`. We've just rejected `@`, so this is safe.
     let pr = PackageRef::parse(key)?;
     Ok((pr.kind, pr.name))
 }
@@ -500,8 +616,11 @@ fn inline_to_registry_pkgref(
                 .to_string(),
         });
     }
-    let version = match inline.version.as_deref() {
-        Some(s) => VersionSpec::parse(s)?,
+    let version = match inline.version {
+        Some(VersionFieldWire::Constraint(s)) => VersionSpec::parse(&s)?,
+        Some(VersionFieldWire::Var { .. }) => {
+            unreachable!("a `version.var` entry is dispatched to var_packages")
+        }
         None => VersionSpec::Latest,
     };
     PackageRef::new(kind, name, version)
@@ -532,10 +651,7 @@ fn inline_to_git_dep(
             });
         }
     };
-    let version = match inline.version.as_deref() {
-        Some(s) => Some(VersionSpec::parse(s)?),
-        None => None,
-    };
+    let version = constraint_only_version(&key_for_err, inline.version, "a git-source dependency")?;
     Ok(GitPackageDep {
         kind,
         name,
@@ -545,6 +661,89 @@ fn inline_to_git_dep(
         auth: inline.auth.unwrap_or_default(),
         token_env: inline.token_env,
     })
+}
+
+fn inline_to_path_dep(
+    kind: PackageKind,
+    name: String,
+    inline: InlinePackageDepWire,
+) -> Result<PathPackageDep> {
+    let key_for_err = format!("{kind}:{name}");
+    let path = inline.path.expect("caller checked path is Some");
+    if inline.git.is_some()
+        || inline.tag.is_some()
+        || inline.branch.is_some()
+        || inline.rev.is_some()
+    {
+        return Err(Error::BadDependencyDecl {
+            input: key_for_err,
+            reason: "path-source dep cannot also specify `git`/`tag`/`branch`/`rev`".to_string(),
+        });
+    }
+    if inline.auth.is_some() || inline.token_env.is_some() {
+        return Err(Error::BadDependencyDecl {
+            input: key_for_err,
+            reason: "path-source dep cannot specify `auth`/`token_env` — the source is local"
+                .to_string(),
+        });
+    }
+    let version =
+        constraint_only_version(&key_for_err, inline.version, "a path-source dependency")?;
+    Ok(PathPackageDep {
+        kind,
+        name,
+        path,
+        version,
+    })
+}
+
+fn inline_to_var_dep(
+    kind: PackageKind,
+    name: String,
+    inline: InlinePackageDepWire,
+) -> Result<VarRegistryDep> {
+    let key_for_err = format!("{kind}:{name}");
+    if inline.git.is_some()
+        || inline.path.is_some()
+        || inline.tag.is_some()
+        || inline.branch.is_some()
+        || inline.rev.is_some()
+        || inline.auth.is_some()
+        || inline.token_env.is_some()
+    {
+        return Err(Error::BadDependencyDecl {
+            input: key_for_err,
+            reason: "a `version.var` dependency is registry-resolved — it cannot carry \
+                     `git`/`path`/`tag`/`branch`/`rev`/`auth`/`token_env`"
+                .to_string(),
+        });
+    }
+    let var = match inline.version {
+        Some(VersionFieldWire::Var { var }) => var,
+        _ => unreachable!("caller checked version is a Var"),
+    };
+    Ok(VarRegistryDep { kind, name, var })
+}
+
+/// Extract an optional concrete [`VersionSpec`] from a wire `version` field,
+/// rejecting a `version.var` placeholder — placeholders are supported only on
+/// registry-resolved dependencies (PROP-007 §2.6), not on `source` declares.
+fn constraint_only_version(
+    key_for_err: &str,
+    field: Option<VersionFieldWire>,
+    source_kind: &str,
+) -> Result<Option<VersionSpec>> {
+    match field {
+        None => Ok(None),
+        Some(VersionFieldWire::Constraint(s)) => Ok(Some(VersionSpec::parse(&s)?)),
+        Some(VersionFieldWire::Var { .. }) => Err(Error::BadDependencyDecl {
+            input: key_for_err.to_string(),
+            reason: format!(
+                "`version.var` is supported only on registry-resolved dependencies, not on \
+                 {source_kind}"
+            ),
+        }),
+    }
 }
 
 fn version_spec_to_constraint_str(spec: &VersionSpec) -> String {
@@ -590,71 +789,13 @@ impl ConflictsList {
     }
 }
 
-/// Legacy `[dependencies]` section — v1 compact form.
-///
-/// Kept on [`PackageManifest`] purely for backwards-compatible parsing. It
-/// is emptied out in [`PackageManifest::normalize_legacy_deps`] and the
-/// serializer skips it, so round-tripping a v1 manifest produces a v2 one.
+/// `[target."<predicate>"]` body — currently just `[dependencies]`,
+/// shaped like `[requires]`. PROP-003 §2.6.1.
 #[derive(Debug, Clone, Default, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(deny_unknown_fields)]
-pub struct PackageDependencies {
-    #[serde(default, skip_serializing_if = "Vec::is_empty")]
-    pub required: Vec<PackageRef>,
-    #[serde(default, skip_serializing_if = "Vec::is_empty")]
-    pub conflicts: Vec<PackageRef>,
-}
-
-impl PackageDependencies {
-    pub fn is_empty(&self) -> bool {
-        self.required.is_empty() && self.conflicts.is_empty()
-    }
-}
-
-impl PackageManifest {
-    pub const FILENAME: &'static str = "vibe-package.toml";
-
-    /// Read a manifest from disk and migrate any legacy v1 `[dependencies]`
-    /// section into the modern fields. Callers always see a manifest in
-    /// modern form regardless of which form was on disk.
-    pub fn read(path: impl AsRef<Path>) -> Result<Self> {
-        let mut m: PackageManifest = read_toml(path)?;
-        m.normalize_legacy_deps();
-        Ok(m)
-    }
-
-    /// Write a manifest to disk. Always serializes the modern form —
-    /// `[dependencies]` is omitted even if it was non-empty before
-    /// [`Self::normalize_legacy_deps`] was called.
-    pub fn write(&self, path: impl AsRef<Path>) -> Result<()> {
-        write_toml(path, self)
-    }
-
-    /// Migrate any `[dependencies]` entries into `requires.packages` and
-    /// `conflicts.packages`. Idempotent — a no-op after the first call. Safe
-    /// to call even on a modern manifest (just returns immediately).
-    pub fn normalize_legacy_deps(&mut self) {
-        if self.dependencies.is_empty() {
-            return;
-        }
-        let legacy = std::mem::take(&mut self.dependencies);
-        for r in legacy.required {
-            self.requires.packages.push(r);
-        }
-        for c in legacy.conflicts {
-            self.conflicts.packages.push(c);
-        }
-    }
-
-    /// Produce a `PackageRef` pinning this package to its exact version.
-    pub fn as_package_ref(&self) -> Result<PackageRef> {
-        let req = semver::VersionReq::parse(&format!("={}", self.package.version))
-            .expect("exact version string always parses as VersionReq");
-        PackageRef::new(
-            self.package.kind,
-            self.package.name.clone(),
-            VersionSpec::Req(req),
-        )
-    }
+pub struct ConditionalTarget {
+    #[serde(default, skip_serializing_if = "Requires::is_empty")]
+    pub dependencies: Requires,
 }
 
 /// `[features]` table — feature definitions per PROP-003 §2.4.
@@ -749,298 +890,56 @@ impl<'de> Deserialize<'de> for FeaturesTable {
 mod tests {
     use super::*;
 
-    const FIXTURE_MODERN: &str = r#"
-[package]
-name = "welcome-page"
-kind = "feat"
-version = "0.3.0"
-authors = ["Oleg Chirukhin <oleg@example.com>"]
-license = "EULA"
-description = "Welcome page demo feat"
-keywords = ["welcome", "demo"]
-
-[compatibility]
-min_vibe_version = "0.1.0"
-requires_kinds = []
-
-[writes]
-files = [
-    "spec/feats/welcome-page/SPEC.md",
-]
-
-[boot_snippet]
-filename = "40-feat-welcome-page.md"
-source = "boot/40-feat-welcome-page.md"
-
-[provides]
-capabilities = ["ui:landing-page@0.3.0", "auth:oauth-callback"]
-
-[requires]
-packages = ["flow:atomic-commits@^0.1", "stack:rust-cli@^0.1"]
-capabilities = ["db:any@>=1.0"]
-
-[[requires_any]]
-one_of = ["stack:rust-cli@^0.1", "stack:rust-axum@^0.2"]
-
-[obsoletes]
-packages = ["feat:welcome-page-legacy"]
-
-[conflicts]
-packages = ["feat:welcome-page-legacy-v2"]
-"#;
-
-    const FIXTURE_LEGACY: &str = r#"
-[package]
-name = "wal"
-kind = "flow"
-version = "0.3.0"
-authors = ["Oleg Chirukhin <oleg@example.com>"]
-license = "EULA"
-description = "WAL"
-keywords = ["wal"]
-
-[compatibility]
-min_vibe_version = "0.1.0"
-requires_kinds = []
-
-[writes]
-files = [
-    "spec/flows/wal/WAL-PROTOCOL.md",
-]
-
-[boot_snippet]
-filename = "10-flow-wal.md"
-source = "boot/10-flow-wal.md"
-
-[dependencies]
-required = ["flow:atomic-commits@^0.1"]
-conflicts = ["flow:legacy-wal"]
-"#;
-
-    const FIXTURE_MINIMAL: &str = r#"
-[package]
-name = "tiny"
-kind = "flow"
-version = "0.0.1"
-"#;
-
-    #[test]
-    fn parses_modern_form() {
-        let m: PackageManifest = toml::from_str(FIXTURE_MODERN).unwrap();
-        assert_eq!(m.package.kind, PackageKind::Feat);
-        assert_eq!(m.package.name, "welcome-page");
-        assert_eq!(m.provides.capabilities.len(), 2);
-        assert_eq!(m.provides.capabilities[0].qualified(), "ui:landing-page");
-        assert_eq!(m.requires.packages.len(), 2);
-        assert_eq!(m.requires.packages[0].qualified_name(), "flow:atomic-commits");
-        assert_eq!(m.requires.capabilities.len(), 1);
-        assert_eq!(m.requires_any.len(), 1);
-        assert_eq!(m.requires_any[0].one_of.len(), 2);
-        assert_eq!(m.obsoletes.packages.len(), 1);
-        assert_eq!(m.conflicts.packages.len(), 1);
-        // Legacy section absent.
-        assert!(m.dependencies.is_empty());
+    /// Parse a bare `Requires` from a TOML body whose top-level keys are
+    /// `packages` / `capabilities` (i.e. the inside of a `[requires]` table).
+    fn requires_from_toml(body: &str) -> Requires {
+        toml::from_str(body).unwrap()
     }
 
     #[test]
-    fn migrates_legacy_dependencies_section() {
-        let mut m: PackageManifest = toml::from_str(FIXTURE_LEGACY).unwrap();
-        // Before normalization: deps populated, requires empty.
-        assert_eq!(m.dependencies.required.len(), 1);
-        assert_eq!(m.dependencies.conflicts.len(), 1);
-        assert!(m.requires.is_empty());
-        assert!(m.conflicts.is_empty());
-
-        m.normalize_legacy_deps();
-
-        // After: deps empty, requires/conflicts populated.
-        assert!(m.dependencies.is_empty());
-        assert_eq!(m.requires.packages.len(), 1);
-        assert_eq!(
-            m.requires.packages[0].qualified_name(),
-            "flow:atomic-commits"
-        );
-        assert_eq!(m.conflicts.packages.len(), 1);
-        assert_eq!(
-            m.conflicts.packages[0].qualified_name(),
-            "flow:legacy-wal"
-        );
+    fn publish_posture_default_is_all_true() {
+        assert!(PublishPosture::default().is_default());
+        assert!(!PublishPosture::default().is_never());
+        assert!(PublishPosture::default().includes("anything"));
     }
 
     #[test]
-    fn normalize_is_idempotent() {
-        let mut m: PackageManifest = toml::from_str(FIXTURE_LEGACY).unwrap();
-        m.normalize_legacy_deps();
-        let snapshot = m.clone();
-        m.normalize_legacy_deps();
-        assert_eq!(m, snapshot);
+    fn publish_posture_roundtrips_all_forms() {
+        // `publish = false`
+        let never: PublishPosture = toml::from_str("v = false").map(|w: Wrap| w.v).unwrap();
+        assert!(never.is_never());
+        assert!(!never.includes("vibespecs"));
+        // `publish = true`
+        let all: PublishPosture = toml::from_str("v = true").map(|w: Wrap| w.v).unwrap();
+        assert!(all.is_default());
+        // `publish = ["a", "b"]`
+        let some: PublishPosture =
+            toml::from_str("v = [\"a\", \"b\"]").map(|w: Wrap| w.v).unwrap();
+        assert!(some.includes("a"));
+        assert!(some.includes("b"));
+        assert!(!some.includes("c"));
+        assert!(!some.is_never());
+    }
+
+    #[derive(Deserialize)]
+    struct Wrap {
+        v: PublishPosture,
     }
 
     #[test]
-    fn modern_form_roundtrips_unchanged() {
-        let m: PackageManifest = toml::from_str(FIXTURE_MODERN).unwrap();
-        let rendered = toml::to_string_pretty(&m).unwrap();
-        let back: PackageManifest = toml::from_str(&rendered).unwrap();
-        assert_eq!(m, back);
+    fn compatibility_is_empty() {
+        assert!(Compatibility::default().is_empty());
+        let c = Compatibility {
+            min_vibe_version: Some("0.1.0".into()),
+            requires_kinds: vec![],
+        };
+        assert!(!c.is_empty());
     }
 
     #[test]
-    fn legacy_form_roundtrips_into_modern() {
-        let mut m: PackageManifest = toml::from_str(FIXTURE_LEGACY).unwrap();
-        m.normalize_legacy_deps();
-        let rendered = toml::to_string_pretty(&m).unwrap();
-        // After normalization + write, the legacy `[dependencies]` table is gone.
-        assert!(!rendered.contains("[dependencies]"));
-        // M1.15: `[requires]` packages now serialise as a map-form table
-        // `[requires.packages]`. The bare `[requires]` heading no longer
-        // appears unless capabilities are non-empty.
-        assert!(
-            rendered.contains("[requires.packages]") || rendered.contains("[requires]"),
-            "expected [requires.packages] or [requires] in:\n{rendered}"
-        );
-        assert!(rendered.contains("[conflicts]"));
-        // And a re-read is byte-identical to the already-normalized state.
-        let back: PackageManifest = toml::from_str(&rendered).unwrap();
-        assert_eq!(m, back);
-    }
-
-    #[test]
-    fn parses_minimal_manifest() {
-        let m: PackageManifest = toml::from_str(FIXTURE_MINIMAL).unwrap();
-        assert_eq!(m.package.name, "tiny");
-        assert!(m.writes.files.is_empty());
-        assert!(m.boot_snippet.is_none());
-        assert!(m.provides.is_empty());
-        assert!(m.requires.is_empty());
-        assert!(m.requires_any.is_empty());
-        assert!(m.obsoletes.is_empty());
-        assert!(m.conflicts.is_empty());
-        assert!(m.dependencies.is_empty());
-    }
-
-    #[test]
-    fn rejects_unknown_kind() {
-        let raw = r#"
-[package]
-name = "wal"
-kind = "widget"
-version = "0.3.0"
-"#;
-        assert!(toml::from_str::<PackageManifest>(raw).is_err());
-    }
-
-    #[test]
-    fn rejects_unknown_top_level_field() {
-        let raw = r#"
-[package]
-name = "wal"
-kind = "flow"
-version = "0.3.0"
-
-[bogus]
-value = 1
-"#;
-        assert!(toml::from_str::<PackageManifest>(raw).is_err());
-    }
-
-    #[test]
-    fn as_package_ref_pins_exact_version() {
-        let m: PackageManifest = toml::from_str(FIXTURE_MODERN).unwrap();
-        let r = m.as_package_ref().unwrap();
-        assert_eq!(r.kind, PackageKind::Feat);
-        assert_eq!(r.name, "welcome-page");
-        let this = semver::Version::parse("0.3.0").unwrap();
-        assert!(r.version.matches(&this));
-        let other = semver::Version::parse("0.3.1").unwrap();
-        assert!(!r.version.matches(&other));
-    }
-
-    #[test]
-    fn rejects_invalid_pkgref_in_requires() {
-        let raw = r#"
-[package]
-name = "foo"
-kind = "flow"
-version = "0.1.0"
-
-[requires]
-packages = ["not-a-valid-pkgref"]
-"#;
-        let err = toml::from_str::<PackageManifest>(raw).unwrap_err();
-        let msg = err.to_string();
-        assert!(msg.contains("invalid package reference") || msg.contains("missing `:`"));
-    }
-
-    #[test]
-    fn parses_conditional_deps_block() {
-        let raw = r#"
-[package]
-name = "x"
-kind = "flow"
-version = "0.1.0"
-
-[target."context(stack:rust)".dependencies]
-packages = ["flow:rust-best-practices@^0.1"]
-
-[target."context(interface:build-system)".dependencies]
-packages = ["flow:build-discipline@^0.1"]
-"#;
-        let m: PackageManifest = toml::from_str(raw).unwrap();
-        assert_eq!(m.conditional_deps.len(), 2);
-        let rust_target = m
-            .conditional_deps
-            .get("context(stack:rust)")
-            .expect("rust target");
-        assert_eq!(rust_target.dependencies.packages.len(), 1);
-        assert_eq!(
-            rust_target.dependencies.packages[0].qualified_name(),
-            "flow:rust-best-practices"
-        );
-        let build_target = m
-            .conditional_deps
-            .get("context(interface:build-system)")
-            .expect("build target");
-        assert_eq!(build_target.dependencies.packages.len(), 1);
-    }
-
-    #[test]
-    fn rejects_invalid_capability_in_requires() {
-        let raw = r#"
-[package]
-name = "foo"
-kind = "flow"
-version = "0.1.0"
-
-[requires]
-capabilities = ["no-colon-here"]
-"#;
-        let err = toml::from_str::<PackageManifest>(raw).unwrap_err();
-        let msg = err.to_string();
-        assert!(msg.contains("invalid capability reference") || msg.contains("missing `:`"));
-    }
-
-    // ---------------------------------------------------------------
-    // M1.15 — git-source `[requires.packages]` map-form tests.
-    // ---------------------------------------------------------------
-
-    fn pkg_req_from_toml(raw: &str) -> Requires {
-        // Wrap a `[requires]` body into a minimal valid `vibe-package.toml`
-        // so we can exercise the manifest-level parser directly.
-        let prefix = r#"
-[package]
-name = "p"
-kind = "flow"
-version = "0.1.0"
-
-"#;
-        let manifest: PackageManifest = toml::from_str(&format!("{prefix}{raw}")).unwrap();
-        manifest.requires
-    }
-
-    #[test]
-    fn map_form_bare_constraint_parses() {
-        let r = pkg_req_from_toml(
-            r#"[requires.packages]
+    fn requires_map_bare_constraint_parses() {
+        let r = requires_from_toml(
+            r#"[packages]
 "flow:wal" = "^0.3"
 "feat:auth" = "*"
 "#,
@@ -1053,9 +952,9 @@ version = "0.1.0"
     }
 
     #[test]
-    fn map_form_inline_table_with_version_parses() {
-        let r = pkg_req_from_toml(
-            r#"[requires.packages]
+    fn requires_inline_table_with_version_parses() {
+        let r = requires_from_toml(
+            r#"[packages]
 "flow:wal" = { version = "^0.3" }
 "#,
         );
@@ -1066,8 +965,8 @@ version = "0.1.0"
 
     #[test]
     fn git_source_with_tag_parses() {
-        let r = pkg_req_from_toml(
-            r#"[requires.packages]
+        let r = requires_from_toml(
+            r#"[packages]
 "flow:internal" = { git = "https://github.com/me/flow-internal", tag = "v0.1.0" }
 "#,
         );
@@ -1084,125 +983,442 @@ version = "0.1.0"
     }
 
     #[test]
-    fn git_source_with_branch_parses() {
-        let r = pkg_req_from_toml(
-            r#"[requires.packages]
+    fn git_source_with_branch_and_rev_parse() {
+        let b = requires_from_toml(
+            r#"[packages]
 "flow:experimental" = { git = "https://github.com/x/y", branch = "main" }
 "#,
         );
-        assert_eq!(r.git_packages.len(), 1);
-        assert!(matches!(&r.git_packages[0].ref_kind, GitRefKind::Branch(b) if b == "main"));
-    }
-
-    #[test]
-    fn git_source_with_rev_parses() {
-        let r = pkg_req_from_toml(
-            r#"[requires.packages]
+        assert!(matches!(&b.git_packages[0].ref_kind, GitRefKind::Branch(s) if s == "main"));
+        let v = requires_from_toml(
+            r#"[packages]
 "flow:fork" = { git = "https://github.com/x/y", rev = "abc12345" }
 "#,
         );
-        assert_eq!(r.git_packages.len(), 1);
-        assert!(matches!(&r.git_packages[0].ref_kind, GitRefKind::Rev(r) if r == "abc12345"));
+        assert!(matches!(&v.git_packages[0].ref_kind, GitRefKind::Rev(s) if s == "abc12345"));
     }
 
     #[test]
-    fn git_source_with_auth_parses() {
-        let r = pkg_req_from_toml(
-            r#"[requires.packages]
-"flow:secret" = { git = "https://gitlab.acme.example/x/y", tag = "v1.0", auth = "token-env", token_env = "MY_TOKEN" }
+    fn git_source_with_auth_and_version_parse() {
+        let r = requires_from_toml(
+            r#"[packages]
+"flow:secret" = { git = "https://gitlab.acme.example/x/y", tag = "v1.0", auth = "token-env", token_env = "MY_TOKEN", version = "^1.0" }
 "#,
         );
         let g = &r.git_packages[0];
         assert_eq!(g.auth, AuthKind::TokenEnv);
         assert_eq!(g.token_env.as_deref(), Some("MY_TOKEN"));
+        assert!(g.version.is_some());
     }
 
     #[test]
-    fn git_source_with_version_constraint_parses() {
-        let r = pkg_req_from_toml(
-            r#"[requires.packages]
-"flow:checked" = { git = "https://x/y", tag = "v0.1.0", version = "^0.1" }
-"#,
-        );
-        assert!(r.git_packages[0].version.is_some());
-    }
-
-    #[test]
-    fn git_source_rejects_no_ref() {
-        let raw = r#"[requires.packages]
+    fn git_source_rejects_no_ref_and_multiple_refs() {
+        let no_ref = toml::from_str::<Requires>(
+            r#"[packages]
 "flow:bad" = { git = "https://x/y" }
-"#;
-        let err = toml::from_str::<PackageManifest>(&format!(
-            "[package]\nname = \"p\"\nkind = \"flow\"\nversion = \"0.1.0\"\n\n{raw}"
-        ))
+"#,
+        )
         .unwrap_err();
-        let msg = err.to_string();
-        assert!(
-            msg.contains("requires exactly one of `tag`, `branch`, `rev`"),
-            "expected ref-required message, got: {msg}"
-        );
-    }
-
-    #[test]
-    fn git_source_rejects_multiple_refs() {
-        let raw = r#"[requires.packages]
+        assert!(no_ref.to_string().contains("requires exactly one of"));
+        let multi = toml::from_str::<Requires>(
+            r#"[packages]
 "flow:bad" = { git = "https://x/y", tag = "v1", branch = "main" }
-"#;
-        let err = toml::from_str::<PackageManifest>(&format!(
-            "[package]\nname = \"p\"\nkind = \"flow\"\nversion = \"0.1.0\"\n\n{raw}"
-        ))
+"#,
+        )
         .unwrap_err();
-        assert!(err.to_string().contains("exactly one of"));
+        assert!(multi.to_string().contains("exactly one of"));
     }
 
     #[test]
     fn registry_inline_rejects_git_fields() {
-        let raw = r#"[requires.packages]
+        let err = toml::from_str::<Requires>(
+            r#"[packages]
 "flow:bad" = { version = "^0.3", tag = "v1" }
-"#;
-        let err = toml::from_str::<PackageManifest>(&format!(
-            "[package]\nname = \"p\"\nkind = \"flow\"\nversion = \"0.1.0\"\n\n{raw}"
-        ))
+"#,
+        )
         .unwrap_err();
         assert!(err.to_string().contains("without `git`"));
     }
 
     #[test]
-    fn rejects_at_in_key() {
-        // Keys are bare pkgrefs `<kind>:<name>`; version goes in the value.
-        let raw = r#"[requires.packages]
+    fn rejects_at_in_pkgref_key() {
+        let err = toml::from_str::<Requires>(
+            r#"[packages]
 "flow:wal@^0.3" = "*"
-"#;
-        let err = toml::from_str::<PackageManifest>(&format!(
-            "[package]\nname = \"p\"\nkind = \"flow\"\nversion = \"0.1.0\"\n\n{raw}"
-        ))
+"#,
+        )
         .unwrap_err();
         assert!(err.to_string().contains("must be the value, not part of the key"));
     }
 
-    // Note: duplicate `(kind, name)` between `packages` and `git_packages`
-    // is **structurally impossible** through the TOML wire form — both land
-    // in the same `[requires.packages]` table, and TOML grammar rejects
-    // duplicate keys at parse time. The defensive check inside
-    // `TryFrom<RequiresWire>` exists as defence-in-depth in case the wire
-    // form ever switches to a Vec-of-pairs shape; it is intentionally
-    // unreachable from any valid `vibe.toml`.
+    #[test]
+    fn path_source_parses() {
+        let r = requires_from_toml(
+            r#"[packages]
+"flow:wal" = { path = "../flow-wal" }
+"#,
+        );
+        assert!(r.packages.is_empty());
+        assert!(r.git_packages.is_empty());
+        assert_eq!(r.path_packages.len(), 1);
+        let p = &r.path_packages[0];
+        assert_eq!(p.kind, PackageKind::Flow);
+        assert_eq!(p.name, "wal");
+        assert_eq!(p.path, "../flow-wal");
+        assert!(p.version.is_none());
+    }
 
     #[test]
-    fn git_source_round_trips_through_serialize() {
-        let original = pkg_req_from_toml(
-            r#"[requires.packages]
+    fn path_source_dual_form_parses() {
+        let r = requires_from_toml(
+            r#"[packages]
+"flow:wal" = { path = "../flow-wal", version = "^0.1" }
+"#,
+        );
+        assert_eq!(r.path_packages.len(), 1);
+        assert!(r.path_packages[0].version.is_some());
+    }
+
+    #[test]
+    fn path_source_rejects_git_alongside() {
+        let err = toml::from_str::<Requires>(
+            r#"[packages]
+"flow:bad" = { path = "../x", git = "https://x/y" }
+"#,
+        )
+        .unwrap_err();
+        assert!(err.to_string().contains("cannot also specify"), "{err}");
+    }
+
+    #[test]
+    fn path_source_round_trips() {
+        let original = requires_from_toml(
+            r#"[packages]
+"flow:wal" = { path = "../flow-wal", version = "^0.1" }
+"feat:auth" = { path = "../feat-auth" }
+"#,
+        );
+        let rendered = toml::to_string_pretty(&original).unwrap();
+        let back: Requires = toml::from_str(&rendered).unwrap();
+        assert_eq!(original, back);
+        assert_eq!(back.path_packages.len(), 2);
+    }
+
+    #[test]
+    fn version_var_parses() {
+        let r = requires_from_toml(
+            r#"[packages]
+"flow:wal" = { version.var = "core" }
+"#,
+        );
+        assert!(r.packages.is_empty());
+        assert!(r.git_packages.is_empty());
+        assert!(r.path_packages.is_empty());
+        assert_eq!(r.var_packages.len(), 1);
+        let v = &r.var_packages[0];
+        assert_eq!(v.kind, PackageKind::Flow);
+        assert_eq!(v.name, "wal");
+        assert_eq!(v.var, "core");
+    }
+
+    #[test]
+    fn version_var_round_trips() {
+        let original = requires_from_toml(
+            r#"[packages]
+"flow:wal" = { version.var = "core" }
+"feat:auth" = "^0.2"
+"#,
+        );
+        let rendered = toml::to_string_pretty(&original).unwrap();
+        let back: Requires = toml::from_str(&rendered).unwrap();
+        assert_eq!(original, back);
+        assert_eq!(back.var_packages.len(), 1);
+        assert_eq!(back.packages.len(), 1);
+    }
+
+    #[test]
+    fn version_var_rejected_on_git_source() {
+        let err = toml::from_str::<Requires>(
+            r#"[packages]
+"flow:bad" = { git = "https://x/y", tag = "v1", version.var = "core" }
+"#,
+        )
+        .unwrap_err();
+        assert!(err.to_string().contains("version.var"), "{err}");
+    }
+
+    #[test]
+    fn version_var_rejects_extra_fields() {
+        let err = toml::from_str::<Requires>(
+            r#"[packages]
+"flow:bad" = { version.var = "core", tag = "v1" }
+"#,
+        )
+        .unwrap_err();
+        assert!(err.to_string().contains("registry-resolved"), "{err}");
+    }
+
+    #[test]
+    fn requires_round_trips_through_serialize() {
+        let original = requires_from_toml(
+            r#"capabilities = ["db:any@>=1.0"]
+
+[packages]
 "flow:internal" = { git = "https://github.com/me/flow-internal", tag = "v0.1.0", auth = "token-env", token_env = "MY" }
 "flow:wal" = "^0.3"
 "#,
         );
-        // Wrap into a manifest, render, re-parse, verify shape identical.
-        let mut m: PackageManifest = toml::from_str(FIXTURE_MINIMAL).unwrap();
-        m.requires = original.clone();
-        let rendered = toml::to_string_pretty(&m).unwrap();
-        let back: PackageManifest = toml::from_str(&rendered).unwrap();
-        assert_eq!(back.requires.packages.len(), 1);
-        assert_eq!(back.requires.git_packages.len(), 1);
-        assert_eq!(back.requires.git_packages[0].name, "internal");
+        let rendered = toml::to_string_pretty(&original).unwrap();
+        let back: Requires = toml::from_str(&rendered).unwrap();
+        assert_eq!(back.packages.len(), 1);
+        assert_eq!(back.git_packages.len(), 1);
+        assert_eq!(back.git_packages[0].name, "internal");
+        assert_eq!(back.capabilities.len(), 1);
+        assert_eq!(original, back);
+    }
+
+    #[test]
+    fn package_meta_as_package_ref_pins_exact() {
+        let meta = PackageMeta {
+            name: "wal".into(),
+            kind: PackageKind::Flow,
+            version: semver::Version::parse("0.3.0").unwrap(),
+            authors: vec![],
+            license: None,
+            description: None,
+            homepage: None,
+            keywords: vec![],
+            describes: None,
+            publish: PublishPosture::default(),
+        };
+        let r = meta.as_package_ref().unwrap();
+        assert_eq!(r.kind, PackageKind::Flow);
+        assert_eq!(r.name, "wal");
+        assert!(r.version.matches(&semver::Version::parse("0.3.0").unwrap()));
+        assert!(!r.version.matches(&semver::Version::parse("0.3.1").unwrap()));
+    }
+
+    #[test]
+    fn features_table_roundtrips() {
+        let raw = r#"
+default = ["wal-protocol"]
+wal-protocol = []
+rust-stack = ["subskill:stack/rust"]
+
+[exclusive]
+stacks = ["rust-stack", "python-stack"]
+"#;
+        let ft: FeaturesTable = toml::from_str(raw).unwrap();
+        assert_eq!(ft.defaults(), &["wal-protocol".to_string()]);
+        assert_eq!(ft.get("rust-stack").unwrap().len(), 1);
+        assert_eq!(ft.exclusive.get("stacks").unwrap().len(), 2);
+        let rendered = toml::to_string_pretty(&ft).unwrap();
+        let back: FeaturesTable = toml::from_str(&rendered).unwrap();
+        assert_eq!(ft, back);
+    }
+
+    // --- PROP-009 §2.4 / §2.5 — inclusion type + boot category ----------
+
+    #[test]
+    fn link_type_default_is_static() {
+        assert_eq!(LinkType::default(), LinkType::Static);
+    }
+
+    #[test]
+    fn requires_link_on_registry_dep_parses() {
+        let r = requires_from_toml(
+            r#"[packages]
+"flow:wal" = { version = "^0.3", link = "inline" }
+"#,
+        );
+        assert_eq!(r.packages.len(), 1);
+        assert_eq!(r.link_for(PackageKind::Flow, "wal"), LinkType::Inline);
+    }
+
+    #[test]
+    fn requires_link_dynamic_parses() {
+        let r = requires_from_toml(
+            r#"[packages]
+"stack:rust" = { version = "^2.0", link = "dynamic" }
+"#,
+        );
+        assert_eq!(r.link_for(PackageKind::Stack, "rust"), LinkType::Dynamic);
+    }
+
+    #[test]
+    fn requires_link_absent_is_static() {
+        let r = requires_from_toml(
+            r#"[packages]
+"flow:wal" = "^0.3"
+"#,
+        );
+        assert!(r.links.is_empty());
+        assert_eq!(r.link_for(PackageKind::Flow, "wal"), LinkType::Static);
+    }
+
+    #[test]
+    fn requires_explicit_static_link_is_stored() {
+        // An explicit `link = "static"` is kept, not folded into "absent":
+        // the loading-model precedence (PROP-009 §2.4) lets it override a
+        // workspace default, so the explicit choice must survive — and it
+        // survives a serialize round-trip as an inline table.
+        let r = requires_from_toml(
+            r#"[packages]
+"flow:wal" = { version = "^0.3", link = "static" }
+"#,
+        );
+        assert_eq!(
+            r.declared_link(PackageKind::Flow, "wal"),
+            Some(LinkType::Static)
+        );
+        assert_eq!(r.link_for(PackageKind::Flow, "wal"), LinkType::Static);
+        let back: Requires = toml::from_str(&toml::to_string_pretty(&r).unwrap()).unwrap();
+        assert_eq!(
+            back.declared_link(PackageKind::Flow, "wal"),
+            Some(LinkType::Static)
+        );
+    }
+
+    #[test]
+    fn requires_declared_link_is_none_when_unspecified() {
+        // A bare entry declares no `link` — `declared_link` is `None`,
+        // while `link_for` applies the `static` default.
+        let r = requires_from_toml(
+            r#"[packages]
+"flow:wal" = "^0.3"
+"#,
+        );
+        assert_eq!(r.declared_link(PackageKind::Flow, "wal"), None);
+        assert_eq!(r.link_for(PackageKind::Flow, "wal"), LinkType::Static);
+    }
+
+    #[test]
+    fn requires_link_on_git_source_parses() {
+        let r = requires_from_toml(
+            r#"[packages]
+"flow:internal" = { git = "https://github.com/me/flow-internal", tag = "v0.1.0", link = "dynamic" }
+"#,
+        );
+        assert_eq!(r.git_packages.len(), 1);
+        assert_eq!(r.link_for(PackageKind::Flow, "internal"), LinkType::Dynamic);
+    }
+
+    #[test]
+    fn requires_link_on_path_source_parses() {
+        let r = requires_from_toml(
+            r#"[packages]
+"flow:wal" = { path = "../flow-wal", link = "inline" }
+"#,
+        );
+        assert_eq!(r.path_packages.len(), 1);
+        assert_eq!(r.link_for(PackageKind::Flow, "wal"), LinkType::Inline);
+    }
+
+    #[test]
+    fn requires_link_on_var_dep_parses() {
+        let r = requires_from_toml(
+            r#"[packages]
+"flow:wal" = { version.var = "core", link = "dynamic" }
+"#,
+        );
+        assert_eq!(r.var_packages.len(), 1);
+        assert_eq!(r.link_for(PackageKind::Flow, "wal"), LinkType::Dynamic);
+    }
+
+    #[test]
+    fn requires_link_rejects_unknown_value() {
+        let err = toml::from_str::<Requires>(
+            r#"[packages]
+"flow:wal" = { version = "^0.3", link = "weird" }
+"#,
+        )
+        .unwrap_err();
+        assert!(
+            err.to_string().contains("variant") || err.to_string().contains("link"),
+            "{err}"
+        );
+    }
+
+    #[test]
+    fn requires_registry_link_renders_as_inline_table() {
+        // A registry dep with a non-default link cannot use the bare-string
+        // form — it must serialise as an inline table so `link` survives.
+        let r = requires_from_toml(
+            r#"[packages]
+"flow:wal" = { version = "^0.3", link = "inline" }
+"#,
+        );
+        let rendered = toml::to_string_pretty(&r).unwrap();
+        assert!(rendered.contains("link = \"inline\""), "{rendered}");
+    }
+
+    #[test]
+    fn requires_link_round_trips_across_all_source_kinds() {
+        let original = requires_from_toml(
+            r#"[packages]
+"flow:wal" = { version = "^0.3", link = "inline" }
+"flow:internal" = { git = "https://github.com/me/flow-internal", tag = "v0.1.0", link = "dynamic" }
+"feat:auth" = { path = "../feat-auth", link = "dynamic" }
+"stack:rust" = { version.var = "core", link = "inline" }
+"flow:plain" = "^0.1"
+"#,
+        );
+        let rendered = toml::to_string_pretty(&original).unwrap();
+        let back: Requires = toml::from_str(&rendered).unwrap();
+        assert_eq!(original, back);
+        // Four declared links survive; the bare entry stays implicitly static.
+        assert_eq!(back.links.len(), 4);
+        assert_eq!(back.link_for(PackageKind::Flow, "wal"), LinkType::Inline);
+        assert_eq!(back.link_for(PackageKind::Flow, "internal"), LinkType::Dynamic);
+        assert_eq!(back.link_for(PackageKind::Feat, "auth"), LinkType::Dynamic);
+        assert_eq!(back.link_for(PackageKind::Stack, "rust"), LinkType::Inline);
+        assert_eq!(back.link_for(PackageKind::Flow, "plain"), LinkType::Static);
+    }
+
+    #[test]
+    fn boot_snippet_parses_category_and_link() {
+        let bs: BootSnippet = toml::from_str(
+            r#"source = "boot/10-flow-wal.md"
+category = "flow"
+link = "inline"
+"#,
+        )
+        .unwrap();
+        assert_eq!(bs.category, Some(BootCategory::Flow));
+        assert_eq!(bs.link, Some(LinkType::Inline));
+    }
+
+    #[test]
+    fn boot_snippet_minimal_form_parses() {
+        // `source` is the only required field; `category` and `link` are
+        // optional and absent here.
+        let bs: BootSnippet = toml::from_str("source = \"boot/10-flow-wal.md\"\n").unwrap();
+        assert!(bs.category.is_none());
+        assert!(bs.link.is_none());
+    }
+
+    #[test]
+    fn boot_category_user_override_is_kebab_case() {
+        let bs: BootSnippet = toml::from_str(
+            r#"source = "boot/90-user.md"
+category = "user-override"
+"#,
+        )
+        .unwrap();
+        assert_eq!(bs.category, Some(BootCategory::UserOverride));
+    }
+
+    #[test]
+    fn boot_snippet_round_trips_with_category_and_link() {
+        let bs: BootSnippet = toml::from_str(
+            r#"source = "boot/20-stack-rust.md"
+category = "stack"
+link = "dynamic"
+"#,
+        )
+        .unwrap();
+        let rendered = toml::to_string_pretty(&bs).unwrap();
+        let back: BootSnippet = toml::from_str(&rendered).unwrap();
+        assert_eq!(bs, back);
     }
 }

@@ -4,7 +4,7 @@
 //! `VIBEVM-SPEC.md` §8.2:
 //!
 //! ```text
-//! <registry>/<kind>/<name>/v<major>.<minor>.<patch>/vibe-package.toml
+//! <registry>/<kind>/<name>/v<major>.<minor>.<patch>/vibe.toml
 //! ```
 //!
 //! M1 adds git support via the same on-disk layout cloned under
@@ -23,7 +23,7 @@ use std::path::{Path, PathBuf};
 
 use sha2::{Digest, Sha256};
 use thiserror::Error;
-use vibe_core::manifest::PackageManifest;
+use vibe_core::manifest::Manifest;
 use vibe_core::{PackageKind, PackageRef, VersionSpec};
 use walkdir::WalkDir;
 
@@ -42,7 +42,7 @@ pub use index_client::{
 };
 pub use multi_registry_resolver::{
     DEFAULT_OVERRIDE_REF, MultiRegistryResolver, MultiResolution, RefreshReport, RefreshedEntry,
-    RefreshedVia, RegistryWalkAttempt, SkippedEntry, WalkAttemptStatus,
+    RefreshedVia, RegistryWalkAttempt, ResolvedPathDep, SkippedEntry, WalkAttemptStatus,
 };
 
 #[derive(Debug, Error)]
@@ -161,7 +161,7 @@ pub struct CachedPackage {
     /// `resolved.source_dir`).
     pub cache_dir: PathBuf,
     /// Parsed manifest from the cached copy.
-    pub manifest: PackageManifest,
+    pub manifest: Manifest,
     /// `sha256:<hex>` content hash over every file in the package, using
     /// relative paths for stability. The **identity** half of the
     /// `(kind, name, version, content_hash)` tuple per PROP-002 §2.1.
@@ -191,6 +191,16 @@ pub struct CachedPackage {
     /// `overridden`. Lockfile maps this to `source_kind = "git"`.
     pub is_git_source: bool,
 
+    /// `true` iff this package was resolved through a `[requires.packages]`
+    /// table-form path-source declaration (PROP-007 §2.5) — a package in
+    /// a local directory, typically a sibling workspace member — rather
+    /// than the registry walk, `[[override]]`, or git-source. Mutually
+    /// exclusive with `overridden` and `is_git_source`. Lockfile maps
+    /// this to `source_kind = "path"`, and `source_uri` then carries the
+    /// member's path relative to the workspace root — never a URL, never
+    /// an absolute path.
+    pub is_path_source: bool,
+
     /// When this package was resolved via a registry stub that
     /// redirected to an external URL (PROP-002 §2.4.2), the **stub**
     /// URL is recorded here while `source_uri` carries the **target**
@@ -198,6 +208,22 @@ pub struct CachedPackage {
     /// resolutions. Lockfile mirrors this verbatim into
     /// `LockedPackage.via_redirect`.
     pub via_redirect: Option<String>,
+}
+
+impl CachedPackage {
+    /// A `CachedPackage` always holds a publishable `[package]` manifest.
+    ///
+    /// Every construction site of `CachedPackage` reads a manifest off a
+    /// fetched registry package and guards `manifest.package.is_some()`
+    /// before building the struct, so this accessor's `.expect()` is
+    /// sound — a fetched registry package always carries a `[package]`
+    /// table.
+    pub fn package_meta(&self) -> &vibe_core::manifest::PackageMeta {
+        self.manifest
+            .package
+            .as_ref()
+            .expect("a fetched registry package always carries a [package] table")
+    }
 }
 
 pub struct LocalRegistry {
@@ -320,8 +346,14 @@ impl LocalRegistry {
         }
         copy_dir_recursive(&resolved.source_dir, &cache_dir)?;
 
-        let manifest_path = cache_dir.join(PackageManifest::FILENAME);
-        let manifest = PackageManifest::read(&manifest_path)?;
+        let manifest_path = cache_dir.join(Manifest::FILENAME);
+        let manifest = Manifest::read(&manifest_path)?;
+        if manifest.package.is_none() {
+            return Err(RegistryError::MalformedMeta {
+                path: manifest_path.clone(),
+                reason: "registry package manifest must carry a [package] table".to_string(),
+            });
+        }
         let content_hash = compute_content_hash(&cache_dir)?;
 
         // Build a source URI. On local-registry M0 we just encode the absolute
@@ -342,6 +374,7 @@ impl LocalRegistry {
             resolved_commit: None,
             overridden: false,
             is_git_source: false,
+            is_path_source: false,
             via_redirect: None,
         })
     }
@@ -453,7 +486,7 @@ mod tests {
         let v1 = root.join("flow/wal/v0.1.0");
         fs::create_dir_all(&v1).unwrap();
         fs::write(
-            v1.join("vibe-package.toml"),
+            v1.join("vibe.toml"),
             r#"[package]
 name = "wal"
 kind = "flow"
@@ -468,7 +501,7 @@ description = "WAL v0.1.0"
         let v2 = root.join("flow/wal/v0.2.0");
         fs::create_dir_all(&v2).unwrap();
         fs::write(
-            v2.join("vibe-package.toml"),
+            v2.join("vibe.toml"),
             r#"[package]
 name = "wal"
 kind = "flow"
@@ -547,9 +580,9 @@ description = "WAL v0.2.0"
         let pkgref = PackageRef::parse("flow:wal@0.2.0").unwrap();
         let resolved = reg.resolve(&pkgref).unwrap();
         let cached = reg.fetch(&resolved, cache_dir.path()).unwrap();
-        assert!(cached.cache_dir.join("vibe-package.toml").exists());
+        assert!(cached.cache_dir.join("vibe.toml").exists());
         assert!(cached.cache_dir.join("README.md").exists());
-        assert_eq!(cached.manifest.package.version.to_string(), "0.2.0");
+        assert_eq!(cached.package_meta().version.to_string(), "0.2.0");
         assert!(cached.content_hash.starts_with("sha256:"));
         assert!(cached.source_uri.starts_with("file://"));
     }

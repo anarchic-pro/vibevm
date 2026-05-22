@@ -1,6 +1,6 @@
 # Git-source dependencies — whole-repo-as-package
 
-vibevm normally resolves dependencies through a `[[registry]]` org — `flow:wal` becomes `<org>/flow-wal` per the registry's `naming` convention. M1.15 adds a second shape: declare a dep as a **git-source**, pointing at any single git repository where the package's `vibe-package.toml` lives at the repository root. Same pattern as Cargo's `[dependencies] foo = { git = "..." }`, npm's `git+https://...#tag`, Poetry's `foo = { git = "..." }`, Bundler's `gem 'foo', git: '...'`. Spec: [PROP-002 §2.4.1](../spec/modules/vibe-registry/PROP-002-decentralized-registry.md#git-source).
+vibevm normally resolves dependencies through a `[[registry]]` org — `flow:wal` becomes `<org>/flow-wal` per the registry's `naming` convention. M1.15 adds a second shape: declare a dep as a **git-source**, pointing at any single git repository where the package's `vibe.toml` (carrying a `[package]` table) lives at the repository root. Same pattern as Cargo's `[dependencies] foo = { git = "..." }`, npm's `git+https://...#tag`, Poetry's `foo = { git = "..." }`, Bundler's `gem 'foo', git: '...'`. Spec: [PROP-002 §2.4.1](../spec/modules/vibe-registry/PROP-002-decentralized-registry.md#git-source).
 
 ## When to use
 
@@ -12,7 +12,7 @@ If the same private host serves three or more packages, declare them through a `
 
 ## Wire form
 
-`[requires.packages]` is a TOML table. Each entry maps a bare pkgref `<kind>:<name>` to either a constraint string (registry-resolved) or an inline-table (registry-resolved with options or git-source).
+`[requires.packages]` is a TOML table. Each entry maps a bare pkgref `<kind>:<name>` to either a constraint string (registry-resolved) or an inline-table (registry-resolved with options, git-source, or path-source).
 
 ```toml
 [requires.packages]
@@ -34,16 +34,21 @@ If the same private host serves three or more packages, declare them through a `
 "flow:checked"         = { git = "https://x/y",
                            tag = "v0.1.0",
                            version = "^0.1" }
+
+# Path-source variant — a sibling package on disk, typically a
+# workspace member:
+"flow:sibling"         = { path = "../flow-sibling", version = "^0.1" }
 ```
 
-The pre-M1.15 array form `packages = ["flow:wal@^0.3", ...]` continues to parse; on the next manifest write (any command that mutates `vibe.toml`) it is rewritten as the table form. There is no version fence — both shapes are read forever; only the table form is written.
+`[requires.packages]` is a TOML table, full stop. The legacy array-of-strings form `packages = ["flow:wal@^0.3", ...]` is no longer accepted — a manifest using it is a hard parse error. (vibevm is pre-release; there is no migration path and none is needed.)
 
 ### Inline-table fields
 
 | Field | Required | Meaning |
 |---|---|---|
 | `git` | required for git-source | Full git URL of the single-package repo. Same URL grammar as `[[registry]] url` — `git@host:…`, `ssh://`, `https://`, `file://`. |
-| `tag` | one of these required | Immutable git tag. Force-pushed tag rewrite caught as `IntegrityError` on next install via content-hash. |
+| `path` | required for path-source | Filesystem path to a sibling package directory (relative to the manifest), typically a workspace member. Mutually exclusive with `git`. |
+| `tag` | one of these required for git-source | Immutable git tag. Force-pushed tag rewrite caught as `IntegrityError` on next install via content-hash. |
 | `branch` |  | Mutable git branch. `vibe install` (no `update`) sticks to the lockfile-pinned commit; `vibe update` re-walks branch HEAD. |
 | `rev` |  | Commit SHA. Most strict; lockfile records the same SHA. |
 | `version` | optional | Verification-only constraint. After resolving the package version from the git ref, `[package].version` in the manifest must satisfy this constraint; mismatch is `VersionMismatch`. |
@@ -102,7 +107,7 @@ Override > git-source > registry reflects the semantic "override is intentional 
 
 Identity is `(kind, name, version, content_hash)` per PROP-002 §2.1. The hash is computed over the **target** package content, not over the URL. Two consumers that pull the same git-source from different mirrors and produce the same content hash are bit-identical installs. Force-pushed tag rewrite caught as `IntegrityError` on the next install.
 
-The pkgref `<kind>:<name>` declared in `[requires.packages]` must match the `[package]` section in the repo's `vibe-package.toml` at the resolved ref. Mismatch — e.g. you typed `flow:internal` but the repo declares `feat:internal` — is rejected as `PackageIdentityMismatch` ("refusing to install"). This means a malicious git-source cannot impersonate `flow:wal` if its manifest declares it as `feat:auth`.
+The pkgref `<kind>:<name>` declared in `[requires.packages]` must match the `[package]` section in the repo's `vibe.toml` at the resolved ref. Mismatch — e.g. you typed `flow:internal` but the repo declares `feat:internal` — is rejected as `PackageIdentityMismatch` ("refusing to install"). This means a malicious git-source cannot impersonate `flow:wal` if its manifest declares it as `feat:auth`.
 
 ## Mutability and `vibe update`
 
@@ -138,13 +143,14 @@ content_hash    = "sha256:…"
 overridden      = false
 ```
 
-The `source_kind` field discriminates between the three resolution paths:
+The `source_kind` field discriminates between the resolution paths:
 
 - `"registry"` — standard `[[registry]]` walk.
 - `"git"` — git-source declaration.
 - `"override"` — `[[override]]`-resolved patch.
+- `"path"` — a `path`-source sibling/workspace-member declaration.
 
-For pre-M1.15 lockfiles, `source_kind` is absent; consumers can assume `"override"` if `overridden = true` else `"registry"` until the lockfile is rewritten on next install.
+`Lockfile::read` accepts only schema v4, where `source_kind` is always present; an older lockfile is rejected, not migrated — regenerate it with `vibe install`.
 
 ## Transitive dependencies
 

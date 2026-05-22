@@ -35,6 +35,15 @@ pub enum Error {
     #[error("invalid dependency declaration for `{input}`: {reason}")]
     BadDependencyDecl { input: String, reason: String },
 
+    #[error("invalid manifest: {reason}")]
+    InvalidManifest { reason: String },
+
+    #[error(
+        "unsupported vibe.lock schema version {found} — expected {expected}; \
+         regenerate with `vibe install`"
+    )]
+    UnsupportedLockfile { found: u32, expected: u32 },
+
     #[error("failed to read file at {path}")]
     Read {
         path: PathBuf,

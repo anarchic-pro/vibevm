@@ -15,14 +15,15 @@
 //!    less than `wal_max_age_hours` (default 24); older → warning.
 //! 6. [`CheckId::WalWellformed`] — WAL has the canonical sections
 //!    (Current Phase, Constraints, Done, Next, Issues).
-//! 7. [`CheckId::BootDirectory`] — every file in `spec/boot/` matches
-//!    the `NN-name.md` pattern; no two files share the same `NN`
-//!    prefix (excluding the user-owned `00-core.md` / `90-user.md`
-//!    pair, which are the foundation / overrides slots).
-//! 8. [`CheckId::LockfileFiles`] — every package in `vibe.lock` has
-//!    its declared `files_written` present on disk; spec/flows,
-//!    spec/feats, spec/stacks subtrees have no orphan files (files
-//!    not in any lockfile entry's `files_written`).
+//! 7. [`CheckId::BootDirectory`] — `spec/boot/` exists and holds only
+//!    markdown files. PROP-009 retired the `NN-` filename prefix; the
+//!    directory holds authored boot files and `vibe`-generated
+//!    `INDEX.md` / `INLINE.md` artifacts, none numerically prefixed.
+//!    [`CheckId::RedirectBlock`] checks the `<vibevm>` block of each
+//!    agent instruction file is well-formed (PROP-012).
+//! 8. [`CheckId::LockfileFiles`] — every package in `vibe.lock` has a
+//!    materialised `vibedeps/` slot on disk, and `vibedeps/` carries
+//!    no slot absent from the lockfile (PROP-009 §2.1).
 //! 9. [`CheckId::ReviewAging`] — every `<!-- REVIEW: YYYY-MM-DD ... -->`
 //!    marker in `spec/**/*.md` whose date is older than
 //!    `review_max_age_days` (default 14) is reported as a warning.
@@ -41,12 +42,11 @@
 
 #![forbid(unsafe_code)]
 
-use std::collections::BTreeMap;
 use std::fs;
 use std::path::{Path, PathBuf};
 use std::time::{SystemTime, UNIX_EPOCH};
 
-use vibe_core::manifest::{Lockfile, ProjectManifest};
+use vibe_core::manifest::{Lockfile, Manifest};
 
 /// Stable identifier for a single check. Used in [`Finding::check`]
 /// and surfaced verbatim under `--json` so downstream tooling can
@@ -78,6 +78,11 @@ pub enum CheckId {
     /// the same package's lazy-push / lazy-pull set. Mirrors Tessl's
     /// review-rubric "activation distinctiveness" axis.
     ActivationConflict,
+    /// PROP-012 §2.2 — the `<vibevm>` block in each agent instruction
+    /// file (`CLAUDE.md` / `AGENTS.md` / `GEMINI.md`) at the project
+    /// root is well-formed: zero markers, or exactly one ordered
+    /// `<vibevm>` … `</vibevm>` pair.
+    RedirectBlock,
 }
 
 impl CheckId {
@@ -93,6 +98,7 @@ impl CheckId {
             CheckId::SubskillStructure => "subskill_structure",
             CheckId::I18nCoverage => "i18n_coverage",
             CheckId::ActivationConflict => "activation_conflict",
+            CheckId::RedirectBlock => "redirect_block",
         }
     }
 
@@ -109,6 +115,7 @@ impl CheckId {
             CheckId::SubskillStructure,
             CheckId::I18nCoverage,
             CheckId::ActivationConflict,
+            CheckId::RedirectBlock,
         ]
     }
 }
@@ -229,6 +236,7 @@ pub fn check_project(project_root: &Path, opts: &CheckOptions) -> CheckReport {
     check_wal_freshness(project_root, &mut report, now, opts.wal_max_age_hours);
     check_wal_wellformed(project_root, &mut report);
     check_boot_directory(project_root, &mut report);
+    check_redirect_blocks(project_root, &mut report);
     check_lockfile_files(project_root, &mut report);
     check_review_aging(project_root, &mut report, now, opts.review_max_age_days);
     check_features_graph(project_root, &mut report);
@@ -249,9 +257,8 @@ pub fn check_project(project_root: &Path, opts: &CheckOptions) -> CheckReport {
 /// surfacing.
 fn check_features_graph(project_root: &Path, report: &mut CheckReport) {
     for (pkg_root, source_label) in scan_local_packages(project_root) {
-        let manifest_path =
-            pkg_root.join(vibe_core::manifest::PackageManifest::FILENAME);
-        let manifest = match vibe_core::manifest::PackageManifest::read(&manifest_path) {
+        let manifest_path = pkg_root.join(Manifest::FILENAME);
+        let manifest = match Manifest::read(&manifest_path) {
             Ok(m) => m,
             Err(_) => continue, // ManifestValidity check surfaces this elsewhere.
         };
@@ -369,9 +376,8 @@ fn check_subskill_structure(project_root: &Path, report: &mut CheckReport) {
 /// (warning when missing).
 fn check_i18n_coverage(project_root: &Path, report: &mut CheckReport) {
     for (pkg_root, source_label) in scan_local_packages(project_root) {
-        let manifest_path =
-            pkg_root.join(vibe_core::manifest::PackageManifest::FILENAME);
-        let manifest = match vibe_core::manifest::PackageManifest::read(&manifest_path) {
+        let manifest_path = pkg_root.join(Manifest::FILENAME);
+        let manifest = match Manifest::read(&manifest_path) {
             Ok(m) => m,
             Err(_) => continue,
         };
@@ -379,18 +385,13 @@ fn check_i18n_coverage(project_root: &Path, report: &mut CheckReport) {
             continue;
         }
         let canonical = &manifest.i18n.canonical;
+        // PROP-009 retired `[writes]`; a package's only manifest-declared
+        // canonical path is now its `[boot_snippet]` source.
         let logical_paths: Vec<std::path::PathBuf> = manifest
-            .writes
-            .files
-            .iter()
-            .cloned()
-            .chain(
-                manifest
-                    .boot_snippet
-                    .as_ref()
-                    .map(|b| b.source.clone())
-                    .into_iter(),
-            )
+            .boot_snippet
+            .as_ref()
+            .map(|b| b.source.clone())
+            .into_iter()
             .collect();
         let rel_manifest = manifest_path
             .strip_prefix(project_root)
@@ -548,18 +549,16 @@ fn jaccard_overlap(
     }
 }
 
-/// Find every locally-discoverable package manifest. Today: scans
+/// Find every locally-discoverable manifest. Today: scans
 /// `packages/` (vibevm's own dogfooding tree) at depth 3. Also includes
-/// the project root itself if it carries a `vibe-package.toml` (rare —
-/// `vibe-package.toml` is for *packages*, not projects, but a few of
-/// our own internal fixtures use this layout). Returns
-/// `(package_root, label)` pairs.
+/// the project root itself, which always carries a `vibe.toml`. Returns
+/// `(manifest_root, label)` pairs. Consumers (`check_features_graph`,
+/// `check_i18n_coverage`, `check_subskill_structure`) tolerate a
+/// non-package `vibe.toml`: they short-circuit on an empty
+/// `[features]` / `[i18n]` table and a missing `subskills/` tree.
 fn scan_local_packages(project_root: &Path) -> Vec<(PathBuf, String)> {
     let mut out: Vec<(PathBuf, String)> = Vec::new();
-    if project_root
-        .join(vibe_core::manifest::PackageManifest::FILENAME)
-        .is_file()
-    {
+    if project_root.join(Manifest::FILENAME).is_file() {
         out.push((project_root.to_path_buf(), "project root".to_string()));
     }
     let packages_dir = project_root.join("packages");
@@ -569,7 +568,7 @@ fn scan_local_packages(project_root: &Path) -> Vec<(PathBuf, String)> {
             .into_iter()
             .filter_map(|e| e.ok())
         {
-            if entry.file_name() == vibe_core::manifest::PackageManifest::FILENAME
+            if entry.file_name() == Manifest::FILENAME
                 && let Some(parent) = entry.path().parent()
             {
                 let rel = parent
@@ -586,25 +585,25 @@ fn scan_local_packages(project_root: &Path) -> Vec<(PathBuf, String)> {
 // ===================== check 1: manifest validity =====================
 
 fn check_manifest_validity(project_root: &Path, report: &mut CheckReport) {
-    let manifest_path = project_root.join(ProjectManifest::FILENAME);
+    let manifest_path = project_root.join(Manifest::FILENAME);
     if !manifest_path.exists() {
         report.err(
             CheckId::ManifestValidity,
-            Some(PathBuf::from(ProjectManifest::FILENAME)),
+            Some(PathBuf::from(Manifest::FILENAME)),
             None,
             format!(
                 "no `{}` in project root — every vibevm project carries one. Run `vibe init`.",
-                ProjectManifest::FILENAME
+                Manifest::FILENAME
             ),
         );
         return;
     }
-    if let Err(e) = ProjectManifest::read(&manifest_path) {
+    if let Err(e) = Manifest::read(&manifest_path) {
         report.err(
             CheckId::ManifestValidity,
-            Some(PathBuf::from(ProjectManifest::FILENAME)),
+            Some(PathBuf::from(Manifest::FILENAME)),
             None,
-            format!("`{}` failed to parse: {e}", ProjectManifest::FILENAME),
+            format!("`{}` failed to parse: {e}", Manifest::FILENAME),
         );
     }
 
@@ -754,7 +753,7 @@ fn check_boot_directory(project_root: &Path, report: &mut CheckReport) {
         // Empty / fresh project — `vibe init` creates it. If the
         // project's vibe.toml exists but boot/ doesn't, that's a
         // structural error.
-        if project_root.join(ProjectManifest::FILENAME).exists() {
+        if project_root.join(Manifest::FILENAME).exists() {
             report.err(
                 CheckId::BootDirectory,
                 Some(boot_rel),
@@ -776,75 +775,88 @@ fn check_boot_directory(project_root: &Path, report: &mut CheckReport) {
             return;
         }
     };
-    // Map NN-prefix → Vec<filename> so we can flag collisions.
-    let mut by_prefix: BTreeMap<String, Vec<String>> = BTreeMap::new();
+    // PROP-009 §2.5 retired the `NN-` filename prefix — `vibe` owns boot
+    // ordering by category band, and the generated `INDEX.md` /
+    // `INLINE.md` artifacts carry no numeric prefix. Any markdown file is
+    // a valid boot file; only a non-markdown stray is worth flagging.
     for entry in entries.filter_map(|e| e.ok()) {
         let name = entry.file_name().to_string_lossy().into_owned();
         if !entry.file_type().map(|t| t.is_file()).unwrap_or(false) {
             continue;
         }
         if !name.ends_with(".md") {
-            // Non-markdown files in boot/ — flag as warning. M0/M1
-            // contract is markdown-only here.
             report.warn(
                 CheckId::BootDirectory,
                 Some(boot_rel.join(&name)),
                 None,
                 format!("non-markdown file `{name}` in spec/boot/"),
             );
-            continue;
-        }
-        match numeric_prefix(&name) {
-            None => {
-                report.err(
-                    CheckId::BootDirectory,
-                    Some(boot_rel.join(&name)),
-                    None,
-                    format!(
-                        "`{name}` does not match the `NN-name.md` pattern (NN = two ASCII digits)"
-                    ),
-                );
-            }
-            Some(prefix) => {
-                by_prefix.entry(prefix.to_string()).or_default().push(name);
-            }
         }
     }
-    for (prefix, mut names) in by_prefix {
-        if names.len() > 1 {
-            names.sort();
+}
+
+// ===================== check: redirect block =====================
+
+/// PROP-012 §2.2 — each agent instruction file at the project root
+/// carries at most one well-formed `<vibevm>` block. A malformed file
+/// is an error: a mutating `vibe` command would refuse to proceed
+/// against it.
+fn check_redirect_blocks(project_root: &Path, report: &mut CheckReport) {
+    for name in ["CLAUDE.md", "AGENTS.md", "GEMINI.md"] {
+        let path = project_root.join(name);
+        let content = match fs::read_to_string(&path) {
+            Ok(c) => c,
+            Err(_) => continue, // an absent file is fine — `vibe` creates it
+        };
+        if let Some(reason) = malformed_vibevm_block(&content) {
             report.err(
-                CheckId::BootDirectory,
-                Some(boot_rel.clone()),
+                CheckId::RedirectBlock,
+                Some(PathBuf::from(name)),
                 None,
-                format!(
-                    "boot prefix `{prefix}` is shared by {} files: {}",
-                    names.len(),
-                    names.join(", ")
-                ),
+                format!("`{name}` has a malformed <vibevm> block: {reason}"),
             );
         }
     }
 }
 
-/// Two-ASCII-digit prefix followed by `-`, or `None`. Mirrors the
-/// helper in `vibe-install` — duplicated rather than re-exported to
-/// keep `vibe-check` independent of the install crate's surface.
-fn numeric_prefix(filename: &str) -> Option<&str> {
-    if filename.len() < 3 {
-        return None;
+/// Classify the `<vibevm>` markers in `content` (PROP-012 §2.2): a line
+/// whose trimmed text is exactly `<vibevm>` / `</vibevm>` is a marker.
+/// Returns `Some(reason)` when the file is malformed — anything other
+/// than zero markers or exactly one ordered pair. The scan is
+/// duplicated from `vibe-workspace::boot_artifacts` rather than
+/// re-exported, to keep `vibe-check` independent of that crate's surface.
+fn malformed_vibevm_block(content: &str) -> Option<String> {
+    let mut opens = 0usize;
+    let mut closes = 0usize;
+    let mut first_open: Option<usize> = None;
+    let mut first_close: Option<usize> = None;
+    for (i, line) in content.lines().enumerate() {
+        match line.trim() {
+            "<vibevm>" => {
+                opens += 1;
+                first_open.get_or_insert(i);
+            }
+            "</vibevm>" => {
+                closes += 1;
+                first_close.get_or_insert(i);
+            }
+            _ => {}
+        }
     }
-    let (prefix, rest) = filename.split_at(2);
-    if prefix.chars().all(|c| c.is_ascii_digit()) && rest.starts_with('-') {
-        Some(prefix)
-    } else {
-        None
+    match (opens, closes) {
+        (0, 0) => None,
+        (1, 1) if first_open < first_close => None,
+        (1, 1) => {
+            Some("the `</vibevm>` marker precedes its `<vibevm>` opener".to_string())
+        }
+        (o, c) => Some(format!(
+            "expected exactly one `<vibevm>` … `</vibevm>` pair, found {o} `<vibevm>` \
+             and {c} `</vibevm>` marker line(s)"
+        )),
     }
 }
 
-// ===================== check 8: lockfile files =====================
-
-const PACKAGE_OWNED_ROOTS: &[&str] = &["spec/flows", "spec/feats", "spec/stacks"];
+// ============== check 8: lockfile / vibedeps consistency ==============
 
 fn check_lockfile_files(project_root: &Path, report: &mut CheckReport) {
     let lockfile_path = project_root.join(Lockfile::FILENAME);
@@ -859,54 +871,68 @@ fn check_lockfile_files(project_root: &Path, report: &mut CheckReport) {
         }
     };
 
-    // 1. Every locked package's files_written present on disk.
-    let mut declared_paths: std::collections::BTreeSet<PathBuf> =
+    // Under the loading model (PROP-009 §2.1) a package is materialised
+    // verbatim into `vibedeps/<kind>-<name>/<version>/`. Check 8 verifies
+    // that the lockfile and that tree agree.
+
+    // 1. Every locked package has its `vibedeps/` slot on disk.
+    let mut expected: std::collections::BTreeSet<String> =
         std::collections::BTreeSet::new();
     for pkg in &lockfile.packages {
-        for rel in &pkg.files_written {
-            declared_paths.insert(normalize(rel));
-            let abs = project_root.join(rel);
-            if !abs.exists() {
-                report.err(
-                    CheckId::LockfileFiles,
-                    Some(rel.clone()),
-                    None,
-                    format!(
-                        "lockfile entry `{}:{}@{}` declares `{}` but the file is missing on disk",
-                        pkg.kind,
-                        pkg.name,
-                        pkg.version,
-                        rel.display()
-                    ),
-                );
-            }
+        let slot = format!("vibedeps/{}-{}/{}", pkg.kind, pkg.name, pkg.version);
+        if !project_root.join(&slot).is_dir() {
+            report.err(
+                CheckId::LockfileFiles,
+                Some(PathBuf::from(&slot)),
+                None,
+                format!(
+                    "lockfile entry `{}:{}@{}` has no materialised `vibedeps/` slot — \
+                     run `vibe reinstall --force`",
+                    pkg.kind, pkg.name, pkg.version
+                ),
+            );
         }
+        expected.insert(slot);
     }
 
-    // 2. No orphan files in package-owned subtrees.
-    for root in PACKAGE_OWNED_ROOTS {
-        let dir = project_root.join(root);
-        if !dir.is_dir() {
-            continue;
-        }
-        for entry in walk_files(&dir) {
-            let rel = match entry.strip_prefix(project_root) {
-                Ok(r) => normalize(r),
-                Err(_) => continue,
-            };
-            if !declared_paths.contains(&rel) {
-                report.warn(
-                    CheckId::LockfileFiles,
-                    Some(rel.clone()),
-                    None,
-                    format!(
-                        "`{}` is in a package-owned subtree but no lockfile entry claims it (orphan)",
-                        rel.display()
-                    ),
-                );
+    // 2. No `vibedeps/` slot absent from the lockfile — `vibe install`
+    //    prunes a slot a version bump or a dropped dependency orphans.
+    let vibedeps = project_root.join("vibedeps");
+    if vibedeps.is_dir() {
+        for kind_name in read_subdirs(&vibedeps) {
+            for version in read_subdirs(&kind_name) {
+                let rel = match version.strip_prefix(project_root) {
+                    Ok(r) => r.to_string_lossy().replace('\\', "/"),
+                    Err(_) => continue,
+                };
+                if !expected.contains(&rel) {
+                    report.warn(
+                        CheckId::LockfileFiles,
+                        Some(PathBuf::from(&rel)),
+                        None,
+                        format!(
+                            "`{rel}` is a vibedeps/ slot no lockfile entry claims \
+                             (orphan) — `vibe install` prunes these"
+                        ),
+                    );
+                }
             }
         }
     }
+}
+
+/// Immediate sub-directories of `dir`, sorted for deterministic output.
+fn read_subdirs(dir: &Path) -> Vec<PathBuf> {
+    let mut out: Vec<PathBuf> = match fs::read_dir(dir) {
+        Ok(rd) => rd
+            .filter_map(|e| e.ok())
+            .map(|e| e.path())
+            .filter(|p| p.is_dir())
+            .collect(),
+        Err(_) => Vec::new(),
+    };
+    out.sort();
+    out
 }
 
 fn walk_files(root: &Path) -> Vec<PathBuf> {
@@ -1282,48 +1308,49 @@ url = "https://example/vibespecs"
     }
 
     #[test]
-    fn boot_dir_prefix_collision_is_an_error() {
+    fn boot_dir_accepts_the_loading_model_layout() {
+        // PROP-009 §2.5 retired the `NN-` prefix: the generated INDEX.md
+        // / INLINE.md and any author-named boot file are all valid.
         let project = tempdir().unwrap();
         write_minimal_project(project.path());
-        // Two `10-` boot snippets — collision.
-        fs::write(project.path().join("spec/boot/10-flow-wal.md"), "x").unwrap();
-        fs::write(project.path().join("spec/boot/10-flow-other.md"), "y").unwrap();
+        fs::write(project.path().join("spec/boot/INDEX.md"), "schema = 1\n").unwrap();
+        fs::write(project.path().join("spec/boot/INLINE.md"), "# inline\n").unwrap();
+        fs::write(project.path().join("spec/boot/rules.md"), "# rules\n").unwrap();
         let report = check_project(project.path(), &opts());
         assert!(
-            report
+            !report
                 .findings
                 .iter()
                 .any(|f| f.check == CheckId::BootDirectory && f.severity == Severity::Error),
-            "expected boot prefix collision error; got: {:?}",
+            "the loading-model boot layout must not be flagged; got: {:?}",
             report.findings
         );
     }
 
     #[test]
-    fn boot_dir_bad_filename_is_an_error() {
+    fn boot_dir_non_markdown_file_is_a_warning() {
         let project = tempdir().unwrap();
         write_minimal_project(project.path());
-        // `flow-wal.md` (no NN- prefix) doesn't match the pattern.
-        fs::write(project.path().join("spec/boot/flow-wal.md"), "x").unwrap();
+        fs::write(project.path().join("spec/boot/notes.txt"), "x").unwrap();
         let report = check_project(project.path(), &opts());
         assert!(
             report
                 .findings
                 .iter()
-                .any(|f| f.check == CheckId::BootDirectory
-                    && f.severity == Severity::Error
-                    && f.message.contains("does not match"))
+                .any(|f| f.check == CheckId::BootDirectory && f.severity == Severity::Warning),
+            "a non-markdown file in spec/boot/ must warn; got: {:?}",
+            report.findings
         );
     }
 
     #[test]
-    fn lockfile_files_missing_on_disk_is_an_error() {
+    fn lockfile_files_missing_slot_is_an_error() {
         let project = tempdir().unwrap();
         write_minimal_project(project.path());
         let lockfile = r#"[meta]
 generated_by = "vibe-test"
 generated_at = "2026-05-04T00:00:00Z"
-schema_version = 2
+schema_version = 4
 
 [[package]]
 kind = "flow"
@@ -1331,10 +1358,10 @@ name = "wal"
 version = "0.1.0"
 source_url = "file:///fake"
 content_hash = "sha256:00"
-files_written = ["spec/flows/wal/A.md"]
+files_written = []
 "#;
         fs::write(project.path().join("vibe.lock"), lockfile).unwrap();
-        // Don't create spec/flows/wal/A.md — we want the error.
+        // No vibedeps/flow-wal/0.1.0/ slot on disk — the error.
         let report = check_project(project.path(), &opts());
         assert!(
             report
@@ -1342,25 +1369,23 @@ files_written = ["spec/flows/wal/A.md"]
                 .iter()
                 .any(|f| f.check == CheckId::LockfileFiles
                     && f.severity == Severity::Error
-                    && f.message.contains("missing on disk")),
+                    && f.message.contains("no materialised")),
             "got: {:?}",
             report.findings
         );
     }
 
     #[test]
-    fn lockfile_files_orphan_in_package_subtree_warns() {
+    fn lockfile_files_orphan_vibedeps_slot_warns() {
         let project = tempdir().unwrap();
         write_minimal_project(project.path());
-        // Stray file in spec/flows/ — not in any lockfile entry.
-        fs::create_dir_all(project.path().join("spec/flows/orphan")).unwrap();
-        fs::write(project.path().join("spec/flows/orphan/stray.md"), "x").unwrap();
-        // Empty lockfile (no packages declare anything).
+        // An empty lockfile, but a vibedeps/ slot on disk — orphan.
         fs::write(
             project.path().join("vibe.lock"),
-            "[meta]\ngenerated_by = \"vibe-test\"\ngenerated_at = \"2026-05-04T00:00:00Z\"\nschema_version = 2\n",
+            "[meta]\ngenerated_by = \"vibe-test\"\ngenerated_at = \"2026-05-04T00:00:00Z\"\nschema_version = 4\n",
         )
         .unwrap();
+        fs::create_dir_all(project.path().join("vibedeps/flow-ghost/1.0.0")).unwrap();
         let report = check_project(project.path(), &opts());
         assert!(
             report
@@ -1370,6 +1395,47 @@ files_written = ["spec/flows/wal/A.md"]
                     && f.severity == Severity::Warning
                     && f.message.contains("orphan")),
             "got: {:?}",
+            report.findings
+        );
+    }
+
+    #[test]
+    fn redirect_block_malformed_is_an_error() {
+        let project = tempdir().unwrap();
+        write_minimal_project(project.path());
+        // Two <vibevm> openers — malformed.
+        fs::write(
+            project.path().join("CLAUDE.md"),
+            "<vibevm>\na\n</vibevm>\n<vibevm>\nb\n</vibevm>\n",
+        )
+        .unwrap();
+        let report = check_project(project.path(), &opts());
+        assert!(
+            report
+                .findings
+                .iter()
+                .any(|f| f.check == CheckId::RedirectBlock && f.severity == Severity::Error),
+            "got: {:?}",
+            report.findings
+        );
+    }
+
+    #[test]
+    fn redirect_block_well_formed_is_clean() {
+        let project = tempdir().unwrap();
+        write_minimal_project(project.path());
+        fs::write(
+            project.path().join("CLAUDE.md"),
+            "# my own instructions\n\n<vibevm>\nredirect\n</vibevm>\n",
+        )
+        .unwrap();
+        let report = check_project(project.path(), &opts());
+        assert!(
+            !report
+                .findings
+                .iter()
+                .any(|f| f.check == CheckId::RedirectBlock),
+            "a well-formed block must not be flagged; got: {:?}",
             report.findings
         );
     }
@@ -1481,7 +1547,7 @@ files_written = ["spec/flows/wal/A.md"]
         let pkg = project.join("packages").join("flow").join("test-pkg");
         fs::create_dir_all(&pkg).unwrap();
         fs::write(
-            pkg.join("vibe-package.toml"),
+            pkg.join("vibe.toml"),
             format!(
                 r#"[package]
 name = "test-pkg"
@@ -1545,7 +1611,7 @@ a = []
         let pkg = project.path().join("packages").join("flow").join("test-pkg");
         fs::create_dir_all(&pkg).unwrap();
         fs::write(
-            pkg.join("vibe-package.toml"),
+            pkg.join("vibe.toml"),
             r#"[package]
 name = "test-pkg"
 kind = "flow"
@@ -1582,7 +1648,7 @@ delivery = "lazy-push"
         let pkg = project.path().join("packages").join("flow").join("test-pkg");
         fs::create_dir_all(&pkg).unwrap();
         fs::write(
-            pkg.join("vibe-package.toml"),
+            pkg.join("vibe.toml"),
             r#"[package]
 name = "test-pkg"
 kind = "flow"
@@ -1618,9 +1684,9 @@ files_written = ["spec/missing.md"]
         let project = tempdir().unwrap();
         write_minimal_project(project.path());
         let pkg = project.path().join("packages").join("flow").join("test-pkg");
-        fs::create_dir_all(pkg.join("spec/flows/x")).unwrap();
+        fs::create_dir_all(pkg.join("boot")).unwrap();
         fs::write(
-            pkg.join("vibe-package.toml"),
+            pkg.join("vibe.toml"),
             r#"[package]
 name = "test-pkg"
 kind = "flow"
@@ -1630,12 +1696,13 @@ version = "0.1.0"
 canonical = "en"
 available = ["en", "ru"]
 
-[writes]
-files = ["spec/flows/x/PROTOCOL.md"]
+[boot_snippet]
+source = "boot/x.md"
+category = "flow"
 "#,
         )
         .unwrap();
-        fs::write(pkg.join("spec/flows/x/PROTOCOL.md"), "EN content").unwrap();
+        fs::write(pkg.join("boot/x.md"), "EN content").unwrap();
         // Russian sidecar deliberately missing.
         let report = check_project(project.path(), &opts());
         let warns: Vec<_> = report
@@ -1658,7 +1725,7 @@ files = ["spec/flows/x/PROTOCOL.md"]
         let pkg = project.path().join("packages").join("flow").join("test-pkg");
         fs::create_dir_all(&pkg).unwrap();
         fs::write(
-            pkg.join("vibe-package.toml"),
+            pkg.join("vibe.toml"),
             r#"[package]
 name = "test-pkg"
 kind = "flow"
@@ -1707,7 +1774,7 @@ description = "{desc}"
         let pkg = project.path().join("packages").join("flow").join("test-pkg");
         fs::create_dir_all(&pkg).unwrap();
         fs::write(
-            pkg.join("vibe-package.toml"),
+            pkg.join("vibe.toml"),
             r#"[package]
 name = "test-pkg"
 kind = "flow"
@@ -1743,7 +1810,7 @@ path = "a/b/c/d"
         let pkg = project.path().join("packages").join("flow").join("test-pkg");
         fs::create_dir_all(&pkg).unwrap();
         fs::write(
-            pkg.join("vibe-package.toml"),
+            pkg.join("vibe.toml"),
             r#"[package]
 name = "test-pkg"
 kind = "flow"
@@ -1787,9 +1854,9 @@ description = "{desc}"
         let project = tempdir().unwrap();
         write_minimal_project(project.path());
         let pkg = project.path().join("packages").join("flow").join("test-pkg");
-        fs::create_dir_all(pkg.join("spec/flows/x")).unwrap();
+        fs::create_dir_all(pkg.join("boot")).unwrap();
         fs::write(
-            pkg.join("vibe-package.toml"),
+            pkg.join("vibe.toml"),
             r#"[package]
 name = "test-pkg"
 kind = "flow"
@@ -1799,13 +1866,14 @@ version = "0.1.0"
 canonical = "en"
 available = ["en", "ru"]
 
-[writes]
-files = ["spec/flows/x/PROTOCOL.md"]
+[boot_snippet]
+source = "boot/x.md"
+category = "flow"
 "#,
         )
         .unwrap();
-        fs::write(pkg.join("spec/flows/x/PROTOCOL.md"), "EN content").unwrap();
-        fs::write(pkg.join("spec/flows/x/PROTOCOL.ru.md"), "RU content").unwrap();
+        fs::write(pkg.join("boot/x.md"), "EN content").unwrap();
+        fs::write(pkg.join("boot/x.ru.md"), "RU content").unwrap();
         let report = check_project(project.path(), &opts());
         let i18n_findings: Vec<_> = report
             .findings
