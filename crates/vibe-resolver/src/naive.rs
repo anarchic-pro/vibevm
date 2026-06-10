@@ -3,7 +3,7 @@
 //! Single pass, no backtracking. See [`crate`] module docs for the
 //! pinned limitations and when to upgrade to a SAT-style solver.
 
-use specmark::spec;
+use specmark::{cell, spec};
 use vibe_core::manifest::Manifest;
 use vibe_core::{CapabilityRef, Group, PackageRef, VersionSpec};
 
@@ -27,6 +27,7 @@ fn require_group(pkgref: &PackageRef) -> Result<&Group, SolveError> {
 }
 
 /// DFS solver over a [`DepProvider`].
+#[cell(seam = "DepSolver", variant = "naive", flag = "solver")]
 #[spec(implements = "spec://vibevm/modules/vibe-resolver/PROP-003#solver-upgrade")]
 #[spec(
     deviates = "spec://vibevm/modules/vibe-registry/PROP-002#solver",

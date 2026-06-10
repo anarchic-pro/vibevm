@@ -7,7 +7,7 @@
 //! through `git archive` (no clone) for registry-served packages and
 //! through the same shallow primitive for overrides.
 
-use specmark::spec;
+use specmark::{cell, spec};
 use vibe_core::manifest::Manifest;
 use vibe_core::{Group, PackageRef};
 use vibe_registry::{MultiRegistryResolver, RegistryError};
@@ -15,6 +15,7 @@ use vibe_registry::{MultiRegistryResolver, RegistryError};
 use crate::{DepProvider, DepProviderError};
 
 /// `DepProvider` impl backed by a [`MultiRegistryResolver`].
+#[cell(seam = "DepProvider", variant = "multi-registry", flag = "provider")]
 #[spec(implements = "spec://vibevm/modules/vibe-registry/PROP-002#solver")]
 pub struct MultiRegistryProvider<'a> {
     resolver: &'a MultiRegistryResolver,
