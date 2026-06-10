@@ -142,10 +142,42 @@ fn fence_mask(lines: &[&str]) -> Vec<bool> {
     mask
 }
 
+/// The canonical citation path used inside `spec://` URIs — the house
+/// style every existing citation in the repo already uses (CLAUDE.md:
+/// `spec://vibevm/common/PROP-000#commits`): relative to `spec/`, the
+/// `.md` extension stripped, and a filename carrying a document id
+/// truncated to it (`modules/vibe-resolver/PROP-003-dep-evolution.md`
+/// → `modules/vibe-resolver/PROP-003`). Files without a document id
+/// keep their full stem (`boot/00-core`, `WAL`).
+pub fn canonical_doc_path(file: &str) -> String {
+    let rel = file.strip_prefix("spec/").unwrap_or(file);
+    let (dir, name) = match rel.rsplit_once('/') {
+        Some((d, n)) => (Some(d), n),
+        None => (None, rel),
+    };
+    let stem = name.strip_suffix(".md").unwrap_or(name);
+    let mut parts = stem.split('-');
+    let id = match (parts.next(), parts.next()) {
+        (Some(kind @ ("PROP" | "FEAT")), Some(num))
+            if !num.is_empty() && num.chars().all(|c| c.is_ascii_digit()) =>
+        {
+            Some(format!("{kind}-{num}"))
+        }
+        _ => None,
+    };
+    let canonical_name = id.unwrap_or_else(|| stem.to_string());
+    match dir {
+        Some(d) => format!("{d}/{canonical_name}"),
+        None => canonical_name,
+    }
+}
+
 /// Parse one markdown document into units + warnings.
 ///
-/// `doc_path` is the forward-slash repo-relative path used in URIs.
-pub fn parse_units(doc_path: &str, text: &str) -> (Vec<SpecUnit>, Vec<Warning>) {
+/// `file` is the forward-slash repo-relative path on disk; the URI
+/// doc-path is derived via [`canonical_doc_path`].
+pub fn parse_units(file: &str, text: &str) -> (Vec<SpecUnit>, Vec<Warning>) {
+    let doc_path = canonical_doc_path(file);
     let lines: Vec<&str> = text.lines().collect();
     let fenced = fence_mask(&lines);
     let mut units = Vec::new();
@@ -168,7 +200,7 @@ pub fn parse_units(doc_path: &str, text: &str) -> (Vec<SpecUnit>, Vec<Warning>) 
             warnings.push(Warning {
                 code: "invalid-anchor".to_string(),
                 message: format!("anchor `{{#{anchor}}}` is not kebab-case; unit skipped"),
-                file: doc_path.to_string(),
+                file: file.to_string(),
                 line: heading_line_no,
             });
             i += 1;
@@ -181,7 +213,7 @@ pub fn parse_units(doc_path: &str, text: &str) -> (Vec<SpecUnit>, Vec<Warning>) 
                     "anchor `{{#{anchor}}}` already used earlier in this file — \
                      spec://…#{anchor} is ambiguous"
                 ),
-                file: doc_path.to_string(),
+                file: file.to_string(),
                 line: heading_line_no,
             });
         } else {
@@ -224,7 +256,7 @@ pub fn parse_units(doc_path: &str, text: &str) -> (Vec<SpecUnit>, Vec<Warning>) 
                 Err(msg) => warnings.push(Warning {
                     code: "malformed-kind-line".to_string(),
                     message: msg,
-                    file: doc_path.to_string(),
+                    file: file.to_string(),
                     line: (i + 1 + off + 1) as u32,
                 }),
             }
@@ -232,7 +264,8 @@ pub fn parse_units(doc_path: &str, text: &str) -> (Vec<SpecUnit>, Vec<Warning>) 
 
         units.push(SpecUnit {
             uri: format!("spec://{SPEC_PACKAGE}/{doc_path}#{anchor}"),
-            docPath: doc_path.to_string(),
+            docPath: doc_path.clone(),
+            file: file.to_string(),
             anchor,
             heading,
             contentHash: content_hash(&span_text),
@@ -265,17 +298,17 @@ pub fn scan_spec_tree(root: &Path) -> (Vec<SpecUnit>, Vec<Warning>) {
             continue;
         }
         let rel = path.strip_prefix(root).unwrap_or(path);
-        let doc_path = fwd(rel);
+        let file_rel = fwd(rel);
         match std::fs::read_to_string(path) {
             Ok(text) => {
-                let (mut u, mut w) = parse_units(&doc_path, &text);
+                let (mut u, mut w) = parse_units(&file_rel, &text);
                 units.append(&mut u);
                 warnings.append(&mut w);
             }
             Err(e) => warnings.push(Warning {
                 code: "unreadable-file".to_string(),
                 message: format!("could not read: {e}"),
-                file: doc_path,
+                file: file_rel,
                 line: 0,
             }),
         }
@@ -303,7 +336,9 @@ mod tests {
         assert!(warnings.is_empty(), "{}", fmt_warnings(&warnings));
         assert_eq!(units.len(), 3);
         assert_eq!(units[0].anchor, "root");
-        assert_eq!(units[0].uri, format!("spec://vibevm/{DOC}#root"));
+        assert_eq!(units[0].uri, "spec://vibevm/test/DOC#root");
+        assert_eq!(units[0].docPath, "test/DOC");
+        assert_eq!(units[0].file, DOC);
         assert_eq!(units[0].line, 1);
         // The root unit spans the whole document (no same-or-higher
         // heading follows); the sub unit ends before `## Next`.

@@ -18,6 +18,7 @@
 //! Design rule inherited from B5 (monotone utility): scanners degrade —
 //! an unparseable file becomes a warning entry, never a hard error.
 
+pub mod explain;
 pub mod index;
 pub mod mdspec;
 pub mod rscan;

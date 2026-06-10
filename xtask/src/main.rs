@@ -81,6 +81,32 @@ enum Cmd {
         #[arg(long, default_value = "terraform/registry/debt.json")]
         debt: String,
     },
+
+    /// Traceability queries over the specmap (PROP-014 §2.6). Pilot
+    /// home: promotion to `vibe trace` is a Phase 4 decision.
+    Trace {
+        #[command(subcommand)]
+        cmd: TraceCmd,
+    },
+}
+
+#[derive(Subcommand, Debug)]
+enum TraceCmd {
+    /// Render the traceability subgraph around a code symbol or a
+    /// `spec://` URI.
+    Explain {
+        /// A module-qualified symbol (exact or unique suffix), or a
+        /// `spec://` unit URI.
+        target: String,
+
+        /// Deterministic structured text rendering (the default).
+        #[arg(long)]
+        text: bool,
+
+        /// Raw subgraph as JSON (agent-friendly).
+        #[arg(long, conflicts_with = "text")]
+        json: bool,
+    },
 }
 
 fn main() -> Result<()> {
@@ -91,7 +117,24 @@ fn main() -> Result<()> {
         Cmd::Specmap { check } => run_specmap(check),
         Cmd::TestGate { baseline } => run_test_gate(&baseline),
         Cmd::Tripwire { base, debt } => run_tripwire(base.as_deref(), &debt),
+        Cmd::Trace {
+            cmd: TraceCmd::Explain { target, json, .. },
+        } => run_trace_explain(&target, json),
     }
+}
+
+fn run_trace_explain(target: &str, json: bool) -> Result<()> {
+    let root = repo_root()?;
+    // Build fresh in-memory: explain answers for the tree as it is,
+    // never for a stale committed artefact.
+    let map = specmap_core::index::build(&root);
+    if json {
+        let v = specmap_core::explain::explain_json(&map, target)?;
+        println!("{}", serde_json::to_string_pretty(&v)?);
+    } else {
+        print!("{}", specmap_core::explain::explain_text(&map, target)?);
+    }
+    Ok(())
 }
 
 fn run_specmap(check: bool) -> Result<()> {
