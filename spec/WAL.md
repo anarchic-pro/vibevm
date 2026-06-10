@@ -1,5 +1,5 @@
 # WAL — Project Continuation State
-_Updated: 2026-06-10 (the Big Refactoring begins — all work moves to branch `new` until it completes. Prior state: M1.19 qualified naming SHIPPED 2026-05-22; the canonical GitHub `vibespecs` registry org migrated to the `fqdn` shape; PROP-013 — the periodic health audit — established, seed inventory in `AUDIT.md`.)_
+_Updated: 2026-06-10, session-end checkpoint (the Big Refactoring on branch `new`: Phases −1 / 0 / 1 of the terraform playbook DONE incl. the drift drill; Phase 2 staged — mining done, the crate sweep deliberately left for a fresh context. Cold-resume: `CONTINUE.md`. Prior state: M1.19 qualified naming SHIPPED 2026-05-22; PROP-013 established.)_
 
 ## Current phase
 
@@ -87,12 +87,21 @@ full `self-check.sh` green. Tripwire on the change set: DBT-0011 fired
 (`touch:crates/vibe-resolver/**`) — addressed: tags only, solver debt
 untouched.
 
-**Next: Phase 2 — backfill `vibe-resolver`** (playbook §phase2): mine
-the latent `spec://` corpus from commit bodies, the bounded crate sweep
-producing `terraform/specmap-proposals.json` (proposals only, no source
-edits), owner-approved affirmation passes, then the ratchet flips
-blocking for `vibe-resolver`. Before it: the owner's in-chat
-confirmation of the pilot's three judgment calls (PHASE1-PILOT.md §1).
+**Phase 2 — backfill `vibe-resolver`: STARTED (2026-06-10), staged for
+the next session.** The latent-corpus mining is done (4 of 106
+`spec://`-citing commits touched the resolver) and the crate surface is
+surveyed — both results are written into `CONTINUE.md` §"Phase 2
+staging data" so the sweep does not redo them. The sweep itself
+(`terraform/specmap-proposals.json`, proposals only, ≤3 edges/item,
+evidence quotes from both sides) was deliberately left whole for a
+fresh context window. After the proposals: the owner APPROVE pass in
+conversation (hard gate per PROP-014 §2.7), then the affirmation
+commits, then the ratchet decision. Also this leg: the owner dropped
+three C++ guides + README updates into `spec/neworder/` — committed
+`630ba3b` (the DBT-0016 tripwire watch caught them again); README now
+records a pending PROP-014 amendment (external read-only `misra://`
+namespaces) for a later phase. Owner inputs still pending: the pilot's
+three judgment calls (PHASE1-PILOT.md §1) and the Phase 0 CI decision.
 
 **M1.19 — qualified package naming (PROP-008): SHIPPED 2026-05-22, under MFBT.** The qualified-naming refactor — [PROP-008](modules/vibe-registry/PROP-008-qualified-naming.md), design lore in [`spec/design/workspace-and-qualified-naming.md`](design/workspace-and-qualified-naming.md) — is **complete**: all eight phases on `main`, `bash tools/self-check.sh` green on all four steps. Exhaustive per-phase detail is in `CHANGELOG.md`'s M1.19 block and PROP-008 §7.
 
