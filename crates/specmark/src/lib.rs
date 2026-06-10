@@ -20,7 +20,7 @@
 
 use proc_macro::TokenStream;
 use quote::quote;
-use specmark_grammar::{EdgeSpec, SpecArgs, UriArgs};
+use specmark_grammar::{CellArgs, EdgeSpec, SpecArgs, UriArgs};
 
 /// Render the rustdoc line a tag injects.
 fn doc_line(edge: &EdgeSpec) -> String {
@@ -90,5 +90,33 @@ pub fn scope(input: TokenStream) -> TokenStream {
     match syn::parse::<UriArgs>(input) {
         Ok(_) => TokenStream::new(),
         Err(err) => err.to_compile_error().into(),
+    }
+}
+
+/// `#[cell(seam = "…", variant = "…" [, replaces = "…"] [, flag = "…"])]`
+/// — the cell manifest (GUIDE-RUST §1): one module behind one seam,
+/// registered in one place, selected by at most one flag. Inert like
+/// `#[spec]`; consumers are `cargo xtask conform-lite`'s structure
+/// checks. A `replaces` key obliges a differential oracle against the
+/// named variant (GUIDE-RUST §7, R-040).
+#[proc_macro_attribute]
+pub fn cell(attr: TokenStream, item: TokenStream) -> TokenStream {
+    match syn::parse::<CellArgs>(attr) {
+        Ok(args) => {
+            let mut doc = format!("Cell: seam `{}`, variant `{}`", args.seam, args.variant);
+            if let Some(replaces) = &args.replaces {
+                doc.push_str(&format!(", replaces `{replaces}`"));
+            }
+            if let Some(flag) = &args.flag {
+                doc.push_str(&format!(", flag `{flag}`"));
+            }
+            let item2: proc_macro2::TokenStream = item.into();
+            quote! {
+                #[doc = #doc]
+                #item2
+            }
+            .into()
+        }
+        Err(err) => emit_error(err, item),
     }
 }

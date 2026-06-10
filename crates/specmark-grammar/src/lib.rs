@@ -336,6 +336,82 @@ impl UriArgs {
     }
 }
 
+/// Argument grammar of `#[cell(...)]` — the cell manifest carried as a
+/// structured attribute on the cell's root item (GUIDE-RUST §1; a
+/// dedicated `cell.toml` is a later promotion). `seam` and `variant`
+/// are mandatory; `replaces` and `flag` are optional. `replaces`
+/// obliges a differential oracle against the named variant
+/// (GUIDE-RUST §7, R-040).
+#[derive(Debug, Clone)]
+pub struct CellArgs {
+    pub seam: String,
+    pub variant: String,
+    pub replaces: Option<String>,
+    pub flag: Option<String>,
+}
+
+impl Parse for CellArgs {
+    fn parse(input: ParseStream) -> syn::Result<Self> {
+        let mut seam: Option<String> = None;
+        let mut variant: Option<String> = None;
+        let mut replaces: Option<String> = None;
+        let mut flag: Option<String> = None;
+        let mut first = true;
+        while !input.is_empty() {
+            if !first {
+                input.parse::<Token![,]>()?;
+                if input.is_empty() {
+                    break; // tolerate a trailing comma
+                }
+            }
+            first = false;
+            let key: Ident = input.parse()?;
+            input.parse::<Token![=]>()?;
+            let lit: LitStr = input.parse()?;
+            let value = lit.value();
+            if value.trim().is_empty() {
+                return Err(syn::Error::new(lit.span(), "cell keys must not be empty"));
+            }
+            let slot = match key.to_string().as_str() {
+                "seam" => &mut seam,
+                "variant" => &mut variant,
+                "replaces" => &mut replaces,
+                "flag" => &mut flag,
+                other => {
+                    return Err(syn::Error::new(
+                        key.span(),
+                        format!(
+                            "unknown cell key `{other}`; expected seam, variant, replaces, flag"
+                        ),
+                    ));
+                }
+            };
+            if slot.is_some() {
+                return Err(syn::Error::new(
+                    key.span(),
+                    format!("duplicate `{key}` key"),
+                ));
+            }
+            *slot = Some(value);
+        }
+        let seam = seam.ok_or_else(|| {
+            syn::Error::new(Span::call_site(), "`#[cell(...)]` requires `seam = \"…\"`")
+        })?;
+        let variant = variant.ok_or_else(|| {
+            syn::Error::new(
+                Span::call_site(),
+                "`#[cell(...)]` requires `variant = \"…\"`",
+            )
+        })?;
+        Ok(CellArgs {
+            seam,
+            variant,
+            replaces,
+            flag,
+        })
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -440,6 +516,32 @@ mod tests {
         let e = s.into_scope_edge();
         assert_eq!(e.verb, Verb::Implements);
         assert_eq!(e.r, None);
+    }
+
+    #[test]
+    fn cell_args_happy_path_and_rejections() {
+        let ok: CellArgs = syn::parse2(
+            quote! { seam = "DepSolver", variant = "sat", replaces = "naive", flag = "solver" },
+        )
+        .unwrap();
+        assert_eq!(ok.seam, "DepSolver");
+        assert_eq!(ok.variant, "sat");
+        assert_eq!(ok.replaces.as_deref(), Some("naive"));
+        assert_eq!(ok.flag.as_deref(), Some("solver"));
+
+        let minimal: CellArgs =
+            syn::parse2(quote! { seam = "DepProvider", variant = "local" }).unwrap();
+        assert_eq!(minimal.replaces, None);
+        assert_eq!(minimal.flag, None);
+
+        let err = syn::parse2::<CellArgs>(quote! { variant = "sat" }).unwrap_err();
+        assert!(err.to_string().contains("requires `seam"), "{err}");
+        let err = syn::parse2::<CellArgs>(quote! { seam = "X", variant = "y", colour = "red" })
+            .unwrap_err();
+        assert!(err.to_string().contains("unknown cell key"), "{err}");
+        let err =
+            syn::parse2::<CellArgs>(quote! { seam = "X", variant = "y", seam = "Z" }).unwrap_err();
+        assert!(err.to_string().contains("duplicate"), "{err}");
     }
 
     #[test]
