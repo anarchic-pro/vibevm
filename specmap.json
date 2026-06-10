@@ -199,43 +199,50 @@
     {
       "crate_name": "vibe-resolver",
       "file": "crates/vibe-resolver/src/conditional.rs",
+      "item_kind": "enum",
+      "line": 81,
+      "symbol": "vibe_resolver::conditional::PredicateError"
+    },
+    {
+      "crate_name": "vibe-resolver",
+      "file": "crates/vibe-resolver/src/conditional.rs",
       "item_kind": "fn",
-      "line": 150,
+      "line": 154,
       "symbol": "vibe_resolver::conditional::tests::evaluates_against_present"
     },
     {
       "crate_name": "vibe-resolver",
       "file": "crates/vibe-resolver/src/conditional.rs",
       "item_kind": "fn",
-      "line": 163,
+      "line": 167,
       "symbol": "vibe_resolver::conditional::tests::evaluates_against_provides"
     },
     {
       "crate_name": "vibe-resolver",
       "file": "crates/vibe-resolver/src/conditional.rs",
       "item_kind": "fn",
-      "line": 134,
+      "line": 138,
       "symbol": "vibe_resolver::conditional::tests::flags_unsupported_richer_forms"
     },
     {
       "crate_name": "vibe-resolver",
       "file": "crates/vibe-resolver/src/conditional.rs",
       "item_kind": "fn",
-      "line": 98,
+      "line": 102,
       "symbol": "vibe_resolver::conditional::tests::parses_simple_present_predicate"
     },
     {
       "crate_name": "vibe-resolver",
       "file": "crates/vibe-resolver/src/conditional.rs",
       "item_kind": "fn",
-      "line": 108,
+      "line": 112,
       "symbol": "vibe_resolver::conditional::tests::parses_with_whitespace"
     },
     {
       "crate_name": "vibe-resolver",
       "file": "crates/vibe-resolver/src/conditional.rs",
       "item_kind": "fn",
-      "line": 118,
+      "line": 122,
       "symbol": "vibe_resolver::conditional::tests::rejects_malformed"
     },
     {
@@ -737,8 +744,17 @@
     },
     {
       "file": "crates/vibe-resolver/src/conditional.rs",
+      "from_symbol": "vibe_resolver::conditional::PredicateError",
+      "line": 82,
+      "provenance": "authored",
+      "uri": "spec://vibevm/modules/vibe-resolver/PROP-003#req-conditional-grammar",
+      "verb": "implements",
+      "pinned_r": 1
+    },
+    {
+      "file": "crates/vibe-resolver/src/conditional.rs",
       "from_symbol": "vibe_resolver::conditional::tests::evaluates_against_present",
-      "line": 151,
+      "line": 155,
       "provenance": "authored",
       "uri": "spec://vibevm/modules/vibe-resolver/PROP-003#req-conditional-host-invariance",
       "verb": "verifies",
@@ -747,7 +763,7 @@
     {
       "file": "crates/vibe-resolver/src/conditional.rs",
       "from_symbol": "vibe_resolver::conditional::tests::evaluates_against_provides",
-      "line": 164,
+      "line": 168,
       "provenance": "authored",
       "uri": "spec://vibevm/modules/vibe-resolver/PROP-003#req-conditional-host-invariance",
       "verb": "verifies",
@@ -756,7 +772,7 @@
     {
       "file": "crates/vibe-resolver/src/conditional.rs",
       "from_symbol": "vibe_resolver::conditional::tests::flags_unsupported_richer_forms",
-      "line": 135,
+      "line": 139,
       "provenance": "authored",
       "uri": "spec://vibevm/modules/vibe-resolver/PROP-003#req-conditional-grammar",
       "verb": "verifies",
@@ -765,7 +781,7 @@
     {
       "file": "crates/vibe-resolver/src/conditional.rs",
       "from_symbol": "vibe_resolver::conditional::tests::parses_simple_present_predicate",
-      "line": 99,
+      "line": 103,
       "provenance": "authored",
       "uri": "spec://vibevm/modules/vibe-resolver/PROP-003#req-conditional-grammar",
       "verb": "verifies",
@@ -774,7 +790,7 @@
     {
       "file": "crates/vibe-resolver/src/conditional.rs",
       "from_symbol": "vibe_resolver::conditional::tests::parses_with_whitespace",
-      "line": 109,
+      "line": 113,
       "provenance": "authored",
       "uri": "spec://vibevm/modules/vibe-resolver/PROP-003#req-conditional-grammar",
       "verb": "verifies",
@@ -783,7 +799,7 @@
     {
       "file": "crates/vibe-resolver/src/conditional.rs",
       "from_symbol": "vibe_resolver::conditional::tests::rejects_malformed",
-      "line": 119,
+      "line": 123,
       "provenance": "authored",
       "uri": "spec://vibevm/modules/vibe-resolver/PROP-003#req-conditional-grammar",
       "verb": "verifies",
@@ -4172,6 +4188,240 @@
       "heading": "9. Doc layer",
       "line": 145,
       "uri": "spec://vibevm/neworder/GUIDE-GO-v0.1#docs"
+    },
+    {
+      "anchor": "baseline",
+      "content_hash": "",
+      "doc_path": "neworder/GUIDE-JAVA-GRAALVM-v0.1",
+      "file": "spec/neworder/GUIDE-JAVA-GRAALVM-v0.1.md",
+      "heading": "§0 additions — baseline",
+      "line": 11,
+      "uri": "spec://vibevm/neworder/GUIDE-JAVA-GRAALVM-v0.1#baseline"
+    },
+    {
+      "anchor": "cells",
+      "content_hash": "",
+      "doc_path": "neworder/GUIDE-JAVA-GRAALVM-v0.1",
+      "file": "spec/neworder/GUIDE-JAVA-GRAALVM-v0.1.md",
+      "heading": "§1' — cells and build-time initialization",
+      "line": 17,
+      "uri": "spec://vibevm/neworder/GUIDE-JAVA-GRAALVM-v0.1#cells"
+    },
+    {
+      "anchor": "flags",
+      "content_hash": "",
+      "doc_path": "neworder/GUIDE-JAVA-GRAALVM-v0.1",
+      "file": "spec/neworder/GUIDE-JAVA-GRAALVM-v0.1.md",
+      "heading": "§3' — flags and the AOT tier migration",
+      "line": 25,
+      "uri": "spec://vibevm/neworder/GUIDE-JAVA-GRAALVM-v0.1#flags"
+    },
+    {
+      "anchor": "magic",
+      "content_hash": "",
+      "doc_path": "neworder/GUIDE-JAVA-GRAALVM-v0.1",
+      "file": "spec/neworder/GUIDE-JAVA-GRAALVM-v0.1.md",
+      "heading": "§4'/§6' — magic accounting",
+      "line": 33,
+      "uri": "spec://vibevm/neworder/GUIDE-JAVA-GRAALVM-v0.1#magic"
+    },
+    {
+      "anchor": "risks",
+      "content_hash": "",
+      "doc_path": "neworder/GUIDE-JAVA-GRAALVM-v0.1",
+      "file": "spec/neworder/GUIDE-JAVA-GRAALVM-v0.1.md",
+      "heading": "§8' — additional risk rows",
+      "line": 39,
+      "uri": "spec://vibevm/neworder/GUIDE-JAVA-GRAALVM-v0.1#risks"
+    },
+    {
+      "anchor": "baseline",
+      "content_hash": "",
+      "doc_path": "neworder/GUIDE-JAVA-JAKARTA-v0.1",
+      "file": "spec/neworder/GUIDE-JAVA-JAKARTA-v0.1.md",
+      "heading": "§0 additions — baseline",
+      "line": 11,
+      "uri": "spec://vibevm/neworder/GUIDE-JAVA-JAKARTA-v0.1#baseline"
+    },
+    {
+      "anchor": "cdi",
+      "content_hash": "",
+      "doc_path": "neworder/GUIDE-JAVA-JAKARTA-v0.1",
+      "file": "spec/neworder/GUIDE-JAVA-JAKARTA-v0.1.md",
+      "heading": "§1'/§3' — CDI as composition root",
+      "line": 16,
+      "uri": "spec://vibevm/neworder/GUIDE-JAVA-JAKARTA-v0.1#cdi"
+    },
+    {
+      "anchor": "boundary",
+      "content_hash": "",
+      "doc_path": "neworder/GUIDE-JAVA-JAKARTA-v0.1",
+      "file": "spec/neworder/GUIDE-JAVA-JAKARTA-v0.1.md",
+      "heading": "§4' — boundary machinery",
+      "line": 37,
+      "uri": "spec://vibevm/neworder/GUIDE-JAVA-JAKARTA-v0.1#boundary"
+    },
+    {
+      "anchor": "risks",
+      "content_hash": "",
+      "doc_path": "neworder/GUIDE-JAVA-JAKARTA-v0.1",
+      "file": "spec/neworder/GUIDE-JAVA-JAKARTA-v0.1.md",
+      "heading": "§8' — additional risk rows",
+      "line": 43,
+      "uri": "spec://vibevm/neworder/GUIDE-JAVA-JAKARTA-v0.1#risks"
+    },
+    {
+      "anchor": "baseline",
+      "content_hash": "",
+      "doc_path": "neworder/GUIDE-JAVA-SPRING-v0.1",
+      "file": "spec/neworder/GUIDE-JAVA-SPRING-v0.1.md",
+      "heading": "§0 additions — baseline",
+      "line": 11,
+      "uri": "spec://vibevm/neworder/GUIDE-JAVA-SPRING-v0.1#baseline"
+    },
+    {
+      "anchor": "cells",
+      "content_hash": "",
+      "doc_path": "neworder/GUIDE-JAVA-SPRING-v0.1",
+      "file": "spec/neworder/GUIDE-JAVA-SPRING-v0.1.md",
+      "heading": "§1' — cells",
+      "line": 16,
+      "uri": "spec://vibevm/neworder/GUIDE-JAVA-SPRING-v0.1#cells"
+    },
+    {
+      "anchor": "seams",
+      "content_hash": "",
+      "doc_path": "neworder/GUIDE-JAVA-SPRING-v0.1",
+      "file": "spec/neworder/GUIDE-JAVA-SPRING-v0.1.md",
+      "heading": "§2' — seams",
+      "line": 20,
+      "uri": "spec://vibevm/neworder/GUIDE-JAVA-SPRING-v0.1#seams"
+    },
+    {
+      "anchor": "flags",
+      "content_hash": "",
+      "doc_path": "neworder/GUIDE-JAVA-SPRING-v0.1",
+      "file": "spec/neworder/GUIDE-JAVA-SPRING-v0.1.md",
+      "heading": "§3' — registry and flags",
+      "line": 24,
+      "uri": "spec://vibevm/neworder/GUIDE-JAVA-SPRING-v0.1#flags"
+    },
+    {
+      "anchor": "errors",
+      "content_hash": "",
+      "doc_path": "neworder/GUIDE-JAVA-SPRING-v0.1",
+      "file": "spec/neworder/GUIDE-JAVA-SPRING-v0.1.md",
+      "heading": "§4' — errors and proxies",
+      "line": 51,
+      "uri": "spec://vibevm/neworder/GUIDE-JAVA-SPRING-v0.1#errors"
+    },
+    {
+      "anchor": "tests",
+      "content_hash": "",
+      "doc_path": "neworder/GUIDE-JAVA-SPRING-v0.1",
+      "file": "spec/neworder/GUIDE-JAVA-SPRING-v0.1.md",
+      "heading": "§7' — replacement and tests",
+      "line": 58,
+      "uri": "spec://vibevm/neworder/GUIDE-JAVA-SPRING-v0.1#tests"
+    },
+    {
+      "anchor": "risks",
+      "content_hash": "",
+      "doc_path": "neworder/GUIDE-JAVA-SPRING-v0.1",
+      "file": "spec/neworder/GUIDE-JAVA-SPRING-v0.1.md",
+      "heading": "§8' — additional risk rows",
+      "line": 62,
+      "uri": "spec://vibevm/neworder/GUIDE-JAVA-SPRING-v0.1#risks"
+    },
+    {
+      "anchor": "baseline",
+      "content_hash": "",
+      "doc_path": "neworder/GUIDE-JAVA-v0.1",
+      "file": "spec/neworder/GUIDE-JAVA-v0.1.md",
+      "heading": "0. Language baseline",
+      "line": 11,
+      "uri": "spec://vibevm/neworder/GUIDE-JAVA-v0.1#baseline"
+    },
+    {
+      "anchor": "cells",
+      "content_hash": "",
+      "doc_path": "neworder/GUIDE-JAVA-v0.1",
+      "file": "spec/neworder/GUIDE-JAVA-v0.1.md",
+      "heading": "1. Cells",
+      "line": 21,
+      "uri": "spec://vibevm/neworder/GUIDE-JAVA-v0.1#cells"
+    },
+    {
+      "anchor": "seams",
+      "content_hash": "",
+      "doc_path": "neworder/GUIDE-JAVA-v0.1",
+      "file": "spec/neworder/GUIDE-JAVA-v0.1.md",
+      "heading": "2. Seams",
+      "line": 42,
+      "uri": "spec://vibevm/neworder/GUIDE-JAVA-v0.1#seams"
+    },
+    {
+      "anchor": "flags",
+      "content_hash": "",
+      "doc_path": "neworder/GUIDE-JAVA-v0.1",
+      "file": "spec/neworder/GUIDE-JAVA-v0.1.md",
+      "heading": "3. Registry and flags",
+      "line": 49,
+      "uri": "spec://vibevm/neworder/GUIDE-JAVA-v0.1#flags"
+    },
+    {
+      "anchor": "errors",
+      "content_hash": "",
+      "doc_path": "neworder/GUIDE-JAVA-v0.1",
+      "file": "spec/neworder/GUIDE-JAVA-v0.1.md",
+      "heading": "4. Errors as contract",
+      "line": 67,
+      "uri": "spec://vibevm/neworder/GUIDE-JAVA-v0.1#errors"
+    },
+    {
+      "anchor": "specmark",
+      "content_hash": "",
+      "doc_path": "neworder/GUIDE-JAVA-v0.1",
+      "file": "spec/neworder/GUIDE-JAVA-v0.1.md",
+      "heading": "5. specmark carrier",
+      "line": 89,
+      "uri": "spec://vibevm/neworder/GUIDE-JAVA-v0.1#specmark"
+    },
+    {
+      "anchor": "naming",
+      "content_hash": "",
+      "doc_path": "neworder/GUIDE-JAVA-v0.1",
+      "file": "spec/neworder/GUIDE-JAVA-v0.1.md",
+      "heading": "6. Naming (R-020/R-021 bindings)",
+      "line": 102,
+      "uri": "spec://vibevm/neworder/GUIDE-JAVA-v0.1#naming"
+    },
+    {
+      "anchor": "replacement",
+      "content_hash": "",
+      "doc_path": "neworder/GUIDE-JAVA-v0.1",
+      "file": "spec/neworder/GUIDE-JAVA-v0.1.md",
+      "heading": "7. Replacement protocol (R-040 binding)",
+      "line": 107,
+      "uri": "spec://vibevm/neworder/GUIDE-JAVA-v0.1#replacement"
+    },
+    {
+      "anchor": "risks",
+      "content_hash": "",
+      "doc_path": "neworder/GUIDE-JAVA-v0.1",
+      "file": "spec/neworder/GUIDE-JAVA-v0.1.md",
+      "heading": "8. Risk table (what conform must cover for Java)",
+      "line": 111,
+      "uri": "spec://vibevm/neworder/GUIDE-JAVA-v0.1#risks"
+    },
+    {
+      "anchor": "docs",
+      "content_hash": "",
+      "doc_path": "neworder/GUIDE-JAVA-v0.1",
+      "file": "spec/neworder/GUIDE-JAVA-v0.1.md",
+      "heading": "9. Doc layer",
+      "line": 132,
+      "uri": "spec://vibevm/neworder/GUIDE-JAVA-v0.1#docs"
     },
     {
       "anchor": "baseline",
