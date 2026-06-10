@@ -88,6 +88,11 @@ enum Cmd {
         #[command(subcommand)]
         cmd: TraceCmd,
     },
+
+    /// Interim structure lints (PLAYBOOK Phase 3; retired by the
+    /// conform engine in Phase 4): flag-reads-outside-registry (R-001)
+    /// and cell-imports-sibling (R-002). Non-zero exit on findings.
+    ConformLite,
 }
 
 #[derive(Subcommand, Debug)]
@@ -117,6 +122,7 @@ fn main() -> Result<()> {
         Cmd::Specmap { check } => run_specmap(check),
         Cmd::TestGate { baseline } => run_test_gate(&baseline),
         Cmd::Tripwire { base, debt } => run_tripwire(base.as_deref(), &debt),
+        Cmd::ConformLite => run_conform_lite(),
         Cmd::Trace {
             cmd: TraceCmd::Explain { target, json, .. },
         } => run_trace_explain(&target, json),
@@ -192,6 +198,132 @@ fn run_ratchet_gate(root: &std::path::Path, blocking: bool) -> Result<()> {
         );
     }
     Ok(())
+}
+
+/// PLAYBOOK Phase 3 interim lints — deliberately line-oriented T-syn
+/// scans, retired by the Phase 4 conform engine:
+///
+/// - **flag-reads-outside-registry (R-001):** `vibe-cli`'s registry
+///   module is the only place allowed to construct selection cells;
+///   a cell constructor anywhere else in `vibe-cli/src` is a finding.
+/// - **cell-imports-sibling (R-002):** a module carrying a `#[cell]`
+///   manifest never imports another cell module — cells import seams
+///   and core only.
+fn run_conform_lite() -> Result<()> {
+    let root = repo_root()?;
+    let mut findings: Vec<String> = Vec::new();
+
+    // R-001 over vibe-cli/src, registry.rs exempt.
+    let cell_ctors = [
+        "NaiveDepSolver::new(",
+        "LocalRegistryProvider::new(",
+        "MultiRegistryProvider::new(",
+    ];
+    let cli_src = root.join("crates/vibe-cli/src");
+    let mut cli_files = 0usize;
+    for entry in walkdir::WalkDir::new(&cli_src)
+        .sort_by_file_name()
+        .into_iter()
+        .filter_map(Result::ok)
+    {
+        let path = entry.path();
+        if !entry.file_type().is_file()
+            || path.extension().and_then(|e| e.to_str()) != Some("rs")
+            || path.file_name().and_then(|n| n.to_str()) == Some("registry.rs")
+        {
+            continue;
+        }
+        cli_files += 1;
+        let text = std::fs::read_to_string(path)?;
+        for (i, line) in text.lines().enumerate() {
+            for ctor in cell_ctors {
+                if line.contains(ctor) {
+                    findings.push(format!(
+                        "R-001 flag-reads-outside-registry: `{}` constructed at {}:{} — \
+                         cell selection belongs to vibe-cli/src/registry.rs",
+                        ctor.trim_end_matches('('),
+                        path.strip_prefix(&root).unwrap_or(path).display(),
+                        i + 1
+                    ));
+                }
+            }
+        }
+    }
+
+    // R-002: discover cell modules (#[cell(...)] carriers), then flag
+    // any `use` of one cell module from another.
+    let mut cells: Vec<(String, String, std::path::PathBuf)> = Vec::new(); // (crate_ident, module_stem, file)
+    if let Ok(rd) = std::fs::read_dir(root.join("crates")) {
+        for crate_dir in rd
+            .filter_map(Result::ok)
+            .map(|e| e.path())
+            .filter(|p| p.is_dir())
+        {
+            let crate_ident = crate_dir
+                .file_name()
+                .map(|n| n.to_string_lossy().replace('-', "_"))
+                .unwrap_or_default();
+            for entry in walkdir::WalkDir::new(crate_dir.join("src"))
+                .sort_by_file_name()
+                .into_iter()
+                .filter_map(Result::ok)
+            {
+                let path = entry.path();
+                if !entry.file_type().is_file()
+                    || path.extension().and_then(|e| e.to_str()) != Some("rs")
+                {
+                    continue;
+                }
+                let text = std::fs::read_to_string(path)?;
+                // An attribute line, not a doc-comment mention of one.
+                if text.lines().any(|l| l.trim_start().starts_with("#[cell(")) {
+                    let stem = path
+                        .file_stem()
+                        .map(|s| s.to_string_lossy().to_string())
+                        .unwrap_or_default();
+                    cells.push((crate_ident.clone(), stem, path.to_path_buf()));
+                }
+            }
+        }
+    }
+    for (crate_ident, _stem, file) in &cells {
+        let text = std::fs::read_to_string(file)?;
+        for (i, line) in text.lines().enumerate() {
+            for (other_crate, other_stem, other_file) in &cells {
+                if other_file == file {
+                    continue;
+                }
+                let same_crate_import = crate_ident == other_crate
+                    && (line.contains(&format!("use crate::{other_stem}::"))
+                        || line.contains(&format!("use crate::{other_stem};")));
+                let cross_crate_import = line
+                    .contains(&format!("use {other_crate}::{other_stem}::"))
+                    || line.contains(&format!("use {other_crate}::{other_stem};"));
+                if same_crate_import || cross_crate_import {
+                    findings.push(format!(
+                        "R-002 cell-imports-sibling: {}:{} imports cell module `{other_stem}` — \
+                         cells import seams and core only",
+                        file.strip_prefix(&root).unwrap_or(file).display(),
+                        i + 1
+                    ));
+                }
+            }
+        }
+    }
+
+    for f in &findings {
+        eprintln!("  conform-lite: {f}");
+    }
+    if findings.is_empty() {
+        eprintln!(
+            "xtask conform-lite: clean — R-001 over {cli_files} vibe-cli files, \
+             R-002 over {} cell module(s).",
+            cells.len()
+        );
+        Ok(())
+    } else {
+        bail!("conform-lite: {} finding(s)", findings.len());
+    }
 }
 
 fn run_test_gate(baseline_rel: &str) -> Result<()> {

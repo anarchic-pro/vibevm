@@ -2752,6 +2752,7 @@ dependencies = [
  "clap",
  "serde_json",
  "specmap-core",
+ "walkdir",
 ]
 
 [[package]]
