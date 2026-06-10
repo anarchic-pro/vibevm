@@ -352,6 +352,27 @@
     },
     {
       "crate_name": "vibe-resolver",
+      "file": "crates/vibe-resolver/src/multi_registry_provider.rs",
+      "item_kind": "struct",
+      "line": 17,
+      "symbol": "vibe_resolver::multi_registry_provider::MultiRegistryProvider"
+    },
+    {
+      "crate_name": "vibe-resolver",
+      "file": "crates/vibe-resolver/src/multi_registry_provider.rs",
+      "item_kind": "fn",
+      "line": 67,
+      "symbol": "vibe_resolver::multi_registry_provider::MultiRegistryProvider<'a>::fetch_manifest"
+    },
+    {
+      "crate_name": "vibe-resolver",
+      "file": "crates/vibe-resolver/src/multi_registry_provider.rs",
+      "item_kind": "fn",
+      "line": 30,
+      "symbol": "vibe_resolver::multi_registry_provider::MultiRegistryProvider<'a>::resolve_version"
+    },
+    {
+      "crate_name": "vibe-resolver",
       "file": "crates/vibe-resolver/src/naive.rs",
       "item_kind": "struct",
       "line": 29,
@@ -894,6 +915,30 @@
       "line": 16,
       "provenance": "authored",
       "uri": "spec://vibevm/modules/vibe-registry/PROP-002#solver",
+      "verb": "implements"
+    },
+    {
+      "file": "crates/vibe-resolver/src/multi_registry_provider.rs",
+      "from_symbol": "vibe_resolver::multi_registry_provider::MultiRegistryProvider",
+      "line": 18,
+      "provenance": "authored",
+      "uri": "spec://vibevm/modules/vibe-registry/PROP-002#solver",
+      "verb": "implements"
+    },
+    {
+      "file": "crates/vibe-resolver/src/multi_registry_provider.rs",
+      "from_symbol": "vibe_resolver::multi_registry_provider::MultiRegistryProvider<'a>::fetch_manifest",
+      "line": 67,
+      "provenance": "authored",
+      "uri": "spec://vibevm/modules/vibe-registry/PROP-002#redirect",
+      "verb": "implements"
+    },
+    {
+      "file": "crates/vibe-resolver/src/multi_registry_provider.rs",
+      "from_symbol": "vibe_resolver::multi_registry_provider::MultiRegistryProvider<'a>::resolve_version",
+      "line": 30,
+      "provenance": "authored",
+      "uri": "spec://vibevm/modules/vibe-registry/PROP-002#failure-discriminator",
       "verb": "implements"
     },
     {
