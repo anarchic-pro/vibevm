@@ -31,15 +31,43 @@ captured (`terraform/golden/` — 5 hermetic flows / 12 steps, byte-
 deterministic across double runs via `capture.sh`); snapshot in
 `terraform/BASELINE.md`; session log in `terraform/LOG.md`.
 
-**Phase −1 acceptance is pending the owner** (the playbook's own
-acceptance line): disposition of the P1's existence (DBT-0001 — the
-under-tested production git-registry path, already acknowledged via the
-AUDIT seed) and of the five disputed-spec entries' existence (adjudication
-itself can wait). After disposition: **Phase 0 — tooling skeleton**
-(`crates/specmark`, `xtask specmap` / `test-gate` / `tripwire`,
-`schemas/specmap.jtd.json`, CI jobs non-blocking). Note for Phase 0 entry:
-its CI additions sit inside Rule 4's stop-and-ask perimeter — sign-off
-will be requested alongside the Phase 0 plan.
+**Phase −1 acceptance closed (2026-06-10).** The owner confirmed the P1
+disposition and all five disputed-spec existences, and granted in-session
+sanction to edit frozen surfaces. **Four disputes adjudicated immediately**
+(all supersede): PROP-002 naming reconciled to PROP-008 fqdn (`aa54ab4`,
+DBT-0012); boot `00-core.md` / `90-user.md` reconciled to split-host +
+fqdn reality (`0e57f0f`, DBT-0013/0014); PROP-003's duplicate `{#phases}`
+anchor disambiguated — §3.2 is now `{#solver-phases}` (`d090cb0`,
+DBT-0015). DBT-0016 stays open by design (feeds the package v0.2).
+
+**Phase 0 — tooling skeleton: DONE (2026-06-10).** Three new crates —
+`specmark-grammar` (the single source of the PROP-014 §2.3 tag grammar),
+`specmark` (inert `#[spec]` / `#[verifies]` / `scope!` proc-macros:
+compile-time validation, rustdoc `Spec:` injection, item unchanged),
+`specmap-core` (markdown unit parser with kind/revision/status lines and
+CRLF-invariant hashes; syn-based attribute scanner; canonical index;
+xfail-strict test-gate engine; debt tripwires) — plus
+`schemas/specmap.jtd.json` → `vibe-wire` types, and three xtask
+subcommands: `specmap [--check]`, `test-gate`, `tripwire`. The first
+committed `specmap.json` inventories **408 spec units** (zero production
+edges yet — Phase 1 lands the first). Acceptance green: `specmap` +
+`--check` ×2 deterministic; `test-gate` 1044 parsed / 0 failed / 3
+skipped (the quarantined live trio), xfail-strict; `cargo test -p
+specmark` green; full `self-check.sh` green with `vibe check` 0/0/0.
+**The CI bullet is deferred with cause:** the repo has no CI
+infrastructure at all, so introducing it is a Rule 4 owner decision, not
+a playbook line item — acceptance commands run locally. Same-day field
+results: `tripwire` caught the owner-dropped `GUIDE-TYPESCRIPT` /
+`GUIDE-PYTHON` files via DBT-0016's watch (now committed, README map
+updated), and the unit parser gained fenced-block exclusion after two
+sample headings from `GUIDE-SPEC-AUTHORING` leaked into the inventory.
+
+**Next: Phase 1 — pilot** (PROP-003 §2.6.1 × `vibe-resolver/src/conditional.rs`):
+additions-only `req` unit markers in PROP-003 (opened as a PR for owner
+review — not merged without approval), tags on `ConditionalPredicate` /
+`parse`, the recorded `deviates` for boolean composition, `#[verifies]`
+on tests, the drift drill (r-bump → suspect → re-affirm; typo → hash
+warning), and `xtask trace explain` over the pilot subgraph.
 
 **M1.19 — qualified package naming (PROP-008): SHIPPED 2026-05-22, under MFBT.** The qualified-naming refactor — [PROP-008](modules/vibe-registry/PROP-008-qualified-naming.md), design lore in [`spec/design/workspace-and-qualified-naming.md`](design/workspace-and-qualified-naming.md) — is **complete**: all eight phases on `main`, `bash tools/self-check.sh` green on all four steps. Exhaustive per-phase detail is in `CHANGELOG.md`'s M1.19 block and PROP-008 §7.
 
