@@ -368,14 +368,14 @@
       "crate_name": "vibe-resolver",
       "file": "crates/vibe-resolver/src/multi_registry_provider.rs",
       "item_kind": "fn",
-      "line": 67,
+      "line": 68,
       "symbol": "vibe_resolver::multi_registry_provider::MultiRegistryProvider<'a>::fetch_manifest"
     },
     {
       "crate_name": "vibe-resolver",
       "file": "crates/vibe-resolver/src/multi_registry_provider.rs",
       "item_kind": "fn",
-      "line": 30,
+      "line": 31,
       "symbol": "vibe_resolver::multi_registry_provider::MultiRegistryProvider<'a>::resolve_version"
     },
     {
@@ -389,78 +389,85 @@
       "crate_name": "vibe-resolver",
       "file": "crates/vibe-resolver/src/naive.rs",
       "item_kind": "fn",
-      "line": 53,
+      "line": 54,
       "symbol": "vibe_resolver::naive::NaiveDepSolver<P>::solve"
     },
     {
       "crate_name": "vibe-resolver",
       "file": "crates/vibe-resolver/src/naive.rs",
       "item_kind": "fn",
-      "line": 578,
+      "line": 579,
       "symbol": "vibe_resolver::naive::tests::capability_requires_satisfied_by_already_seen_provider"
     },
     {
       "crate_name": "vibe-resolver",
       "file": "crates/vibe-resolver/src/naive.rs",
       "item_kind": "fn",
-      "line": 618,
+      "line": 619,
       "symbol": "vibe_resolver::naive::tests::capability_requires_self_satisfaction"
     },
     {
       "crate_name": "vibe-resolver",
       "file": "crates/vibe-resolver/src/naive.rs",
       "item_kind": "fn",
-      "line": 645,
+      "line": 646,
       "symbol": "vibe_resolver::naive::tests::capability_requires_unmet_errors"
     },
     {
       "crate_name": "vibe-resolver",
       "file": "crates/vibe-resolver/src/naive.rs",
       "item_kind": "fn",
-      "line": 769,
+      "line": 770,
       "symbol": "vibe_resolver::naive::tests::dependencies_are_exact_pinned_after_solve"
     },
     {
       "crate_name": "vibe-resolver",
       "file": "crates/vibe-resolver/src/naive.rs",
       "item_kind": "fn",
-      "line": 543,
+      "line": 544,
       "symbol": "vibe_resolver::naive::tests::detects_conflicts_declaration"
     },
     {
       "crate_name": "vibe-resolver",
       "file": "crates/vibe-resolver/src/naive.rs",
       "item_kind": "fn",
-      "line": 518,
+      "line": 519,
       "symbol": "vibe_resolver::naive::tests::detects_version_conflict_across_paths"
     },
     {
       "crate_name": "vibe-resolver",
       "file": "crates/vibe-resolver/src/naive.rs",
       "item_kind": "fn",
-      "line": 686,
+      "line": 687,
       "symbol": "vibe_resolver::naive::tests::obsoletes_drops_obsolete_entry"
     },
     {
       "crate_name": "vibe-resolver",
       "file": "crates/vibe-resolver/src/naive.rs",
       "item_kind": "fn",
-      "line": 720,
+      "line": 721,
       "symbol": "vibe_resolver::naive::tests::requires_any_picks_first_alternative"
     },
     {
       "crate_name": "vibe-resolver",
       "file": "crates/vibe-resolver/src/naive.rs",
       "item_kind": "fn",
-      "line": 748,
+      "line": 749,
       "symbol": "vibe_resolver::naive::tests::root_dependencies_marked"
     },
     {
       "crate_name": "vibe-resolver",
       "file": "crates/vibe-resolver/src/naive.rs",
       "item_kind": "fn",
-      "line": 672,
+      "line": 673,
       "symbol": "vibe_resolver::naive::tests::unknown_package_propagates"
+    },
+    {
+      "crate_name": "vibe-resolver",
+      "file": "crates/vibe-resolver/tests/differential_oracle.rs",
+      "item_kind": "fn",
+      "line": 119,
+      "symbol": "vibe_resolver::tests::differential_oracle::provider_pair_agrees_on_solvable_inputs"
     }
   ],
   "edges": [
@@ -928,7 +935,7 @@
     {
       "file": "crates/vibe-resolver/src/local_registry_provider.rs",
       "from_symbol": "vibe_resolver::local_registry_provider::LocalRegistryProvider",
-      "line": 16,
+      "line": 17,
       "provenance": "authored",
       "uri": "spec://vibevm/modules/vibe-registry/PROP-002#solver",
       "verb": "implements"
@@ -936,7 +943,7 @@
     {
       "file": "crates/vibe-resolver/src/multi_registry_provider.rs",
       "from_symbol": "vibe_resolver::multi_registry_provider::MultiRegistryProvider",
-      "line": 18,
+      "line": 19,
       "provenance": "authored",
       "uri": "spec://vibevm/modules/vibe-registry/PROP-002#solver",
       "verb": "implements"
@@ -944,7 +951,7 @@
     {
       "file": "crates/vibe-resolver/src/multi_registry_provider.rs",
       "from_symbol": "vibe_resolver::multi_registry_provider::MultiRegistryProvider<'a>::fetch_manifest",
-      "line": 67,
+      "line": 68,
       "provenance": "authored",
       "uri": "spec://vibevm/modules/vibe-registry/PROP-002#redirect",
       "verb": "implements"
@@ -952,7 +959,7 @@
     {
       "file": "crates/vibe-resolver/src/multi_registry_provider.rs",
       "from_symbol": "vibe_resolver::multi_registry_provider::MultiRegistryProvider<'a>::resolve_version",
-      "line": 30,
+      "line": 31,
       "provenance": "authored",
       "uri": "spec://vibevm/modules/vibe-registry/PROP-002#failure-discriminator",
       "verb": "implements"
@@ -960,7 +967,7 @@
     {
       "file": "crates/vibe-resolver/src/naive.rs",
       "from_symbol": "vibe_resolver::naive::NaiveDepSolver",
-      "line": 30,
+      "line": 31,
       "provenance": "authored",
       "uri": "spec://vibevm/modules/vibe-resolver/PROP-003#solver-upgrade",
       "verb": "implements"
@@ -968,7 +975,7 @@
     {
       "file": "crates/vibe-resolver/src/naive.rs",
       "from_symbol": "vibe_resolver::naive::NaiveDepSolver",
-      "line": 31,
+      "line": 32,
       "provenance": "authored",
       "uri": "spec://vibevm/modules/vibe-registry/PROP-002#solver",
       "verb": "deviates",
@@ -977,7 +984,7 @@
     {
       "file": "crates/vibe-resolver/src/naive.rs",
       "from_symbol": "vibe_resolver::naive::NaiveDepSolver<P>::solve",
-      "line": 53,
+      "line": 54,
       "provenance": "authored",
       "uri": "spec://vibevm/modules/vibe-registry/PROP-002#lockfile",
       "verb": "implements"
@@ -985,7 +992,7 @@
     {
       "file": "crates/vibe-resolver/src/naive.rs",
       "from_symbol": "vibe_resolver::naive::NaiveDepSolver<P>::solve",
-      "line": 54,
+      "line": 55,
       "provenance": "authored",
       "uri": "spec://vibevm/modules/vibe-resolver/PROP-003#determinism",
       "verb": "implements"
@@ -993,7 +1000,7 @@
     {
       "file": "crates/vibe-resolver/src/naive.rs",
       "from_symbol": "vibe_resolver::naive::tests::capability_requires_satisfied_by_already_seen_provider",
-      "line": 579,
+      "line": 580,
       "provenance": "authored",
       "uri": "spec://vibevm/modules/vibe-registry/PROP-002#capability",
       "verb": "verifies"
@@ -1001,7 +1008,7 @@
     {
       "file": "crates/vibe-resolver/src/naive.rs",
       "from_symbol": "vibe_resolver::naive::tests::capability_requires_self_satisfaction",
-      "line": 619,
+      "line": 620,
       "provenance": "authored",
       "uri": "spec://vibevm/modules/vibe-registry/PROP-002#capability",
       "verb": "verifies"
@@ -1009,7 +1016,7 @@
     {
       "file": "crates/vibe-resolver/src/naive.rs",
       "from_symbol": "vibe_resolver::naive::tests::capability_requires_unmet_errors",
-      "line": 646,
+      "line": 647,
       "provenance": "authored",
       "uri": "spec://vibevm/modules/vibe-registry/PROP-002#capability",
       "verb": "verifies"
@@ -1017,7 +1024,7 @@
     {
       "file": "crates/vibe-resolver/src/naive.rs",
       "from_symbol": "vibe_resolver::naive::tests::dependencies_are_exact_pinned_after_solve",
-      "line": 770,
+      "line": 771,
       "provenance": "authored",
       "uri": "spec://vibevm/modules/vibe-registry/PROP-002#lockfile",
       "verb": "verifies"
@@ -1025,7 +1032,7 @@
     {
       "file": "crates/vibe-resolver/src/naive.rs",
       "from_symbol": "vibe_resolver::naive::tests::detects_conflicts_declaration",
-      "line": 544,
+      "line": 545,
       "provenance": "authored",
       "uri": "spec://vibevm/modules/vibe-registry/PROP-002#capability",
       "verb": "verifies"
@@ -1033,7 +1040,7 @@
     {
       "file": "crates/vibe-resolver/src/naive.rs",
       "from_symbol": "vibe_resolver::naive::tests::detects_version_conflict_across_paths",
-      "line": 519,
+      "line": 520,
       "provenance": "authored",
       "uri": "spec://vibevm/modules/vibe-registry/PROP-002#capability",
       "verb": "verifies"
@@ -1041,7 +1048,7 @@
     {
       "file": "crates/vibe-resolver/src/naive.rs",
       "from_symbol": "vibe_resolver::naive::tests::obsoletes_drops_obsolete_entry",
-      "line": 687,
+      "line": 688,
       "provenance": "authored",
       "uri": "spec://vibevm/modules/vibe-registry/PROP-002#capability",
       "verb": "verifies"
@@ -1049,7 +1056,7 @@
     {
       "file": "crates/vibe-resolver/src/naive.rs",
       "from_symbol": "vibe_resolver::naive::tests::requires_any_picks_first_alternative",
-      "line": 721,
+      "line": 722,
       "provenance": "authored",
       "uri": "spec://vibevm/modules/vibe-registry/PROP-002#capability",
       "verb": "verifies"
@@ -1057,7 +1064,7 @@
     {
       "file": "crates/vibe-resolver/src/naive.rs",
       "from_symbol": "vibe_resolver::naive::tests::root_dependencies_marked",
-      "line": 749,
+      "line": 750,
       "provenance": "authored",
       "uri": "spec://vibevm/modules/vibe-registry/PROP-002#lockfile",
       "verb": "verifies"
@@ -1065,9 +1072,17 @@
     {
       "file": "crates/vibe-resolver/src/naive.rs",
       "from_symbol": "vibe_resolver::naive::tests::unknown_package_propagates",
-      "line": 673,
+      "line": 674,
       "provenance": "authored",
       "uri": "spec://vibevm/modules/vibe-registry/PROP-002#failure-discriminator",
+      "verb": "verifies"
+    },
+    {
+      "file": "crates/vibe-resolver/tests/differential_oracle.rs",
+      "from_symbol": "vibe_resolver::tests::differential_oracle::provider_pair_agrees_on_solvable_inputs",
+      "line": 120,
+      "provenance": "authored",
+      "uri": "spec://vibevm/modules/vibe-registry/PROP-002#solver",
       "verb": "verifies"
     }
   ],
@@ -4422,6 +4437,96 @@
       "heading": "9. Doc layer",
       "line": 132,
       "uri": "spec://vibevm/neworder/GUIDE-JAVA-v0.1#docs"
+    },
+    {
+      "anchor": "baseline",
+      "content_hash": "",
+      "doc_path": "neworder/GUIDE-KOTLIN-v0.1",
+      "file": "spec/neworder/GUIDE-KOTLIN-v0.1.md",
+      "heading": "0. Language baseline",
+      "line": 13,
+      "uri": "spec://vibevm/neworder/GUIDE-KOTLIN-v0.1#baseline"
+    },
+    {
+      "anchor": "cells",
+      "content_hash": "",
+      "doc_path": "neworder/GUIDE-KOTLIN-v0.1",
+      "file": "spec/neworder/GUIDE-KOTLIN-v0.1.md",
+      "heading": "1. Cells",
+      "line": 23,
+      "uri": "spec://vibevm/neworder/GUIDE-KOTLIN-v0.1#cells"
+    },
+    {
+      "anchor": "seams",
+      "content_hash": "",
+      "doc_path": "neworder/GUIDE-KOTLIN-v0.1",
+      "file": "spec/neworder/GUIDE-KOTLIN-v0.1.md",
+      "heading": "2. Seams",
+      "line": 43,
+      "uri": "spec://vibevm/neworder/GUIDE-KOTLIN-v0.1#seams"
+    },
+    {
+      "anchor": "flags",
+      "content_hash": "",
+      "doc_path": "neworder/GUIDE-KOTLIN-v0.1",
+      "file": "spec/neworder/GUIDE-KOTLIN-v0.1.md",
+      "heading": "3. Registry and flags",
+      "line": 50,
+      "uri": "spec://vibevm/neworder/GUIDE-KOTLIN-v0.1#flags"
+    },
+    {
+      "anchor": "errors",
+      "content_hash": "",
+      "doc_path": "neworder/GUIDE-KOTLIN-v0.1",
+      "file": "spec/neworder/GUIDE-KOTLIN-v0.1.md",
+      "heading": "4. Errors as contract",
+      "line": 64,
+      "uri": "spec://vibevm/neworder/GUIDE-KOTLIN-v0.1#errors"
+    },
+    {
+      "anchor": "specmark",
+      "content_hash": "",
+      "doc_path": "neworder/GUIDE-KOTLIN-v0.1",
+      "file": "spec/neworder/GUIDE-KOTLIN-v0.1.md",
+      "heading": "5. specmark carrier",
+      "line": 85,
+      "uri": "spec://vibevm/neworder/GUIDE-KOTLIN-v0.1#specmark"
+    },
+    {
+      "anchor": "naming",
+      "content_hash": "",
+      "doc_path": "neworder/GUIDE-KOTLIN-v0.1",
+      "file": "spec/neworder/GUIDE-KOTLIN-v0.1.md",
+      "heading": "6. Naming (R-020/R-021 bindings)",
+      "line": 89,
+      "uri": "spec://vibevm/neworder/GUIDE-KOTLIN-v0.1#naming"
+    },
+    {
+      "anchor": "replacement",
+      "content_hash": "",
+      "doc_path": "neworder/GUIDE-KOTLIN-v0.1",
+      "file": "spec/neworder/GUIDE-KOTLIN-v0.1.md",
+      "heading": "7. Replacement protocol (R-040 binding)",
+      "line": 94,
+      "uri": "spec://vibevm/neworder/GUIDE-KOTLIN-v0.1#replacement"
+    },
+    {
+      "anchor": "risks",
+      "content_hash": "",
+      "doc_path": "neworder/GUIDE-KOTLIN-v0.1",
+      "file": "spec/neworder/GUIDE-KOTLIN-v0.1.md",
+      "heading": "8. Risk table — trunk",
+      "line": 98,
+      "uri": "spec://vibevm/neworder/GUIDE-KOTLIN-v0.1#risks"
+    },
+    {
+      "anchor": "docs",
+      "content_hash": "",
+      "doc_path": "neworder/GUIDE-KOTLIN-v0.1",
+      "file": "spec/neworder/GUIDE-KOTLIN-v0.1.md",
+      "heading": "9. Doc layer",
+      "line": 118,
+      "uri": "spec://vibevm/neworder/GUIDE-KOTLIN-v0.1#docs"
     },
     {
       "anchor": "baseline",
