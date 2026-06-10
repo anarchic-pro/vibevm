@@ -58,6 +58,55 @@
     },
     {
       "crate_name": "vibe-resolver",
+      "file": "crates/vibe-resolver/src/lib.rs",
+      "item_kind": "trait",
+      "line": 114,
+      "symbol": "vibe_resolver::DepProvider"
+    },
+    {
+      "crate_name": "vibe-resolver",
+      "file": "crates/vibe-resolver/src/lib.rs",
+      "item_kind": "enum",
+      "line": 150,
+      "symbol": "vibe_resolver::DepProviderError"
+    },
+    {
+      "crate_name": "vibe-resolver",
+      "file": "crates/vibe-resolver/src/lib.rs",
+      "item_kind": "trait",
+      "line": 132,
+      "symbol": "vibe_resolver::DepSolver"
+    },
+    {
+      "crate_name": "vibe-resolver",
+      "file": "crates/vibe-resolver/src/lib.rs",
+      "item_kind": "struct",
+      "line": 85,
+      "symbol": "vibe_resolver::ResolvedGraph"
+    },
+    {
+      "crate_name": "vibe-resolver",
+      "file": "crates/vibe-resolver/src/lib.rs",
+      "item_kind": "fn",
+      "line": 101,
+      "symbol": "vibe_resolver::ResolvedGraph::find"
+    },
+    {
+      "crate_name": "vibe-resolver",
+      "file": "crates/vibe-resolver/src/lib.rs",
+      "item_kind": "struct",
+      "line": 66,
+      "symbol": "vibe_resolver::ResolvedNode"
+    },
+    {
+      "crate_name": "vibe-resolver",
+      "file": "crates/vibe-resolver/src/lib.rs",
+      "item_kind": "enum",
+      "line": 184,
+      "symbol": "vibe_resolver::SolveError"
+    },
+    {
+      "crate_name": "vibe-resolver",
       "file": "crates/vibe-resolver/src/conditional.rs",
       "item_kind": "enum",
       "line": 21,
@@ -199,6 +248,79 @@
       "provenance": "authored",
       "uri": "spec://vibevm/neworder/PROP-014#addressing-code",
       "verb": "verifies"
+    },
+    {
+      "file": "crates/vibe-resolver/src/lib.rs",
+      "from_symbol": "vibe_resolver::DepProvider",
+      "line": 115,
+      "provenance": "authored",
+      "uri": "spec://vibevm/modules/vibe-registry/PROP-002#solver",
+      "verb": "implements"
+    },
+    {
+      "file": "crates/vibe-resolver/src/lib.rs",
+      "from_symbol": "vibe_resolver::DepProviderError",
+      "line": 151,
+      "provenance": "authored",
+      "uri": "spec://vibevm/modules/vibe-registry/PROP-002#failure-discriminator",
+      "verb": "implements"
+    },
+    {
+      "file": "crates/vibe-resolver/src/lib.rs",
+      "from_symbol": "vibe_resolver::DepSolver",
+      "line": 133,
+      "provenance": "authored",
+      "uri": "spec://vibevm/modules/vibe-registry/PROP-002#solver",
+      "verb": "implements"
+    },
+    {
+      "file": "crates/vibe-resolver/src/lib.rs",
+      "from_symbol": "vibe_resolver::DepSolver",
+      "line": 134,
+      "provenance": "authored",
+      "uri": "spec://vibevm/modules/vibe-resolver/PROP-003#solver-upgrade",
+      "verb": "deviates",
+      "reason": "PROP-003 §2.1 adds `pin_preferences(&mut self, pins)` to this trait for minimum-churn re-resolution; the method is absent — PROP-011 Phase 3 holds pins via constraint-tightening at the install layer instead, and SatDepSolver is not in tree (see DBT-0011)"
+    },
+    {
+      "file": "crates/vibe-resolver/src/lib.rs",
+      "from_symbol": "vibe_resolver::ResolvedGraph",
+      "line": 87,
+      "provenance": "authored",
+      "uri": "spec://vibevm/modules/vibe-resolver/PROP-003#solver-upgrade",
+      "verb": "implements"
+    },
+    {
+      "file": "crates/vibe-resolver/src/lib.rs",
+      "from_symbol": "vibe_resolver::ResolvedGraph::find",
+      "line": 102,
+      "provenance": "authored",
+      "uri": "spec://vibevm/modules/vibe-registry/PROP-008#identity",
+      "verb": "implements"
+    },
+    {
+      "file": "crates/vibe-resolver/src/lib.rs",
+      "from_symbol": "vibe_resolver::ResolvedNode",
+      "line": 69,
+      "provenance": "authored",
+      "uri": "spec://vibevm/modules/vibe-registry/PROP-002#lockfile",
+      "verb": "implements"
+    },
+    {
+      "file": "crates/vibe-resolver/src/lib.rs",
+      "from_symbol": "vibe_resolver::ResolvedNode",
+      "line": 68,
+      "provenance": "authored",
+      "uri": "spec://vibevm/modules/vibe-registry/PROP-008#identity",
+      "verb": "implements"
+    },
+    {
+      "file": "crates/vibe-resolver/src/lib.rs",
+      "from_symbol": "vibe_resolver::SolveError",
+      "line": 185,
+      "provenance": "authored",
+      "uri": "spec://vibevm/modules/vibe-registry/PROP-002#capability",
+      "verb": "implements"
     },
     {
       "file": "crates/vibe-resolver/src/conditional.rs",
