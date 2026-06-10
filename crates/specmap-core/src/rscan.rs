@@ -253,7 +253,7 @@ pub fn scan_source(
 /// `src/foo/mod.rs` → `foo`; `tests/x.rs` → `tests::x` (integration
 /// test targets compile as their own crates; this scheme keeps their
 /// symbols stable and readable).
-fn module_path(crate_ident: &str, rel_in_crate: &Path) -> Option<String> {
+pub(crate) fn module_path(crate_ident: &str, rel_in_crate: &Path) -> Option<String> {
     let comps: Vec<String> = rel_in_crate
         .iter()
         .map(|c| c.to_string_lossy().to_string())

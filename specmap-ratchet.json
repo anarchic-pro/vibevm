@@ -1,0 +1,22 @@
+{
+  "schema": 1,
+  "note": "The specmap orphan ratchet (PLAYBOOK-TERRAFORM-VIBEVM-v0.2 #phase2, flipped 2026-06-10). A crate NOT listed in `exempt` is gated: `cargo xtask specmap --check` fails on any public top-level item without an own or scope!-inherited edge, unless the symbol carries a disposition (debt id) below. Crates leave `exempt` one at a time as their backfill lands (Phase 6 order).",
+  "exempt": [
+    "specmap-core",
+    "specmark",
+    "specmark-grammar",
+    "vibe-check",
+    "vibe-cli",
+    "vibe-core",
+    "vibe-graph",
+    "vibe-index",
+    "vibe-llm",
+    "vibe-mcp",
+    "vibe-publish",
+    "vibe-registry",
+    "vibe-wire",
+    "vibe-workspace",
+    "xtask"
+  ],
+  "dispositioned": []
+}

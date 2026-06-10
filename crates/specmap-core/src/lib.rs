@@ -21,6 +21,7 @@
 pub mod explain;
 pub mod index;
 pub mod mdspec;
+pub mod ratchet;
 pub mod rscan;
 pub mod testgate;
 pub mod tripwire;
