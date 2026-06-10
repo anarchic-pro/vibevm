@@ -8,9 +8,14 @@ registry mechanizes; the two reconcile at the first full audit run
 (INT-0001).
 
 **18 entries** — 1 P1 · 7 P2 · 10 P3. Dispositions: 1 filed ·
-1 accepted · 16 open. Kinds: 5 disputed-spec · 4 stale-doc ·
+1 accepted · 4 fixed · 12 open. Kinds: 5 disputed-spec · 4 stale-doc ·
 3 unimplemented-req · 3 external-drift · 1 coverage-gap ·
 1 failing-test · 1 orphan-code.
+
+_2026-06-10 adjudication (owner sanction, incl. frozen surfaces):
+DBT-0012 → fixed `aa54ab4` · DBT-0013 / DBT-0014 → fixed `0e57f0f` ·
+DBT-0015 → fixed `d090cb0`. All four were supersede outcomes; details
+in the JSON entries._
 
 ## P1 — blockers (resolve before the next milestone ships)
 
@@ -25,10 +30,10 @@ registry mechanizes; the two reconcile at the first full audit run
 | DBT-0002 | failing-test | `cli_live_e2e` is `#[ignore]`d and red (3 tests; → tests-baseline) | open |
 | DBT-0004 | external-drift | GitVerse registry side un-migrated to fqdn (owner-only) | open |
 | DBT-0005 | external-drift | GitHub test orgs `vibespecstest1/2` un-migrated (coupled to DBT-0002) | open |
-| DBT-0012 | disputed-spec | PROP-002 §2.5 vs PROP-008 §2.5 — naming default + value set | open · **owner adjudication** |
-| DBT-0013 | disputed-spec | boot/00-core.md vs boot/90-user.md — registry host (frozen surfaces) | open · **owner adjudication** |
-| DBT-0014 | disputed-spec | boot/90-user.md `<kind>-<name>` line vs PROP-008 / live org (frozen surface) | open · **owner adjudication** |
-| DBT-0015 | disputed-spec | PROP-003 duplicate `{#phases}` anchor — URI ambiguity in the Phase 1 pilot PROP | open · **owner adjudication** |
+| DBT-0012 | disputed-spec | PROP-002 §2.5 vs PROP-008 §2.5 — naming default + value set | **fixed** `aa54ab4` (supersede) |
+| DBT-0013 | disputed-spec | boot/00-core.md vs boot/90-user.md — registry host (frozen surfaces) | **fixed** `0e57f0f` (supersede) |
+| DBT-0014 | disputed-spec | boot/90-user.md `<kind>-<name>` line vs PROP-008 / live org (frozen surface) | **fixed** `0e57f0f` (supersede) |
+| DBT-0015 | disputed-spec | PROP-003 duplicate `{#phases}` anchor — URI ambiguity in the Phase 1 pilot PROP | **fixed** `d090cb0` (rename) |
 
 ## P3 — notes (recorded; re-judged each audit)
 

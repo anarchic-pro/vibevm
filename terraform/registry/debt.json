@@ -216,12 +216,14 @@
         "fix cc32d7e made `vibe init` / `vibe registry add` scaffold fqdn (the shipped default)"
       ],
       "source": "Phase −1 conflict scan (LLM-proposed)",
-      "disposition": "open",
+      "disposition": "fixed",
+      "fixed_in": "aa54ab4",
+      "adjudication": "supersede — PROP-008 wins (owner sanction 2026-06-10); PROP-002 §2.2 now leads with fqdn and keeps kind-name documented as legacy",
       "tripwires": [
         "touch:spec/modules/vibe-registry/PROP-002-decentralized-registry.md",
         "touch:spec/modules/vibe-registry/PROP-008-qualified-naming.md"
       ],
-      "sunset": "owner adjudication; re-listed every audit until then"
+      "sunset": "re-verify at the first full PROP-013 audit run"
     },
     {
       "id": "DBT-0013",
@@ -238,13 +240,15 @@
         "90-user.md:14 — \"Package registry — GitHub organization `vibespecs`: `https://github.com/vibespecs`. (...) All publishing and consumption of v0.1.0+ packages goes through GitHub.\""
       ],
       "source": "Phase −1 conflict scan (LLM-proposed)",
-      "disposition": "open",
+      "disposition": "fixed",
+      "fixed_in": "0e57f0f",
+      "adjudication": "supersede — 90-user/split-host reality wins; 00-core.md edited under the owner's explicit in-session sanction for frozen surfaces (2026-06-10)",
       "frozen_surface": true,
       "tripwires": [
         "touch:spec/boot/00-core.md",
         "touch:spec/boot/90-user.md"
       ],
-      "sunset": "owner adjudication; re-listed every audit until then"
+      "sunset": "re-verify at the first full PROP-013 audit run"
     },
     {
       "id": "DBT-0014",
@@ -262,13 +266,15 @@
         "WAL 2026-05-23 — the canonical GitHub org hosts org.vibevm.{wal,sync-from-code,atomic-commits}; flow-* archived"
       ],
       "source": "Phase −1 conflict scan (LLM-proposed)",
-      "disposition": "open",
+      "disposition": "fixed",
+      "fixed_in": "0e57f0f",
+      "adjudication": "supersede — PROP-008/live-org reality wins; 90-user.md edited under the owner's explicit in-session sanction for frozen surfaces (2026-06-10)",
       "frozen_surface": true,
       "links": ["DBT-0012"],
       "tripwires": [
         "touch:spec/boot/90-user.md"
       ],
-      "sunset": "owner adjudication; re-listed every audit until then"
+      "sunset": "re-verify at the first full PROP-013 audit run"
     },
     {
       "id": "DBT-0015",
@@ -285,12 +291,14 @@
         "PROP-003:769 — \"## 6. Phases / staging plan {#phases}\""
       ],
       "source": "Phase −1 conflict scan (heuristic: duplicate anchors)",
-      "disposition": "open",
+      "disposition": "fixed",
+      "fixed_in": "d090cb0",
+      "adjudication": "§6 staging plan keeps {#phases} (house convention); §3.2 renamed to {#solver-phases}; zero references existed to either meaning, verified by repo-wide grep",
       "links": ["INT-0006 (vibe check deferred check #4 — anchor uniqueness — would catch this class mechanically)"],
       "tripwires": [
         "touch:spec/modules/vibe-resolver/PROP-003-dep-evolution.md"
       ],
-      "sunset": "owner adjudication (rename one anchor) — cheap; flagged for Phase 1 entry"
+      "sunset": "re-verify at the first full PROP-013 audit run"
     },
     {
       "id": "DBT-0016",
