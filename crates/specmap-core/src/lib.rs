@@ -18,6 +18,8 @@
 //! Design rule inherited from B5 (monotone utility): scanners degrade —
 //! an unparseable file becomes a warning entry, never a hard error.
 
+specmark::scope!("spec://vibevm/neworder/PROP-014#index");
+
 pub mod explain;
 pub mod index;
 pub mod ledger;

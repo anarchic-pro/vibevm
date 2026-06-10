@@ -8,6 +8,8 @@
 //! line are legacy-unmarked and still inventoried (full node inventory,
 //! PROP-014 §4 Phase 0).
 
+specmark::scope!("spec://vibevm/neworder/PROP-014#spec-units");
+
 use std::path::Path;
 
 use specmark_grammar::is_valid_anchor;

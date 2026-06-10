@@ -10,6 +10,8 @@
 //! diagnostic ("content changed while `r` did not") needs the previous
 //! index and is emitted as regeneration-time stderr, never stored.
 
+specmark::scope!("spec://vibevm/neworder/PROP-014#index");
+
 use std::collections::BTreeMap;
 use std::path::{Path, PathBuf};
 

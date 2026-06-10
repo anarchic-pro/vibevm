@@ -7,6 +7,8 @@
 //! (matched here) and `rev:<spec-uri>` (needs specmap revisions —
 //! evaluation lands with Phase 1; reported as not-yet-evaluable).
 
+specmark::scope!("spec://vibevm/neworder/BROWNFIELD-PROTOCOL-v0.1#registries");
+
 use anyhow::{Context, Result};
 use serde::Deserialize;
 

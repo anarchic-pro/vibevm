@@ -22,6 +22,8 @@
 //! into `specmap.json`; the full PROP-014 §2.5 orphan table lands when
 //! PROP-014 itself is unit-ified after ratification.
 
+specmark::scope!("spec://vibevm/neworder/PROP-014#index");
+
 use std::collections::HashSet;
 use std::path::{Path, PathBuf};
 

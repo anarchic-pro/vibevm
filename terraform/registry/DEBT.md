@@ -49,6 +49,7 @@ in the JSON entries._
 | DBT-0016 | disputed-spec | PLAYBOOK vs BROWNFIELD — REVIEW/TODO marker homing (package-internal) | open |
 | DBT-0017 | stale-doc | ROADMAP internal staleness (TASKS.md pointer, unticked boxes, …) | open |
 | DBT-0018 | stale-doc | `vibe init` hint leads with the kind-qualified pkgref shape | open |
+| DBT-0019 | coverage-gap | vibe-core leaf modules (error/timestamp/values) lack a scannable spec home until `VIBEVM-SPEC.md` is unit-ified; six symbols dispositioned in `specmap-ratchet.json` | open |
 
 ## Marker sweep — result and skip rule
 
@@ -61,3 +62,4 @@ placeholder text* (`init.rs`'s generated `_TODO: …_` README line) are
 not debt. An `#[allow(…)]` sweep is deliberately left to the first full
 PROP-013 audit (category D3) — it is not in the playbook's Phase −1
 debt-source list.
+

@@ -11,6 +11,8 @@
 //! never appears in the run is reported as a warning (possible rename /
 //! deletion — the promotion protocol covers shrinking the registry).
 
+specmark::scope!("spec://vibevm/neworder/BROWNFIELD-PROTOCOL-v0.1#test-gate");
+
 use std::collections::BTreeMap;
 
 use anyhow::{Context, Result, bail};
