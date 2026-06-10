@@ -89,10 +89,28 @@ enum Cmd {
         cmd: TraceCmd,
     },
 
-    /// Interim structure lints (PLAYBOOK Phase 3; retired by the
-    /// conform engine in Phase 4): flag-reads-outside-registry (R-001)
-    /// and cell-imports-sibling (R-002). Non-zero exit on findings.
-    ConformLite,
+    /// The conformance engine gate (ENGINE-CONFORM §5; PLAYBOOK
+    /// Phase 4). Replaces the Phase 3 `conform-lite` interim lints.
+    Conform {
+        #[command(subcommand)]
+        cmd: ConformCmd,
+    },
+}
+
+#[derive(Subcommand, Debug)]
+enum ConformCmd {
+    /// Extract facts (incremental, content-addressed), run the rules,
+    /// emit SARIF, and gate new findings against the ratchet baseline.
+    Check {
+        /// Path to the frozen-findings baseline, repo-relative.
+        #[arg(long, default_value = "conform-baseline.json")]
+        baseline: String,
+
+        /// Report findings only under this repo-relative path prefix
+        /// (facts are still extracted workspace-wide — B5).
+        #[arg(long)]
+        scope: Option<String>,
+    },
 }
 
 #[derive(Subcommand, Debug)]
@@ -122,7 +140,9 @@ fn main() -> Result<()> {
         Cmd::Specmap { check } => run_specmap(check),
         Cmd::TestGate { baseline } => run_test_gate(&baseline),
         Cmd::Tripwire { base, debt } => run_tripwire(base.as_deref(), &debt),
-        Cmd::ConformLite => run_conform_lite(),
+        Cmd::Conform {
+            cmd: ConformCmd::Check { baseline, scope },
+        } => run_conform_check(&baseline, scope.as_deref()),
         Cmd::Trace {
             cmd: TraceCmd::Explain { target, json, .. },
         } => run_trace_explain(&target, json),
@@ -200,130 +220,72 @@ fn run_ratchet_gate(root: &std::path::Path, blocking: bool) -> Result<()> {
     Ok(())
 }
 
-/// PLAYBOOK Phase 3 interim lints — deliberately line-oriented T-syn
-/// scans, retired by the Phase 4 conform engine:
-///
-/// - **flag-reads-outside-registry (R-001):** `vibe-cli`'s registry
-///   module is the only place allowed to construct selection cells;
-///   a cell constructor anywhere else in `vibe-cli/src` is a finding.
-/// - **cell-imports-sibling (R-002):** a module carrying a `#[cell]`
-///   manifest never imports another cell module — cells import seams
-///   and core only.
-fn run_conform_lite() -> Result<()> {
+/// The Phase 4 conform gate (ENGINE-CONFORM §5):
+/// `cargo xtask conform check --baseline conform-baseline.json
+/// [--scope crates/vibe-resolver]`. Facts are extracted workspace-wide
+/// through the content-addressed store (incremental by file hash);
+/// findings are reported only inside `--scope`; new findings against
+/// the baseline fail the gate; SARIF lands under `target/conform/`.
+fn run_conform_check(baseline_rel: &str, scope: Option<&str>) -> Result<()> {
+    use conform_core::{ExtractionLog, Rule, Store, baseline, check, count_by_rule, rules, sarif};
+    use conform_frontend_rust::RustFrontend;
+
     let root = repo_root()?;
-    let mut findings: Vec<String> = Vec::new();
+    let store = Store::at_repo(&root);
+    let mut log = ExtractionLog::default();
+    let facts = store.extract_workspace(&root, &RustFrontend, &mut log)?;
+    eprintln!(
+        "xtask conform: extracted {} file(s), {} cached (producer rust-syn-1).",
+        log.extracted.len(),
+        log.cached
+    );
 
-    // R-001 over vibe-cli/src, registry.rs exempt.
-    let cell_ctors = [
-        "NaiveDepSolver::new(",
-        "LocalRegistryProvider::new(",
-        "MultiRegistryProvider::new(",
-    ];
-    let cli_src = root.join("crates/vibe-cli/src");
-    let mut cli_files = 0usize;
-    for entry in walkdir::WalkDir::new(&cli_src)
-        .sort_by_file_name()
-        .into_iter()
-        .filter_map(Result::ok)
-    {
-        let path = entry.path();
-        if !entry.file_type().is_file()
-            || path.extension().and_then(|e| e.to_str()) != Some("rs")
-            || path.file_name().and_then(|n| n.to_str()) == Some("registry.rs")
-        {
-            continue;
-        }
-        cli_files += 1;
-        let text = std::fs::read_to_string(path)?;
-        for (i, line) in text.lines().enumerate() {
-            for ctor in cell_ctors {
-                if line.contains(ctor) {
-                    findings.push(format!(
-                        "R-001 flag-reads-outside-registry: `{}` constructed at {}:{} — \
-                         cell selection belongs to vibe-cli/src/registry.rs",
-                        ctor.trim_end_matches('('),
-                        path.strip_prefix(&root).unwrap_or(path).display(),
-                        i + 1
-                    ));
-                }
-            }
-        }
-    }
+    let flag_sites = rules::FlagSites {
+        registry_file: "crates/vibe-cli/src/registry.rs",
+        gated_crate: "vibe-cli",
+    };
+    let isolation = rules::CellIsolation;
+    // No crate is a designated unsafe-audit crate today; the list grows
+    // by owner decision, not by accretion.
+    let unsafe_gate = rules::UnsafeGate { audit_crates: &[] };
+    let rule_refs: Vec<&dyn Rule> = vec![&flag_sites, &isolation, &unsafe_gate];
 
-    // R-002: discover cell modules (#[cell(...)] carriers), then flag
-    // any `use` of one cell module from another.
-    let mut cells: Vec<(String, String, std::path::PathBuf)> = Vec::new(); // (crate_ident, module_stem, file)
-    if let Ok(rd) = std::fs::read_dir(root.join("crates")) {
-        for crate_dir in rd
-            .filter_map(Result::ok)
-            .map(|e| e.path())
-            .filter(|p| p.is_dir())
-        {
-            let crate_ident = crate_dir
-                .file_name()
-                .map(|n| n.to_string_lossy().replace('-', "_"))
-                .unwrap_or_default();
-            for entry in walkdir::WalkDir::new(crate_dir.join("src"))
-                .sort_by_file_name()
-                .into_iter()
-                .filter_map(Result::ok)
-            {
-                let path = entry.path();
-                if !entry.file_type().is_file()
-                    || path.extension().and_then(|e| e.to_str()) != Some("rs")
-                {
-                    continue;
-                }
-                let text = std::fs::read_to_string(path)?;
-                // An attribute line, not a doc-comment mention of one.
-                if text.lines().any(|l| l.trim_start().starts_with("#[cell(")) {
-                    let stem = path
-                        .file_stem()
-                        .map(|s| s.to_string_lossy().to_string())
-                        .unwrap_or_default();
-                    cells.push((crate_ident.clone(), stem, path.to_path_buf()));
-                }
-            }
-        }
+    let findings = check(&rule_refs, &facts, scope);
+    let report = sarif::render(&rule_refs, &findings);
+    let sarif_path = root.join("target").join("conform").join("report.sarif");
+    if let Some(parent) = sarif_path.parent() {
+        std::fs::create_dir_all(parent)?;
     }
-    for (crate_ident, _stem, file) in &cells {
-        let text = std::fs::read_to_string(file)?;
-        for (i, line) in text.lines().enumerate() {
-            for (other_crate, other_stem, other_file) in &cells {
-                if other_file == file {
-                    continue;
-                }
-                let same_crate_import = crate_ident == other_crate
-                    && (line.contains(&format!("use crate::{other_stem}::"))
-                        || line.contains(&format!("use crate::{other_stem};")));
-                let cross_crate_import = line
-                    .contains(&format!("use {other_crate}::{other_stem}::"))
-                    || line.contains(&format!("use {other_crate}::{other_stem};"));
-                if same_crate_import || cross_crate_import {
-                    findings.push(format!(
-                        "R-002 cell-imports-sibling: {}:{} imports cell module `{other_stem}` — \
-                         cells import seams and core only",
-                        file.strip_prefix(&root).unwrap_or(file).display(),
-                        i + 1
-                    ));
-                }
-            }
-        }
-    }
+    std::fs::write(&sarif_path, &report)?;
 
-    for f in &findings {
-        eprintln!("  conform-lite: {f}");
-    }
-    if findings.is_empty() {
+    let base = baseline::load(&root.join(baseline_rel))?;
+    let (new, stale) = baseline::diff(&base, &findings);
+    for f in &new {
         eprintln!(
-            "xtask conform-lite: clean — R-001 over {cli_files} vibe-cli files, \
-             R-002 over {} cell module(s).",
-            cells.len()
+            "  conform: NEW {} {}:{} — {}",
+            f.rule, f.file, f.line, f.message
         );
-        Ok(())
-    } else {
-        bail!("conform-lite: {} finding(s)", findings.len());
     }
+    for fp in &stale {
+        eprintln!("  conform: baseline entry no longer fires — prune it: {fp}");
+    }
+    let counts = count_by_rule(&findings);
+    eprintln!(
+        "xtask conform check: {} finding(s) in scope {} ({:?}), {} frozen in baseline, {} new; SARIF at {}.",
+        findings.len(),
+        scope.unwrap_or("<workspace>"),
+        counts,
+        base.findings.len(),
+        new.len(),
+        sarif_path
+            .strip_prefix(&root)
+            .unwrap_or(&sarif_path)
+            .display()
+    );
+    if !new.is_empty() {
+        bail!("conform: {} new finding(s) against the baseline", new.len());
+    }
+    Ok(())
 }
 
 fn run_test_gate(baseline_rel: &str) -> Result<()> {
