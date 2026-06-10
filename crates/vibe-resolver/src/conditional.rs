@@ -79,6 +79,10 @@ impl ConditionalPredicate {
 }
 
 #[derive(Debug, Error, PartialEq, Eq)]
+#[spec(
+    implements = "spec://vibevm/modules/vibe-resolver/PROP-003#req-conditional-grammar",
+    r = 1
+)]
 pub enum PredicateError {
     #[error("malformed conditional-dep predicate `{0}` (expected `context(<key>)`)")]
     Malformed(String),

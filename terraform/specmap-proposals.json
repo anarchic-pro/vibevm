@@ -693,6 +693,19 @@
       "evidence_code": "Preserve the structured per-registry attempts so the downstream install-error JSON envelope can ship them verbatim.",
       "evidence_spec": "When a primary `[[registry]]` connect-fails, the error message points the operator at `vibe registry list` (typo check) and the network (outage check).",
       "status": "approved"
+    },
+    {
+      "id": "PRP-0054",
+      "item": "vibe_resolver::conditional::PredicateError",
+      "item_kind": "enum",
+      "file": "crates/vibe-resolver/src/conditional.rs",
+      "verb": "implements",
+      "uri": "spec://vibevm/modules/vibe-resolver/PROP-003#req-conditional-grammar",
+      "confidence": "high",
+      "evidence_code": "malformed conditional-dep predicate `{0}` (expected `context(<key>)`)",
+      "evidence_spec": "Today's grammar supports the simple-key form only: `context(<key>)` (the §2.6.1 grammar unit, ratified r1 by the pilot).",
+      "status": "approved",
+      "note": "Found by the ratchet gate, not the sweep: conditional.rs was excluded as already-tagged while its public error enum carried no edge. Approved under the owner's session mandate (Goal: all PLAYBOOK phases done) — error-as-contract, same shape as the approved SolveError/FeatureError/DepProviderError edges. Pinned r1: the target unit is marked (pilot), unlike the sweep's unmarked targets."
     }
   ],
   "candidate_orphans": []
