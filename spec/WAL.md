@@ -1,13 +1,14 @@
 # WAL — Project Continuation State
-_Updated: 2026-06-10, terraform COMPLETE checkpoint (the Big Refactoring: ALL phases of PLAYBOOK-TERRAFORM-VIBEVM-v0.2 executed — −1/0/1/2/3/4/5/6 — owner-declared complete, `new` merged to `main`. Close-out report: [`terraform/REPORT.md`](../terraform/REPORT.md). Cold-resume: `CONTINUE.md`. Prior state: M1.19 qualified naming SHIPPED 2026-05-22; PROP-013 established.)_
+_Updated: 2026-06-11, session-end checkpoint (the Big Refactoring: ALL phases of PLAYBOOK-TERRAFORM-VIBEVM-v0.2 executed 2026-06-10 — −1/0/1/2/3/4/5/6 — owner-declared complete, `new` merged to `main` at **`e1da0c4`** and pushed. Close-out report: [`terraform/REPORT.md`](../terraform/REPORT.md). Cold-resume: `CONTINUE.md`. Prior state: M1.19 qualified naming SHIPPED 2026-05-22; PROP-013 established.)_
 
 ## Current phase
 
 **THE BIG REFACTORING IS COMPLETE — branch policy retired (2026-06-10).**
 The owner declared the refactoring complete in-session («рефакторинг
 завершен, все фазы PLAYBOOK-TERRAFORM-VIBEVM выполнены»); `new` merged
-back to `main` with `--no-ff` at the merge checkpoint this entry
-records. The branch-isolation notice that stood here is retired per its
+back to `main` with `--no-ff` — merge commit **`e1da0c4`** (181 files,
++19 247 / −389), pushed to `origin/main`. The branch-isolation notice
+that stood here is retired per its
 own instruction; `new` is retained (merged, not deleted — the
 `m1.17-workspace` precedent).
 
