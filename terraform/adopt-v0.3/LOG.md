@@ -377,3 +377,63 @@ within budget; self-check all four steps.
 recorded as pending-with-instrumentation-ready — the first
 prediction whose falsification needs an actual weak-agent run;
 P4-2 holding from birth.
+
+**Post-phase process correction (third occurrence, now fixed).**
+The Phase-4 commit shipped and pushed with clippy red: a gate
+behind `| tail -1` returns the pipe's exit status, not the gate's,
+and `&&` sails on. Same failure shape as the Phase-3 cwd slip and
+the Phase-0-noted panel-ordering gap. The raid recipe is now
+explicit and in use: gates run with their own exit status captured
+(`set -e` + redirect, tail the log file separately). REPORT input:
+the discipline specifies checkers but not the **gate-invocation
+pattern** — a verdict the caller can silently drop fails the same
+cannot-silently-lie clause the engine is held to.
+
+---
+
+## 2026-06-11 — Phase 5: Generators (A) + simulators (H)
+
+**Class H landed — the fixpoint simulator.**
+`vibe_resolver::fixpoint_model` is a runnable reference model of
+the conditional-dependency loop (solve → probe → add → re-solve,
+PROP-003 §2.6): a world of `ModelPackage`s (name, provides-tags,
+`trigger → dep` conditional edges), a `step()` that returns the
+observable record (present-set, fired edges, added packages,
+stability), and `run(max)` mirroring the production loop's
+iteration cap. The monotone-lattice property — the present-set
+never shrinks, WHY the loop terminates — is a debug_assert at
+every step, not prose. Five behavior tests (immediate stability,
+two-stage cascade, provides-triggering, joint fixpoint, cap
+behavior) plus a doctest showing the canonical world.
+
+**The model's license to exist:** the card names model-drift as
+the failure mode, so `tests/fixpoint_conformance.rs` rebuilds the
+loop from the production primitives (`ConditionalPredicate`
+evaluated over a real `ActivationContext`, the same qualified-tag
+shapes `build_activation_context` emits) and steps it in lockstep
+with the model on representative worlds — per-iteration added-sets
+must match exactly. The model and the production loop cannot
+drift apart silently.
+
+**Class A — recognition fired, application correctly declined.**
+The plan names "transition tables, exhaustive matches" as
+candidates. Honest survey: the wire-type generator (JTD →
+vibe-wire, `xtask codegen` + `check-codegen` regenerate-and-diff)
+is already a complete card-A instance — generator, committed
+plain-Rust output, determinism check. Inside the resolver, the
+activation channels LOOK near-duplicate but differ in probe
+semantics (PATH probe vs glob vs env vs PURL match) — a generator
+there would encode business decisions, the card's named misuse;
+and the `composition` predicate tables belong to Phase 7's
+formalization, where they will be evaluated against card A again.
+No artificial generator was built to tick a box.
+
+**Gate panel at phase close (all green, statuses captured):**
+specmap regenerated (+6 edges — the model's and conformance
+suite's spec/verifies tags), `--check` clean; conform 8 frozen /
+0 new; test-gate green xfail-strict (+8 model & conformance
+tests); self-check all four steps.
+
+**Phase 5 exit: met.** P5-1 standing (conformance keeps the model
+truthful; agent-behavior half deferred with P4-1), P5-2 held for
+the existing generator instance.
