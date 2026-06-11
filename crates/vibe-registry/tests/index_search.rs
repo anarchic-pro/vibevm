@@ -14,6 +14,7 @@ use axum::http::StatusCode;
 use axum::response::IntoResponse;
 use axum::routing::get;
 use serde::Deserialize;
+use specmark::verifies;
 use tokio::net::TcpListener;
 
 use vibe_core::PackageKind;
@@ -114,6 +115,7 @@ fn spawn_mock(canned: CannedSearch) -> Mock {
 }
 
 #[test]
+#[verifies("spec://vibevm/modules/vibe-index/PROP-005#integration", r = 1)]
 fn search_decodes_response_and_propagates_query_params() {
     let canned = CannedSearch {
         response: Some(serde_json::json!({

@@ -15,6 +15,7 @@ use axum::extract::{Path as AxumPath, State};
 use axum::http::StatusCode;
 use axum::response::IntoResponse;
 use axum::routing::get;
+use specmark::verifies;
 use tempfile::tempdir;
 use tokio::net::TcpListener;
 
@@ -186,6 +187,7 @@ impl GitBackend for AlwaysMissing {
 }
 
 #[test]
+#[verifies("spec://vibevm/modules/vibe-index/PROP-005#integration", r = 1)]
 fn index_fast_path_serves_versions() {
     let org = Group::parse("org.vibevm").unwrap();
     let mut canned = CannedFiles {
@@ -225,6 +227,7 @@ fn index_fast_path_serves_versions() {
 }
 
 #[test]
+#[verifies("spec://vibevm/modules/vibe-index/PROP-005#integration", r = 1)]
 fn index_404_falls_through_to_git_backend() {
     // Index responds 404 for the named package; git backend says
     // RepoNotFound. The result must be the canonical UnknownPackage

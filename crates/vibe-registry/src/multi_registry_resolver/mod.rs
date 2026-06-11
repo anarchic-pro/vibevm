@@ -1,0 +1,670 @@
+//! Multi-registry resolver — PROP-002.
+//!
+//! Sits on top of one or more [`GitPackageRegistry`] instances and dispatches
+//! resolution / fetch through the priority + override + (eventually) mirror
+//! decision tree pinned in [PROP-002 §2.2 / §2.3 / §2.4](../../../spec/modules/vibe-registry/PROP-002-decentralized-registry.md).
+//!
+//! Decision order on `resolve(pkgref)`:
+//!
+//! 1. **`[[override]]` first.** If `vibe.toml` carries an override for this
+//!    pkgref, the registry layer is bypassed entirely. The override's
+//!    `source_url` / `ref` is fetched directly; the version is taken
+//!    verbatim from the manifest at that ref. `overridden = true` ends up
+//!    in the lockfile so `vibe list --overrides` and audit tooling can
+//!    surface it.
+//!
+//! 2. **`[[registry]]` array, in priority order.** The first registry
+//!    whose [`GitPackageRegistry::resolve`] succeeds wins. If a registry
+//!    answers `UnknownPackage` (the package repo simply does not exist
+//!    under that org URL), we fall through to the next. Other errors
+//!    (network, auth, malformed manifest) bubble up immediately — those
+//!    are not "package missing", they are operational failures the user
+//!    should see.
+//!
+//! 3. **Mirror chain per registry** — schema-wired in this commit, runtime
+//!    dispatch lands together with content-hash cross-source verification
+//!    in M1.6 (Phase B). [`MultiRegistryResolver::mirrors_for`] exposes
+//!    the priority-sorted list so downstream code is ready when fetch
+//!    learns to consult it.
+//!
+//! `MultiResolution` and `MultiCached` enrich the registry-trait return
+//! types with provenance (`registry_name`, `source_url`, `source_ref`,
+//! `overridden`) — exactly what lockfile schema v2 needs to fill on each
+//! install. Callers that only need the M0-shape `ResolvedPackage` /
+//! `CachedPackage` continue to use them via the `.resolved` / `.cached`
+//! field on the wrapper.
+
+specmark::scope!("spec://vibevm/modules/vibe-registry/PROP-002#registry-model");
+
+use std::collections::HashMap;
+use std::path::{Path, PathBuf};
+use std::sync::Arc;
+
+use vibe_core::manifest::{
+    GitPackageDep, Lockfile, Manifest, MirrorSection, OverrideSection, RedirectFile, RefPolicy,
+    RegistrySection, parse_redirect_bytes,
+};
+use vibe_core::{Group, PackageKind, PackageRef, VersionSpec};
+
+use crate::git_backend::{GitBackend, GitError, ShellGit};
+use crate::git_package_registry::{GitPackageRegistry, copy_dir_excluding_git};
+use crate::registry_cache::{DEFAULT_FRESHNESS_SECS, default_cache_root, strip_git_plus_prefix};
+use crate::{CachedPackage, RegistryError, ResolvedPackage, compute_content_hash};
+
+mod redirect_follow;
+mod refresh;
+mod sources;
+mod walk;
+
+pub use refresh::{RefreshReport, RefreshedEntry, RefreshedVia, SkippedEntry};
+pub use walk::{RegistryWalkAttempt, WalkAttemptStatus};
+
+/// Default ref for `[[override]]` entries that omit `ref`. Most adopters
+/// will pin a tag or branch explicitly; `main` is the practical default
+/// for "just take HEAD on the canonical line".
+pub const DEFAULT_OVERRIDE_REF: &str = "main";
+
+/// A resolved package with provenance — which registry served it, the
+/// URL / ref recorded in the lockfile, and whether the resolution
+/// short-circuited via an override.
+#[derive(Debug, Clone)]
+pub struct MultiResolution {
+    pub resolved: ResolvedPackage,
+    /// Name of the `[[registry]]` that served this package. `None` for
+    /// override-resolved and git-source entries.
+    pub registry_name: Option<String>,
+    /// What goes into lockfile `source_url`.
+    pub source_url: String,
+    /// What goes into lockfile `source_ref` — typically the version tag
+    /// (`v0.3.0`) for registry resolutions, or the override's / git-source
+    /// `tag`/`branch`/`rev` value.
+    pub source_ref: Option<String>,
+    pub overridden: bool,
+    /// True when this package was resolved via a `[requires.packages]`
+    /// git-source declaration (PROP-002 §2.4.1) rather than through
+    /// the registry walk or `[[override]]`. Lockfile maps this to
+    /// `source_kind = "git"`.
+    pub is_git_source: bool,
+    /// True when this package was resolved via a `[requires.packages]`
+    /// path-source declaration (PROP-007 §2.5) — a package in a local
+    /// directory, typically a sibling workspace member — rather than the
+    /// registry walk, `[[override]]`, or git-source. Lockfile maps this
+    /// to `source_kind = "path"`, and `source_url` then carries the
+    /// member's path relative to the workspace root, not a URL.
+    pub is_path_source: bool,
+    /// When this package was resolved via a registry stub that
+    /// redirected to an external URL (PROP-002 §2.4.2), the **stub**
+    /// URL is recorded here while `source_url` carries the **target**
+    /// URL. `None` for non-redirected resolutions.
+    pub via_redirect: Option<String>,
+    /// Auth regime declared in the redirect's `[redirect].auth`. Only
+    /// meaningful when `via_redirect.is_some()`; for non-redirected
+    /// resolutions the registry's own auth applies via `registry_name`
+    /// → registry lookup. The fetch path uses this to synthesise a
+    /// target-side `GitPackageRegistry` with the right auth without
+    /// re-fetching the redirect marker.
+    pub redirect_target_auth: vibe_core::manifest::AuthKind,
+    /// Env-var name when `redirect_target_auth = TokenEnv`. `None`
+    /// otherwise.
+    pub redirect_target_token_env: Option<String>,
+}
+
+/// A `[requires.packages]` path-source declaration (PROP-007 §2.5) with
+/// the on-disk location already computed by the caller. A path-source
+/// dependency is a package living in a local directory — typically a
+/// sibling workspace member — so there is no registry walk and no git
+/// clone: the source is a directory the resolver reads and copies.
+///
+/// The resolver does **no** filesystem path arithmetic. The caller (the
+/// workspace layer, a later milestone) resolves `PathPackageDep.path`
+/// against the declaring manifest's directory, canonicalises it, and
+/// hands the absolute `package_dir` plus the workspace-relative
+/// `workspace_rel` in already-computed. The resolver just consumes them.
+#[derive(Debug, Clone)]
+pub struct ResolvedPathDep {
+    /// Optional `kind` prefix carried by the pkgref key (PROP-008 §2.4).
+    /// Metadata only — never used to resolve; `(group, name)` is identity.
+    pub kind: Option<PackageKind>,
+    /// Reverse-FQDN group — a manifest pkgref is always qualified.
+    pub group: Group,
+    pub name: String,
+    /// Optional dual-form version constraint from `{ path, version }`.
+    /// When present, the package's own `[package].version` must satisfy
+    /// it; mismatch is a hard error — same shape as the git-source
+    /// version check.
+    pub version: Option<VersionSpec>,
+    /// Absolute directory where the dependency package lives. The caller
+    /// resolves `PathPackageDep.path` against the declaring manifest's
+    /// directory and canonicalises it; the resolver just consumes it.
+    pub package_dir: PathBuf,
+    /// `package_dir` relative to the workspace absolute root,
+    /// forward-slashed. Recorded verbatim as the lockfile `source_url`
+    /// for this entry — a portable relative path, never a URL, never
+    /// absolute.
+    pub workspace_rel: String,
+}
+
+/// Resolver coordinating an ordered set of [`GitPackageRegistry`]
+/// instances plus the cross-cutting `[[mirror]]` and `[[override]]`
+/// layers from `vibe.toml`.
+pub struct MultiRegistryResolver {
+    registries: Vec<Arc<GitPackageRegistry>>,
+    mirrors: Vec<MirrorSection>,
+    overrides: HashMap<String, OverrideSection>,
+    /// Git-source declarations from `[requires.packages]` table-form
+    /// (PROP-002 §2.4.1), keyed by `<group>/<name>` qualified-name
+    /// (PROP-008). Resolution order (resolve()): override > path-source
+    /// > git-source > registry-walk.
+    git_packages: HashMap<String, GitPackageDep>,
+    /// Path-source declarations from `[requires.packages]` table-form
+    /// (PROP-007 §2.5), keyed by `<group>/<name>` qualified-name
+    /// (PROP-008). Sits one notch above git-source in the resolution
+    /// order — a pkgref present here wins over a same-pkgref git-source
+    /// declaration.
+    path_packages: HashMap<String, ResolvedPathDep>,
+    backend: Arc<dyn GitBackend>,
+    cache_root: PathBuf,
+    /// Strict-auth posture — when `true`, a 401 / 403 against a
+    /// public (`auth = "none"`) registry is treated as a halt
+    /// instead of a walk-to-next, even though the §2.3.1 default
+    /// for that combination is fall-through. Useful in CI / cron
+    /// where the operator wants to gate "private install must
+    /// come from the private registry; if the private registry is
+    /// down or its 401 leaks through to a fallback, fail loudly
+    /// rather than silently picking up a public substitute."
+    /// Toggled by `MultiRegistryResolver::with_strict_auth`.
+    strict_auth: bool,
+}
+
+impl MultiRegistryResolver {
+    /// Direct constructor — every input handed in already-built. Used by
+    /// tests and callers that want to substitute a specific backend.
+    pub fn new(
+        registries: Vec<Arc<GitPackageRegistry>>,
+        mirrors: Vec<MirrorSection>,
+        overrides: Vec<OverrideSection>,
+        backend: Arc<dyn GitBackend>,
+        cache_root: PathBuf,
+    ) -> Self {
+        let overrides = overrides
+            .into_iter()
+            .map(|o| (o.pkgref.clone(), o))
+            .collect();
+        MultiRegistryResolver {
+            registries,
+            mirrors,
+            overrides,
+            git_packages: HashMap::new(),
+            path_packages: HashMap::new(),
+            backend,
+            cache_root,
+            strict_auth: false,
+        }
+    }
+
+    /// Plumb in the git-source declarations from `vibe.toml`'s
+    /// `[requires.packages]` table-form (PROP-002 §2.4.1). Builder-style
+    /// so existing call-sites of `from_manifest` / `open` / `new` that
+    /// don't yet thread git-source deps stay source-compatible.
+    ///
+    /// Keyed by `<group>/<name>` qualified-name (PROP-008) so a
+    /// `pkgref.qualified_name()` lookup hits.
+    pub fn with_git_packages(mut self, deps: Vec<GitPackageDep>) -> Self {
+        self.git_packages = deps
+            .into_iter()
+            .map(|d| (format!("{}/{}", d.group, d.name), d))
+            .collect();
+        self
+    }
+
+    /// Read-only view of the registered git-source declarations.
+    pub fn git_packages(&self) -> &HashMap<String, GitPackageDep> {
+        &self.git_packages
+    }
+
+    /// Plumb in the path-source declarations from `vibe.toml`'s
+    /// `[requires.packages]` table-form (PROP-007 §2.5). Builder-style,
+    /// mirroring [`Self::with_git_packages`] — existing call-sites that
+    /// don't thread path-source deps stay source-compatible. Each
+    /// [`ResolvedPathDep`] arrives with `package_dir` / `workspace_rel`
+    /// already computed by the workspace layer; the resolver does no
+    /// filesystem path arithmetic itself.
+    pub fn with_path_packages(mut self, deps: Vec<ResolvedPathDep>) -> Self {
+        self.path_packages = deps
+            .into_iter()
+            .map(|d| (format!("{}/{}", d.group, d.name), d))
+            .collect();
+        self
+    }
+
+    /// Read-only view of the registered path-source declarations.
+    pub fn path_packages(&self) -> &HashMap<String, ResolvedPathDep> {
+        &self.path_packages
+    }
+
+    /// Toggle strict-auth posture (see field docs / PROP-002 §2.3.1
+    /// strict-auth corollary). Builder-style consume-and-return.
+    pub fn with_strict_auth(mut self, strict: bool) -> Self {
+        self.strict_auth = strict;
+        self
+    }
+
+    /// Whether the resolver is in strict-auth mode. Tests + the
+    /// CLI surface read this to confirm the toggle flowed through.
+    pub fn strict_auth(&self) -> bool {
+        self.strict_auth
+    }
+
+    /// Build a resolver from `vibe.toml`-shape sections plus a backend
+    /// reused across all `GitPackageRegistry` instances. Production
+    /// callers pass `Arc::new(ShellGit::new())` as the backend; tests
+    /// pass a fake.
+    pub fn from_manifest(
+        registries: &[RegistrySection],
+        mirrors: &[MirrorSection],
+        overrides: &[OverrideSection],
+        cache_root: PathBuf,
+        backend: Arc<dyn GitBackend>,
+        freshness_secs: u64,
+    ) -> Result<Self, RegistryError> {
+        let mut built = Vec::with_capacity(registries.len());
+        for reg in registries {
+            // Compose the priority-sorted mirror chain for this registry
+            // (named `of = "<reg.name>"` plus wildcard `of = "*"`). This
+            // is exactly what `Self::mirrors_for` would compute, but
+            // we're still building `self`.
+            let mut chain: Vec<&MirrorSection> = mirrors
+                .iter()
+                .filter(|m| m.of == reg.name || m.of == "*")
+                .collect();
+            chain.sort_by_key(|m| m.priority);
+            let mirror_urls: Vec<String> = chain.into_iter().map(|m| m.url.clone()).collect();
+
+            // PROP-002 §2.2.1 — thread the registry's auth regime and
+            // the explicit-or-derived token env-var name into the
+            // registry instance, so it can pre-flight `MissingToken`
+            // errors and inject the token into per-package URLs at
+            // git invocation time.
+            let token_env_name = if matches!(reg.auth, vibe_core::manifest::AuthKind::TokenEnv) {
+                reg.resolve_token_env_name()
+            } else {
+                None
+            };
+            let mut entry = GitPackageRegistry::open_with_auth(
+                &reg.name,
+                &reg.url,
+                &reg.r#ref,
+                reg.naming,
+                mirror_urls,
+                &cache_root,
+                Arc::clone(&backend),
+                freshness_secs,
+                reg.auth,
+                token_env_name.as_deref(),
+            )?;
+            // PROP-005 §2.10 slice 10 — when an upstream index is
+            // configured for this registry via env vars, attach the
+            // probed client. Probe is best-effort; absent or
+            // unreachable index leaves the registry on the existing
+            // git ls-remote path with no warning.
+            if let Some(url) = crate::index_client::index_url_for(&reg.name)
+                && let Some(client) = crate::index_client::IndexClient::probe(&url)
+            {
+                entry = entry.with_index_client(client);
+            }
+            built.push(Arc::new(entry));
+        }
+        Ok(Self::new(
+            built,
+            mirrors.to_vec(),
+            overrides.to_vec(),
+            backend,
+            cache_root,
+        ))
+    }
+
+    /// Default-flavoured constructor: `ShellGit` backend, default
+    /// `~/.vibe/registries/` cache root, 1-hour freshness.
+    pub fn open(
+        registries: &[RegistrySection],
+        mirrors: &[MirrorSection],
+        overrides: &[OverrideSection],
+    ) -> Result<Self, RegistryError> {
+        let cache_root = default_cache_root()?;
+        Self::from_manifest(
+            registries,
+            mirrors,
+            overrides,
+            cache_root,
+            Arc::new(ShellGit::new()),
+            DEFAULT_FRESHNESS_SECS,
+        )
+    }
+
+    pub fn registries(&self) -> &[Arc<GitPackageRegistry>] {
+        &self.registries
+    }
+
+    /// Index-backed short-name candidate enumeration (PROP-008 §2.6).
+    /// For each configured registry that exposes an index, fetch the
+    /// `by-name/<name>.json` candidate set and union every `group`
+    /// that publishes a package of this bare `name`. Registries
+    /// without an index contribute nothing — a remote git host cannot
+    /// be enumerated cheaply (PROP-005 §1), which is precisely why
+    /// short-name resolution needs the index layer.
+    ///
+    /// A per-registry index error is logged and skipped, never
+    /// propagated: one unreachable index must not block resolution
+    /// against the others. The returned groups are de-duplicated and
+    /// sorted; `len() > 1` is a short-name collision (PROP-008 §2.7),
+    /// `len() == 0` means no index carried the name.
+    pub fn resolve_name_candidates(&self, name: &str) -> Vec<Group> {
+        let mut groups: Vec<Group> = Vec::new();
+        for reg in &self.registries {
+            let Some(client) = reg.index_client() else {
+                continue;
+            };
+            match client.name_candidates(name) {
+                Ok(found) => {
+                    for g in found {
+                        if !groups.contains(&g) {
+                            groups.push(g);
+                        }
+                    }
+                }
+                Err(e) => {
+                    tracing::debug!(
+                        target: "vibe_registry::multi_registry_resolver",
+                        package = %name,
+                        error = %e,
+                        "index short-name lookup failed; skipping this registry"
+                    );
+                }
+            }
+        }
+        groups.sort();
+        groups
+    }
+
+    pub fn mirrors(&self) -> &[MirrorSection] {
+        &self.mirrors
+    }
+
+    pub fn overrides(&self) -> &HashMap<String, OverrideSection> {
+        &self.overrides
+    }
+
+    /// Mirrors targeting the named registry (plus any wildcard `of = "*"`
+    /// entries), sorted by `priority` ascending.
+    pub fn mirrors_for(&self, registry_name: &str) -> Vec<&MirrorSection> {
+        let mut v: Vec<&MirrorSection> = self
+            .mirrors
+            .iter()
+            .filter(|m| m.of == registry_name || m.of == "*")
+            .collect();
+        v.sort_by_key(|m| m.priority);
+        v
+    }
+}
+
+fn ensure_clone_at(
+    backend: &dyn GitBackend,
+    url: &str,
+    refname: &str,
+    clone_dir: &Path,
+) -> Result<(), RegistryError> {
+    if clone_dir.join(".git").exists() {
+        backend.update(clone_dir, refname)?;
+        return Ok(());
+    }
+    if clone_dir.exists() {
+        std::fs::remove_dir_all(clone_dir).map_err(|source| RegistryError::Io {
+            path: clone_dir.to_path_buf(),
+            source,
+        })?;
+    }
+    if let Some(parent) = clone_dir.parent() {
+        std::fs::create_dir_all(parent).map_err(|source| RegistryError::Io {
+            path: parent.to_path_buf(),
+            source,
+        })?;
+    }
+    backend.bootstrap(strip_git_plus_prefix(url), refname, clone_dir)?;
+    Ok(())
+}
+
+/// Shared fixtures for this module's submodule tests — the canned
+/// [`GitBackend`] fake plus section / resolver builders.
+#[cfg(test)]
+pub(crate) mod test_support {
+    use std::fs;
+    use std::sync::Mutex;
+
+    use vibe_core::manifest::NamingConvention;
+
+    use super::*;
+
+    /// Test-only `GitBackend` shared across multi-registry tests. Same
+    /// shape as the one in `git_package_registry::tests`; duplicated
+    /// here rather than promoted to a shared `test_support` module to
+    /// keep this commit narrow — that consolidation can land separately.
+    #[derive(Default)]
+    pub(crate) struct FakeBackend {
+        pub(crate) tags: Mutex<HashMap<String, Vec<String>>>,
+        pub(crate) files: Mutex<HashMap<(String, String, String), Vec<u8>>>,
+        pub(crate) bootstrap_seeds: Mutex<HashMap<String, PathBuf>>,
+        pub(crate) bootstrap_calls: Mutex<u32>,
+        pub(crate) update_calls: Mutex<u32>,
+        /// URLs whose `list_tags` should fail with `AuthFailed` —
+        /// simulates a host that returned 401 / 403. Used to drive
+        /// the per-`auth` walk-vs-halt rules in §2.3.1.
+        pub(crate) auth_failure_urls: Mutex<std::collections::HashSet<String>>,
+    }
+
+    impl FakeBackend {
+        pub(crate) fn seed_tags(&self, url: impl Into<String>, tags: Vec<String>) {
+            self.tags.lock().unwrap().insert(url.into(), tags);
+        }
+        pub(crate) fn seed_file(
+            &self,
+            url: impl Into<String>,
+            refname: impl Into<String>,
+            path: impl Into<String>,
+            bytes: Vec<u8>,
+        ) {
+            self.files
+                .lock()
+                .unwrap()
+                .insert((url.into(), refname.into(), path.into()), bytes);
+        }
+        pub(crate) fn seed_bootstrap(&self, url: impl Into<String>, source_dir: PathBuf) {
+            self.bootstrap_seeds
+                .lock()
+                .unwrap()
+                .insert(url.into(), source_dir);
+        }
+        pub(crate) fn seed_auth_failure(&self, url: impl Into<String>) {
+            self.auth_failure_urls.lock().unwrap().insert(url.into());
+        }
+        pub(crate) fn bootstrap_count(&self) -> u32 {
+            *self.bootstrap_calls.lock().unwrap()
+        }
+    }
+
+    impl GitBackend for FakeBackend {
+        fn bootstrap(&self, url: &str, _refname: &str, dest: &Path) -> Result<(), GitError> {
+            *self.bootstrap_calls.lock().unwrap() += 1;
+            let seed = self
+                .bootstrap_seeds
+                .lock()
+                .unwrap()
+                .get(url)
+                .cloned()
+                .ok_or_else(|| GitError::RepoNotFound {
+                    url: url.to_string(),
+                })?;
+            fs::create_dir_all(dest).unwrap();
+            for entry in walkdir::WalkDir::new(&seed)
+                .into_iter()
+                .filter_map(|e| e.ok())
+            {
+                let rel = entry.path().strip_prefix(&seed).unwrap();
+                if rel.as_os_str().is_empty() {
+                    continue;
+                }
+                let target = dest.join(rel);
+                if entry.file_type().is_dir() {
+                    fs::create_dir_all(&target).unwrap();
+                } else if entry.file_type().is_file() {
+                    fs::copy(entry.path(), &target).unwrap();
+                }
+            }
+            fs::create_dir_all(dest.join(".git")).unwrap();
+            Ok(())
+        }
+        fn update(&self, _dest: &Path, _refname: &str) -> Result<(), GitError> {
+            *self.update_calls.lock().unwrap() += 1;
+            Ok(())
+        }
+        fn list_tags(&self, url: &str) -> Result<Vec<String>, GitError> {
+            if self.auth_failure_urls.lock().unwrap().contains(url) {
+                return Err(GitError::AuthFailed {
+                    url: url.to_string(),
+                });
+            }
+            self.tags
+                .lock()
+                .unwrap()
+                .get(url)
+                .cloned()
+                .ok_or_else(|| GitError::RepoNotFound {
+                    url: url.to_string(),
+                })
+        }
+        fn fetch_file_at_ref(
+            &self,
+            url: &str,
+            refname: &str,
+            path: &str,
+        ) -> Result<Vec<u8>, GitError> {
+            let key = (url.to_string(), refname.to_string(), path.to_string());
+            self.files
+                .lock()
+                .unwrap()
+                .get(&key)
+                .cloned()
+                .ok_or_else(|| GitError::FileNotFoundInRef {
+                    url: url.to_string(),
+                    refname: refname.to_string(),
+                    path: path.to_string(),
+                })
+        }
+    }
+
+    pub(crate) fn registry_section(name: &str, url: &str) -> RegistrySection {
+        RegistrySection {
+            name: name.to_string(),
+            url: url.to_string(),
+            r#ref: "main".to_string(),
+            naming: NamingConvention::Fqdn,
+            auth: vibe_core::manifest::AuthKind::None,
+            token_env: None,
+        }
+    }
+
+    pub(crate) fn registry_section_token_env(
+        name: &str,
+        url: &str,
+        env_var: &str,
+    ) -> RegistrySection {
+        RegistrySection {
+            name: name.to_string(),
+            url: url.to_string(),
+            r#ref: "main".to_string(),
+            naming: NamingConvention::Fqdn,
+            auth: vibe_core::manifest::AuthKind::TokenEnv,
+            token_env: Some(env_var.to_string()),
+        }
+    }
+
+    pub(crate) fn manifest_text(name: &str, kind: &str, version: &str) -> String {
+        format!(
+            "[package]\ngroup = \"org.vibevm\"\nname = \"{name}\"\nkind = \"{kind}\"\nversion = \"{version}\"\n"
+        )
+    }
+
+    /// The canonical group every fixture package in these tests belongs
+    /// to. The resolver is group-native (PROP-008): identity is
+    /// `(group, name)`, `kind` plays no part in resolution.
+    pub(crate) fn org() -> Group {
+        Group::parse("org.vibevm").unwrap()
+    }
+
+    pub(crate) fn build_resolver(
+        cache: &Path,
+        registries: Vec<RegistrySection>,
+        mirrors: Vec<MirrorSection>,
+        overrides: Vec<OverrideSection>,
+        backend: Arc<FakeBackend>,
+    ) -> MultiRegistryResolver {
+        MultiRegistryResolver::from_manifest(
+            &registries,
+            &mirrors,
+            &overrides,
+            cache.to_path_buf(),
+            backend,
+            DEFAULT_FRESHNESS_SECS,
+        )
+        .unwrap()
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use tempfile::tempdir;
+
+    use crate::multi_registry_resolver::test_support::*;
+
+    #[test]
+    fn mirrors_for_filters_and_sorts() {
+        let cache = tempdir().unwrap();
+        let fake = Arc::new(FakeBackend::default());
+
+        let mirrors = vec![
+            MirrorSection {
+                of: "vibespecs".to_string(),
+                url: "https://a".to_string(),
+                priority: 2,
+            },
+            MirrorSection {
+                of: "vibespecs".to_string(),
+                url: "https://b".to_string(),
+                priority: 1,
+            },
+            MirrorSection {
+                of: "*".to_string(),
+                url: "https://catchall".to_string(),
+                priority: 99,
+            },
+            MirrorSection {
+                of: "other".to_string(),
+                url: "https://unrelated".to_string(),
+                priority: 0,
+            },
+        ];
+        let r = build_resolver(
+            cache.path(),
+            vec![registry_section("vibespecs", "git@host:org")],
+            mirrors,
+            vec![],
+            fake,
+        );
+
+        let m = r.mirrors_for("vibespecs");
+        assert_eq!(m.len(), 3);
+        assert_eq!(m[0].url, "https://b");
+        assert_eq!(m[1].url, "https://a");
+        assert_eq!(m[2].url, "https://catchall");
+    }
+}
