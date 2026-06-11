@@ -109,14 +109,14 @@
       "crate_name": "specmark",
       "file": "crates/specmark/tests/usage.rs",
       "item_kind": "impl",
-      "line": 26,
+      "line": 29,
       "symbol": "specmark::tests::usage::<impl Tagged>"
     },
     {
       "crate_name": "specmark",
       "file": "crates/specmark/tests/usage.rs",
       "item_kind": "enum",
-      "line": 19,
+      "line": 22,
       "symbol": "specmark::tests::usage::MultiTagged"
     },
     {
@@ -130,28 +130,28 @@
       "crate_name": "specmark",
       "file": "crates/specmark/tests/usage.rs",
       "item_kind": "fn",
-      "line": 37,
+      "line": 40,
       "symbol": "specmark::tests::usage::helper"
     },
     {
       "crate_name": "specmark",
       "file": "crates/specmark/tests/usage.rs",
       "item_kind": "mod",
-      "line": 43,
+      "line": 46,
       "symbol": "specmark::tests::usage::inner"
     },
     {
       "crate_name": "specmark",
       "file": "crates/specmark/tests/usage.rs",
       "item_kind": "fn",
-      "line": 50,
+      "line": 53,
       "symbol": "specmark::tests::usage::tags_are_inert"
     },
     {
       "crate_name": "specmark",
       "file": "crates/specmark/tests/usage.rs",
       "item_kind": "fn",
-      "line": 61,
+      "line": 64,
       "symbol": "specmark::tests::usage::verifies_without_pin_compiles_and_runs"
     },
     {
@@ -1197,7 +1197,7 @@
       "from_symbol": "conform_core",
       "line": 29,
       "provenance": "authored",
-      "uri": "spec://vibevm/neworder/ENGINE-CONFORM-v0.1#facts",
+      "uri": "spec://vibevm/discipline/ENGINE-CONFORM-v0.1#facts",
       "verb": "implements"
     },
     {
@@ -1205,7 +1205,7 @@
       "from_symbol": "conform_core::baseline",
       "line": 485,
       "provenance": "authored",
-      "uri": "spec://vibevm/neworder/ENGINE-CONFORM-v0.1#rules",
+      "uri": "spec://vibevm/discipline/ENGINE-CONFORM-v0.1#rules",
       "verb": "implements"
     },
     {
@@ -1213,7 +1213,7 @@
       "from_symbol": "conform_core::rules",
       "line": 255,
       "provenance": "authored",
-      "uri": "spec://vibevm/neworder/ENGINE-CONFORM-v0.1#rules",
+      "uri": "spec://vibevm/discipline/ENGINE-CONFORM-v0.1#rules",
       "verb": "implements"
     },
     {
@@ -1221,7 +1221,7 @@
       "from_symbol": "conform_core::sarif",
       "line": 428,
       "provenance": "authored",
-      "uri": "spec://vibevm/neworder/ENGINE-CONFORM-v0.1#determinism",
+      "uri": "spec://vibevm/discipline/ENGINE-CONFORM-v0.1#determinism",
       "verb": "implements"
     },
     {
@@ -1229,7 +1229,7 @@
       "from_symbol": "conform_frontend_rust",
       "line": 12,
       "provenance": "authored",
-      "uri": "spec://vibevm/neworder/ENGINE-CONFORM-v0.1#frontends",
+      "uri": "spec://vibevm/discipline/ENGINE-CONFORM-v0.1#frontends",
       "verb": "implements"
     },
     {
@@ -1237,7 +1237,7 @@
       "from_symbol": "specmap_core",
       "line": 21,
       "provenance": "authored",
-      "uri": "spec://vibevm/neworder/PROP-014#index",
+      "uri": "spec://vibevm/discipline/PROP-014#index",
       "verb": "implements"
     },
     {
@@ -1245,7 +1245,7 @@
       "from_symbol": "specmap_core::explain",
       "line": 7,
       "provenance": "authored",
-      "uri": "spec://vibevm/neworder/PROP-014#queries",
+      "uri": "spec://vibevm/discipline/PROP-014#queries",
       "verb": "implements"
     },
     {
@@ -1253,7 +1253,7 @@
       "from_symbol": "specmap_core::index",
       "line": 13,
       "provenance": "authored",
-      "uri": "spec://vibevm/neworder/PROP-014#index",
+      "uri": "spec://vibevm/discipline/PROP-014#index",
       "verb": "implements"
     },
     {
@@ -1261,7 +1261,7 @@
       "from_symbol": "specmap_core::ledger",
       "line": 20,
       "provenance": "authored",
-      "uri": "spec://vibevm/neworder/LEDGER-INTENT-v0.1#classes",
+      "uri": "spec://vibevm/discipline/LEDGER-INTENT-v0.1#classes",
       "verb": "implements"
     },
     {
@@ -1269,7 +1269,7 @@
       "from_symbol": "specmap_core::mdspec",
       "line": 11,
       "provenance": "authored",
-      "uri": "spec://vibevm/neworder/PROP-014#spec-units",
+      "uri": "spec://vibevm/discipline/PROP-014#spec-units",
       "verb": "implements"
     },
     {
@@ -1277,7 +1277,7 @@
       "from_symbol": "specmap_core::ratchet",
       "line": 25,
       "provenance": "authored",
-      "uri": "spec://vibevm/neworder/PROP-014#index",
+      "uri": "spec://vibevm/discipline/PROP-014#index",
       "verb": "implements"
     },
     {
@@ -1285,7 +1285,7 @@
       "from_symbol": "specmap_core::rscan",
       "line": 10,
       "provenance": "authored",
-      "uri": "spec://vibevm/neworder/PROP-014#addressing-code",
+      "uri": "spec://vibevm/discipline/PROP-014#addressing-code",
       "verb": "implements"
     },
     {
@@ -1293,7 +1293,7 @@
       "from_symbol": "specmap_core::testgate",
       "line": 14,
       "provenance": "authored",
-      "uri": "spec://vibevm/neworder/BROWNFIELD-PROTOCOL-v0.1#test-gate",
+      "uri": "spec://vibevm/discipline/BROWNFIELD-PROTOCOL-v0.1#test-gate",
       "verb": "implements"
     },
     {
@@ -1301,7 +1301,7 @@
       "from_symbol": "specmap_core::tripwire",
       "line": 10,
       "provenance": "authored",
-      "uri": "spec://vibevm/neworder/BROWNFIELD-PROTOCOL-v0.1#registries",
+      "uri": "spec://vibevm/discipline/BROWNFIELD-PROTOCOL-v0.1#registries",
       "verb": "implements"
     },
     {
@@ -1309,15 +1309,15 @@
       "from_symbol": "specmark::tests::usage",
       "line": 12,
       "provenance": "authored",
-      "uri": "spec://vibevm/neworder/PROP-014#addressing-code",
+      "uri": "spec://vibevm/discipline/PROP-014#addressing-code",
       "verb": "implements"
     },
     {
       "file": "crates/specmark/tests/usage.rs",
       "from_symbol": "specmark::tests::usage::<impl Tagged>",
-      "line": 26,
+      "line": 29,
       "provenance": "authored",
-      "uri": "spec://vibevm/neworder/PROP-014#addressing-code",
+      "uri": "spec://vibevm/discipline/PROP-014#addressing-code",
       "verb": "deviates",
       "pinned_r": 1,
       "reason": "test fixture exercising the deviates carrier form"
@@ -1325,17 +1325,17 @@
     {
       "file": "crates/specmark/tests/usage.rs",
       "from_symbol": "specmark::tests::usage::MultiTagged",
-      "line": 19,
+      "line": 22,
       "provenance": "authored",
-      "uri": "spec://vibevm/neworder/PROP-014#addressing-code",
+      "uri": "spec://vibevm/discipline/PROP-014#addressing-code",
       "verb": "implements"
     },
     {
       "file": "crates/specmark/tests/usage.rs",
       "from_symbol": "specmark::tests::usage::MultiTagged",
-      "line": 20,
+      "line": 23,
       "provenance": "authored",
-      "uri": "spec://vibevm/neworder/PROP-014#addressing-spec",
+      "uri": "spec://vibevm/discipline/PROP-014#addressing-spec",
       "verb": "documents",
       "pinned_r": 1
     },
@@ -1344,43 +1344,43 @@
       "from_symbol": "specmark::tests::usage::Tagged",
       "line": 14,
       "provenance": "authored",
-      "uri": "spec://vibevm/neworder/PROP-014#addressing-code",
+      "uri": "spec://vibevm/discipline/PROP-014#addressing-code",
       "verb": "implements",
       "pinned_r": 1
     },
     {
       "file": "crates/specmark/tests/usage.rs",
       "from_symbol": "specmark::tests::usage::helper",
-      "line": 37,
+      "line": 40,
       "provenance": "authored",
-      "uri": "spec://vibevm/neworder/PROP-014#edges",
+      "uri": "spec://vibevm/discipline/PROP-014#edges",
       "verb": "informs",
       "pinned_r": 1
     },
     {
       "file": "crates/specmark/tests/usage.rs",
       "from_symbol": "specmark::tests::usage::inner",
-      "line": 43,
+      "line": 46,
       "provenance": "authored",
-      "uri": "spec://vibevm/neworder/PROP-014#addressing-code",
+      "uri": "spec://vibevm/discipline/PROP-014#addressing-code",
       "verb": "implements",
       "pinned_r": 1
     },
     {
       "file": "crates/specmark/tests/usage.rs",
       "from_symbol": "specmark::tests::usage::tags_are_inert",
-      "line": 51,
+      "line": 54,
       "provenance": "authored",
-      "uri": "spec://vibevm/neworder/PROP-014#addressing-code",
+      "uri": "spec://vibevm/discipline/PROP-014#addressing-code",
       "verb": "verifies",
       "pinned_r": 1
     },
     {
       "file": "crates/specmark/tests/usage.rs",
       "from_symbol": "specmark::tests::usage::verifies_without_pin_compiles_and_runs",
-      "line": 62,
+      "line": 65,
       "provenance": "authored",
-      "uri": "spec://vibevm/neworder/PROP-014#addressing-code",
+      "uri": "spec://vibevm/discipline/PROP-014#addressing-code",
       "verb": "verifies"
     },
     {
@@ -3046,6 +3046,420 @@
       "heading": "7. Version history",
       "line": 132,
       "uri": "spec://vibevm/common/PROP-013#history"
+    },
+    {
+      "anchor": "problem",
+      "content_hash": "",
+      "doc_path": "discipline/BROWNFIELD-PROTOCOL-v0.1",
+      "file": "spec/discipline/BROWNFIELD-PROTOCOL-v0.1.md",
+      "heading": "1. The problem, stated precisely",
+      "line": 9,
+      "uri": "spec://vibevm/discipline/BROWNFIELD-PROTOCOL-v0.1#problem"
+    },
+    {
+      "anchor": "principles",
+      "content_hash": "",
+      "doc_path": "discipline/BROWNFIELD-PROTOCOL-v0.1",
+      "file": "spec/discipline/BROWNFIELD-PROTOCOL-v0.1.md",
+      "heading": "2. Principles",
+      "line": 13,
+      "uri": "spec://vibevm/discipline/BROWNFIELD-PROTOCOL-v0.1#principles"
+    },
+    {
+      "anchor": "registries",
+      "content_hash": "",
+      "doc_path": "discipline/BROWNFIELD-PROTOCOL-v0.1",
+      "file": "spec/discipline/BROWNFIELD-PROTOCOL-v0.1.md",
+      "heading": "3. The registries",
+      "line": 23,
+      "uri": "spec://vibevm/discipline/BROWNFIELD-PROTOCOL-v0.1#registries"
+    },
+    {
+      "anchor": "test-gate",
+      "content_hash": "",
+      "doc_path": "discipline/BROWNFIELD-PROTOCOL-v0.1",
+      "file": "spec/discipline/BROWNFIELD-PROTOCOL-v0.1.md",
+      "heading": "4. The test gate — xfail-strict semantics",
+      "line": 57,
+      "uri": "spec://vibevm/discipline/BROWNFIELD-PROTOCOL-v0.1#test-gate"
+    },
+    {
+      "anchor": "spec-lifecycle",
+      "content_hash": "",
+      "doc_path": "discipline/BROWNFIELD-PROTOCOL-v0.1",
+      "file": "spec/discipline/BROWNFIELD-PROTOCOL-v0.1.md",
+      "heading": "5. Spec lifecycle and the conflict protocol",
+      "line": 66,
+      "uri": "spec://vibevm/discipline/BROWNFIELD-PROTOCOL-v0.1#spec-lifecycle"
+    },
+    {
+      "anchor": "characterization",
+      "content_hash": "",
+      "doc_path": "discipline/BROWNFIELD-PROTOCOL-v0.1",
+      "file": "spec/discipline/BROWNFIELD-PROTOCOL-v0.1.md",
+      "heading": "6. Characterization of record",
+      "line": 75,
+      "uri": "spec://vibevm/discipline/BROWNFIELD-PROTOCOL-v0.1#characterization"
+    },
+    {
+      "anchor": "frontier",
+      "content_hash": "",
+      "doc_path": "discipline/BROWNFIELD-PROTOCOL-v0.1",
+      "file": "spec/discipline/BROWNFIELD-PROTOCOL-v0.1.md",
+      "heading": "7. Frontier and monotone utility",
+      "line": 79,
+      "uri": "spec://vibevm/discipline/BROWNFIELD-PROTOCOL-v0.1#frontier"
+    },
+    {
+      "anchor": "carry-over",
+      "content_hash": "",
+      "doc_path": "discipline/BROWNFIELD-PROTOCOL-v0.1",
+      "file": "spec/discipline/BROWNFIELD-PROTOCOL-v0.1.md",
+      "heading": "8. Carry-over guarantee and exit accounting",
+      "line": 83,
+      "uri": "spec://vibevm/discipline/BROWNFIELD-PROTOCOL-v0.1#carry-over"
+    },
+    {
+      "anchor": "governance",
+      "content_hash": "",
+      "doc_path": "discipline/BROWNFIELD-PROTOCOL-v0.1",
+      "file": "spec/discipline/BROWNFIELD-PROTOCOL-v0.1.md",
+      "heading": "9. Governance",
+      "line": 87,
+      "uri": "spec://vibevm/discipline/BROWNFIELD-PROTOCOL-v0.1#governance"
+    },
+    {
+      "anchor": "prior-art",
+      "content_hash": "",
+      "doc_path": "discipline/BROWNFIELD-PROTOCOL-v0.1",
+      "file": "spec/discipline/BROWNFIELD-PROTOCOL-v0.1.md",
+      "heading": "10. Prior art",
+      "line": 93,
+      "uri": "spec://vibevm/discipline/BROWNFIELD-PROTOCOL-v0.1#prior-art"
+    },
+    {
+      "anchor": "open",
+      "content_hash": "",
+      "doc_path": "discipline/BROWNFIELD-PROTOCOL-v0.1",
+      "file": "spec/discipline/BROWNFIELD-PROTOCOL-v0.1.md",
+      "heading": "11. Open questions",
+      "line": 97,
+      "uri": "spec://vibevm/discipline/BROWNFIELD-PROTOCOL-v0.1#open"
+    },
+    {
+      "anchor": "tiers",
+      "content_hash": "",
+      "doc_path": "discipline/ENGINE-CONFORM-v0.1",
+      "file": "spec/discipline/ENGINE-CONFORM-v0.1.md",
+      "heading": "1. Escalation tiers",
+      "line": 9,
+      "uri": "spec://vibevm/discipline/ENGINE-CONFORM-v0.1#tiers"
+    },
+    {
+      "anchor": "frontends",
+      "content_hash": "",
+      "doc_path": "discipline/ENGINE-CONFORM-v0.1",
+      "file": "spec/discipline/ENGINE-CONFORM-v0.1.md",
+      "heading": "2. Frontends — borrowed, behind one trait",
+      "line": 21,
+      "uri": "spec://vibevm/discipline/ENGINE-CONFORM-v0.1#frontends"
+    },
+    {
+      "anchor": "facts",
+      "content_hash": "",
+      "doc_path": "discipline/ENGINE-CONFORM-v0.1",
+      "file": "spec/discipline/ENGINE-CONFORM-v0.1.md",
+      "heading": "3. The fact store",
+      "line": 42,
+      "uri": "spec://vibevm/discipline/ENGINE-CONFORM-v0.1#facts"
+    },
+    {
+      "anchor": "rules",
+      "content_hash": "",
+      "doc_path": "discipline/ENGINE-CONFORM-v0.1",
+      "file": "spec/discipline/ENGINE-CONFORM-v0.1.md",
+      "heading": "4. Rules as queries",
+      "line": 57,
+      "uri": "spec://vibevm/discipline/ENGINE-CONFORM-v0.1#rules"
+    },
+    {
+      "anchor": "determinism",
+      "content_hash": "",
+      "doc_path": "discipline/ENGINE-CONFORM-v0.1",
+      "file": "spec/discipline/ENGINE-CONFORM-v0.1.md",
+      "heading": "5. Determinism and gates",
+      "line": 63,
+      "uri": "spec://vibevm/discipline/ENGINE-CONFORM-v0.1#determinism"
+    },
+    {
+      "anchor": "open",
+      "content_hash": "",
+      "doc_path": "discipline/ENGINE-CONFORM-v0.1",
+      "file": "spec/discipline/ENGINE-CONFORM-v0.1.md",
+      "heading": "6. Open questions",
+      "line": 67,
+      "uri": "spec://vibevm/discipline/ENGINE-CONFORM-v0.1#open"
+    },
+    {
+      "anchor": "what",
+      "content_hash": "",
+      "doc_path": "discipline/LEDGER-INTENT-v0.1",
+      "file": "spec/discipline/LEDGER-INTENT-v0.1.md",
+      "heading": "1. What the ledger is",
+      "line": 7,
+      "uri": "spec://vibevm/discipline/LEDGER-INTENT-v0.1#what"
+    },
+    {
+      "anchor": "classes",
+      "content_hash": "",
+      "doc_path": "discipline/LEDGER-INTENT-v0.1",
+      "file": "spec/discipline/LEDGER-INTENT-v0.1.md",
+      "heading": "2. Two storage classes — the load-bearing taxonomy",
+      "line": 13,
+      "uri": "spec://vibevm/discipline/LEDGER-INTENT-v0.1#classes"
+    },
+    {
+      "anchor": "epochs",
+      "content_hash": "",
+      "doc_path": "discipline/LEDGER-INTENT-v0.1",
+      "file": "spec/discipline/LEDGER-INTENT-v0.1.md",
+      "heading": "3. Epochs — contextual invalidation",
+      "line": 22,
+      "uri": "spec://vibevm/discipline/LEDGER-INTENT-v0.1#epochs"
+    },
+    {
+      "anchor": "provenance",
+      "content_hash": "",
+      "doc_path": "discipline/LEDGER-INTENT-v0.1",
+      "file": "spec/discipline/LEDGER-INTENT-v0.1.md",
+      "heading": "4. Provenance — every entry confesses its origin",
+      "line": 33,
+      "uri": "spec://vibevm/discipline/LEDGER-INTENT-v0.1#provenance"
+    },
+    {
+      "anchor": "storage",
+      "content_hash": "",
+      "doc_path": "discipline/LEDGER-INTENT-v0.1",
+      "file": "spec/discipline/LEDGER-INTENT-v0.1.md",
+      "heading": "5. Storage and lifecycle",
+      "line": 37,
+      "uri": "spec://vibevm/discipline/LEDGER-INTENT-v0.1#storage"
+    },
+    {
+      "anchor": "queries",
+      "content_hash": "",
+      "doc_path": "discipline/LEDGER-INTENT-v0.1",
+      "file": "spec/discipline/LEDGER-INTENT-v0.1.md",
+      "heading": "6. Query kinds shipped in v0.1",
+      "line": 44,
+      "uri": "spec://vibevm/discipline/LEDGER-INTENT-v0.1#queries"
+    },
+    {
+      "anchor": "release-slice",
+      "content_hash": "",
+      "doc_path": "discipline/LEDGER-INTENT-v0.1",
+      "file": "spec/discipline/LEDGER-INTENT-v0.1.md",
+      "heading": "7. The release slice",
+      "line": 53,
+      "uri": "spec://vibevm/discipline/LEDGER-INTENT-v0.1#release-slice"
+    },
+    {
+      "anchor": "failures",
+      "content_hash": "",
+      "doc_path": "discipline/LEDGER-INTENT-v0.1",
+      "file": "spec/discipline/LEDGER-INTENT-v0.1.md",
+      "heading": "8. Failure modes, named",
+      "line": 57,
+      "uri": "spec://vibevm/discipline/LEDGER-INTENT-v0.1#failures"
+    },
+    {
+      "anchor": "problem",
+      "content_hash": "",
+      "doc_path": "discipline/PROP-014",
+      "file": "spec/discipline/PROP-014-specmap-bidirectional-traceability.md",
+      "heading": "1. Problem statement",
+      "line": 11,
+      "uri": "spec://vibevm/discipline/PROP-014#problem"
+    },
+    {
+      "anchor": "analogy",
+      "content_hash": "",
+      "doc_path": "discipline/PROP-014",
+      "file": "spec/discipline/PROP-014-specmap-bidirectional-traceability.md",
+      "heading": "1.1 Where the source-map analogy holds, and where it breaks",
+      "line": 17,
+      "uri": "spec://vibevm/discipline/PROP-014#analogy"
+    },
+    {
+      "anchor": "runtime-vision",
+      "content_hash": "",
+      "doc_path": "discipline/PROP-014",
+      "file": "spec/discipline/PROP-014-specmap-bidirectional-traceability.md",
+      "heading": "1.2 The runtime vision (AI-native open source)",
+      "line": 28,
+      "uri": "spec://vibevm/discipline/PROP-014#runtime-vision"
+    },
+    {
+      "anchor": "decisions",
+      "content_hash": "",
+      "doc_path": "discipline/PROP-014",
+      "file": "spec/discipline/PROP-014-specmap-bidirectional-traceability.md",
+      "heading": "2. Decisions",
+      "line": 34,
+      "uri": "spec://vibevm/discipline/PROP-014#decisions"
+    },
+    {
+      "anchor": "addressing-spec",
+      "content_hash": "",
+      "doc_path": "discipline/PROP-014",
+      "file": "spec/discipline/PROP-014-specmap-bidirectional-traceability.md",
+      "heading": "2.1 Addressing: spec-side",
+      "line": 38,
+      "uri": "spec://vibevm/discipline/PROP-014#addressing-spec"
+    },
+    {
+      "anchor": "spec-units",
+      "content_hash": "",
+      "doc_path": "discipline/PROP-014",
+      "file": "spec/discipline/PROP-014-specmap-bidirectional-traceability.md",
+      "heading": "2.2 Spec units, normativity, and the two-tier revision discipline",
+      "line": 51,
+      "uri": "spec://vibevm/discipline/PROP-014#spec-units"
+    },
+    {
+      "anchor": "addressing-code",
+      "content_hash": "",
+      "doc_path": "discipline/PROP-014",
+      "file": "spec/discipline/PROP-014-specmap-bidirectional-traceability.md",
+      "heading": "2.3 Addressing: code-side — tags that travel",
+      "line": 80,
+      "uri": "spec://vibevm/discipline/PROP-014#addressing-code"
+    },
+    {
+      "anchor": "edges",
+      "content_hash": "",
+      "doc_path": "discipline/PROP-014",
+      "file": "spec/discipline/PROP-014-specmap-bidirectional-traceability.md",
+      "heading": "2.4 The edge model",
+      "line": 125,
+      "uri": "spec://vibevm/discipline/PROP-014#edges"
+    },
+    {
+      "anchor": "index",
+      "content_hash": "",
+      "doc_path": "discipline/PROP-014",
+      "file": "spec/discipline/PROP-014-specmap-bidirectional-traceability.md",
+      "heading": "2.5 The index: `specmap.json`",
+      "line": 133,
+      "uri": "spec://vibevm/discipline/PROP-014#index"
+    },
+    {
+      "anchor": "queries",
+      "content_hash": "",
+      "doc_path": "discipline/PROP-014",
+      "file": "spec/discipline/PROP-014-specmap-bidirectional-traceability.md",
+      "heading": "2.6 Query surface",
+      "line": 142,
+      "uri": "spec://vibevm/discipline/PROP-014#queries"
+    },
+    {
+      "anchor": "llm-boundary",
+      "content_hash": "",
+      "doc_path": "discipline/PROP-014",
+      "file": "spec/discipline/PROP-014-specmap-bidirectional-traceability.md",
+      "heading": "2.7 The LLM boundary",
+      "line": 156,
+      "uri": "spec://vibevm/discipline/PROP-014#llm-boundary"
+    },
+    {
+      "anchor": "runtime",
+      "content_hash": "",
+      "doc_path": "discipline/PROP-014",
+      "file": "spec/discipline/PROP-014-specmap-bidirectional-traceability.md",
+      "heading": "2.8 Runtime exposure — the AI-native OSS channel",
+      "line": 164,
+      "uri": "spec://vibevm/discipline/PROP-014#runtime"
+    },
+    {
+      "anchor": "languages",
+      "content_hash": "",
+      "doc_path": "discipline/PROP-014",
+      "file": "spec/discipline/PROP-014-specmap-bidirectional-traceability.md",
+      "heading": "2.9 Language neutrality",
+      "line": 171,
+      "uri": "spec://vibevm/discipline/PROP-014#languages"
+    },
+    {
+      "anchor": "principles",
+      "content_hash": "",
+      "doc_path": "discipline/PROP-014",
+      "file": "spec/discipline/PROP-014-specmap-bidirectional-traceability.md",
+      "heading": "3. Principles",
+      "line": 180,
+      "uri": "spec://vibevm/discipline/PROP-014#principles"
+    },
+    {
+      "anchor": "spec-principles",
+      "content_hash": "",
+      "doc_path": "discipline/PROP-014",
+      "file": "spec/discipline/PROP-014-specmap-bidirectional-traceability.md",
+      "heading": "3.1 (а) Writing specifications",
+      "line": 182,
+      "uri": "spec://vibevm/discipline/PROP-014#spec-principles"
+    },
+    {
+      "anchor": "rust-principles",
+      "content_hash": "",
+      "doc_path": "discipline/PROP-014",
+      "file": "spec/discipline/PROP-014-specmap-bidirectional-traceability.md",
+      "heading": "3.2 (б) Writing Rust under specmap",
+      "line": 195,
+      "uri": "spec://vibevm/discipline/PROP-014#rust-principles"
+    },
+    {
+      "anchor": "binding-principles",
+      "content_hash": "",
+      "doc_path": "discipline/PROP-014",
+      "file": "spec/discipline/PROP-014-specmap-bidirectional-traceability.md",
+      "heading": "3.3 (в) Binding principles",
+      "line": 208,
+      "uri": "spec://vibevm/discipline/PROP-014#binding-principles"
+    },
+    {
+      "anchor": "migration",
+      "content_hash": "",
+      "doc_path": "discipline/PROP-014",
+      "file": "spec/discipline/PROP-014-specmap-bidirectional-traceability.md",
+      "heading": "4. (г) Migration playbook — transforming vibevm with Claude Code",
+      "line": 214,
+      "uri": "spec://vibevm/discipline/PROP-014#migration"
+    },
+    {
+      "anchor": "rejected",
+      "content_hash": "",
+      "doc_path": "discipline/PROP-014",
+      "file": "spec/discipline/PROP-014-specmap-bidirectional-traceability.md",
+      "heading": "5. Rejected alternatives",
+      "line": 284,
+      "uri": "spec://vibevm/discipline/PROP-014#rejected"
+    },
+    {
+      "anchor": "prior-art",
+      "content_hash": "",
+      "doc_path": "discipline/PROP-014",
+      "file": "spec/discipline/PROP-014-specmap-bidirectional-traceability.md",
+      "heading": "6. Prior art and license posture",
+      "line": 293,
+      "uri": "spec://vibevm/discipline/PROP-014#prior-art"
+    },
+    {
+      "anchor": "open",
+      "content_hash": "",
+      "doc_path": "discipline/PROP-014",
+      "file": "spec/discipline/PROP-014-specmap-bidirectional-traceability.md",
+      "heading": "7. Open questions",
+      "line": 310,
+      "uri": "spec://vibevm/discipline/PROP-014#open"
     },
     {
       "anchor": "root",
@@ -5138,1284 +5552,6 @@
       "uri": "spec://vibevm/modules/vibe-workspace/PROP-012#history"
     },
     {
-      "anchor": "problem",
-      "content_hash": "",
-      "doc_path": "neworder/BROWNFIELD-PROTOCOL-v0.1",
-      "file": "spec/neworder/BROWNFIELD-PROTOCOL-v0.1.md",
-      "heading": "1. The problem, stated precisely",
-      "line": 9,
-      "uri": "spec://vibevm/neworder/BROWNFIELD-PROTOCOL-v0.1#problem"
-    },
-    {
-      "anchor": "principles",
-      "content_hash": "",
-      "doc_path": "neworder/BROWNFIELD-PROTOCOL-v0.1",
-      "file": "spec/neworder/BROWNFIELD-PROTOCOL-v0.1.md",
-      "heading": "2. Principles",
-      "line": 13,
-      "uri": "spec://vibevm/neworder/BROWNFIELD-PROTOCOL-v0.1#principles"
-    },
-    {
-      "anchor": "registries",
-      "content_hash": "",
-      "doc_path": "neworder/BROWNFIELD-PROTOCOL-v0.1",
-      "file": "spec/neworder/BROWNFIELD-PROTOCOL-v0.1.md",
-      "heading": "3. The registries",
-      "line": 23,
-      "uri": "spec://vibevm/neworder/BROWNFIELD-PROTOCOL-v0.1#registries"
-    },
-    {
-      "anchor": "test-gate",
-      "content_hash": "",
-      "doc_path": "neworder/BROWNFIELD-PROTOCOL-v0.1",
-      "file": "spec/neworder/BROWNFIELD-PROTOCOL-v0.1.md",
-      "heading": "4. The test gate — xfail-strict semantics",
-      "line": 57,
-      "uri": "spec://vibevm/neworder/BROWNFIELD-PROTOCOL-v0.1#test-gate"
-    },
-    {
-      "anchor": "spec-lifecycle",
-      "content_hash": "",
-      "doc_path": "neworder/BROWNFIELD-PROTOCOL-v0.1",
-      "file": "spec/neworder/BROWNFIELD-PROTOCOL-v0.1.md",
-      "heading": "5. Spec lifecycle and the conflict protocol",
-      "line": 66,
-      "uri": "spec://vibevm/neworder/BROWNFIELD-PROTOCOL-v0.1#spec-lifecycle"
-    },
-    {
-      "anchor": "characterization",
-      "content_hash": "",
-      "doc_path": "neworder/BROWNFIELD-PROTOCOL-v0.1",
-      "file": "spec/neworder/BROWNFIELD-PROTOCOL-v0.1.md",
-      "heading": "6. Characterization of record",
-      "line": 75,
-      "uri": "spec://vibevm/neworder/BROWNFIELD-PROTOCOL-v0.1#characterization"
-    },
-    {
-      "anchor": "frontier",
-      "content_hash": "",
-      "doc_path": "neworder/BROWNFIELD-PROTOCOL-v0.1",
-      "file": "spec/neworder/BROWNFIELD-PROTOCOL-v0.1.md",
-      "heading": "7. Frontier and monotone utility",
-      "line": 79,
-      "uri": "spec://vibevm/neworder/BROWNFIELD-PROTOCOL-v0.1#frontier"
-    },
-    {
-      "anchor": "carry-over",
-      "content_hash": "",
-      "doc_path": "neworder/BROWNFIELD-PROTOCOL-v0.1",
-      "file": "spec/neworder/BROWNFIELD-PROTOCOL-v0.1.md",
-      "heading": "8. Carry-over guarantee and exit accounting",
-      "line": 83,
-      "uri": "spec://vibevm/neworder/BROWNFIELD-PROTOCOL-v0.1#carry-over"
-    },
-    {
-      "anchor": "governance",
-      "content_hash": "",
-      "doc_path": "neworder/BROWNFIELD-PROTOCOL-v0.1",
-      "file": "spec/neworder/BROWNFIELD-PROTOCOL-v0.1.md",
-      "heading": "9. Governance",
-      "line": 87,
-      "uri": "spec://vibevm/neworder/BROWNFIELD-PROTOCOL-v0.1#governance"
-    },
-    {
-      "anchor": "prior-art",
-      "content_hash": "",
-      "doc_path": "neworder/BROWNFIELD-PROTOCOL-v0.1",
-      "file": "spec/neworder/BROWNFIELD-PROTOCOL-v0.1.md",
-      "heading": "10. Prior art",
-      "line": 93,
-      "uri": "spec://vibevm/neworder/BROWNFIELD-PROTOCOL-v0.1#prior-art"
-    },
-    {
-      "anchor": "open",
-      "content_hash": "",
-      "doc_path": "neworder/BROWNFIELD-PROTOCOL-v0.1",
-      "file": "spec/neworder/BROWNFIELD-PROTOCOL-v0.1.md",
-      "heading": "11. Open questions",
-      "line": 97,
-      "uri": "spec://vibevm/neworder/BROWNFIELD-PROTOCOL-v0.1#open"
-    },
-    {
-      "anchor": "tiers",
-      "content_hash": "",
-      "doc_path": "neworder/ENGINE-CONFORM-v0.1",
-      "file": "spec/neworder/ENGINE-CONFORM-v0.1.md",
-      "heading": "1. Escalation tiers",
-      "line": 9,
-      "uri": "spec://vibevm/neworder/ENGINE-CONFORM-v0.1#tiers"
-    },
-    {
-      "anchor": "frontends",
-      "content_hash": "",
-      "doc_path": "neworder/ENGINE-CONFORM-v0.1",
-      "file": "spec/neworder/ENGINE-CONFORM-v0.1.md",
-      "heading": "2. Frontends — borrowed, behind one trait",
-      "line": 21,
-      "uri": "spec://vibevm/neworder/ENGINE-CONFORM-v0.1#frontends"
-    },
-    {
-      "anchor": "facts",
-      "content_hash": "",
-      "doc_path": "neworder/ENGINE-CONFORM-v0.1",
-      "file": "spec/neworder/ENGINE-CONFORM-v0.1.md",
-      "heading": "3. The fact store",
-      "line": 42,
-      "uri": "spec://vibevm/neworder/ENGINE-CONFORM-v0.1#facts"
-    },
-    {
-      "anchor": "rules",
-      "content_hash": "",
-      "doc_path": "neworder/ENGINE-CONFORM-v0.1",
-      "file": "spec/neworder/ENGINE-CONFORM-v0.1.md",
-      "heading": "4. Rules as queries",
-      "line": 57,
-      "uri": "spec://vibevm/neworder/ENGINE-CONFORM-v0.1#rules"
-    },
-    {
-      "anchor": "determinism",
-      "content_hash": "",
-      "doc_path": "neworder/ENGINE-CONFORM-v0.1",
-      "file": "spec/neworder/ENGINE-CONFORM-v0.1.md",
-      "heading": "5. Determinism and gates",
-      "line": 63,
-      "uri": "spec://vibevm/neworder/ENGINE-CONFORM-v0.1#determinism"
-    },
-    {
-      "anchor": "open",
-      "content_hash": "",
-      "doc_path": "neworder/ENGINE-CONFORM-v0.1",
-      "file": "spec/neworder/ENGINE-CONFORM-v0.1.md",
-      "heading": "6. Open questions",
-      "line": 67,
-      "uri": "spec://vibevm/neworder/ENGINE-CONFORM-v0.1#open"
-    },
-    {
-      "anchor": "baseline",
-      "content_hash": "",
-      "doc_path": "neworder/GUIDE-CPP-MISRA2008-v0.1",
-      "file": "spec/neworder/GUIDE-CPP-MISRA2008-v0.1.md",
-      "heading": "0. Language baseline",
-      "line": 13,
-      "uri": "spec://vibevm/neworder/GUIDE-CPP-MISRA2008-v0.1#baseline"
-    },
-    {
-      "anchor": "cells",
-      "content_hash": "",
-      "doc_path": "neworder/GUIDE-CPP-MISRA2008-v0.1",
-      "file": "spec/neworder/GUIDE-CPP-MISRA2008-v0.1.md",
-      "heading": "1. Cells",
-      "line": 25,
-      "uri": "spec://vibevm/neworder/GUIDE-CPP-MISRA2008-v0.1#cells"
-    },
-    {
-      "anchor": "seams",
-      "content_hash": "",
-      "doc_path": "neworder/GUIDE-CPP-MISRA2008-v0.1",
-      "file": "spec/neworder/GUIDE-CPP-MISRA2008-v0.1.md",
-      "heading": "2. Seams",
-      "line": 34,
-      "uri": "spec://vibevm/neworder/GUIDE-CPP-MISRA2008-v0.1#seams"
-    },
-    {
-      "anchor": "flags",
-      "content_hash": "",
-      "doc_path": "neworder/GUIDE-CPP-MISRA2008-v0.1",
-      "file": "spec/neworder/GUIDE-CPP-MISRA2008-v0.1.md",
-      "heading": "3. Registry and flags",
-      "line": 41,
-      "uri": "spec://vibevm/neworder/GUIDE-CPP-MISRA2008-v0.1#flags"
-    },
-    {
-      "anchor": "errors",
-      "content_hash": "",
-      "doc_path": "neworder/GUIDE-CPP-MISRA2008-v0.1",
-      "file": "spec/neworder/GUIDE-CPP-MISRA2008-v0.1.md",
-      "heading": "4. Errors as contract",
-      "line": 59,
-      "uri": "spec://vibevm/neworder/GUIDE-CPP-MISRA2008-v0.1#errors"
-    },
-    {
-      "anchor": "specmark",
-      "content_hash": "",
-      "doc_path": "neworder/GUIDE-CPP-MISRA2008-v0.1",
-      "file": "spec/neworder/GUIDE-CPP-MISRA2008-v0.1.md",
-      "heading": "5. specmark carrier",
-      "line": 70,
-      "uri": "spec://vibevm/neworder/GUIDE-CPP-MISRA2008-v0.1#specmark"
-    },
-    {
-      "anchor": "naming",
-      "content_hash": "",
-      "doc_path": "neworder/GUIDE-CPP-MISRA2008-v0.1",
-      "file": "spec/neworder/GUIDE-CPP-MISRA2008-v0.1.md",
-      "heading": "6. Naming (R-020/R-021 bindings)",
-      "line": 83,
-      "uri": "spec://vibevm/neworder/GUIDE-CPP-MISRA2008-v0.1#naming"
-    },
-    {
-      "anchor": "replacement",
-      "content_hash": "",
-      "doc_path": "neworder/GUIDE-CPP-MISRA2008-v0.1",
-      "file": "spec/neworder/GUIDE-CPP-MISRA2008-v0.1.md",
-      "heading": "7. Replacement protocol (R-040 binding)",
-      "line": 88,
-      "uri": "spec://vibevm/neworder/GUIDE-CPP-MISRA2008-v0.1#replacement"
-    },
-    {
-      "anchor": "framework",
-      "content_hash": "",
-      "doc_path": "neworder/GUIDE-CPP-MISRA2008-v0.1",
-      "file": "spec/neworder/GUIDE-CPP-MISRA2008-v0.1.md",
-      "heading": "8. The Compliance:2020 framework, operationalized",
-      "line": 92,
-      "uri": "spec://vibevm/neworder/GUIDE-CPP-MISRA2008-v0.1#framework"
-    },
-    {
-      "anchor": "docs",
-      "content_hash": "",
-      "doc_path": "neworder/GUIDE-CPP-MISRA2008-v0.1",
-      "file": "spec/neworder/GUIDE-CPP-MISRA2008-v0.1.md",
-      "heading": "9. Doc layer",
-      "line": 107,
-      "uri": "spec://vibevm/neworder/GUIDE-CPP-MISRA2008-v0.1#docs"
-    },
-    {
-      "anchor": "baseline",
-      "content_hash": "",
-      "doc_path": "neworder/GUIDE-CPP-MODERN-v0.1",
-      "file": "spec/neworder/GUIDE-CPP-MODERN-v0.1.md",
-      "heading": "0. Language baseline",
-      "line": 11,
-      "uri": "spec://vibevm/neworder/GUIDE-CPP-MODERN-v0.1#baseline"
-    },
-    {
-      "anchor": "cells",
-      "content_hash": "",
-      "doc_path": "neworder/GUIDE-CPP-MODERN-v0.1",
-      "file": "spec/neworder/GUIDE-CPP-MODERN-v0.1.md",
-      "heading": "1. Cells",
-      "line": 20,
-      "uri": "spec://vibevm/neworder/GUIDE-CPP-MODERN-v0.1#cells"
-    },
-    {
-      "anchor": "seams",
-      "content_hash": "",
-      "doc_path": "neworder/GUIDE-CPP-MODERN-v0.1",
-      "file": "spec/neworder/GUIDE-CPP-MODERN-v0.1.md",
-      "heading": "2. Seams",
-      "line": 35,
-      "uri": "spec://vibevm/neworder/GUIDE-CPP-MODERN-v0.1#seams"
-    },
-    {
-      "anchor": "flags",
-      "content_hash": "",
-      "doc_path": "neworder/GUIDE-CPP-MODERN-v0.1",
-      "file": "spec/neworder/GUIDE-CPP-MODERN-v0.1.md",
-      "heading": "3. Registry and flags",
-      "line": 42,
-      "uri": "spec://vibevm/neworder/GUIDE-CPP-MODERN-v0.1#flags"
-    },
-    {
-      "anchor": "errors",
-      "content_hash": "",
-      "doc_path": "neworder/GUIDE-CPP-MODERN-v0.1",
-      "file": "spec/neworder/GUIDE-CPP-MODERN-v0.1.md",
-      "heading": "4. Errors as contract",
-      "line": 59,
-      "uri": "spec://vibevm/neworder/GUIDE-CPP-MODERN-v0.1#errors"
-    },
-    {
-      "anchor": "specmark",
-      "content_hash": "",
-      "doc_path": "neworder/GUIDE-CPP-MODERN-v0.1",
-      "file": "spec/neworder/GUIDE-CPP-MODERN-v0.1.md",
-      "heading": "5. specmark carrier",
-      "line": 67,
-      "uri": "spec://vibevm/neworder/GUIDE-CPP-MODERN-v0.1#specmark"
-    },
-    {
-      "anchor": "naming",
-      "content_hash": "",
-      "doc_path": "neworder/GUIDE-CPP-MODERN-v0.1",
-      "file": "spec/neworder/GUIDE-CPP-MODERN-v0.1.md",
-      "heading": "6. Naming (R-020/R-021 bindings)",
-      "line": 71,
-      "uri": "spec://vibevm/neworder/GUIDE-CPP-MODERN-v0.1#naming"
-    },
-    {
-      "anchor": "replacement",
-      "content_hash": "",
-      "doc_path": "neworder/GUIDE-CPP-MODERN-v0.1",
-      "file": "spec/neworder/GUIDE-CPP-MODERN-v0.1.md",
-      "heading": "7. Replacement protocol (R-040 binding)",
-      "line": 76,
-      "uri": "spec://vibevm/neworder/GUIDE-CPP-MODERN-v0.1#replacement"
-    },
-    {
-      "anchor": "risks",
-      "content_hash": "",
-      "doc_path": "neworder/GUIDE-CPP-MODERN-v0.1",
-      "file": "spec/neworder/GUIDE-CPP-MODERN-v0.1.md",
-      "heading": "8. Risk table (what conform must cover for this profile)",
-      "line": 80,
-      "uri": "spec://vibevm/neworder/GUIDE-CPP-MODERN-v0.1#risks"
-    },
-    {
-      "anchor": "docs",
-      "content_hash": "",
-      "doc_path": "neworder/GUIDE-CPP-MODERN-v0.1",
-      "file": "spec/neworder/GUIDE-CPP-MODERN-v0.1.md",
-      "heading": "9. Doc layer",
-      "line": 98,
-      "uri": "spec://vibevm/neworder/GUIDE-CPP-MODERN-v0.1#docs"
-    },
-    {
-      "anchor": "baseline",
-      "content_hash": "",
-      "doc_path": "neworder/GUIDE-CPP-TRADITIONAL-v0.1",
-      "file": "spec/neworder/GUIDE-CPP-TRADITIONAL-v0.1.md",
-      "heading": "0. Language baseline",
-      "line": 11,
-      "uri": "spec://vibevm/neworder/GUIDE-CPP-TRADITIONAL-v0.1#baseline"
-    },
-    {
-      "anchor": "cells",
-      "content_hash": "",
-      "doc_path": "neworder/GUIDE-CPP-TRADITIONAL-v0.1",
-      "file": "spec/neworder/GUIDE-CPP-TRADITIONAL-v0.1.md",
-      "heading": "1. Cells",
-      "line": 22,
-      "uri": "spec://vibevm/neworder/GUIDE-CPP-TRADITIONAL-v0.1#cells"
-    },
-    {
-      "anchor": "seams",
-      "content_hash": "",
-      "doc_path": "neworder/GUIDE-CPP-TRADITIONAL-v0.1",
-      "file": "spec/neworder/GUIDE-CPP-TRADITIONAL-v0.1.md",
-      "heading": "2. Seams",
-      "line": 40,
-      "uri": "spec://vibevm/neworder/GUIDE-CPP-TRADITIONAL-v0.1#seams"
-    },
-    {
-      "anchor": "flags",
-      "content_hash": "",
-      "doc_path": "neworder/GUIDE-CPP-TRADITIONAL-v0.1",
-      "file": "spec/neworder/GUIDE-CPP-TRADITIONAL-v0.1.md",
-      "heading": "3. Registry and flags",
-      "line": 47,
-      "uri": "spec://vibevm/neworder/GUIDE-CPP-TRADITIONAL-v0.1#flags"
-    },
-    {
-      "anchor": "errors",
-      "content_hash": "",
-      "doc_path": "neworder/GUIDE-CPP-TRADITIONAL-v0.1",
-      "file": "spec/neworder/GUIDE-CPP-TRADITIONAL-v0.1.md",
-      "heading": "4. Errors as contract",
-      "line": 65,
-      "uri": "spec://vibevm/neworder/GUIDE-CPP-TRADITIONAL-v0.1#errors"
-    },
-    {
-      "anchor": "specmark",
-      "content_hash": "",
-      "doc_path": "neworder/GUIDE-CPP-TRADITIONAL-v0.1",
-      "file": "spec/neworder/GUIDE-CPP-TRADITIONAL-v0.1.md",
-      "heading": "5. specmark carrier",
-      "line": 75,
-      "uri": "spec://vibevm/neworder/GUIDE-CPP-TRADITIONAL-v0.1#specmark"
-    },
-    {
-      "anchor": "naming",
-      "content_hash": "",
-      "doc_path": "neworder/GUIDE-CPP-TRADITIONAL-v0.1",
-      "file": "spec/neworder/GUIDE-CPP-TRADITIONAL-v0.1.md",
-      "heading": "6. Naming (R-020/R-021 bindings)",
-      "line": 88,
-      "uri": "spec://vibevm/neworder/GUIDE-CPP-TRADITIONAL-v0.1#naming"
-    },
-    {
-      "anchor": "replacement",
-      "content_hash": "",
-      "doc_path": "neworder/GUIDE-CPP-TRADITIONAL-v0.1",
-      "file": "spec/neworder/GUIDE-CPP-TRADITIONAL-v0.1.md",
-      "heading": "7. Replacement protocol (R-040 binding)",
-      "line": 93,
-      "uri": "spec://vibevm/neworder/GUIDE-CPP-TRADITIONAL-v0.1#replacement"
-    },
-    {
-      "anchor": "risks",
-      "content_hash": "",
-      "doc_path": "neworder/GUIDE-CPP-TRADITIONAL-v0.1",
-      "file": "spec/neworder/GUIDE-CPP-TRADITIONAL-v0.1.md",
-      "heading": "8. Risk table (what conform must cover for this profile)",
-      "line": 97,
-      "uri": "spec://vibevm/neworder/GUIDE-CPP-TRADITIONAL-v0.1#risks"
-    },
-    {
-      "anchor": "docs",
-      "content_hash": "",
-      "doc_path": "neworder/GUIDE-CPP-TRADITIONAL-v0.1",
-      "file": "spec/neworder/GUIDE-CPP-TRADITIONAL-v0.1.md",
-      "heading": "9. Doc layer",
-      "line": 116,
-      "uri": "spec://vibevm/neworder/GUIDE-CPP-TRADITIONAL-v0.1#docs"
-    },
-    {
-      "anchor": "baseline",
-      "content_hash": "",
-      "doc_path": "neworder/GUIDE-GO-v0.1",
-      "file": "spec/neworder/GUIDE-GO-v0.1.md",
-      "heading": "0. Language baseline",
-      "line": 11,
-      "uri": "spec://vibevm/neworder/GUIDE-GO-v0.1#baseline"
-    },
-    {
-      "anchor": "cells",
-      "content_hash": "",
-      "doc_path": "neworder/GUIDE-GO-v0.1",
-      "file": "spec/neworder/GUIDE-GO-v0.1.md",
-      "heading": "1. Cells",
-      "line": 21,
-      "uri": "spec://vibevm/neworder/GUIDE-GO-v0.1#cells"
-    },
-    {
-      "anchor": "seams",
-      "content_hash": "",
-      "doc_path": "neworder/GUIDE-GO-v0.1",
-      "file": "spec/neworder/GUIDE-GO-v0.1.md",
-      "heading": "2. Seams",
-      "line": 43,
-      "uri": "spec://vibevm/neworder/GUIDE-GO-v0.1#seams"
-    },
-    {
-      "anchor": "flags",
-      "content_hash": "",
-      "doc_path": "neworder/GUIDE-GO-v0.1",
-      "file": "spec/neworder/GUIDE-GO-v0.1.md",
-      "heading": "3. Registry and flags",
-      "line": 50,
-      "uri": "spec://vibevm/neworder/GUIDE-GO-v0.1#flags"
-    },
-    {
-      "anchor": "errors",
-      "content_hash": "",
-      "doc_path": "neworder/GUIDE-GO-v0.1",
-      "file": "spec/neworder/GUIDE-GO-v0.1.md",
-      "heading": "4. Errors as contract",
-      "line": 71,
-      "uri": "spec://vibevm/neworder/GUIDE-GO-v0.1#errors"
-    },
-    {
-      "anchor": "specmark",
-      "content_hash": "",
-      "doc_path": "neworder/GUIDE-GO-v0.1",
-      "file": "spec/neworder/GUIDE-GO-v0.1.md",
-      "heading": "5. specmark carrier",
-      "line": 102,
-      "uri": "spec://vibevm/neworder/GUIDE-GO-v0.1#specmark"
-    },
-    {
-      "anchor": "naming",
-      "content_hash": "",
-      "doc_path": "neworder/GUIDE-GO-v0.1",
-      "file": "spec/neworder/GUIDE-GO-v0.1.md",
-      "heading": "6. Naming (R-020/R-021 bindings)",
-      "line": 115,
-      "uri": "spec://vibevm/neworder/GUIDE-GO-v0.1#naming"
-    },
-    {
-      "anchor": "replacement",
-      "content_hash": "",
-      "doc_path": "neworder/GUIDE-GO-v0.1",
-      "file": "spec/neworder/GUIDE-GO-v0.1.md",
-      "heading": "7. Replacement protocol (R-040 binding)",
-      "line": 120,
-      "uri": "spec://vibevm/neworder/GUIDE-GO-v0.1#replacement"
-    },
-    {
-      "anchor": "risks",
-      "content_hash": "",
-      "doc_path": "neworder/GUIDE-GO-v0.1",
-      "file": "spec/neworder/GUIDE-GO-v0.1.md",
-      "heading": "8. Risk table (what conform must cover for Go)",
-      "line": 124,
-      "uri": "spec://vibevm/neworder/GUIDE-GO-v0.1#risks"
-    },
-    {
-      "anchor": "docs",
-      "content_hash": "",
-      "doc_path": "neworder/GUIDE-GO-v0.1",
-      "file": "spec/neworder/GUIDE-GO-v0.1.md",
-      "heading": "9. Doc layer",
-      "line": 145,
-      "uri": "spec://vibevm/neworder/GUIDE-GO-v0.1#docs"
-    },
-    {
-      "anchor": "baseline",
-      "content_hash": "",
-      "doc_path": "neworder/GUIDE-JAVA-GRAALVM-v0.1",
-      "file": "spec/neworder/GUIDE-JAVA-GRAALVM-v0.1.md",
-      "heading": "§0 additions — baseline",
-      "line": 11,
-      "uri": "spec://vibevm/neworder/GUIDE-JAVA-GRAALVM-v0.1#baseline"
-    },
-    {
-      "anchor": "cells",
-      "content_hash": "",
-      "doc_path": "neworder/GUIDE-JAVA-GRAALVM-v0.1",
-      "file": "spec/neworder/GUIDE-JAVA-GRAALVM-v0.1.md",
-      "heading": "§1' — cells and build-time initialization",
-      "line": 17,
-      "uri": "spec://vibevm/neworder/GUIDE-JAVA-GRAALVM-v0.1#cells"
-    },
-    {
-      "anchor": "flags",
-      "content_hash": "",
-      "doc_path": "neworder/GUIDE-JAVA-GRAALVM-v0.1",
-      "file": "spec/neworder/GUIDE-JAVA-GRAALVM-v0.1.md",
-      "heading": "§3' — flags and the AOT tier migration",
-      "line": 25,
-      "uri": "spec://vibevm/neworder/GUIDE-JAVA-GRAALVM-v0.1#flags"
-    },
-    {
-      "anchor": "magic",
-      "content_hash": "",
-      "doc_path": "neworder/GUIDE-JAVA-GRAALVM-v0.1",
-      "file": "spec/neworder/GUIDE-JAVA-GRAALVM-v0.1.md",
-      "heading": "§4'/§6' — magic accounting",
-      "line": 33,
-      "uri": "spec://vibevm/neworder/GUIDE-JAVA-GRAALVM-v0.1#magic"
-    },
-    {
-      "anchor": "risks",
-      "content_hash": "",
-      "doc_path": "neworder/GUIDE-JAVA-GRAALVM-v0.1",
-      "file": "spec/neworder/GUIDE-JAVA-GRAALVM-v0.1.md",
-      "heading": "§8' — additional risk rows",
-      "line": 39,
-      "uri": "spec://vibevm/neworder/GUIDE-JAVA-GRAALVM-v0.1#risks"
-    },
-    {
-      "anchor": "baseline",
-      "content_hash": "",
-      "doc_path": "neworder/GUIDE-JAVA-JAKARTA-v0.1",
-      "file": "spec/neworder/GUIDE-JAVA-JAKARTA-v0.1.md",
-      "heading": "§0 additions — baseline",
-      "line": 11,
-      "uri": "spec://vibevm/neworder/GUIDE-JAVA-JAKARTA-v0.1#baseline"
-    },
-    {
-      "anchor": "cdi",
-      "content_hash": "",
-      "doc_path": "neworder/GUIDE-JAVA-JAKARTA-v0.1",
-      "file": "spec/neworder/GUIDE-JAVA-JAKARTA-v0.1.md",
-      "heading": "§1'/§3' — CDI as composition root",
-      "line": 16,
-      "uri": "spec://vibevm/neworder/GUIDE-JAVA-JAKARTA-v0.1#cdi"
-    },
-    {
-      "anchor": "boundary",
-      "content_hash": "",
-      "doc_path": "neworder/GUIDE-JAVA-JAKARTA-v0.1",
-      "file": "spec/neworder/GUIDE-JAVA-JAKARTA-v0.1.md",
-      "heading": "§4' — boundary machinery",
-      "line": 37,
-      "uri": "spec://vibevm/neworder/GUIDE-JAVA-JAKARTA-v0.1#boundary"
-    },
-    {
-      "anchor": "risks",
-      "content_hash": "",
-      "doc_path": "neworder/GUIDE-JAVA-JAKARTA-v0.1",
-      "file": "spec/neworder/GUIDE-JAVA-JAKARTA-v0.1.md",
-      "heading": "§8' — additional risk rows",
-      "line": 43,
-      "uri": "spec://vibevm/neworder/GUIDE-JAVA-JAKARTA-v0.1#risks"
-    },
-    {
-      "anchor": "baseline",
-      "content_hash": "",
-      "doc_path": "neworder/GUIDE-JAVA-SPRING-v0.1",
-      "file": "spec/neworder/GUIDE-JAVA-SPRING-v0.1.md",
-      "heading": "§0 additions — baseline",
-      "line": 11,
-      "uri": "spec://vibevm/neworder/GUIDE-JAVA-SPRING-v0.1#baseline"
-    },
-    {
-      "anchor": "cells",
-      "content_hash": "",
-      "doc_path": "neworder/GUIDE-JAVA-SPRING-v0.1",
-      "file": "spec/neworder/GUIDE-JAVA-SPRING-v0.1.md",
-      "heading": "§1' — cells",
-      "line": 16,
-      "uri": "spec://vibevm/neworder/GUIDE-JAVA-SPRING-v0.1#cells"
-    },
-    {
-      "anchor": "seams",
-      "content_hash": "",
-      "doc_path": "neworder/GUIDE-JAVA-SPRING-v0.1",
-      "file": "spec/neworder/GUIDE-JAVA-SPRING-v0.1.md",
-      "heading": "§2' — seams",
-      "line": 20,
-      "uri": "spec://vibevm/neworder/GUIDE-JAVA-SPRING-v0.1#seams"
-    },
-    {
-      "anchor": "flags",
-      "content_hash": "",
-      "doc_path": "neworder/GUIDE-JAVA-SPRING-v0.1",
-      "file": "spec/neworder/GUIDE-JAVA-SPRING-v0.1.md",
-      "heading": "§3' — registry and flags",
-      "line": 24,
-      "uri": "spec://vibevm/neworder/GUIDE-JAVA-SPRING-v0.1#flags"
-    },
-    {
-      "anchor": "errors",
-      "content_hash": "",
-      "doc_path": "neworder/GUIDE-JAVA-SPRING-v0.1",
-      "file": "spec/neworder/GUIDE-JAVA-SPRING-v0.1.md",
-      "heading": "§4' — errors and proxies",
-      "line": 51,
-      "uri": "spec://vibevm/neworder/GUIDE-JAVA-SPRING-v0.1#errors"
-    },
-    {
-      "anchor": "tests",
-      "content_hash": "",
-      "doc_path": "neworder/GUIDE-JAVA-SPRING-v0.1",
-      "file": "spec/neworder/GUIDE-JAVA-SPRING-v0.1.md",
-      "heading": "§7' — replacement and tests",
-      "line": 58,
-      "uri": "spec://vibevm/neworder/GUIDE-JAVA-SPRING-v0.1#tests"
-    },
-    {
-      "anchor": "risks",
-      "content_hash": "",
-      "doc_path": "neworder/GUIDE-JAVA-SPRING-v0.1",
-      "file": "spec/neworder/GUIDE-JAVA-SPRING-v0.1.md",
-      "heading": "§8' — additional risk rows",
-      "line": 62,
-      "uri": "spec://vibevm/neworder/GUIDE-JAVA-SPRING-v0.1#risks"
-    },
-    {
-      "anchor": "baseline",
-      "content_hash": "",
-      "doc_path": "neworder/GUIDE-JAVA-v0.1",
-      "file": "spec/neworder/GUIDE-JAVA-v0.1.md",
-      "heading": "0. Language baseline",
-      "line": 11,
-      "uri": "spec://vibevm/neworder/GUIDE-JAVA-v0.1#baseline"
-    },
-    {
-      "anchor": "cells",
-      "content_hash": "",
-      "doc_path": "neworder/GUIDE-JAVA-v0.1",
-      "file": "spec/neworder/GUIDE-JAVA-v0.1.md",
-      "heading": "1. Cells",
-      "line": 21,
-      "uri": "spec://vibevm/neworder/GUIDE-JAVA-v0.1#cells"
-    },
-    {
-      "anchor": "seams",
-      "content_hash": "",
-      "doc_path": "neworder/GUIDE-JAVA-v0.1",
-      "file": "spec/neworder/GUIDE-JAVA-v0.1.md",
-      "heading": "2. Seams",
-      "line": 42,
-      "uri": "spec://vibevm/neworder/GUIDE-JAVA-v0.1#seams"
-    },
-    {
-      "anchor": "flags",
-      "content_hash": "",
-      "doc_path": "neworder/GUIDE-JAVA-v0.1",
-      "file": "spec/neworder/GUIDE-JAVA-v0.1.md",
-      "heading": "3. Registry and flags",
-      "line": 49,
-      "uri": "spec://vibevm/neworder/GUIDE-JAVA-v0.1#flags"
-    },
-    {
-      "anchor": "errors",
-      "content_hash": "",
-      "doc_path": "neworder/GUIDE-JAVA-v0.1",
-      "file": "spec/neworder/GUIDE-JAVA-v0.1.md",
-      "heading": "4. Errors as contract",
-      "line": 67,
-      "uri": "spec://vibevm/neworder/GUIDE-JAVA-v0.1#errors"
-    },
-    {
-      "anchor": "specmark",
-      "content_hash": "",
-      "doc_path": "neworder/GUIDE-JAVA-v0.1",
-      "file": "spec/neworder/GUIDE-JAVA-v0.1.md",
-      "heading": "5. specmark carrier",
-      "line": 89,
-      "uri": "spec://vibevm/neworder/GUIDE-JAVA-v0.1#specmark"
-    },
-    {
-      "anchor": "naming",
-      "content_hash": "",
-      "doc_path": "neworder/GUIDE-JAVA-v0.1",
-      "file": "spec/neworder/GUIDE-JAVA-v0.1.md",
-      "heading": "6. Naming (R-020/R-021 bindings)",
-      "line": 102,
-      "uri": "spec://vibevm/neworder/GUIDE-JAVA-v0.1#naming"
-    },
-    {
-      "anchor": "replacement",
-      "content_hash": "",
-      "doc_path": "neworder/GUIDE-JAVA-v0.1",
-      "file": "spec/neworder/GUIDE-JAVA-v0.1.md",
-      "heading": "7. Replacement protocol (R-040 binding)",
-      "line": 107,
-      "uri": "spec://vibevm/neworder/GUIDE-JAVA-v0.1#replacement"
-    },
-    {
-      "anchor": "risks",
-      "content_hash": "",
-      "doc_path": "neworder/GUIDE-JAVA-v0.1",
-      "file": "spec/neworder/GUIDE-JAVA-v0.1.md",
-      "heading": "8. Risk table (what conform must cover for Java)",
-      "line": 111,
-      "uri": "spec://vibevm/neworder/GUIDE-JAVA-v0.1#risks"
-    },
-    {
-      "anchor": "docs",
-      "content_hash": "",
-      "doc_path": "neworder/GUIDE-JAVA-v0.1",
-      "file": "spec/neworder/GUIDE-JAVA-v0.1.md",
-      "heading": "9. Doc layer",
-      "line": 132,
-      "uri": "spec://vibevm/neworder/GUIDE-JAVA-v0.1#docs"
-    },
-    {
-      "anchor": "baseline",
-      "content_hash": "",
-      "doc_path": "neworder/GUIDE-KOTLIN-v0.1",
-      "file": "spec/neworder/GUIDE-KOTLIN-v0.1.md",
-      "heading": "0. Language baseline",
-      "line": 13,
-      "uri": "spec://vibevm/neworder/GUIDE-KOTLIN-v0.1#baseline"
-    },
-    {
-      "anchor": "cells",
-      "content_hash": "",
-      "doc_path": "neworder/GUIDE-KOTLIN-v0.1",
-      "file": "spec/neworder/GUIDE-KOTLIN-v0.1.md",
-      "heading": "1. Cells",
-      "line": 23,
-      "uri": "spec://vibevm/neworder/GUIDE-KOTLIN-v0.1#cells"
-    },
-    {
-      "anchor": "seams",
-      "content_hash": "",
-      "doc_path": "neworder/GUIDE-KOTLIN-v0.1",
-      "file": "spec/neworder/GUIDE-KOTLIN-v0.1.md",
-      "heading": "2. Seams",
-      "line": 43,
-      "uri": "spec://vibevm/neworder/GUIDE-KOTLIN-v0.1#seams"
-    },
-    {
-      "anchor": "flags",
-      "content_hash": "",
-      "doc_path": "neworder/GUIDE-KOTLIN-v0.1",
-      "file": "spec/neworder/GUIDE-KOTLIN-v0.1.md",
-      "heading": "3. Registry and flags",
-      "line": 50,
-      "uri": "spec://vibevm/neworder/GUIDE-KOTLIN-v0.1#flags"
-    },
-    {
-      "anchor": "errors",
-      "content_hash": "",
-      "doc_path": "neworder/GUIDE-KOTLIN-v0.1",
-      "file": "spec/neworder/GUIDE-KOTLIN-v0.1.md",
-      "heading": "4. Errors as contract",
-      "line": 64,
-      "uri": "spec://vibevm/neworder/GUIDE-KOTLIN-v0.1#errors"
-    },
-    {
-      "anchor": "specmark",
-      "content_hash": "",
-      "doc_path": "neworder/GUIDE-KOTLIN-v0.1",
-      "file": "spec/neworder/GUIDE-KOTLIN-v0.1.md",
-      "heading": "5. specmark carrier",
-      "line": 85,
-      "uri": "spec://vibevm/neworder/GUIDE-KOTLIN-v0.1#specmark"
-    },
-    {
-      "anchor": "naming",
-      "content_hash": "",
-      "doc_path": "neworder/GUIDE-KOTLIN-v0.1",
-      "file": "spec/neworder/GUIDE-KOTLIN-v0.1.md",
-      "heading": "6. Naming (R-020/R-021 bindings)",
-      "line": 89,
-      "uri": "spec://vibevm/neworder/GUIDE-KOTLIN-v0.1#naming"
-    },
-    {
-      "anchor": "replacement",
-      "content_hash": "",
-      "doc_path": "neworder/GUIDE-KOTLIN-v0.1",
-      "file": "spec/neworder/GUIDE-KOTLIN-v0.1.md",
-      "heading": "7. Replacement protocol (R-040 binding)",
-      "line": 94,
-      "uri": "spec://vibevm/neworder/GUIDE-KOTLIN-v0.1#replacement"
-    },
-    {
-      "anchor": "risks",
-      "content_hash": "",
-      "doc_path": "neworder/GUIDE-KOTLIN-v0.1",
-      "file": "spec/neworder/GUIDE-KOTLIN-v0.1.md",
-      "heading": "8. Risk table — trunk",
-      "line": 98,
-      "uri": "spec://vibevm/neworder/GUIDE-KOTLIN-v0.1#risks"
-    },
-    {
-      "anchor": "docs",
-      "content_hash": "",
-      "doc_path": "neworder/GUIDE-KOTLIN-v0.1",
-      "file": "spec/neworder/GUIDE-KOTLIN-v0.1.md",
-      "heading": "9. Doc layer",
-      "line": 118,
-      "uri": "spec://vibevm/neworder/GUIDE-KOTLIN-v0.1#docs"
-    },
-    {
-      "anchor": "baseline",
-      "content_hash": "",
-      "doc_path": "neworder/GUIDE-PYTHON-v0.1",
-      "file": "spec/neworder/GUIDE-PYTHON-v0.1.md",
-      "heading": "0. Language baseline",
-      "line": 11,
-      "uri": "spec://vibevm/neworder/GUIDE-PYTHON-v0.1#baseline"
-    },
-    {
-      "anchor": "cells",
-      "content_hash": "",
-      "doc_path": "neworder/GUIDE-PYTHON-v0.1",
-      "file": "spec/neworder/GUIDE-PYTHON-v0.1.md",
-      "heading": "1. Cells",
-      "line": 21,
-      "uri": "spec://vibevm/neworder/GUIDE-PYTHON-v0.1#cells"
-    },
-    {
-      "anchor": "seams",
-      "content_hash": "",
-      "doc_path": "neworder/GUIDE-PYTHON-v0.1",
-      "file": "spec/neworder/GUIDE-PYTHON-v0.1.md",
-      "heading": "2. Seams",
-      "line": 40,
-      "uri": "spec://vibevm/neworder/GUIDE-PYTHON-v0.1#seams"
-    },
-    {
-      "anchor": "flags",
-      "content_hash": "",
-      "doc_path": "neworder/GUIDE-PYTHON-v0.1",
-      "file": "spec/neworder/GUIDE-PYTHON-v0.1.md",
-      "heading": "3. Registry and flags",
-      "line": 47,
-      "uri": "spec://vibevm/neworder/GUIDE-PYTHON-v0.1#flags"
-    },
-    {
-      "anchor": "errors",
-      "content_hash": "",
-      "doc_path": "neworder/GUIDE-PYTHON-v0.1",
-      "file": "spec/neworder/GUIDE-PYTHON-v0.1.md",
-      "heading": "4. Errors as contract",
-      "line": 67,
-      "uri": "spec://vibevm/neworder/GUIDE-PYTHON-v0.1#errors"
-    },
-    {
-      "anchor": "specmark",
-      "content_hash": "",
-      "doc_path": "neworder/GUIDE-PYTHON-v0.1",
-      "file": "spec/neworder/GUIDE-PYTHON-v0.1.md",
-      "heading": "5. specmark carrier",
-      "line": 88,
-      "uri": "spec://vibevm/neworder/GUIDE-PYTHON-v0.1#specmark"
-    },
-    {
-      "anchor": "naming",
-      "content_hash": "",
-      "doc_path": "neworder/GUIDE-PYTHON-v0.1",
-      "file": "spec/neworder/GUIDE-PYTHON-v0.1.md",
-      "heading": "6. Naming (R-020/R-021 bindings)",
-      "line": 102,
-      "uri": "spec://vibevm/neworder/GUIDE-PYTHON-v0.1#naming"
-    },
-    {
-      "anchor": "replacement",
-      "content_hash": "",
-      "doc_path": "neworder/GUIDE-PYTHON-v0.1",
-      "file": "spec/neworder/GUIDE-PYTHON-v0.1.md",
-      "heading": "7. Replacement protocol (R-040 binding)",
-      "line": 107,
-      "uri": "spec://vibevm/neworder/GUIDE-PYTHON-v0.1#replacement"
-    },
-    {
-      "anchor": "risks",
-      "content_hash": "",
-      "doc_path": "neworder/GUIDE-PYTHON-v0.1",
-      "file": "spec/neworder/GUIDE-PYTHON-v0.1.md",
-      "heading": "8. Risk table (what conform must cover for Python)",
-      "line": 111,
-      "uri": "spec://vibevm/neworder/GUIDE-PYTHON-v0.1#risks"
-    },
-    {
-      "anchor": "docs",
-      "content_hash": "",
-      "doc_path": "neworder/GUIDE-PYTHON-v0.1",
-      "file": "spec/neworder/GUIDE-PYTHON-v0.1.md",
-      "heading": "9. Doc layer",
-      "line": 131,
-      "uri": "spec://vibevm/neworder/GUIDE-PYTHON-v0.1#docs"
-    },
-    {
-      "anchor": "baseline",
-      "content_hash": "",
-      "doc_path": "neworder/GUIDE-TYPESCRIPT-v0.1",
-      "file": "spec/neworder/GUIDE-TYPESCRIPT-v0.1.md",
-      "heading": "0. Language baseline",
-      "line": 9,
-      "uri": "spec://vibevm/neworder/GUIDE-TYPESCRIPT-v0.1#baseline"
-    },
-    {
-      "anchor": "cells",
-      "content_hash": "",
-      "doc_path": "neworder/GUIDE-TYPESCRIPT-v0.1",
-      "file": "spec/neworder/GUIDE-TYPESCRIPT-v0.1.md",
-      "heading": "1. Cells",
-      "line": 19,
-      "uri": "spec://vibevm/neworder/GUIDE-TYPESCRIPT-v0.1#cells"
-    },
-    {
-      "anchor": "seams",
-      "content_hash": "",
-      "doc_path": "neworder/GUIDE-TYPESCRIPT-v0.1",
-      "file": "spec/neworder/GUIDE-TYPESCRIPT-v0.1.md",
-      "heading": "2. Seams",
-      "line": 38,
-      "uri": "spec://vibevm/neworder/GUIDE-TYPESCRIPT-v0.1#seams"
-    },
-    {
-      "anchor": "flags",
-      "content_hash": "",
-      "doc_path": "neworder/GUIDE-TYPESCRIPT-v0.1",
-      "file": "spec/neworder/GUIDE-TYPESCRIPT-v0.1.md",
-      "heading": "3. Registry and flags",
-      "line": 45,
-      "uri": "spec://vibevm/neworder/GUIDE-TYPESCRIPT-v0.1#flags"
-    },
-    {
-      "anchor": "errors",
-      "content_hash": "",
-      "doc_path": "neworder/GUIDE-TYPESCRIPT-v0.1",
-      "file": "spec/neworder/GUIDE-TYPESCRIPT-v0.1.md",
-      "heading": "4. Errors as contract",
-      "line": 64,
-      "uri": "spec://vibevm/neworder/GUIDE-TYPESCRIPT-v0.1#errors"
-    },
-    {
-      "anchor": "specmark",
-      "content_hash": "",
-      "doc_path": "neworder/GUIDE-TYPESCRIPT-v0.1",
-      "file": "spec/neworder/GUIDE-TYPESCRIPT-v0.1.md",
-      "heading": "5. specmark carrier",
-      "line": 80,
-      "uri": "spec://vibevm/neworder/GUIDE-TYPESCRIPT-v0.1#specmark"
-    },
-    {
-      "anchor": "naming",
-      "content_hash": "",
-      "doc_path": "neworder/GUIDE-TYPESCRIPT-v0.1",
-      "file": "spec/neworder/GUIDE-TYPESCRIPT-v0.1.md",
-      "heading": "6. Naming (R-020/R-021 bindings)",
-      "line": 93,
-      "uri": "spec://vibevm/neworder/GUIDE-TYPESCRIPT-v0.1#naming"
-    },
-    {
-      "anchor": "replacement",
-      "content_hash": "",
-      "doc_path": "neworder/GUIDE-TYPESCRIPT-v0.1",
-      "file": "spec/neworder/GUIDE-TYPESCRIPT-v0.1.md",
-      "heading": "7. Replacement protocol (R-040 binding)",
-      "line": 98,
-      "uri": "spec://vibevm/neworder/GUIDE-TYPESCRIPT-v0.1#replacement"
-    },
-    {
-      "anchor": "risks",
-      "content_hash": "",
-      "doc_path": "neworder/GUIDE-TYPESCRIPT-v0.1",
-      "file": "spec/neworder/GUIDE-TYPESCRIPT-v0.1.md",
-      "heading": "8. Risk table (what conform must cover for TS/JS)",
-      "line": 102,
-      "uri": "spec://vibevm/neworder/GUIDE-TYPESCRIPT-v0.1#risks"
-    },
-    {
-      "anchor": "docs",
-      "content_hash": "",
-      "doc_path": "neworder/GUIDE-TYPESCRIPT-v0.1",
-      "file": "spec/neworder/GUIDE-TYPESCRIPT-v0.1.md",
-      "heading": "9. Doc layer",
-      "line": 120,
-      "uri": "spec://vibevm/neworder/GUIDE-TYPESCRIPT-v0.1#docs"
-    },
-    {
-      "anchor": "what",
-      "content_hash": "",
-      "doc_path": "neworder/LEDGER-INTENT-v0.1",
-      "file": "spec/neworder/LEDGER-INTENT-v0.1.md",
-      "heading": "1. What the ledger is",
-      "line": 7,
-      "uri": "spec://vibevm/neworder/LEDGER-INTENT-v0.1#what"
-    },
-    {
-      "anchor": "classes",
-      "content_hash": "",
-      "doc_path": "neworder/LEDGER-INTENT-v0.1",
-      "file": "spec/neworder/LEDGER-INTENT-v0.1.md",
-      "heading": "2. Two storage classes — the load-bearing taxonomy",
-      "line": 13,
-      "uri": "spec://vibevm/neworder/LEDGER-INTENT-v0.1#classes"
-    },
-    {
-      "anchor": "epochs",
-      "content_hash": "",
-      "doc_path": "neworder/LEDGER-INTENT-v0.1",
-      "file": "spec/neworder/LEDGER-INTENT-v0.1.md",
-      "heading": "3. Epochs — contextual invalidation",
-      "line": 22,
-      "uri": "spec://vibevm/neworder/LEDGER-INTENT-v0.1#epochs"
-    },
-    {
-      "anchor": "provenance",
-      "content_hash": "",
-      "doc_path": "neworder/LEDGER-INTENT-v0.1",
-      "file": "spec/neworder/LEDGER-INTENT-v0.1.md",
-      "heading": "4. Provenance — every entry confesses its origin",
-      "line": 33,
-      "uri": "spec://vibevm/neworder/LEDGER-INTENT-v0.1#provenance"
-    },
-    {
-      "anchor": "storage",
-      "content_hash": "",
-      "doc_path": "neworder/LEDGER-INTENT-v0.1",
-      "file": "spec/neworder/LEDGER-INTENT-v0.1.md",
-      "heading": "5. Storage and lifecycle",
-      "line": 37,
-      "uri": "spec://vibevm/neworder/LEDGER-INTENT-v0.1#storage"
-    },
-    {
-      "anchor": "queries",
-      "content_hash": "",
-      "doc_path": "neworder/LEDGER-INTENT-v0.1",
-      "file": "spec/neworder/LEDGER-INTENT-v0.1.md",
-      "heading": "6. Query kinds shipped in v0.1",
-      "line": 44,
-      "uri": "spec://vibevm/neworder/LEDGER-INTENT-v0.1#queries"
-    },
-    {
-      "anchor": "release-slice",
-      "content_hash": "",
-      "doc_path": "neworder/LEDGER-INTENT-v0.1",
-      "file": "spec/neworder/LEDGER-INTENT-v0.1.md",
-      "heading": "7. The release slice",
-      "line": 53,
-      "uri": "spec://vibevm/neworder/LEDGER-INTENT-v0.1#release-slice"
-    },
-    {
-      "anchor": "failures",
-      "content_hash": "",
-      "doc_path": "neworder/LEDGER-INTENT-v0.1",
-      "file": "spec/neworder/LEDGER-INTENT-v0.1.md",
-      "heading": "8. Failure modes, named",
-      "line": 57,
-      "uri": "spec://vibevm/neworder/LEDGER-INTENT-v0.1#failures"
-    },
-    {
-      "anchor": "problem",
-      "content_hash": "",
-      "doc_path": "neworder/PROP-014",
-      "file": "spec/neworder/PROP-014-specmap-bidirectional-traceability.md",
-      "heading": "1. Problem statement",
-      "line": 11,
-      "uri": "spec://vibevm/neworder/PROP-014#problem"
-    },
-    {
-      "anchor": "analogy",
-      "content_hash": "",
-      "doc_path": "neworder/PROP-014",
-      "file": "spec/neworder/PROP-014-specmap-bidirectional-traceability.md",
-      "heading": "1.1 Where the source-map analogy holds, and where it breaks",
-      "line": 17,
-      "uri": "spec://vibevm/neworder/PROP-014#analogy"
-    },
-    {
-      "anchor": "runtime-vision",
-      "content_hash": "",
-      "doc_path": "neworder/PROP-014",
-      "file": "spec/neworder/PROP-014-specmap-bidirectional-traceability.md",
-      "heading": "1.2 The runtime vision (AI-native open source)",
-      "line": 28,
-      "uri": "spec://vibevm/neworder/PROP-014#runtime-vision"
-    },
-    {
-      "anchor": "decisions",
-      "content_hash": "",
-      "doc_path": "neworder/PROP-014",
-      "file": "spec/neworder/PROP-014-specmap-bidirectional-traceability.md",
-      "heading": "2. Decisions",
-      "line": 34,
-      "uri": "spec://vibevm/neworder/PROP-014#decisions"
-    },
-    {
-      "anchor": "addressing-spec",
-      "content_hash": "",
-      "doc_path": "neworder/PROP-014",
-      "file": "spec/neworder/PROP-014-specmap-bidirectional-traceability.md",
-      "heading": "2.1 Addressing: spec-side",
-      "line": 38,
-      "uri": "spec://vibevm/neworder/PROP-014#addressing-spec"
-    },
-    {
-      "anchor": "spec-units",
-      "content_hash": "",
-      "doc_path": "neworder/PROP-014",
-      "file": "spec/neworder/PROP-014-specmap-bidirectional-traceability.md",
-      "heading": "2.2 Spec units, normativity, and the two-tier revision discipline",
-      "line": 51,
-      "uri": "spec://vibevm/neworder/PROP-014#spec-units"
-    },
-    {
-      "anchor": "addressing-code",
-      "content_hash": "",
-      "doc_path": "neworder/PROP-014",
-      "file": "spec/neworder/PROP-014-specmap-bidirectional-traceability.md",
-      "heading": "2.3 Addressing: code-side — tags that travel",
-      "line": 80,
-      "uri": "spec://vibevm/neworder/PROP-014#addressing-code"
-    },
-    {
-      "anchor": "edges",
-      "content_hash": "",
-      "doc_path": "neworder/PROP-014",
-      "file": "spec/neworder/PROP-014-specmap-bidirectional-traceability.md",
-      "heading": "2.4 The edge model",
-      "line": 125,
-      "uri": "spec://vibevm/neworder/PROP-014#edges"
-    },
-    {
-      "anchor": "index",
-      "content_hash": "",
-      "doc_path": "neworder/PROP-014",
-      "file": "spec/neworder/PROP-014-specmap-bidirectional-traceability.md",
-      "heading": "2.5 The index: `specmap.json`",
-      "line": 133,
-      "uri": "spec://vibevm/neworder/PROP-014#index"
-    },
-    {
-      "anchor": "queries",
-      "content_hash": "",
-      "doc_path": "neworder/PROP-014",
-      "file": "spec/neworder/PROP-014-specmap-bidirectional-traceability.md",
-      "heading": "2.6 Query surface",
-      "line": 142,
-      "uri": "spec://vibevm/neworder/PROP-014#queries"
-    },
-    {
-      "anchor": "llm-boundary",
-      "content_hash": "",
-      "doc_path": "neworder/PROP-014",
-      "file": "spec/neworder/PROP-014-specmap-bidirectional-traceability.md",
-      "heading": "2.7 The LLM boundary",
-      "line": 156,
-      "uri": "spec://vibevm/neworder/PROP-014#llm-boundary"
-    },
-    {
-      "anchor": "runtime",
-      "content_hash": "",
-      "doc_path": "neworder/PROP-014",
-      "file": "spec/neworder/PROP-014-specmap-bidirectional-traceability.md",
-      "heading": "2.8 Runtime exposure — the AI-native OSS channel",
-      "line": 164,
-      "uri": "spec://vibevm/neworder/PROP-014#runtime"
-    },
-    {
-      "anchor": "languages",
-      "content_hash": "",
-      "doc_path": "neworder/PROP-014",
-      "file": "spec/neworder/PROP-014-specmap-bidirectional-traceability.md",
-      "heading": "2.9 Language neutrality",
-      "line": 171,
-      "uri": "spec://vibevm/neworder/PROP-014#languages"
-    },
-    {
-      "anchor": "principles",
-      "content_hash": "",
-      "doc_path": "neworder/PROP-014",
-      "file": "spec/neworder/PROP-014-specmap-bidirectional-traceability.md",
-      "heading": "3. Principles",
-      "line": 180,
-      "uri": "spec://vibevm/neworder/PROP-014#principles"
-    },
-    {
-      "anchor": "spec-principles",
-      "content_hash": "",
-      "doc_path": "neworder/PROP-014",
-      "file": "spec/neworder/PROP-014-specmap-bidirectional-traceability.md",
-      "heading": "3.1 (а) Writing specifications",
-      "line": 182,
-      "uri": "spec://vibevm/neworder/PROP-014#spec-principles"
-    },
-    {
-      "anchor": "rust-principles",
-      "content_hash": "",
-      "doc_path": "neworder/PROP-014",
-      "file": "spec/neworder/PROP-014-specmap-bidirectional-traceability.md",
-      "heading": "3.2 (б) Writing Rust under specmap",
-      "line": 195,
-      "uri": "spec://vibevm/neworder/PROP-014#rust-principles"
-    },
-    {
-      "anchor": "binding-principles",
-      "content_hash": "",
-      "doc_path": "neworder/PROP-014",
-      "file": "spec/neworder/PROP-014-specmap-bidirectional-traceability.md",
-      "heading": "3.3 (в) Binding principles",
-      "line": 208,
-      "uri": "spec://vibevm/neworder/PROP-014#binding-principles"
-    },
-    {
-      "anchor": "migration",
-      "content_hash": "",
-      "doc_path": "neworder/PROP-014",
-      "file": "spec/neworder/PROP-014-specmap-bidirectional-traceability.md",
-      "heading": "4. (г) Migration playbook — transforming vibevm with Claude Code",
-      "line": 214,
-      "uri": "spec://vibevm/neworder/PROP-014#migration"
-    },
-    {
-      "anchor": "rejected",
-      "content_hash": "",
-      "doc_path": "neworder/PROP-014",
-      "file": "spec/neworder/PROP-014-specmap-bidirectional-traceability.md",
-      "heading": "5. Rejected alternatives",
-      "line": 284,
-      "uri": "spec://vibevm/neworder/PROP-014#rejected"
-    },
-    {
-      "anchor": "prior-art",
-      "content_hash": "",
-      "doc_path": "neworder/PROP-014",
-      "file": "spec/neworder/PROP-014-specmap-bidirectional-traceability.md",
-      "heading": "6. Prior art and license posture",
-      "line": 293,
-      "uri": "spec://vibevm/neworder/PROP-014#prior-art"
-    },
-    {
-      "anchor": "open",
-      "content_hash": "",
-      "doc_path": "neworder/PROP-014",
-      "file": "spec/neworder/PROP-014-specmap-bidirectional-traceability.md",
-      "heading": "7. Open questions",
-      "line": 310,
-      "uri": "spec://vibevm/neworder/PROP-014#open"
-    },
-    {
       "anchor": "what-tessl-is",
       "content_hash": "",
       "doc_path": "research/PROP-004",
@@ -6683,37 +5819,37 @@
       "code": "pin-into-unmarked-unit",
       "file": "crates/specmark/tests/usage.rs",
       "line": 14,
-      "message": "edge `specmark::tests::usage::Tagged` pins r1 but `spec://vibevm/neworder/PROP-014#addressing-code` carries no kind/revision line yet"
+      "message": "edge `specmark::tests::usage::Tagged` pins r1 but `spec://vibevm/discipline/PROP-014#addressing-code` carries no kind/revision line yet"
     },
     {
       "code": "pin-into-unmarked-unit",
       "file": "crates/specmark/tests/usage.rs",
-      "line": 20,
-      "message": "edge `specmark::tests::usage::MultiTagged` pins r1 but `spec://vibevm/neworder/PROP-014#addressing-spec` carries no kind/revision line yet"
+      "line": 23,
+      "message": "edge `specmark::tests::usage::MultiTagged` pins r1 but `spec://vibevm/discipline/PROP-014#addressing-spec` carries no kind/revision line yet"
     },
     {
       "code": "pin-into-unmarked-unit",
       "file": "crates/specmark/tests/usage.rs",
-      "line": 26,
-      "message": "edge `specmark::tests::usage::<impl Tagged>` pins r1 but `spec://vibevm/neworder/PROP-014#addressing-code` carries no kind/revision line yet"
+      "line": 29,
+      "message": "edge `specmark::tests::usage::<impl Tagged>` pins r1 but `spec://vibevm/discipline/PROP-014#addressing-code` carries no kind/revision line yet"
     },
     {
       "code": "pin-into-unmarked-unit",
       "file": "crates/specmark/tests/usage.rs",
-      "line": 37,
-      "message": "edge `specmark::tests::usage::helper` pins r1 but `spec://vibevm/neworder/PROP-014#edges` carries no kind/revision line yet"
+      "line": 40,
+      "message": "edge `specmark::tests::usage::helper` pins r1 but `spec://vibevm/discipline/PROP-014#edges` carries no kind/revision line yet"
     },
     {
       "code": "pin-into-unmarked-unit",
       "file": "crates/specmark/tests/usage.rs",
-      "line": 43,
-      "message": "edge `specmark::tests::usage::inner` pins r1 but `spec://vibevm/neworder/PROP-014#addressing-code` carries no kind/revision line yet"
+      "line": 46,
+      "message": "edge `specmark::tests::usage::inner` pins r1 but `spec://vibevm/discipline/PROP-014#addressing-code` carries no kind/revision line yet"
     },
     {
       "code": "pin-into-unmarked-unit",
       "file": "crates/specmark/tests/usage.rs",
-      "line": 51,
-      "message": "edge `specmark::tests::usage::tags_are_inert` pins r1 but `spec://vibevm/neworder/PROP-014#addressing-code` carries no kind/revision line yet"
+      "line": 54,
+      "message": "edge `specmark::tests::usage::tags_are_inert` pins r1 but `spec://vibevm/discipline/PROP-014#addressing-code` carries no kind/revision line yet"
     }
   ]
 }

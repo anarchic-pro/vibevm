@@ -26,7 +26,7 @@ use std::path::{Path, PathBuf};
 use anyhow::{Context, Result};
 use serde::{Deserialize, Serialize};
 
-specmark::scope!("spec://vibevm/neworder/ENGINE-CONFORM-v0.1#facts");
+specmark::scope!("spec://vibevm/discipline/ENGINE-CONFORM-v0.1#facts");
 
 /// One normalized fact (ENGINE-CONFORM §3). Variants carry exactly
 /// what the Phase 4 checks consume; the schema grows with the rules.
@@ -252,7 +252,7 @@ pub trait Rule {
 pub mod rules {
     use super::{Fact, Finding, Rule, SourceFacts};
 
-    specmark::scope!("spec://vibevm/neworder/ENGINE-CONFORM-v0.1#rules");
+    specmark::scope!("spec://vibevm/discipline/ENGINE-CONFORM-v0.1#rules");
 
     /// The names of cell types, discovered from `#[cell(...)]`-carrying
     /// item facts, with the module (file) that declares each.
@@ -425,7 +425,7 @@ pub mod rules {
 pub mod sarif {
     use super::{Finding, Rule};
 
-    specmark::scope!("spec://vibevm/neworder/ENGINE-CONFORM-v0.1#determinism");
+    specmark::scope!("spec://vibevm/discipline/ENGINE-CONFORM-v0.1#determinism");
 
     /// Byte-stable minimal SARIF 2.1.0: stable ordering (findings are
     /// pre-sorted), no wall-clock, no absolute paths.
@@ -482,7 +482,7 @@ pub mod baseline {
 
     use super::Finding;
 
-    specmark::scope!("spec://vibevm/neworder/ENGINE-CONFORM-v0.1#rules");
+    specmark::scope!("spec://vibevm/discipline/ENGINE-CONFORM-v0.1#rules");
 
     /// `conform-baseline.json`: frozen pre-existing findings, by
     /// fingerprint. The file only shrinks.

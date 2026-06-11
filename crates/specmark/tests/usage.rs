@@ -7,24 +7,27 @@
 
 use specmark::{spec, verifies};
 
-const URI: &str = "spec://vibevm/neworder/PROP-014#addressing-code";
+const URI: &str = "spec://vibevm/discipline/PROP-014#addressing-code";
 
-specmark::scope!("spec://vibevm/neworder/PROP-014#addressing-code");
+specmark::scope!("spec://vibevm/discipline/PROP-014#addressing-code");
 
-#[spec(implements = "spec://vibevm/neworder/PROP-014#addressing-code", r = 1)]
+#[spec(
+    implements = "spec://vibevm/discipline/PROP-014#addressing-code",
+    r = 1
+)]
 struct Tagged {
     value: u8,
 }
 
-#[spec(implements = "spec://vibevm/neworder/PROP-014#addressing-code")]
-#[spec(documents = "spec://vibevm/neworder/PROP-014#addressing-spec", r = 1)]
+#[spec(implements = "spec://vibevm/discipline/PROP-014#addressing-code")]
+#[spec(documents = "spec://vibevm/discipline/PROP-014#addressing-spec", r = 1)]
 enum MultiTagged {
     A,
     B,
 }
 
 #[spec(
-    deviates = "spec://vibevm/neworder/PROP-014#addressing-code",
+    deviates = "spec://vibevm/discipline/PROP-014#addressing-code",
     r = 1,
     reason = "test fixture exercising the deviates carrier form"
 )]
@@ -34,13 +37,13 @@ impl Tagged {
     }
 }
 
-#[spec(informs = "spec://vibevm/neworder/PROP-014#edges~r1")]
+#[spec(informs = "spec://vibevm/discipline/PROP-014#edges~r1")]
 fn helper(x: u8) -> u8 {
     x + 1
 }
 
 mod inner {
-    specmark::scope!("spec://vibevm/neworder/PROP-014#addressing-code", r = 1);
+    specmark::scope!("spec://vibevm/discipline/PROP-014#addressing-code", r = 1);
 
     pub fn inherited() -> &'static str {
         "covered by the module scope marker"
@@ -48,7 +51,7 @@ mod inner {
 }
 
 #[test]
-#[verifies("spec://vibevm/neworder/PROP-014#addressing-code", r = 1)]
+#[verifies("spec://vibevm/discipline/PROP-014#addressing-code", r = 1)]
 fn tags_are_inert() {
     let t = Tagged { value: 21 };
     assert_eq!(t.doubled(), 42);
@@ -59,7 +62,7 @@ fn tags_are_inert() {
 }
 
 #[test]
-#[verifies("spec://vibevm/neworder/PROP-014#addressing-code")]
+#[verifies("spec://vibevm/discipline/PROP-014#addressing-code")]
 fn verifies_without_pin_compiles_and_runs() {
     assert_eq!(1 + 1, 2);
 }

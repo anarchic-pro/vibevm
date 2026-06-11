@@ -9,7 +9,7 @@ use quote::ToTokens;
 use syn::spanned::Spanned;
 use syn::visit::Visit;
 
-specmark::scope!("spec://vibevm/neworder/ENGINE-CONFORM-v0.1#frontends");
+specmark::scope!("spec://vibevm/discipline/ENGINE-CONFORM-v0.1#frontends");
 
 pub struct RustFrontend;
 

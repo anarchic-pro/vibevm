@@ -7,7 +7,7 @@
 
 use std::path::Path;
 
-specmark::scope!("spec://vibevm/neworder/PROP-014#addressing-code");
+specmark::scope!("spec://vibevm/discipline/PROP-014#addressing-code");
 
 use quote::ToTokens;
 use specmark_grammar::{EdgeSpec, SpecArgs, UriArgs};

@@ -17,7 +17,7 @@
 //! Local per checkout; never shipped, never signed, never exposed —
 //! `.ledger/` is git-ignored.
 
-specmark::scope!("spec://vibevm/neworder/LEDGER-INTENT-v0.1#classes");
+specmark::scope!("spec://vibevm/discipline/LEDGER-INTENT-v0.1#classes");
 
 use std::path::{Path, PathBuf};
 
@@ -51,7 +51,7 @@ pub fn epoch(root: &Path) -> Epoch {
         "Cargo.lock",
         "vibe.lock",
         "schemas/specmap.jtd.json",
-        "spec/neworder/README.md",
+        "vibevm.discipline.lock",
     ] {
         acc.push_str(rel);
         acc.push('\n');

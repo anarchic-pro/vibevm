@@ -4,7 +4,7 @@
 //! useful without an LLM by contract — prose rendering is a later,
 //! separate presentation layer.
 
-specmark::scope!("spec://vibevm/neworder/PROP-014#queries");
+specmark::scope!("spec://vibevm/discipline/PROP-014#queries");
 
 use anyhow::{Result, bail};
 use vibe_wire::generated::specmap::{Edge, SpecUnit, Specmap};
