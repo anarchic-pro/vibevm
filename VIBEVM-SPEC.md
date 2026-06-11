@@ -1,4 +1,4 @@
-# vibevm: A Software Project Manager for Spec-Driven Development with AI Agents
+# vibevm: A Software Project Manager for Spec-Driven Development with AI Agents {#root}
 
 **Document version:** 1.0
 **Status:** Implementation specification
@@ -9,7 +9,7 @@
 
 ---
 
-## How to read this document
+## How to read this document {#how-to-read-this-document}
 
 This is a complete, self-contained specification. It assumes you have not read any prior conversation about this project. Every decision is re-justified here. Every term is defined here. If something is unclear, the answer is in this document; do not invent.
 
@@ -32,19 +32,19 @@ This document is structured to be navigable:
 
 ---
 
-## Section 1. Project identity
+## Section 1. Project identity {#project-identity}
 
-### 1.1 Name
+### 1.1 Name {#name}
 
 The project is named **vibevm**. The CLI binary is named **`vibe`**. The user has trademark and domain rights for both. Do not propose alternative names.
 
-### 1.2 Tagline
+### 1.2 Tagline {#tagline}
 
 *The disciplined runtime for spec-driven vibecoding.*
 
 This is the project's positioning. Internalize it: **vibevm is a tool that makes vibecoding work in practice by removing boilerplate decisions, not a tool that opposes vibecoding.** The user's stated philosophy is that vibecoding is a legitimate and joyful mode of building software, that humans don't and shouldn't control everything, and that good tools remove boring decisions so vibecoders can focus on the interesting parts. Design choices should serve this philosophy. When in doubt: choose convention over configuration, choose default over choice, choose "it just works" over "you can configure everything."
 
-### 1.3 What it is
+### 1.3 What it is {#what-it-is}
 
 vibevm is a command-line software project manager for AI-assisted development. It lets developers install reusable building blocks (process disciplines, feature descriptions, technology stacks) into a project, and then have an AI agent compile those blocks into working code under the discipline of Spec-Driven Development.
 
@@ -58,7 +58,7 @@ Concretely, a developer can:
 
 The same `feat:welcome-page` produces different code depending on which stack is active. This is the core value proposition: features are abstract descriptions of intent; stacks are the concrete mappings into a particular technology context; vibevm orchestrates the assembly.
 
-### 1.4 What it is not
+### 1.4 What it is not {#what-it-is-not}
 
 vibevm is not:
 - A new IDE.
@@ -69,11 +69,11 @@ vibevm is not:
 
 ---
 
-## Section 2. Philosophical foundation
+## Section 2. Philosophical foundation {#philosophical-foundation}
 
 The user has written a book on AI-native development. The first three chapters are in `refs/book/`. Read them in full before writing any code. This section summarizes the load-bearing principles, but the chapters contain the reasoning and examples that explain *why* these principles hold.
 
-### 2.1 The two-process model
+### 2.1 The two-process model {#two-process-model}
 
 A human developer and an AI agent are two cooperating processes with complementary architectures, not a master-and-tool pairing. The human has persistent memory, semantic understanding, intuition, and decision-making under uncertainty. The AI has high throughput, mechanical consistency within a session, broad shallow knowledge, and tirelessness within a context window. Productive work uses both for what each is good at.
 
@@ -82,7 +82,7 @@ Implications for vibevm:
 - The system never assumes the human will catch every issue manually.
 - Mechanical work goes to the AI; semantic decisions go to the human; the system makes the boundary explicit.
 
-### 2.2 Files as IPC
+### 2.2 Files as IPC {#files-as-ipc}
 
 In the human-AI development system, files are not documentation. They are the inter-process communication channel between the two processes. The AI cannot ask the human in real time; the human cannot remember everything between sessions. Files are the only persistent shared memory.
 
@@ -94,7 +94,7 @@ Four requirements for this IPC, all of which vibevm must support:
 
 vibevm enforces the first three structurally. The fourth is partially enforced by tooling, partially by user discipline.
 
-### 2.3 Memory architecture
+### 2.3 Memory architecture {#memory-architecture}
 
 There are four levels of memory in the system:
 1. **Head** — persistent for the human, invisible to the AI, the canonical source for decisions before they are written.
@@ -106,13 +106,13 @@ Information flows top-down: head → WAL → spec → code. When information flo
 
 The WAL is a *checkpoint*, not a log. It is rewritten, not appended. It describes the current state, not the history. History lives in git and in milestone commits.
 
-### 2.4 The constraint that defines everything
+### 2.4 The constraint that defines everything {#constraint-that-defines-everything}
 
 **The AI has no memory between sessions.** Every session starts blank. WAL and specifications are the only artifacts that survive. This is the single most important fact in the system. Every design decision in vibevm should be evaluated against the question: *does this work when the AI's session restarts every morning?*
 
 If a design depends on the AI "remembering" something across sessions, it is wrong. The AI must be able to reconstruct everything it needs from files on disk.
 
-### 2.5 The vibecoding affirmation
+### 2.5 The vibecoding affirmation {#vibecoding-affirmation}
 
 The book's framing positions structured AI-assisted development against undisciplined "vibe coding." vibevm sits in a different place: it is *vibe coding made viable*. The user is not embarrassed to be vibe-coding; they want to vibe-code productively. vibevm removes the boilerplate decisions that make vibe coding fall apart at scale, while preserving the speed and joy that make vibe coding worth doing in the first place.
 
@@ -120,9 +120,9 @@ When choosing between two design options, prefer the one that lets a vibe coder 
 
 ---
 
-## Section 3. Prior art and positioning
+## Section 3. Prior art and positioning {#prior-art-and-positioning}
 
-### 3.1 Spec-Driven Development (SDD)
+### 3.1 Spec-Driven Development (SDD) {#spec-driven-development}
 
 The current state of SDD as of early 2026 includes:
 - **Tessl** (https://tessl.io) — a commercial platform with a Spec Registry (repository of specs for popular OSS libraries) and a Tessl Framework (closed-beta tool for spec-driven development inside agents).
@@ -131,7 +131,7 @@ The current state of SDD as of early 2026 includes:
 
 Read what each of these does. Note their gaps.
 
-### 3.2 What vibevm does that prior art does not
+### 3.2 What vibevm does that prior art does not {#what-vibevm-does-that-prior-art-does-not}
 
 1. **Three-kinds taxonomy.** Tessl's registry distributes library-usage specs. Spec Kit produces in-project markdown with no notion of installable units. None has a clean separation of "process discipline" vs. "abstract feature" vs. "concrete stack." vibevm makes this taxonomy first-class.
 
@@ -143,14 +143,14 @@ Read what each of these does. Note their gaps.
 
 5. **Separation of deterministic and probabilistic work.** vibevm's CLI does deterministic work (resolution, fetching, file management, validation) without LLM calls. The LLM is invoked only for steps that genuinely require reasoning (build, sync, review). This is cheaper, faster, more debuggable, and fits the book's philosophy of cognitive load distribution.
 
-### 3.3 What vibevm explicitly avoids
+### 3.3 What vibevm explicitly avoids {#what-vibevm-explicitly-avoids}
 
 - We never use Maven's terminology, even though we have studied it. No "lifecycle," "phase," "goal," or "plugin" in user-facing or internal code (except where context demands a known term — see Section 4 for what to use instead).
 - We never use Bazel's terminology directly, but we adopt its DAG execution model.
 - We do not build a hosted registry in v1. The registry is a public git repository.
 - We do not build a censoring system in v1. We assume one will exist later (see Section 8.5).
 
-### 3.4 References to study
+### 3.4 References to study {#references-to-study}
 
 Before designing anything, the Reader should read or skim:
 - All chapters in `refs/book/` (mandatory, full read).
@@ -169,11 +169,11 @@ git clone https://github.com/tessl-io/tessl-mcp refs/src/tessl-mcp  # if accessi
 
 ---
 
-## Section 4. Core terminology
+## Section 4. Core terminology {#core-terminology}
 
 Use these terms and only these terms in code, in documentation, in error messages, in commit messages. Consistency matters more than perfection.
 
-### 4.1 The four installable kinds
+### 4.1 The four installable kinds {#four-installable-kinds}
 
 vibevm packages come in four kinds. A user installs them with `vibe install <kind>:<name>`.
 
@@ -185,7 +185,7 @@ vibevm packages come in four kinds. A user installs them with `vibe install <kin
 
 **`tool`** — A reusable script, prompt, or utility that nodes in the build graph may invoke. Examples: a code formatter wrapper, a test runner adapter, a structured-output renderer. Tools are not workflows; they are *capabilities used by workflows*. (Tools are reserved as a kind for future use; v1 does not require them. Document the slot, do not implement.)
 
-### 4.2 The directory layout
+### 4.2 The directory layout {#directory-layout}
 
 A vibevm project has this structure:
 
@@ -226,7 +226,7 @@ The `spec/` directory is *the* spec directory. Always. Do not allow this to be c
 
 A **multi-package project** — a workspace — nests member packages as subdirectories, each carrying its own `vibe.toml`; the single `vibe.lock` stays at the workspace's absolute root. The layout and the workspace model are specified in §7.6.
 
-### 4.3 Workflows
+### 4.3 Workflows {#workflows}
 
 A **workflow** is a named sequence of work that the user invokes via the CLI. Each workflow is defined as a subgraph of the project's task graph (see Section 5). v1 ships with these workflows:
 
@@ -242,7 +242,7 @@ A **workflow** is a named sequence of work that the user invokes via the CLI. Ea
 
 Workflows are user-facing. They are what people type. The internal implementation is a graph; that is invisible to the user except via `vibe show graph`.
 
-### 4.4 The task graph
+### 4.4 The task graph {#task-graph}
 
 Internally, a vibevm project has a **task graph**: a directed acyclic graph of typed nodes. The graph is constructed at runtime from the project's configuration and installed packages. Each workflow corresponds to a query on this graph (a target node and its transitive dependencies).
 
@@ -272,7 +272,7 @@ Internally, a vibevm project has a **task graph**: a directed acyclic graph of t
 
 This model is more expressive than a sequential lifecycle because it allows fan-out and fan-in naturally: three nodes that all consume the same upstream output can run in parallel.
 
-### 4.5 The four memory levels (recap from book)
+### 4.5 The four memory levels (recap from book) {#four-memory-levels}
 
 Use these terms consistently:
 - **Head** — the human's memory; not in scope for vibevm to manage, but vibevm respects that it exists.
@@ -280,7 +280,7 @@ Use these terms consistently:
 - **Spec** — the corpus of files under `spec/` that are not WAL or boot. Stable, addressable, versioned in git.
 - **Code** — files outside `spec/`, typically in `src/` and `tests/`. Generated or user-edited. Tracked via `Implements: spec://...` markers.
 
-### 4.6 Other key terms
+### 4.6 Other key terms {#other-key-terms}
 
 - **Effective spec** — the layered corpus a workflow consumes: the node's authored `spec/` plus its materialised `vibedeps/` dependencies plus the current WAL, computed at the start of each workflow. A projection of the computed-view engine (Section 6). The effective spec is what the LLM "sees" during build. `vibe show effective` prints it.
 - **Active stack** — the stack currently selected for build operations. A project may have multiple stacks installed; one is active by default; per-command override via `--stack`.
@@ -291,11 +291,11 @@ Use these terms consistently:
 
 ---
 
-## Section 5. The task graph in detail
+## Section 5. The task graph in detail {#task-graph-in-detail}
 
 This section specifies the internal model. Most users never see it; plugin authors and `vibe show graph` users do.
 
-### 5.1 The graph builder
+### 5.1 The graph builder {#graph-builder}
 
 When the user invokes any workflow, the CLI:
 1. Reads `vibe.toml` and `vibe.lock`.
@@ -311,7 +311,7 @@ When the user invokes any workflow, the CLI:
 
 This graph is constructed in memory; it is not persisted. It can be printed via `vibe show graph` for debugging.
 
-### 5.2 The graph runner
+### 5.2 The graph runner {#graph-runner}
 
 Given a target node, the runner:
 1. Computes the transitive closure of dependencies.
@@ -327,7 +327,7 @@ Given a target node, the runner:
 
 The runner is sequential in v1 (no parallelism). Topological sort is computed but levels are executed serially. This simplifies error handling and matches the reality that most workflows have few parallelizable nodes. v2 may add parallelism.
 
-### 5.3 The typed value system
+### 5.3 The typed value system {#typed-value-system}
 
 Edges carry typed values. v1 defines this minimal type set:
 
@@ -351,7 +351,7 @@ Edges carry typed values. v1 defines this minimal type set:
 
 These are TOML-defined schemas in the codebase. Type matching at graph-build time is a string comparison plus version-compatibility rules.
 
-### 5.4 Plugin contribution model
+### 5.4 Plugin contribution model {#plugin-contribution-model}
 
 A package's manifest may contribute nodes to the graph. v1 supports a *content-only* contribution model: a package materialises as a verbatim `vibedeps/` subtree and contributes a boot snippet, but does not contribute executable nodes. This keeps v1 small.
 
@@ -359,7 +359,7 @@ v1.5 may extend this to allow packages to contribute LLM nodes (e.g., a flow tha
 
 This means: in v1, all nodes in the graph are built-in. Plugins influence the graph only by changing what content the built-in nodes operate on.
 
-### 5.5 Workflows as graph queries
+### 5.5 Workflows as graph queries {#workflows-as-graph-queries}
 
 Each workflow is defined as a target node name. v1 workflows and their target nodes:
 
@@ -377,7 +377,7 @@ Each workflow is defined as a target node name. v1 workflows and their target no
 
 Each target's transitive dependencies define what the workflow does. Adding a new workflow is adding a new target node and its dependency chain.
 
-### 5.6 The `install` workflow in detail
+### 5.6 The `install` workflow in detail {#install-workflow-in-detail}
 
 This is the most important workflow in v1; specify it precisely.
 
@@ -424,7 +424,7 @@ Each named node is a built-in. `install:user-confirm` is a `prompt` node that pa
 
 **Implementation note.** The `install` workflow is implemented procedurally in `vibe-cli` rather than executed through a formal graph runner. The node names above reflect the logical shape. `install:review` is elided (no LLM censor yet); when M2 introduces one it lands as a new stage between `install:fetch` and `install:plan`. The graph-runner sophistication described here is a v2 deliverable — v1 ships the same semantics executed procedurally so the type-system and testability benefits hold without the runner's infrastructure cost.
 
-### 5.7 The `build` workflow in detail (v1.5 scope; document for forward compatibility)
+### 5.7 The `build` workflow in detail (v1.5 scope; document for forward compatibility) {#build-workflow-in-detail}
 
 When the user invokes `vibe build feat:welcome-page --stack rust-cli`, the subgraph:
 
@@ -469,11 +469,11 @@ Note: in v1.5, flows that want to participate in build (e.g., `wal:checkpoint`) 
 
 ---
 
-## Section 6. The boot directory model
+## Section 6. The boot directory model {#boot-directory-model}
 
 `spec/boot/` is what gives vibevm cross-agent compatibility — every agent reads the same session-start sequence. Under the loading model the sequence is **computed**, not hand-curated. Design lock: [PROP-009](spec/modules/vibe-workspace/PROP-009-loading-model.md) (the loading model) and [PROP-012](spec/modules/vibe-workspace/PROP-012-managed-redirect-block.md) (the managed redirect block). Specify it precisely.
 
-### 6.1 The computed boot sequence
+### 6.1 The computed boot sequence {#computed-boot-sequence}
 
 A node's boot sequence is not a flat directory the author maintains by hand. `vibe` **computes** it from the unified resolution:
 
@@ -481,7 +481,7 @@ A node's boot sequence is not a flat directory the author maintains by hand. `vi
 
 The computation is deterministic and re-run by `vibe install` / `vibe reinstall`. Authored boot files — the node's own — live in `spec/boot/` as ordinary markdown the author writes. Dependency boot lives in the materialised `vibedeps/` tree (§4.2), never copied into the authored `spec/` — installing a dependency must never modify a node's authored content. `vibe` projects the computed sequence into two generated artifacts (§6.2).
 
-### 6.2 The generated artifacts — `INLINE.md` and `INDEX.md`
+### 6.2 The generated artifacts — `INLINE.md` and `INDEX.md` {#generated-artifacts-inline-md-and-index-md}
 
 For every entry-point node, `vibe` generates two files under the node's `spec/boot/`:
 
@@ -490,7 +490,7 @@ For every entry-point node, `vibe` generates two files under the node's `spec/bo
 
 Both are git-tracked and carry a "generated — do not edit" header. The agent performs no graph walk: `vibe` did it once at generation time; the agent parses one TOML document and reads the files it names — no recursion, no discovery, no cycle detection.
 
-### 6.3 Inclusion types and ordering
+### 6.3 Inclusion types and ordering {#inclusion-types-and-ordering}
 
 Each dependency declares an **inclusion type** — `link` on the consumer's `[requires.packages]` entry (§7.3), one of:
 
@@ -500,7 +500,7 @@ Each dependency declares an **inclusion type** — `link` on the consumer's `[re
 
 `vibe` owns the order. The author-chosen two-digit `NN-` filename prefix is **retired** — it cannot survive a workspace's combined namespace. A package's `[boot_snippet]` declares a **`category`** instead — `foundation`, `flow`, `stack`, or `user-override` — and `vibe` orders the computed sequence by band: `foundation` → the node's own boot → dependency boot (topologically — a dependency before its dependents) → `user-override`. Prefix collisions become impossible by construction. The user-owned `00-core.md` / `90-user.md` keep their reserved names by convention and sit at the foundation / override ends.
 
-### 6.4 The managed `<vibevm>` block
+### 6.4 The managed `<vibevm>` block {#managed-vibevm-block}
 
 The user's `CLAUDE.md`, `AGENTS.md`, `GEMINI.md` are the cross-agent compatibility layer: every modern coding agent reads a project-level instruction file at session start. vibevm does **not** own these files — they are a shared surface a developer and other tools also write to. vibevm owns only a delimited block inside each, bounded by the literal markers `<vibevm>` and `</vibevm>`:
 
@@ -514,15 +514,15 @@ The user's `CLAUDE.md`, `AGENTS.md`, `GEMINI.md` are the cross-agent compatibili
 
 **Session-start order:** the `<vibevm>` block of `CLAUDE.md` / `AGENTS.md` / `GEMINI.md` → `spec/boot/INLINE.md` (if present) → `spec/boot/INDEX.md` and the entries it names, in order. Boot stays **pure file-reading** — the block points at files, it never becomes "run `vibe`", preserving the zero-dependency cross-agent property.
 
-### 6.5 The attention-weight caveat
+### 6.5 The attention-weight caveat {#attention-weight-caveat}
 
 Because LLMs suffer "lost in the middle" attention degradation, files earlier in the boot sequence carry more weight than files in the middle. The `inline` lane — `INLINE.md`, read first — exists for contributions whose priority must be guaranteed by position rather than by trusting agent-side resolution. Authors should not rely on ordering for *correctness*, only for *priority*: a contribution whose correctness depends on running before another must declare an explicit dependency, not lean on a category band.
 
 ---
 
-## Section 7. The package model
+## Section 7. The package model {#package-model}
 
-### 7.1 Package identity
+### 7.1 Package identity {#package-identity}
 
 A package's identity is the tuple `(group, name, version, content_hash)`:
 
@@ -559,14 +559,14 @@ In CLI commands, version is optional and defaults to "latest stable". The versio
 
 `vibe install <pkgref>` records the dep in `vibe.toml` `[requires].packages`. When the CLI form had no version, the resolver pins to a concrete version and the manifest stores the **caret** form (`org.vibevm/wal@^0.1.0`) — same default Cargo's `cargo add` writes. When the CLI form had an explicit constraint, the manifest preserves it verbatim. The `--exact` flag overrides both: it always pins to `=<resolved-version>` (npm `--save-exact` shape).
 
-### 7.2 Package contents
+### 7.2 Package contents {#package-contents}
 
 A package is a directory containing:
 - `vibe.toml` — the manifest, carrying a `[package]` table (required).
 - `README.md` — human-readable description (required).
 - Other content files referenced by the manifest (e.g., boot snippets, spec files).
 
-### 7.3 The manifest schema
+### 7.3 The manifest schema {#manifest-schema}
 
 vibevm uses **one manifest file — `vibe.toml`** — for every node: a consumer
 project, a publishable package, a workspace coordinator. The node's role is
@@ -642,7 +642,7 @@ packages = []                       # e.g., ["org.vibevm/welcome-page-legacy"]
 packages = []                       # e.g., ["org.vibevm/legacy-wal"]
 ```
 
-### 7.4 Lockfile schema
+### 7.4 Lockfile schema {#lockfile-schema}
 
 ```toml
 # vibe.lock — one per workspace, at the absolute root
@@ -684,7 +684,7 @@ version = "0.1.0"
 
 The lockfile is the source of truth for what is installed. `vibe list` reads it. `vibe uninstall` reads it to know what files to remove. It is committed to git.
 
-### 7.5 The manifest schema — consumer-project role
+### 7.5 The manifest schema — consumer-project role {#manifest-schema-consumer-project-role}
 
 The same `vibe.toml` file as §7.3, in the **consumer-project role**: it
 carries `[project]` instead of `[package]` — a node is one or the other,
@@ -813,7 +813,7 @@ auth   = "none"                           # public read-only — default; no cre
 
 This is the difference that makes `vibe install` (no arguments) meaningful: the manifest carries the input list, the resolver produces the lockfile from it. Cloning a vibevm project from git and running `vibe install` reproduces the project's package set without re-typing every pkgref. `vibe install <pkgref>` is sugar for "append to `[requires]`, then sync"; `vibe uninstall <pkgref>` is sugar for "drop from `[requires]`, then sync".
 
-### 7.6 Workspaces — multi-package projects
+### 7.6 Workspaces — multi-package projects {#workspaces-multi-package-projects}
 
 A project may decompose into several packages — the cargo-`[workspace]` /
 Maven-multi-module shape. The model and its rationale are specified in
@@ -887,9 +887,9 @@ implementation time.
 
 ---
 
-## Section 8. The registry
+## Section 8. The registry {#registry}
 
-### 8.1 Registry model: decentralized, per-package repos
+### 8.1 Registry model: decentralized, per-package repos {#registry-model-decentralized-per-package-repos}
 
 A registry is a **git-hosted organization** (GitVerse org / GitHub org / Gitea org / Forgejo group) in which every package is its own repository. A project references one or more registries via the `[[registry]]` array in `vibe.toml`; additional `[[mirror]]` and `[[override]]` entries control fallback and local-pin behaviour (§7.5).
 
@@ -901,7 +901,7 @@ Key properties:
 
 The decentralized shape exists deliberately to avoid the single-host lock-in pattern that, for example, ties Nix to GitHub through hardcoded URL schemes, a global index hosted on GitHub, and lockfiles that pin absolute GitHub URLs. In vibevm, every load-bearing surface (resolve, fetch, lockfile) is host-agnostic.
 
-### 8.2 Registry layout
+### 8.2 Registry layout {#registry-layout}
 
 A registry is a **hosting organization URL**. Each package under it is a **separate git repository** with a flat layout — the package's content lives at the repository root, versions are git tags:
 
@@ -928,7 +928,7 @@ Resolution: `vibe install flow:wal@^0.3` →
 5. Compute `content_hash`; cross-check against the lockfile pin if one exists; fail hard on mismatch.
 6. Drive transitive dependencies through the depsolver (§8.6).
 
-### 8.3 Fetching strategy and cache layout
+### 8.3 Fetching strategy and cache layout {#fetching-strategy-and-cache-layout}
 
 The per-user registry cache is organized by **canonical registry URL**, not by mirror URL — a transparent mirror therefore does not invalidate the cache:
 
@@ -953,7 +953,7 @@ Transport-level optimisations used where they reduce work:
 
 A resolver pass that only needs to consider N candidate versions of a package should never clone all N — it enumerates via `ls-remote`, reads manifests via `git archive`, and only clones the one version it commits to installing.
 
-### 8.4 Publishing
+### 8.4 Publishing {#publishing}
 
 **v1 ships `vibe registry publish <path>`** — a maintainer-facing command that creates a new package repository under the configured registry organization, pushes the package contents, and creates the version tag. It is mechanical: no semantic review, no LLM-backed safety analysis. The full *reviewed publish* surface (LLM censor per §8.5, signed attestations, policy gates) remains v2+.
 
@@ -965,13 +965,13 @@ Error surface (called out because non-admin maintainers will hit these routinely
 - **Tag collision** (publishing `v0.1.0` when that tag already exists) → refused; never force-pushed automatically. The operator must explicitly pick a new version.
 - **Org does not exist / unreachable** → differentiated from auth errors so the operator can distinguish a typo from a permission issue.
 
-### 8.5 Future: LLM-based censoring
+### 8.5 Future: LLM-based censoring {#future-llm-based-censoring}
 
 A v2 feature: before applying writes, the CLI invokes an LLM to review the package contents and emit a safety analysis. The user sees both the plan (mechanical: which files will be written) and the analysis (semantic: does this look like it's trying to do something malicious or surprising).
 
 v1 architectural hook: the `install:review` node exists in the install subgraph and is a no-op in v1. v2 replaces its implementation.
 
-### 8.6 Dependency resolver
+### 8.6 Dependency resolver {#dependency-resolver}
 
 `vibe install` and `vibe update` drive **transitive** resolution through a depsolver layer. v1 primary solver is `resolvo` (Rust-native SAT-backed, used by Pixi / Rattler in the conda ecosystem). An explicit fallback slot for `libsolv` (C, RPM-world, battle-tested at millions-of-packages scale) exists behind a `DepSolver` trait — analogous to the `GitBackend` pattern pinned in [PROP-001 §2.2](spec/modules/vibe-registry/PROP-001-git-backend.md#backend-trait). Swap cost is a single new impl and one factory line.
 
@@ -989,9 +989,9 @@ Complexity expectation (pinned in [PROP-000 §18](spec/common/PROP-000.md#comple
 
 ---
 
-## Section 9. The CLI surface
+## Section 9. The CLI surface {#cli-surface}
 
-### 9.1 Command summary (v1)
+### 9.1 Command summary (v1) {#command-summary}
 
 ```
 vibe init [--path <dir>] [--name <n>] [--stack <stack-name>]
@@ -1022,7 +1022,7 @@ vibe version                                           # Version info
 
 Every command honours the two global flags `--json` (machine-readable output) and `--quiet` (one-line summary); they are mutually exclusive. `--json` output is a stream of one or more JSON documents on stdout — `install`, for instance, emits the plan and then the report as separate top-level objects so consumers can parse the plan before approval lands.
 
-### 9.2 Commands deferred to v1.5
+### 9.2 Commands deferred to v1.5 {#commands-deferred-to-v1-5}
 
 ```
 vibe build <feat-pkgref> [--stack <stack-name>]        # Generate code
@@ -1030,7 +1030,7 @@ vibe sync                                              # Reconcile code-spec dri
 vibe build --with-install <feat-pkgref>                # Compose install + build
 ```
 
-### 9.3 Output format
+### 9.3 Output format {#output-format}
 
 The CLI defaults to a structured human-readable format that is also LLM-readable:
 - Markdown-flavored with clear headers.
@@ -1042,7 +1042,7 @@ A `--json` flag produces fully machine-readable output. Skills consuming the CLI
 
 A `--quiet` flag reduces output to one line of summary. Useful in CI and in scripts.
 
-### 9.4 Exit codes
+### 9.4 Exit codes {#exit-codes}
 
 - `0` — success.
 - `1` — general error (file not found, parse error, etc.).
@@ -1054,7 +1054,7 @@ A `--quiet` flag reduces output to one line of summary. Useful in CI and in scri
 - `7` — ambiguous package: a short name matched two or more packages across different groups ([PROP-008 §2.7](spec/modules/vibe-registry/PROP-008-qualified-naming.md)). Distinct from `3` — a collision is a naming ambiguity, not a dependency conflict.
 - `10+` — reserved for specific failure modes documented per command.
 
-### 9.5 Configuration sources, in precedence order
+### 9.5 Configuration sources, in precedence order {#configuration-sources-in-precedence-order}
 
 1. Command-line flags (highest precedence).
 2. Environment variables (`VIBE_*` prefix).
@@ -1066,9 +1066,9 @@ A `--quiet` flag reduces output to one line of summary. Useful in CI and in scri
 
 ---
 
-## Section 10. Implementation language and dependencies
+## Section 10. Implementation language and dependencies {#implementation-language-and-dependencies}
 
-### 10.1 Language: Rust
+### 10.1 Language: Rust {#language-rust}
 
 Implement vibevm in Rust. Rationale:
 - Single-binary distribution (no runtime dependency on Node.js or Python).
@@ -1079,7 +1079,7 @@ Implement vibevm in Rust. Rationale:
 
 The target binary should be runnable as `vibe` after a single `cargo install` or `brew install`.
 
-### 10.2 Crate structure
+### 10.2 Crate structure {#crate-structure}
 
 ```
 vibevm/
@@ -1104,7 +1104,7 @@ vibevm/
 
 Each crate has clear responsibilities; cross-crate dependencies follow the diagram (cli depends on everything; everything depends on core).
 
-### 10.3 Required external dependencies (all permissive licenses)
+### 10.3 Required external dependencies (all permissive licenses) {#required-external-dependencies}
 
 - `clap` (Apache-2.0/MIT) — argument parsing.
 - `serde` + `toml` (Apache-2.0/MIT) — manifest parsing.
@@ -1119,7 +1119,7 @@ Each crate has clear responsibilities; cross-crate dependencies follow the diagr
 
 Avoid GPL/AGPL/LGPL dependencies entirely. The user's license preference is permissive only.
 
-### 10.4 LLM provider integration (for v1.5)
+### 10.4 LLM provider integration (for v1.5) {#llm-provider-integration}
 
 Implement provider abstraction in `vibe-llm` crate. v1.5 supports:
 - **Anthropic** (Claude models) via the official Messages API.
@@ -1160,17 +1160,17 @@ async fn build_with_tools(provider: &dyn LLMProvider, context: BuildContext) -> 
 
 Tool execution must enforce that file operations are scoped to the project root. No path traversal. No reads outside the project.
 
-### 10.5 Spec-driven development of vibevm itself
+### 10.5 Spec-driven development of vibevm itself {#spec-driven-development-of-vibevm-itself}
 
 vibevm is built using vibevm's own philosophy. The `vibevm` source tree itself follows the structure described in the book: a `spec/` directory with PROP/FEAT documents, `spec/WAL.md`, `spec/boot/`, and the managed `<vibevm>` block in `CLAUDE.md`. The Reader writes vibevm using the same discipline that vibevm enforces. This is meta-bootstrapping but it's also the most rigorous test of the design.
 
 ---
 
-## Section 11. Staging plan
+## Section 11. Staging plan {#staging-plan}
 
 vibevm ships in staged milestones. Each milestone is *useful on its own* — if work stops at any milestone, the user has a usable product.
 
-### 11.1 Milestone M0: Walking skeleton
+### 11.1 Milestone M0: Walking skeleton {#milestone-m0-walking-skeleton}
 
 **Scope.** A minimum-viable installer that proves the file-management mechanics work.
 
@@ -1186,7 +1186,7 @@ vibevm ships in staged milestones. Each milestone is *useful on its own* — if 
 
 **Estimated effort.** One weekend.
 
-### 11.2 Milestone M1: The package manager
+### 11.2 Milestone M1: The package manager {#milestone-m1-the-package-manager}
 
 **Scope.** Full package manager functionality with git registry, multiple installed packages, and the consistency linter.
 
@@ -1208,7 +1208,7 @@ vibevm ships in staged milestones. Each milestone is *useful on its own* — if 
 
 **Revision (M1.1-revision, amended post-M1.1 shipping).** After three packages went live against a monorepo-shaped registry, the registry model was redesigned around decentralized per-package repos, a `[[registry]]`-array + `[[mirror]]` + `[[override]]` schema in `vibe.toml`, content-addressed identity, a transitive depsolver (`resolvo`), and a `vibe registry publish` maintainer utility — see [PROP-002](spec/modules/vibe-registry/PROP-002-decentralized-registry.md). The monorepo layout example previously shown in §8.2 was replaced by the per-package layout now described there. Applies to M1.1+ code; live migration of the three demo packages to the new `vibespecs/<kind>-<name>` shape is part of that revision slice.
 
-### 11.3 Milestone M1.5: Generation
+### 11.3 Milestone M1.5: Generation {#milestone-m1-5-generation}
 
 **Scope.** The `build` workflow ships, with LLM-driven code generation via tool-use loops.
 
@@ -1223,7 +1223,7 @@ vibevm ships in staged milestones. Each milestone is *useful on its own* — if 
 
 **Estimated effort.** Three to six weekends, primarily for hardening tool-use loops.
 
-### 11.4 Milestone M2: Production-readiness
+### 11.4 Milestone M2: Production-readiness {#milestone-m2-production-readiness}
 
 **Scope.** Everything needed for vibevm to be safely used by people other than the author.
 
@@ -1237,7 +1237,7 @@ vibevm ships in staged milestones. Each milestone is *useful on its own* — if 
 
 **Estimated effort.** Open-ended; depends on adoption signals.
 
-### 11.5 Milestone M3+: Speculative directions
+### 11.5 Milestone M3+: Speculative directions {#milestone-m3-speculative-directions}
 
 Documented for reference, not for v1 implementation:
 - **Interpret mode.** `vibe run <feat-pkgref>` — execute the spec directly without generating code, using an LLM as the runtime interpreter.
@@ -1249,7 +1249,7 @@ These are not in scope. Mention them in design only to ensure the foundation sup
 
 ---
 
-## Section 12. The linter (vibe check)
+## Section 12. The linter (vibe check) {#linter}
 
 `vibe check` runs deterministic checks on the project's spec content. No LLM. Pure inspection.
 
@@ -1274,11 +1274,11 @@ Exit code: 0 if no errors, 1 if errors, 0 with warnings displayed if only warnin
 
 ---
 
-## Section 13. The hand-written flow:wal package
+## Section 13. The hand-written flow:wal package {#hand-written-flow-wal-package}
 
 This is the canonical demo package. Implementing it correctly is the v1 acceptance test for the package model.
 
-### 13.1 Package contents
+### 13.1 Package contents {#wal-package-contents}
 
 ```
 flow-wal-package/
@@ -1298,7 +1298,7 @@ flow-wal-package/
 
 **The boot snippet is declared, not mirrored.** The `[boot_snippet]` table names the boot file's `source` path inside the package and its `category`; `vibe` composes it into the consumer's computed boot sequence (Section 6). The file is not copied to a fixed `spec/boot/` path.
 
-### 13.2 Manifest
+### 13.2 Manifest {#manifest}
 
 ```toml
 [package]
@@ -1319,7 +1319,7 @@ source   = "boot/wal.md"
 category = "flow"
 ```
 
-### 13.3 Boot snippet content
+### 13.3 Boot snippet content {#boot-snippet-content}
 
 ```markdown
 # Flow: WAL (Write-Ahead Log)
@@ -1342,7 +1342,7 @@ At the end of the session:
 Full protocol: spec/flows/wal/WAL-PROTOCOL.md
 ```
 
-### 13.4 The protocol document
+### 13.4 The protocol document {#protocol-document}
 
 The full WAL protocol document (`spec/flows/wal/WAL-PROTOCOL.md` after install) is derived from the user's book chapter 3 ("Архитектура памяти") and chapter 2 (sections on WAL). Reproduce the structure faithfully but in English. Include:
 - Definition (WAL is a checkpoint, not a log).
@@ -1355,11 +1355,11 @@ This document, plus the boot snippet, is what the user installs when they run `v
 
 ---
 
-## Section 14. Development methodology
+## Section 14. Development methodology {#development-methodology}
 
 The Reader (Claude Code) implements vibevm using Spec-Driven Development with WAL, single-developer mode, as described in the user's book chapters 1-3 (in `refs/book/`).
 
-### 14.1 Project initialization
+### 14.1 Project initialization {#project-initialization}
 
 Before writing any code:
 1. Create a `spec/` directory in the vibevm source tree.
@@ -1370,7 +1370,7 @@ Before writing any code:
 6. Set up `CLAUDE.md` / `AGENTS.md` / `GEMINI.md` at the source tree root, each carrying the managed `<vibevm>` block.
 7. Eat your own dogfood: this layout is exactly what `vibe init` will generate. You're hand-creating it now because `vibe` doesn't exist yet.
 
-### 14.2 The discipline
+### 14.2 The discipline {#discipline}
 
 For every coding session:
 1. Read `spec/WAL.md` first.
@@ -1379,7 +1379,7 @@ For every coding session:
 4. Update WAL at end of session.
 5. If a decision needs to be made that isn't in the spec, write it to the spec first, then implement.
 
-### 14.3 What to do when stuck
+### 14.3 What to do when stuck {#what-to-do-when-stuck}
 
 When a design question arises that this document doesn't answer:
 1. Re-read the relevant section of this document.
@@ -1389,7 +1389,7 @@ When a design question arises that this document doesn't answer:
 
 Do not silently invent. The book is explicit about this: REVIEW marker before any decision the spec doesn't authorize.
 
-### 14.4 Iteration order
+### 14.4 Iteration order {#iteration-order}
 
 Build M0 entirely before starting M1. Do not skip ahead. Each milestone should result in a working, tested, releasable artifact before the next one starts.
 
@@ -1423,7 +1423,7 @@ Within M1.5:
 7. Add OpenAI, OpenRouter, Ollama providers.
 8. Update WAL. Tag M1.5 release.
 
-### 14.5 Testing strategy
+### 14.5 Testing strategy {#testing-strategy}
 
 - **Unit tests** for every parsing, validation, type-conversion function. These should run in milliseconds.
 - **Integration tests** for each CLI command, using a temporary directory and a fixture package. Use `assert_cmd` or similar.
@@ -1432,7 +1432,7 @@ Within M1.5:
 
 Aim for coverage that catches regressions, not coverage as a metric. Test the seams (manifest parsing, graph construction, file operations) more than the leaves.
 
-### 14.6 Documentation discipline
+### 14.6 Documentation discipline {#documentation-discipline}
 
 For every command and every public type:
 - Have a doc-comment explaining what it does and why.
@@ -1444,7 +1444,7 @@ Documentation is part of the deliverable. Do not defer it to "after v1."
 
 ---
 
-## Section 15. Glossary
+## Section 15. Glossary {#glossary}
 
 Terms used throughout this document, in alphabetical order. When in doubt, refer here.
 
@@ -1488,11 +1488,11 @@ Terms used throughout this document, in alphabetical order. When in doubt, refer
 
 ---
 
-## Section 16. Acceptance checklist for v1
+## Section 16. Acceptance checklist for v1 {#acceptance-checklist-for-v1}
 
 Before declaring any milestone complete, verify every item in its section.
 
-### M0 acceptance
+### M0 acceptance {#m0-acceptance}
 
 - [ ] `vibe init` creates a project structure that matches the layout in Section 4.2.
 - [ ] `vibe init` is idempotent: running it twice in the same directory does not destroy user-modified files.
@@ -1510,7 +1510,7 @@ Before declaring any milestone complete, verify every item in its section.
 - [ ] All output is parseable as either human-readable or `--json`.
 - [ ] Test suite covers init, install, uninstall, list with at least one happy-path and one error-path test each.
 
-### M1 acceptance (additive over M0)
+### M1 acceptance (additive over M0) {#m1-acceptance}
 
 - [ ] `vibe install` resolves packages from a git registry per `vibe.toml`'s `[[registry]]` configuration (priority-ordered).
 - [ ] Registry cache lives at `~/.vibe/registries/<canonical-url-hash>/packages/<kind>-<name>/` — per-package, not per-monorepo.
@@ -1531,7 +1531,7 @@ Before declaring any milestone complete, verify every item in its section.
 - [ ] Lockfile schema v1 (monorepo-era) is accepted read-only and auto-migrated to schema v2 on next write.
 - [ ] Documentation in `docs/` covers all commands and includes an authoring guide for each kind.
 
-### M1.5 acceptance (additive over M1)
+### M1.5 acceptance (additive over M1) {#m1-5-acceptance}
 
 - [ ] LLM provider abstraction in `vibe-llm` supports Anthropic, OpenAI, OpenRouter, Ollama.
 - [ ] `vibe build feat:welcome-page --stack rust-cli` produces working Rust CLI code.
@@ -1544,7 +1544,7 @@ Before declaring any milestone complete, verify every item in its section.
 
 ---
 
-## Section 17. Closing notes for the Reader
+## Section 17. Closing notes for the Reader {#closing-notes-for-the-reader}
 
 This document is the entire specification. If you are implementing vibevm and you find this document silent on a question, either (a) the question is outside v1 scope and should be deferred, or (b) the answer is in `refs/book/` and you should re-read the relevant chapter.
 
