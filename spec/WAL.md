@@ -1,7 +1,55 @@
 # WAL — Project Continuation State
-_Updated: 2026-06-11, the **Discipline v0.2 adoption (TERRAFORM-PLAN-v0.3) is COMPLETE** — all phases 0–7 plus the priority-cell sweep executed this day on `main` (commits `e3f06ec` … `09d0da5`, pushed). Close-out: [`terraform/adopt-v0.3/REPORT.md`](../terraform/adopt-v0.3/REPORT.md); raid log: [`terraform/adopt-v0.3/LOG.md`](../terraform/adopt-v0.3/LOG.md); prediction ledger: [`terraform/adopt-v0.3/PREDICTIONS.md`](../terraform/adopt-v0.3/PREDICTIONS.md). Prior state: the v0.2 terraform complete at `e1da0c4` (2026-06-10)._
+_Updated: 2026-06-12, the **PROP-013 discipline-depth audit (the INT-0001 window) ran to completion** — 12 findings (1 P1 fixed in-run, `9f06fbf`), category **E** added to PROP-013 §2.2, inventory in [`AUDIT.md`](../AUDIT.md). Prior state: the v0.3 adoption complete 2026-06-11 (below). **Note:** the adoption-day commit chain was re-hashed by a post-session history rewrite — older hash citations below (`e3f06ec` … `09d0da5`, `1792c14`) are pre-rewrite; the live chain runs `d0b28a5` … `d872832` and onward._
 
 ## Current phase
+
+**AUDIT WINDOW 2026-06-12 — the discipline-depth sweep: COMPLETE.**
+The owner opened the INT-0001 window with the question «насколько
+глубоко код соответствует идеалам AI-Native Rust». The run added
+category **E (discipline depth)** to PROP-013 §2.2 and recorded **12
+findings** in `AUDIT.md` (1 P1 fixed in-run, 7 P2 filed, 4 P3).
+Headline: **the adoption is ~one crate deep** — vibe-resolver holds
+80/198 edges, 42/50 `#[verifies]`, all 4 `#[cell]` manifests and the
+only differential oracle; 347/352 spec units are untyped anchors (the
+formal REQ fabric is PROP-003's pilot five); `VIBEVM-SPEC.md` (1190
+lines, 0 units) keeps 8 crates ratchet-exempt (DBT-0019 escalated
+P3→P2); PROP-012 is shipped with 0 edges; `seam-has-doctest` audits
+lib.rs only and `error-enum-cites-req` checks the attribute, not the
+Class-F message grammar; 23 src files exceed 600 lines (top: CLI
+`commands/registry.rs` 3245, `multi_registry_resolver.rs` 2870,
+`git_package_registry.rs` 2539; `vibe-check/lib.rs` is the whole crate
+in one file). **The P1 (2026-06-12-01):** the committed `specmap.json`
+had every `content_hash` emptied by the post-session history rewrite
+of 2026-06-11 (all adoption-day commits re-hashed, e.g.
+`1792c14`→`3ab0986`; pre-rewrite objects gone) — gate #1 was red on a
+clean `main` while believed green; the close-out panel had certified
+the pre-rewrite tree. Fixed by regeneration (`9f06fbf`); panel
+re-certified on the live tree: specmap --check green (352/190/198/0),
+conform 8 frozen / 0 new, test-gate 1109 results / 0 failed / 3
+skipped, xfail-strict (fast-loop budget figures inherited). **Open
+owner question:** what tool performed the rewrite — anything that
+re-serializes committed derived artifacts must regenerate them or
+leave them alone.
+
+**The depth program (the audit's filed P2s, in dependency order):**
+(1) DBT-0019 — unit-ify `VIBEVM-SPEC.md` (now P2; unblocks tagging for
+vibe-cli/mcp/wire/xtask, half the workspace); (2) type the implemented
+modules' PROPs (002/005/007/008/012) — kind/revision/status lines at
+REQ grain; (3) affirmation sweeps, PROP-012 first (shipped, 0 edges),
+then PROP-007 / PROP-005 item-grain; (4) `#[verifies]` tagging of the
+strongest existing tests outside the resolver; (5) cell-ify the
+`Registry` seam (3 proven production variants) with `#[cell]`
+manifests + R-001 registration; (6) the god-file decomposition backlog
+(CLI registry.rs → 4 cells; the two vibe-registry files; vibe-check
+gains a `Check` seam; `manifest/package.rs` 5-way split; conform-core
+engine split; `cli_e2e.rs` → per-feature files); (7) the conform rule
+backlog (seam-doctest beyond lib.rs; Class-F message grammar;
+file-length warn per guide §2; unwrap-in-domain with cfg(test)
+exclusion) — each lands ratcheted.
+
+---
+
+## Prior phase (superseded 2026-06-12): the v0.3 adoption
 
 **THE v0.3 ADOPTION IS COMPLETE (2026-06-11).** The owner dropped the
 Discipline v0.2 package and TERRAFORM-PLAN-v0.3; the plan ran to its
