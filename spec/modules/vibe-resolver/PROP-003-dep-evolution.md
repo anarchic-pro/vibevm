@@ -433,9 +433,9 @@ The `context(...)` predicate accepts the same `if_present` / `if_provides` / `if
 
 #### Boolean composition over predicates {#req-conditional-composition}
 
-`req r1 planned`
+`req r2`
 
-Predicates compose with `and` / `or` / `not` over the §2.5.2 probe set. Unbuilt today: the shipped parser surfaces every composition form as `PredicateError::Unsupported` rather than misparsing it — see the recorded `deviates` in `crates/vibe-resolver/src/conditional.rs`.
+Predicates compose with `and` / `or` / `not` over context keys, with parentheses for grouping and the standard precedence (`not` > `and` > `or`): `context(stack:rust and not stack:go)`, `context((a or b) and c)`. Composition over the richer §2.5.2 probe forms (`if_files = '…'` inside `context(...)`) remains future work; the parser surfaces those as `PredicateError::Unsupported` — see the recorded `deviates` on the grammar edge in `crates/vibe-resolver/src/conditional.rs`. (r1 was `planned`; the adopt-v0.3 Phase 7 implementation ratified it at r2.)
 
 ### 2.7 Internationalization (i18n) — multi-language package content {#i18n}
 
