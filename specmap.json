@@ -2948,7 +2948,7 @@
   "spec_units": [
     {
       "anchor": "root",
-      "content_hash": "",
+      "content_hash": "sha256:3563fe0bdda859f19714ba001090bf9c825adf3df3f5ae487adafade21600670",
       "doc_path": "common/PROP-000",
       "file": "spec/common/PROP-000.md",
       "heading": "PROP-000: Foundational technical decisions",
@@ -2957,7 +2957,7 @@
     },
     {
       "anchor": "language",
-      "content_hash": "",
+      "content_hash": "sha256:06ed05753f5f28deb05c796aac8305286e6f298fd584a867ff097e51ab998081",
       "doc_path": "common/PROP-000",
       "file": "spec/common/PROP-000.md",
       "heading": "1. Language: Rust",
@@ -2966,7 +2966,7 @@
     },
     {
       "anchor": "build",
-      "content_hash": "",
+      "content_hash": "sha256:7aa4eb5d82381ab6804c551b8a0a1ee379ee67cdefe6deccdb2b182dca5b2fa6",
       "doc_path": "common/PROP-000",
       "file": "spec/common/PROP-000.md",
       "heading": "2. Build system: Cargo workspace",
@@ -2975,7 +2975,7 @@
     },
     {
       "anchor": "license",
-      "content_hash": "",
+      "content_hash": "sha256:c53689e27dd6562b17fafb08045462d50938dbe676323a426b406c6971dbea92",
       "doc_path": "common/PROP-000",
       "file": "spec/common/PROP-000.md",
       "heading": "3. License",
@@ -2984,7 +2984,7 @@
     },
     {
       "anchor": "manifests",
-      "content_hash": "",
+      "content_hash": "sha256:a779568e52605947025d6fe37549f1829acc5b9cd3993c047733f8dd04125205",
       "doc_path": "common/PROP-000",
       "file": "spec/common/PROP-000.md",
       "heading": "4. Manifest format: TOML",
@@ -2993,7 +2993,7 @@
     },
     {
       "anchor": "layout",
-      "content_hash": "",
+      "content_hash": "sha256:864942b63575842255186b6042b26879038746f2f5c4f3b5736835db03b13c2a",
       "doc_path": "common/PROP-000",
       "file": "spec/common/PROP-000.md",
       "heading": "5. Directory layout",
@@ -3002,7 +3002,7 @@
     },
     {
       "anchor": "identity",
-      "content_hash": "",
+      "content_hash": "sha256:caa30bfa8713653d4a8ba0f431a6127575c71acc63be34988529666b724cd7f3",
       "doc_path": "common/PROP-000",
       "file": "spec/common/PROP-000.md",
       "heading": "6. Package identity",
@@ -3011,7 +3011,7 @@
     },
     {
       "anchor": "registry",
-      "content_hash": "",
+      "content_hash": "sha256:6d46da364e04a7b5d1c1ce0e437d78dbcd821aea0ca79fa05f04462fb4f44d64",
       "doc_path": "common/PROP-000",
       "file": "spec/common/PROP-000.md",
       "heading": "7. Registry model (M0 vs M1)",
@@ -3020,7 +3020,7 @@
     },
     {
       "anchor": "graph",
-      "content_hash": "",
+      "content_hash": "sha256:b1e1012a5c1403184de43dcca49246fe2bcb95e6c0a5dedeed9c974345295fad",
       "doc_path": "common/PROP-000",
       "file": "spec/common/PROP-000.md",
       "heading": "8. Task graph model",
@@ -3029,7 +3029,7 @@
     },
     {
       "anchor": "conflicts",
-      "content_hash": "",
+      "content_hash": "sha256:bc0cf6038971e1f28aecdf353172700a30ae5c9073554cb5e960af8e5da48f17",
       "doc_path": "common/PROP-000",
       "file": "spec/common/PROP-000.md",
       "heading": "9. Conflict resolution",
@@ -3038,7 +3038,7 @@
     },
     {
       "anchor": "observability",
-      "content_hash": "",
+      "content_hash": "sha256:67ad77369c89ab3f8ef27c52788d83b8193b59f88e7ee547b052103c1c40ed59",
       "doc_path": "common/PROP-000",
       "file": "spec/common/PROP-000.md",
       "heading": "10. Observability",
@@ -3047,7 +3047,7 @@
     },
     {
       "anchor": "platforms",
-      "content_hash": "",
+      "content_hash": "sha256:b380e7291a34900a8bb70bb4cb1b62112aed7267c70e19d5d4deff74f1271f6e",
       "doc_path": "common/PROP-000",
       "file": "spec/common/PROP-000.md",
       "heading": "11. Cross-platform target",
@@ -3056,7 +3056,7 @@
     },
     {
       "anchor": "commits",
-      "content_hash": "",
+      "content_hash": "sha256:c3eb89a1dc4424bf666b49afcc6d8056565dba466ea0372976345419f9178101",
       "doc_path": "common/PROP-000",
       "file": "spec/common/PROP-000.md",
       "heading": "12. Commit and push discipline",
@@ -3065,7 +3065,7 @@
     },
     {
       "anchor": "conventional-commits",
-      "content_hash": "",
+      "content_hash": "sha256:c947a1f6f5e89b0415992112fcfc2da2feffb86a0d11df1f890e05e3d153a035",
       "doc_path": "common/PROP-000",
       "file": "spec/common/PROP-000.md",
       "heading": "12.2 Conventional Commits",
@@ -3074,7 +3074,7 @@
     },
     {
       "anchor": "grouping",
-      "content_hash": "",
+      "content_hash": "sha256:dc277b3df1f23630a9e9ddad1d78547374f211780860dba13568631458a74653",
       "doc_path": "common/PROP-000",
       "file": "spec/common/PROP-000.md",
       "heading": "12.3 Group commits by meaning",
@@ -3083,7 +3083,7 @@
     },
     {
       "anchor": "autonomy",
-      "content_hash": "",
+      "content_hash": "sha256:a8facf49030ad52f1ae3d3699a1264f89e9d64bc2296550cf42b315ff296f176",
       "doc_path": "common/PROP-000",
       "file": "spec/common/PROP-000.md",
       "heading": "12.4 Autonomy on routine changes",
@@ -3092,7 +3092,7 @@
     },
     {
       "anchor": "package-layout",
-      "content_hash": "",
+      "content_hash": "sha256:f6e82ef25ab6e250e75b55fef337669b19cb8997e02cf48956563d0c5cc74ae2",
       "doc_path": "common/PROP-000",
       "file": "spec/common/PROP-000.md",
       "heading": "13. Package layout convention",
@@ -3101,7 +3101,7 @@
     },
     {
       "anchor": "manual-tests",
-      "content_hash": "",
+      "content_hash": "sha256:4f743e000f06d74f10abf476ba81f198a6b26c51c7204700e376aca0326e33e9",
       "doc_path": "common/PROP-000",
       "file": "spec/common/PROP-000.md",
       "heading": "14. Manual-test protocol",
@@ -3110,7 +3110,7 @@
     },
     {
       "anchor": "dep-weight",
-      "content_hash": "",
+      "content_hash": "sha256:3ddc6b80e06aa6efeb974fb9f570b214ba6dad74d82f2ef1e17ccc6529f53d34",
       "doc_path": "common/PROP-000",
       "file": "spec/common/PROP-000.md",
       "heading": "15. Dependency weight is not a decision factor",
@@ -3119,7 +3119,7 @@
     },
     {
       "anchor": "jtd",
-      "content_hash": "",
+      "content_hash": "sha256:6eea99e5c40e290095a7279e37c378506b9578937801c0db7c9db395d2e65af5",
       "doc_path": "common/PROP-000",
       "file": "spec/common/PROP-000.md",
       "heading": "16. JTD + codegen for wire contracts",
@@ -3128,7 +3128,7 @@
     },
     {
       "anchor": "prod-arch",
-      "content_hash": "",
+      "content_hash": "sha256:d087cdd908521937064ae5a944bfc72f63d1eae598cf77ee0a4e0548e93f67fc",
       "doc_path": "common/PROP-000",
       "file": "spec/common/PROP-000.md",
       "heading": "17. Production architecture in the prototype phase",
@@ -3137,7 +3137,7 @@
     },
     {
       "anchor": "complexity",
-      "content_hash": "",
+      "content_hash": "sha256:9d5fa1a554b991f5f49910901339cd94baad913118c7f1f7f771bf6acafae925",
       "doc_path": "common/PROP-000",
       "file": "spec/common/PROP-000.md",
       "heading": "18. Complexity expectation: higher than RPM",
@@ -3146,7 +3146,7 @@
     },
     {
       "anchor": "setup-docs",
-      "content_hash": "",
+      "content_hash": "sha256:b134d68c7044c12d05d01380cccb7793df14c482f829e2df13d91aa373f5f76d",
       "doc_path": "common/PROP-000",
       "file": "spec/common/PROP-000.md",
       "heading": "19. Load-bearing setup documentation",
@@ -3155,7 +3155,7 @@
     },
     {
       "anchor": "token-secrecy",
-      "content_hash": "",
+      "content_hash": "sha256:b5834c16489c761119cad8a40d5989898f6033084a77dca2aa1740789bfd978e",
       "doc_path": "common/PROP-000",
       "file": "spec/common/PROP-000.md",
       "heading": "20. Token secrecy and adapter scope",
@@ -3164,7 +3164,7 @@
     },
     {
       "anchor": "root",
-      "content_hash": "",
+      "content_hash": "sha256:214fb57d249b074cdadf2e245a851c9396320c0309e84d6d140dd4cb55772758",
       "doc_path": "common/PROP-006",
       "file": "spec/common/PROP-006-operating-modes.md",
       "heading": "PROP-006: Operating modes — codeword-triggered work postures",
@@ -3173,7 +3173,7 @@
     },
     {
       "anchor": "motivation",
-      "content_hash": "",
+      "content_hash": "sha256:8ba70048859348bdba7990b6f4d8c39cc9009f68b44859d45be613c394627dc5",
       "doc_path": "common/PROP-006",
       "file": "spec/common/PROP-006-operating-modes.md",
       "heading": "1. Motivation",
@@ -3182,7 +3182,7 @@
     },
     {
       "anchor": "mfbt",
-      "content_hash": "",
+      "content_hash": "sha256:ec79f497101de1d27ed7b842914abec9d293503f69188c811f7bef23adc782fd",
       "doc_path": "common/PROP-006",
       "file": "spec/common/PROP-006-operating-modes.md",
       "heading": "2. Codeword: «move fast and break things»",
@@ -3191,7 +3191,7 @@
     },
     {
       "anchor": "mfbt-changes",
-      "content_hash": "",
+      "content_hash": "sha256:7e5d05fc061c25237bfd31017b7fa2254846a999632d80065e43cc713c77b9e1",
       "doc_path": "common/PROP-006",
       "file": "spec/common/PROP-006-operating-modes.md",
       "heading": "2.1 What the codeword changes",
@@ -3200,7 +3200,7 @@
     },
     {
       "anchor": "mfbt-limits",
-      "content_hash": "",
+      "content_hash": "sha256:1cf6143af87ae977656254dc9309cae209a8880cb031b0cdb20024a45a636b96",
       "doc_path": "common/PROP-006",
       "file": "spec/common/PROP-006-operating-modes.md",
       "heading": "2.2 What the codeword does NOT change",
@@ -3209,7 +3209,7 @@
     },
     {
       "anchor": "mfbt-lifecycle",
-      "content_hash": "",
+      "content_hash": "sha256:44b31af988f3d8ee076ab5dfdb9fda4910b049934f3af460027f305d2fa277d8",
       "doc_path": "common/PROP-006",
       "file": "spec/common/PROP-006-operating-modes.md",
       "heading": "2.3 Activation lifecycle",
@@ -3218,7 +3218,7 @@
     },
     {
       "anchor": "mfbt-reports",
-      "content_hash": "",
+      "content_hash": "sha256:b3c35afa915594feb5df1dd37136139b0725edce05f5cb574d237148ba756b3f",
       "doc_path": "common/PROP-006",
       "file": "spec/common/PROP-006-operating-modes.md",
       "heading": "2.4 Reporting cadence under MFBT",
@@ -3227,7 +3227,7 @@
     },
     {
       "anchor": "future",
-      "content_hash": "",
+      "content_hash": "sha256:ea39409f020ab9eb88019c457489e64528067baf5db861fffcda447db48742a8",
       "doc_path": "common/PROP-006",
       "file": "spec/common/PROP-006-operating-modes.md",
       "heading": "3. Future codewords",
@@ -3236,7 +3236,7 @@
     },
     {
       "anchor": "history",
-      "content_hash": "",
+      "content_hash": "sha256:7ba37de51d6d1ba1e67e5280ed08d0b6f39c2ee677632386cd626a7517bccbfe",
       "doc_path": "common/PROP-006",
       "file": "spec/common/PROP-006-operating-modes.md",
       "heading": "4. Version history",
@@ -3245,7 +3245,7 @@
     },
     {
       "anchor": "root",
-      "content_hash": "",
+      "content_hash": "sha256:2fa24db669df6b641301c4e364f0096f04b86d64b0bab4ac1ac8368f7db7ac03",
       "doc_path": "common/PROP-013",
       "file": "spec/common/PROP-013-periodic-health-audit.md",
       "heading": "PROP-013: Periodic health audit — a recurring inventory of defects, rot, and drift",
@@ -3254,7 +3254,7 @@
     },
     {
       "anchor": "motivation",
-      "content_hash": "",
+      "content_hash": "sha256:fcace4540197eaff5560d9ec3938bc96f852e7e63b6ad6ea1fda03070b117f32",
       "doc_path": "common/PROP-013",
       "file": "spec/common/PROP-013-periodic-health-audit.md",
       "heading": "1. Motivation",
@@ -3263,7 +3263,7 @@
     },
     {
       "anchor": "decisions",
-      "content_hash": "",
+      "content_hash": "sha256:d9da09518f048dc8267fcd31f07d03f50c5091a3b2d4eeb6bd2986886d144552",
       "doc_path": "common/PROP-013",
       "file": "spec/common/PROP-013-periodic-health-audit.md",
       "heading": "2. Decisions",
@@ -3272,7 +3272,7 @@
     },
     {
       "anchor": "nature",
-      "content_hash": "",
+      "content_hash": "sha256:e14625807946e41bb1867dd3b990fda3d9856acd4fa1f7e7bc542b915c6a9c98",
       "doc_path": "common/PROP-013",
       "file": "spec/common/PROP-013-periodic-health-audit.md",
       "heading": "2.1 The audit is a deliberate periodic sweep, complementary to the gate",
@@ -3281,7 +3281,7 @@
     },
     {
       "anchor": "checklist",
-      "content_hash": "",
+      "content_hash": "sha256:1d3965e79e78f15449e143163a509ded9ff09651387f98d3e7db5eb03f3b9cb0",
       "doc_path": "common/PROP-013",
       "file": "spec/common/PROP-013-periodic-health-audit.md",
       "heading": "2.2 Audit scope — the category checklist",
@@ -3290,7 +3290,7 @@
     },
     {
       "anchor": "inventory",
-      "content_hash": "",
+      "content_hash": "sha256:a6441ef79f38cf82616d0e109f085be7f970587fa452ed4073e15d325dc5bd8b",
       "doc_path": "common/PROP-013",
       "file": "spec/common/PROP-013-periodic-health-audit.md",
       "heading": "2.3 The inventory — `AUDIT.md`",
@@ -3299,7 +3299,7 @@
     },
     {
       "anchor": "disposition",
-      "content_hash": "",
+      "content_hash": "sha256:a95ca153e0b910fc988bf3db60b2032618e162ac034e2950e22aea7d8b834721",
       "doc_path": "common/PROP-013",
       "file": "spec/common/PROP-013-periodic-health-audit.md",
       "heading": "2.4 Disposition and carry-forward",
@@ -3308,7 +3308,7 @@
     },
     {
       "anchor": "living",
-      "content_hash": "",
+      "content_hash": "sha256:435a56ee57d1d551e5f07720a16bcf21fb9b4210929adeb539fc3694468564b4",
       "doc_path": "common/PROP-013",
       "file": "spec/common/PROP-013-periodic-health-audit.md",
       "heading": "2.5 The checklist is living; mechanical checks migrate to `vibe check`",
@@ -3317,7 +3317,7 @@
     },
     {
       "anchor": "cadence",
-      "content_hash": "",
+      "content_hash": "sha256:7adb408ba1acc66f802e53aadd430dbe4517bd64379894bad25a0584b83eb73a",
       "doc_path": "common/PROP-013",
       "file": "spec/common/PROP-013-periodic-health-audit.md",
       "heading": "3. Cadence",
@@ -3326,7 +3326,7 @@
     },
     {
       "anchor": "running",
-      "content_hash": "",
+      "content_hash": "sha256:fd8015de0d53103409681fbce15a14443d613df5a5adb54e0f1d40d11d53d121",
       "doc_path": "common/PROP-013",
       "file": "spec/common/PROP-013-periodic-health-audit.md",
       "heading": "4. Running an audit",
@@ -3335,7 +3335,7 @@
     },
     {
       "anchor": "open",
-      "content_hash": "",
+      "content_hash": "sha256:83ee0e110f1fb9b7a3404d0cc6f53956568c30cacb00c2bf4bc36a0ae252255c",
       "doc_path": "common/PROP-013",
       "file": "spec/common/PROP-013-periodic-health-audit.md",
       "heading": "5. Open questions",
@@ -3344,7 +3344,7 @@
     },
     {
       "anchor": "rejected",
-      "content_hash": "",
+      "content_hash": "sha256:272c858ec011c2aa484f2ae63e171b5cc5a15c58ca0641cb078573990d93b5f3",
       "doc_path": "common/PROP-013",
       "file": "spec/common/PROP-013-periodic-health-audit.md",
       "heading": "6. Rejected alternatives",
@@ -3353,7 +3353,7 @@
     },
     {
       "anchor": "history",
-      "content_hash": "",
+      "content_hash": "sha256:739b25af5878a51a6bdf8b91b1e10a2b7d48cd6829210d02e3e3670375caec9e",
       "doc_path": "common/PROP-013",
       "file": "spec/common/PROP-013-periodic-health-audit.md",
       "heading": "7. Version history",
@@ -3362,7 +3362,7 @@
     },
     {
       "anchor": "problem",
-      "content_hash": "",
+      "content_hash": "sha256:51d81e2d52166e993280136ba6134889a6db3eb8f11d440c266bacf187e60158",
       "doc_path": "discipline/BROWNFIELD-PROTOCOL-v0.1",
       "file": "spec/discipline/BROWNFIELD-PROTOCOL-v0.1.md",
       "heading": "1. The problem, stated precisely",
@@ -3371,7 +3371,7 @@
     },
     {
       "anchor": "principles",
-      "content_hash": "",
+      "content_hash": "sha256:c3b4729250fa6ad316a267f4fa0f69340c4f84cf7158828c51befd1b7cdf28ee",
       "doc_path": "discipline/BROWNFIELD-PROTOCOL-v0.1",
       "file": "spec/discipline/BROWNFIELD-PROTOCOL-v0.1.md",
       "heading": "2. Principles",
@@ -3380,7 +3380,7 @@
     },
     {
       "anchor": "registries",
-      "content_hash": "",
+      "content_hash": "sha256:9fa765f11f426912c979ba1b74221b3af6a5173f7e6a4183e0102f303bb5ad1d",
       "doc_path": "discipline/BROWNFIELD-PROTOCOL-v0.1",
       "file": "spec/discipline/BROWNFIELD-PROTOCOL-v0.1.md",
       "heading": "3. The registries",
@@ -3389,7 +3389,7 @@
     },
     {
       "anchor": "test-gate",
-      "content_hash": "",
+      "content_hash": "sha256:9056f7cdfb27311d8f742500c2d174294e88362a0be16e5f1545cbb5ae24f7d7",
       "doc_path": "discipline/BROWNFIELD-PROTOCOL-v0.1",
       "file": "spec/discipline/BROWNFIELD-PROTOCOL-v0.1.md",
       "heading": "4. The test gate — xfail-strict semantics",
@@ -3398,7 +3398,7 @@
     },
     {
       "anchor": "spec-lifecycle",
-      "content_hash": "",
+      "content_hash": "sha256:c21bb6fe37af4be0d3a524aed22b99ecf2b248c0b97fe7a153a3e05bc927e83c",
       "doc_path": "discipline/BROWNFIELD-PROTOCOL-v0.1",
       "file": "spec/discipline/BROWNFIELD-PROTOCOL-v0.1.md",
       "heading": "5. Spec lifecycle and the conflict protocol",
@@ -3407,7 +3407,7 @@
     },
     {
       "anchor": "characterization",
-      "content_hash": "",
+      "content_hash": "sha256:fc1ec9ff6da0e3c7600a42db89260c2a6dfdfdeb715b752368c22ffd9e78b337",
       "doc_path": "discipline/BROWNFIELD-PROTOCOL-v0.1",
       "file": "spec/discipline/BROWNFIELD-PROTOCOL-v0.1.md",
       "heading": "6. Characterization of record",
@@ -3416,7 +3416,7 @@
     },
     {
       "anchor": "frontier",
-      "content_hash": "",
+      "content_hash": "sha256:603f570dcc051da1db09b4292e63f22b3a3b888a400f0fcaee313e0b2ae12c15",
       "doc_path": "discipline/BROWNFIELD-PROTOCOL-v0.1",
       "file": "spec/discipline/BROWNFIELD-PROTOCOL-v0.1.md",
       "heading": "7. Frontier and monotone utility",
@@ -3425,7 +3425,7 @@
     },
     {
       "anchor": "carry-over",
-      "content_hash": "",
+      "content_hash": "sha256:50b29e7e3845922759b1bc5825f1dfd2145deca77f686dd92d376d4e0a53d42d",
       "doc_path": "discipline/BROWNFIELD-PROTOCOL-v0.1",
       "file": "spec/discipline/BROWNFIELD-PROTOCOL-v0.1.md",
       "heading": "8. Carry-over guarantee and exit accounting",
@@ -3434,7 +3434,7 @@
     },
     {
       "anchor": "governance",
-      "content_hash": "",
+      "content_hash": "sha256:b6996699a136619e60b7cfa32b217d86e8452c084b9170e45cc1a8377be39f3c",
       "doc_path": "discipline/BROWNFIELD-PROTOCOL-v0.1",
       "file": "spec/discipline/BROWNFIELD-PROTOCOL-v0.1.md",
       "heading": "9. Governance",
@@ -3443,7 +3443,7 @@
     },
     {
       "anchor": "prior-art",
-      "content_hash": "",
+      "content_hash": "sha256:6007613fef55aed95b80a51ec10f48a00ad0f0423f8d32dc56912a924d19d423",
       "doc_path": "discipline/BROWNFIELD-PROTOCOL-v0.1",
       "file": "spec/discipline/BROWNFIELD-PROTOCOL-v0.1.md",
       "heading": "10. Prior art",
@@ -3452,7 +3452,7 @@
     },
     {
       "anchor": "open",
-      "content_hash": "",
+      "content_hash": "sha256:bdf673542d5dda8ae63a417524081939a335d5ae0da013339ee259f02eda02af",
       "doc_path": "discipline/BROWNFIELD-PROTOCOL-v0.1",
       "file": "spec/discipline/BROWNFIELD-PROTOCOL-v0.1.md",
       "heading": "11. Open questions",
@@ -3461,7 +3461,7 @@
     },
     {
       "anchor": "tiers",
-      "content_hash": "",
+      "content_hash": "sha256:57e9b8d7a29c8583b95897679c5e4ec7525ff2678519f83972ffad87b3205b94",
       "doc_path": "discipline/ENGINE-CONFORM-v0.1",
       "file": "spec/discipline/ENGINE-CONFORM-v0.1.md",
       "heading": "1. Escalation tiers",
@@ -3470,7 +3470,7 @@
     },
     {
       "anchor": "frontends",
-      "content_hash": "",
+      "content_hash": "sha256:71bb138546bb5b28ffe332f8a2d72b413cb608ff24fd66c002dd5891ee95c6d4",
       "doc_path": "discipline/ENGINE-CONFORM-v0.1",
       "file": "spec/discipline/ENGINE-CONFORM-v0.1.md",
       "heading": "2. Frontends — borrowed, behind one trait",
@@ -3479,7 +3479,7 @@
     },
     {
       "anchor": "facts",
-      "content_hash": "",
+      "content_hash": "sha256:c1683099172e2ebbbb95e1b04fab684023decd5dba3be1b6b2932deed30ec5d5",
       "doc_path": "discipline/ENGINE-CONFORM-v0.1",
       "file": "spec/discipline/ENGINE-CONFORM-v0.1.md",
       "heading": "3. The fact store",
@@ -3488,7 +3488,7 @@
     },
     {
       "anchor": "rules",
-      "content_hash": "",
+      "content_hash": "sha256:5fa0ab406b7db7938ace3eba4a48614e70d1d3d1732cce0082ee44a6e802e53c",
       "doc_path": "discipline/ENGINE-CONFORM-v0.1",
       "file": "spec/discipline/ENGINE-CONFORM-v0.1.md",
       "heading": "4. Rules as queries",
@@ -3497,7 +3497,7 @@
     },
     {
       "anchor": "determinism",
-      "content_hash": "",
+      "content_hash": "sha256:7ce288e6cedb7d5ade842f8d3b9525fa285aba8ca0915deb357240374d2fc0f6",
       "doc_path": "discipline/ENGINE-CONFORM-v0.1",
       "file": "spec/discipline/ENGINE-CONFORM-v0.1.md",
       "heading": "5. Determinism and gates",
@@ -3506,7 +3506,7 @@
     },
     {
       "anchor": "open",
-      "content_hash": "",
+      "content_hash": "sha256:f3af78da42cd86c8049958598e2cbd1e4d1bfc32b45803a3bb23e03d95efdaeb",
       "doc_path": "discipline/ENGINE-CONFORM-v0.1",
       "file": "spec/discipline/ENGINE-CONFORM-v0.1.md",
       "heading": "6. Open questions",
@@ -3515,7 +3515,7 @@
     },
     {
       "anchor": "what",
-      "content_hash": "",
+      "content_hash": "sha256:329f185e15489c517d05b76e5cdfd846dd93f920e48f35260c672af6caf5915e",
       "doc_path": "discipline/LEDGER-INTENT-v0.1",
       "file": "spec/discipline/LEDGER-INTENT-v0.1.md",
       "heading": "1. What the ledger is",
@@ -3524,7 +3524,7 @@
     },
     {
       "anchor": "classes",
-      "content_hash": "",
+      "content_hash": "sha256:e0856698b959ec276b11e4671e87e280ee29748ae9936982b6a9c5fc11cfbb6b",
       "doc_path": "discipline/LEDGER-INTENT-v0.1",
       "file": "spec/discipline/LEDGER-INTENT-v0.1.md",
       "heading": "2. Two storage classes — the load-bearing taxonomy",
@@ -3533,7 +3533,7 @@
     },
     {
       "anchor": "epochs",
-      "content_hash": "",
+      "content_hash": "sha256:4b9d10a1dd43b38fbf161ce5c76d2f9d12f2f33619cc470f2ff57d532dbe95f5",
       "doc_path": "discipline/LEDGER-INTENT-v0.1",
       "file": "spec/discipline/LEDGER-INTENT-v0.1.md",
       "heading": "3. Epochs — contextual invalidation",
@@ -3542,7 +3542,7 @@
     },
     {
       "anchor": "provenance",
-      "content_hash": "",
+      "content_hash": "sha256:53d48fd7e113b18c7ffba659b6257cdfc193a3fbae365b61e962e7880eeae308",
       "doc_path": "discipline/LEDGER-INTENT-v0.1",
       "file": "spec/discipline/LEDGER-INTENT-v0.1.md",
       "heading": "4. Provenance — every entry confesses its origin",
@@ -3551,7 +3551,7 @@
     },
     {
       "anchor": "storage",
-      "content_hash": "",
+      "content_hash": "sha256:af2eff43d77bc16b4d7749bf0b7f0b58619b023b27053bba77cb535b2ae36dde",
       "doc_path": "discipline/LEDGER-INTENT-v0.1",
       "file": "spec/discipline/LEDGER-INTENT-v0.1.md",
       "heading": "5. Storage and lifecycle",
@@ -3560,7 +3560,7 @@
     },
     {
       "anchor": "queries",
-      "content_hash": "",
+      "content_hash": "sha256:f2fb81719e1716ab48587d9bbcfa82164baf81fd37cd927b2bd50a6a13c8259c",
       "doc_path": "discipline/LEDGER-INTENT-v0.1",
       "file": "spec/discipline/LEDGER-INTENT-v0.1.md",
       "heading": "6. Query kinds shipped in v0.1",
@@ -3569,7 +3569,7 @@
     },
     {
       "anchor": "release-slice",
-      "content_hash": "",
+      "content_hash": "sha256:2a939fe00f3f7c792e002b52a45187ceda18b2b4ce8be395b53d0f0ab71c473a",
       "doc_path": "discipline/LEDGER-INTENT-v0.1",
       "file": "spec/discipline/LEDGER-INTENT-v0.1.md",
       "heading": "7. The release slice",
@@ -3578,7 +3578,7 @@
     },
     {
       "anchor": "failures",
-      "content_hash": "",
+      "content_hash": "sha256:3f5489cd41b235c117f04416c8b18f729e9695ddd340caeb0a442b9dfab86eb3",
       "doc_path": "discipline/LEDGER-INTENT-v0.1",
       "file": "spec/discipline/LEDGER-INTENT-v0.1.md",
       "heading": "8. Failure modes, named",
@@ -3587,7 +3587,7 @@
     },
     {
       "anchor": "problem",
-      "content_hash": "",
+      "content_hash": "sha256:f18e66ea68ce7f47390f87533faa3d13ef8930ed8dca0facc59d8d96ca05d637",
       "doc_path": "discipline/PROP-014",
       "file": "spec/discipline/PROP-014-specmap-bidirectional-traceability.md",
       "heading": "1. Problem statement",
@@ -3596,7 +3596,7 @@
     },
     {
       "anchor": "analogy",
-      "content_hash": "",
+      "content_hash": "sha256:711bd7c4f422a1e0110152fce60849091985a6a80bec55260e8b9cd90c37e295",
       "doc_path": "discipline/PROP-014",
       "file": "spec/discipline/PROP-014-specmap-bidirectional-traceability.md",
       "heading": "1.1 Where the source-map analogy holds, and where it breaks",
@@ -3605,7 +3605,7 @@
     },
     {
       "anchor": "runtime-vision",
-      "content_hash": "",
+      "content_hash": "sha256:9433699e9bbd7ad2e693d788359429fa45f961d597b62a9c4eb1f1a333f437c9",
       "doc_path": "discipline/PROP-014",
       "file": "spec/discipline/PROP-014-specmap-bidirectional-traceability.md",
       "heading": "1.2 The runtime vision (AI-native open source)",
@@ -3614,7 +3614,7 @@
     },
     {
       "anchor": "decisions",
-      "content_hash": "",
+      "content_hash": "sha256:fa3544f45f5aa496244023c509a6004df8b6144723851e4529ab70c7710faf6e",
       "doc_path": "discipline/PROP-014",
       "file": "spec/discipline/PROP-014-specmap-bidirectional-traceability.md",
       "heading": "2. Decisions",
@@ -3623,7 +3623,7 @@
     },
     {
       "anchor": "addressing-spec",
-      "content_hash": "",
+      "content_hash": "sha256:7680e4f6e9757962f07b66f0540bb42df4d45d41a13cec7e3af2a292c8461015",
       "doc_path": "discipline/PROP-014",
       "file": "spec/discipline/PROP-014-specmap-bidirectional-traceability.md",
       "heading": "2.1 Addressing: spec-side",
@@ -3632,7 +3632,7 @@
     },
     {
       "anchor": "spec-units",
-      "content_hash": "",
+      "content_hash": "sha256:fa4eb4fb95f32128c59bf67e1c2947f8483efc0d00b55202ca4fae2ef1d13c70",
       "doc_path": "discipline/PROP-014",
       "file": "spec/discipline/PROP-014-specmap-bidirectional-traceability.md",
       "heading": "2.2 Spec units, normativity, and the two-tier revision discipline",
@@ -3641,7 +3641,7 @@
     },
     {
       "anchor": "addressing-code",
-      "content_hash": "",
+      "content_hash": "sha256:1b4fbacfc9edf8025e68cc29c9399e837f38b7d512720dc277595811a50fbada",
       "doc_path": "discipline/PROP-014",
       "file": "spec/discipline/PROP-014-specmap-bidirectional-traceability.md",
       "heading": "2.3 Addressing: code-side — tags that travel",
@@ -3650,7 +3650,7 @@
     },
     {
       "anchor": "edges",
-      "content_hash": "",
+      "content_hash": "sha256:0ab3c95846872fa61a5e4badb619a202439c86eaff46c9b4a28932cadbe6c49f",
       "doc_path": "discipline/PROP-014",
       "file": "spec/discipline/PROP-014-specmap-bidirectional-traceability.md",
       "heading": "2.4 The edge model",
@@ -3659,7 +3659,7 @@
     },
     {
       "anchor": "index",
-      "content_hash": "",
+      "content_hash": "sha256:cca4a317608879dda3ff08debea0b95881acb5cbfb90438f950d7c28676dea55",
       "doc_path": "discipline/PROP-014",
       "file": "spec/discipline/PROP-014-specmap-bidirectional-traceability.md",
       "heading": "2.5 The index: `specmap.json`",
@@ -3668,7 +3668,7 @@
     },
     {
       "anchor": "queries",
-      "content_hash": "",
+      "content_hash": "sha256:786a7f17111d195cfc478243bee79e5c0cd5907a155882690fd6f7730de7e305",
       "doc_path": "discipline/PROP-014",
       "file": "spec/discipline/PROP-014-specmap-bidirectional-traceability.md",
       "heading": "2.6 Query surface",
@@ -3677,7 +3677,7 @@
     },
     {
       "anchor": "llm-boundary",
-      "content_hash": "",
+      "content_hash": "sha256:9e20470bbb7ad621fc8983903e1305fd1f75f61729801ef5e8ae2ec237f8ed1f",
       "doc_path": "discipline/PROP-014",
       "file": "spec/discipline/PROP-014-specmap-bidirectional-traceability.md",
       "heading": "2.7 The LLM boundary",
@@ -3686,7 +3686,7 @@
     },
     {
       "anchor": "runtime",
-      "content_hash": "",
+      "content_hash": "sha256:8c35b9c96b88d04c14e84fe0be60af60092a86976f3d6a73a79754a4ec519393",
       "doc_path": "discipline/PROP-014",
       "file": "spec/discipline/PROP-014-specmap-bidirectional-traceability.md",
       "heading": "2.8 Runtime exposure — the AI-native OSS channel",
@@ -3695,7 +3695,7 @@
     },
     {
       "anchor": "languages",
-      "content_hash": "",
+      "content_hash": "sha256:d16275708ef53a0b473c0ab481b064ce7b547816d15fafa11f7b9569d0d469bf",
       "doc_path": "discipline/PROP-014",
       "file": "spec/discipline/PROP-014-specmap-bidirectional-traceability.md",
       "heading": "2.9 Language neutrality",
@@ -3704,7 +3704,7 @@
     },
     {
       "anchor": "principles",
-      "content_hash": "",
+      "content_hash": "sha256:815e041e54ba1b85784aab8873554cb44b7b9a44d14a8fd81468579266f41e83",
       "doc_path": "discipline/PROP-014",
       "file": "spec/discipline/PROP-014-specmap-bidirectional-traceability.md",
       "heading": "3. Principles",
@@ -3713,7 +3713,7 @@
     },
     {
       "anchor": "spec-principles",
-      "content_hash": "",
+      "content_hash": "sha256:632f7a63ba34113838898bbb827a9e0ed36a0ad1559896a6171f9be36086474d",
       "doc_path": "discipline/PROP-014",
       "file": "spec/discipline/PROP-014-specmap-bidirectional-traceability.md",
       "heading": "3.1 (а) Writing specifications",
@@ -3722,7 +3722,7 @@
     },
     {
       "anchor": "rust-principles",
-      "content_hash": "",
+      "content_hash": "sha256:a02508f1486fd1b2dd5ce57e822918466702d3da204d814aefdb68402335546d",
       "doc_path": "discipline/PROP-014",
       "file": "spec/discipline/PROP-014-specmap-bidirectional-traceability.md",
       "heading": "3.2 (б) Writing Rust under specmap",
@@ -3731,7 +3731,7 @@
     },
     {
       "anchor": "binding-principles",
-      "content_hash": "",
+      "content_hash": "sha256:2345d8e316bce964986f2254b347ced0367ae6a8a4a1213c673c0b7fdc746c3e",
       "doc_path": "discipline/PROP-014",
       "file": "spec/discipline/PROP-014-specmap-bidirectional-traceability.md",
       "heading": "3.3 (в) Binding principles",
@@ -3740,7 +3740,7 @@
     },
     {
       "anchor": "migration",
-      "content_hash": "",
+      "content_hash": "sha256:d7cd1fa6d09d7b51a711c2797c521ec009db601ff3d658648479184847967467",
       "doc_path": "discipline/PROP-014",
       "file": "spec/discipline/PROP-014-specmap-bidirectional-traceability.md",
       "heading": "4. (г) Migration playbook — transforming vibevm with Claude Code",
@@ -3749,7 +3749,7 @@
     },
     {
       "anchor": "rejected",
-      "content_hash": "",
+      "content_hash": "sha256:dd019ceaff1203833f9a88fff591a098c16d7c07602298dc90ad5cdeb3293cb9",
       "doc_path": "discipline/PROP-014",
       "file": "spec/discipline/PROP-014-specmap-bidirectional-traceability.md",
       "heading": "5. Rejected alternatives",
@@ -3758,7 +3758,7 @@
     },
     {
       "anchor": "prior-art",
-      "content_hash": "",
+      "content_hash": "sha256:f367901325fda8c2e075f6f0a60b4e5e98ad431797182b8650ad388e46c552f8",
       "doc_path": "discipline/PROP-014",
       "file": "spec/discipline/PROP-014-specmap-bidirectional-traceability.md",
       "heading": "6. Prior art and license posture",
@@ -3767,7 +3767,7 @@
     },
     {
       "anchor": "open",
-      "content_hash": "",
+      "content_hash": "sha256:a70adead5c44759d2ebe60d94dc325d5fde5a7652c697f1d94a0782c4d3833af",
       "doc_path": "discipline/PROP-014",
       "file": "spec/discipline/PROP-014-specmap-bidirectional-traceability.md",
       "heading": "7. Open questions",
@@ -3776,7 +3776,7 @@
     },
     {
       "anchor": "root",
-      "content_hash": "",
+      "content_hash": "sha256:464fd2f6ea075897aee5d829871dc6f976e350a3dbab3042197390afeedb65f9",
       "doc_path": "modules/vibe-index/PROP-005",
       "file": "spec/modules/vibe-index/PROP-005-package-index.md",
       "heading": "PROP-005: Optional package index — per-org metadata + standalone index server",
@@ -3785,7 +3785,7 @@
     },
     {
       "anchor": "motivation",
-      "content_hash": "",
+      "content_hash": "sha256:cf84763eb03976dfeecdc819a1efb716c3a0bda426c68662b571618620d6066d",
       "doc_path": "modules/vibe-index/PROP-005",
       "file": "spec/modules/vibe-index/PROP-005-package-index.md",
       "heading": "1. Motivation",
@@ -3794,7 +3794,7 @@
     },
     {
       "anchor": "decisions",
-      "content_hash": "",
+      "content_hash": "sha256:e6bbd187983fac3c2027c379d43b06c929db56d47c39ced52a2c11b2e234fbe6",
       "doc_path": "modules/vibe-index/PROP-005",
       "file": "spec/modules/vibe-index/PROP-005-package-index.md",
       "heading": "2. Decisions",
@@ -3803,7 +3803,7 @@
     },
     {
       "anchor": "optional",
-      "content_hash": "",
+      "content_hash": "sha256:cb043dfe6281909e0f739ed6d9f07ac1b0636daeb38cd65352a55fb0a1e60711",
       "doc_path": "modules/vibe-index/PROP-005",
       "file": "spec/modules/vibe-index/PROP-005-package-index.md",
       "heading": "2.1 Index is OPTIONAL — zero impact when absent",
@@ -3812,7 +3812,7 @@
     },
     {
       "anchor": "form-factor",
-      "content_hash": "",
+      "content_hash": "sha256:76ae76de1997d38d98ea47825199e99f8797174f8f1dafa9a54ce2c581f17ddf",
       "doc_path": "modules/vibe-index/PROP-005",
       "file": "spec/modules/vibe-index/PROP-005-package-index.md",
       "heading": "2.2 Form factor: per-org **index** living in a separate git repository",
@@ -3821,7 +3821,7 @@
     },
     {
       "anchor": "truth",
-      "content_hash": "",
+      "content_hash": "sha256:081741c553784dc70edc09c7fc0befb1fd150843208aae29a8c0c3bb6aca869f",
       "doc_path": "modules/vibe-index/PROP-005",
       "file": "spec/modules/vibe-index/PROP-005-package-index.md",
       "heading": "2.3 Source of truth: package repos remain authoritative; index is a hot cache",
@@ -3830,7 +3830,7 @@
     },
     {
       "anchor": "layout",
-      "content_hash": "",
+      "content_hash": "sha256:30550fc716033f14bc6884cb6b0ceac47fc75ed786712e5ec3ec648cb3454a46",
       "doc_path": "modules/vibe-index/PROP-005",
       "file": "spec/modules/vibe-index/PROP-005-package-index.md",
       "heading": "2.4 File layout inside the index repo",
@@ -3839,7 +3839,7 @@
     },
     {
       "anchor": "modes",
-      "content_hash": "",
+      "content_hash": "sha256:8ac7b1aa5bea8e4cdb2a5264a7d675f60d1cf1ab56c979793c9019c489cd3b99",
       "doc_path": "modules/vibe-index/PROP-005",
       "file": "spec/modules/vibe-index/PROP-005-package-index.md",
       "heading": "2.5 Two modes: CLI tool and HTTP server",
@@ -3848,7 +3848,7 @@
     },
     {
       "anchor": "entry",
-      "content_hash": "",
+      "content_hash": "sha256:01d02960f2cb629d102a21781ec9170d42ec217f2c2e7209c4fabc7eaa16dcad",
       "doc_path": "modules/vibe-index/PROP-005",
       "file": "spec/modules/vibe-index/PROP-005-package-index.md",
       "heading": "2.6 Index entry shape (the canonical record)",
@@ -3857,7 +3857,7 @@
     },
     {
       "anchor": "trust",
-      "content_hash": "",
+      "content_hash": "sha256:0f00e444f092d63e9057d3e6ecff9faff323c39303dd322bae0dd9f6e380b5ca",
       "doc_path": "modules/vibe-index/PROP-005",
       "file": "spec/modules/vibe-index/PROP-005-package-index.md",
       "heading": "2.7 Identity and trust",
@@ -3866,7 +3866,7 @@
     },
     {
       "anchor": "reindex",
-      "content_hash": "",
+      "content_hash": "sha256:367b7df9d16dc7ee9ad0532414065a756aa08305201240b0c64d0e1bbd19cdfc",
       "doc_path": "modules/vibe-index/PROP-005",
       "file": "spec/modules/vibe-index/PROP-005-package-index.md",
       "heading": "2.8 Reindexation: full and incremental",
@@ -3875,7 +3875,7 @@
     },
     {
       "anchor": "server-mode",
-      "content_hash": "",
+      "content_hash": "sha256:026fb308c3d2df6e9b5c8bf538168f39cbc78d60b15c211eb67bc1b431666c54",
       "doc_path": "modules/vibe-index/PROP-005",
       "file": "spec/modules/vibe-index/PROP-005-package-index.md",
       "heading": "2.9 Single-writer server mode",
@@ -3884,7 +3884,7 @@
     },
     {
       "anchor": "http",
-      "content_hash": "",
+      "content_hash": "sha256:6941453505103deb040712d898831b32776012665066ee0c1a4fea5c40c81eda",
       "doc_path": "modules/vibe-index/PROP-005",
       "file": "spec/modules/vibe-index/PROP-005-package-index.md",
       "heading": "2.10 HTTP API surface",
@@ -3893,7 +3893,7 @@
     },
     {
       "anchor": "cli",
-      "content_hash": "",
+      "content_hash": "sha256:299e3ee4d5e51a55c758098900c7e85ff218665837b053b807faab9fc92fdbf4",
       "doc_path": "modules/vibe-index/PROP-005",
       "file": "spec/modules/vibe-index/PROP-005-package-index.md",
       "heading": "2.11 CLI surface",
@@ -3902,7 +3902,7 @@
     },
     {
       "anchor": "types",
-      "content_hash": "",
+      "content_hash": "sha256:cd0ead0d2cd3293225dd72164470bc216afa955900726b822a1d8239f68680fd",
       "doc_path": "modules/vibe-index/PROP-005",
       "file": "spec/modules/vibe-index/PROP-005-package-index.md",
       "heading": "2.12 Data structures",
@@ -3911,7 +3911,7 @@
     },
     {
       "anchor": "persistence",
-      "content_hash": "",
+      "content_hash": "sha256:c68f5496dcd61ec30a05f749f6210ac7b276eb2d354898b9c9dae3533c1e3553",
       "doc_path": "modules/vibe-index/PROP-005",
       "file": "spec/modules/vibe-index/PROP-005-package-index.md",
       "heading": "2.13 Persistence layer",
@@ -3920,7 +3920,7 @@
     },
     {
       "anchor": "integration",
-      "content_hash": "",
+      "content_hash": "sha256:7c72f469c6a5d540b4e91ff1a8f1964c9ed836300f6bad207e4f6f8dee53b2d7",
       "doc_path": "modules/vibe-index/PROP-005",
       "file": "spec/modules/vibe-index/PROP-005-package-index.md",
       "heading": "2.14 Integration with the rest of vibevm",
@@ -3929,7 +3929,7 @@
     },
     {
       "anchor": "never",
-      "content_hash": "",
+      "content_hash": "sha256:d3a9a572c428b8e8e51af059b10ee8948177d25a821a6f1ac5a51bff89a81d18",
       "doc_path": "modules/vibe-index/PROP-005",
       "file": "spec/modules/vibe-index/PROP-005-package-index.md",
       "heading": "2.15 What index must NEVER do",
@@ -3938,7 +3938,7 @@
     },
     {
       "anchor": "architecture",
-      "content_hash": "",
+      "content_hash": "sha256:18ca53cc9763f4c1d607ffe0569e74b9def94fecafeeeb0303ea3977c8479124",
       "doc_path": "modules/vibe-index/PROP-005",
       "file": "spec/modules/vibe-index/PROP-005-package-index.md",
       "heading": "3. Architecture",
@@ -3947,7 +3947,7 @@
     },
     {
       "anchor": "crate-layout",
-      "content_hash": "",
+      "content_hash": "sha256:281782f49851c12a50358d08acdbe1935b4f01d88c71a246bbf761b863d5ea57",
       "doc_path": "modules/vibe-index/PROP-005",
       "file": "spec/modules/vibe-index/PROP-005-package-index.md",
       "heading": "3.1 Crate layout",
@@ -3956,7 +3956,7 @@
     },
     {
       "anchor": "deps",
-      "content_hash": "",
+      "content_hash": "sha256:04f955f91be3531c5fa2652387b143d9aeff1a90d9663f3f73c4ea7ce6555db3",
       "doc_path": "modules/vibe-index/PROP-005",
       "file": "spec/modules/vibe-index/PROP-005-package-index.md",
       "heading": "3.2 Dependencies",
@@ -3965,7 +3965,7 @@
     },
     {
       "anchor": "git-access",
-      "content_hash": "",
+      "content_hash": "sha256:7f2039f14ea64242f1369caa880dd0b24fa314f59bd68a819b9ffe5cfc66dc49",
       "doc_path": "modules/vibe-index/PROP-005",
       "file": "spec/modules/vibe-index/PROP-005-package-index.md",
       "heading": "3.3 Git access in the scanner",
@@ -3974,7 +3974,7 @@
     },
     {
       "anchor": "threading",
-      "content_hash": "",
+      "content_hash": "sha256:79a8221147ea8f04a457493cfc890801b14f3d86ba539f708ea75e76bb1e0b93",
       "doc_path": "modules/vibe-index/PROP-005",
       "file": "spec/modules/vibe-index/PROP-005-package-index.md",
       "heading": "3.4 Threading model",
@@ -3983,7 +3983,7 @@
     },
     {
       "anchor": "config",
-      "content_hash": "",
+      "content_hash": "sha256:24d77c70b788c244387a540bdaed6e47c7893421b897f883f6b30965acb9d5fc",
       "doc_path": "modules/vibe-index/PROP-005",
       "file": "spec/modules/vibe-index/PROP-005-package-index.md",
       "heading": "3.5 Configuration precedence",
@@ -3992,7 +3992,7 @@
     },
     {
       "anchor": "phases",
-      "content_hash": "",
+      "content_hash": "sha256:8c18fee52538db9dc80ad2601bbbd694c2475afa1d6a536f9e0baf60c8b2f080",
       "doc_path": "modules/vibe-index/PROP-005",
       "file": "spec/modules/vibe-index/PROP-005-package-index.md",
       "heading": "4. Phase plan (slices)",
@@ -4001,7 +4001,7 @@
     },
     {
       "anchor": "slice-1",
-      "content_hash": "",
+      "content_hash": "sha256:0530ff3b68ce30bac5d8b9d953e094e0554a49352f1bbe21b2ea10342dfa05aa",
       "doc_path": "modules/vibe-index/PROP-005",
       "file": "spec/modules/vibe-index/PROP-005-package-index.md",
       "heading": "4.1 Slice 1 — skeleton",
@@ -4010,7 +4010,7 @@
     },
     {
       "anchor": "slice-2",
-      "content_hash": "",
+      "content_hash": "sha256:adeac3392311303fa03bcb2fd435570bcebade1299f058ea896a17f23c96b4e2",
       "doc_path": "modules/vibe-index/PROP-005",
       "file": "spec/modules/vibe-index/PROP-005-package-index.md",
       "heading": "4.2 Slice 2 — types + persistence",
@@ -4019,7 +4019,7 @@
     },
     {
       "anchor": "slice-3",
-      "content_hash": "",
+      "content_hash": "sha256:a42b78b8c9ca37b7888903e5c2cca76ab0e2e7fb4a69ef2f44a0e71d10fbf4ea",
       "doc_path": "modules/vibe-index/PROP-005",
       "file": "spec/modules/vibe-index/PROP-005-package-index.md",
       "heading": "4.3 Slice 3 — scanner + reindex from clones",
@@ -4028,7 +4028,7 @@
     },
     {
       "anchor": "slice-4",
-      "content_hash": "",
+      "content_hash": "sha256:796979b840364d204cc10c686067fabe0b2622c0fbde76d7e490d6858f7cd61b",
       "doc_path": "modules/vibe-index/PROP-005",
       "file": "spec/modules/vibe-index/PROP-005-package-index.md",
       "heading": "4.4 Slice 4 — read CLI subcommands",
@@ -4037,7 +4037,7 @@
     },
     {
       "anchor": "slice-5",
-      "content_hash": "",
+      "content_hash": "sha256:5b1f6bd6534218ea87feb542610753a173c8f1f481498354a4afafbb191cb8fa",
       "doc_path": "modules/vibe-index/PROP-005",
       "file": "spec/modules/vibe-index/PROP-005-package-index.md",
       "heading": "4.5 Slice 5 — HTTP server (read-only)",
@@ -4046,7 +4046,7 @@
     },
     {
       "anchor": "slice-6",
-      "content_hash": "",
+      "content_hash": "sha256:a1b90479709cc04428fcd4259a0af81eddfb0c23b7d781db43a2176c357f9277",
       "doc_path": "modules/vibe-index/PROP-005",
       "file": "spec/modules/vibe-index/PROP-005-package-index.md",
       "heading": "4.6 Slice 6 — write CLI + write HTTP + auth",
@@ -4055,7 +4055,7 @@
     },
     {
       "anchor": "slice-7",
-      "content_hash": "",
+      "content_hash": "sha256:62def751246411e5f77454d8a814876cbbfd7382f4f5c0a03053d8a19693522b",
       "doc_path": "modules/vibe-index/PROP-005",
       "file": "spec/modules/vibe-index/PROP-005-package-index.md",
       "heading": "4.7 Slice 7 — incremental reindex",
@@ -4064,7 +4064,7 @@
     },
     {
       "anchor": "slice-8",
-      "content_hash": "",
+      "content_hash": "sha256:21e9403a5390a32b3368885815f9feaae46fbf8e202d9540d9affdbbd160d14f",
       "doc_path": "modules/vibe-index/PROP-005",
       "file": "spec/modules/vibe-index/PROP-005-package-index.md",
       "heading": "4.8 Slice 8 — `--from-github` mode",
@@ -4073,7 +4073,7 @@
     },
     {
       "anchor": "slice-9",
-      "content_hash": "",
+      "content_hash": "sha256:04bdfe5e7d4baa41d0f5858b015346327ba863b07dda2e65aa33e1fa48506f1a",
       "doc_path": "modules/vibe-index/PROP-005",
       "file": "spec/modules/vibe-index/PROP-005-package-index.md",
       "heading": "4.9 Slice 9 — vibe-publish post-publish hook",
@@ -4082,7 +4082,7 @@
     },
     {
       "anchor": "slice-10",
-      "content_hash": "",
+      "content_hash": "sha256:2733199ff333d4e2280cf6b0aaa7f2642df20dcba91ecdb0638307288ce239a8",
       "doc_path": "modules/vibe-index/PROP-005",
       "file": "spec/modules/vibe-index/PROP-005-package-index.md",
       "heading": "4.10 Slice 10 — consumer-side integration",
@@ -4091,7 +4091,7 @@
     },
     {
       "anchor": "slice-11",
-      "content_hash": "",
+      "content_hash": "sha256:c35632962a1b4a03dfddbb607a8ce9c986c9d915eb53658f67bf9969cdd5e0c3",
       "doc_path": "modules/vibe-index/PROP-005",
       "file": "spec/modules/vibe-index/PROP-005-package-index.md",
       "heading": "4.11 Slice 11 — docs + manual-test smoke",
@@ -4100,7 +4100,7 @@
     },
     {
       "anchor": "tests",
-      "content_hash": "",
+      "content_hash": "sha256:5a919674b598b187d539e2df7458671683c293dd797c4f65268414617ca538b9",
       "doc_path": "modules/vibe-index/PROP-005",
       "file": "spec/modules/vibe-index/PROP-005-package-index.md",
       "heading": "5. Test plan",
@@ -4109,7 +4109,7 @@
     },
     {
       "anchor": "distribution",
-      "content_hash": "",
+      "content_hash": "sha256:bb3201ebe595d4b0e517a9786b6dbde077c62c187c5a18381f1a49b34b8106db",
       "doc_path": "modules/vibe-index/PROP-005",
       "file": "spec/modules/vibe-index/PROP-005-package-index.md",
       "heading": "6. Distribution — a workspace crate",
@@ -4118,7 +4118,7 @@
     },
     {
       "anchor": "secrets",
-      "content_hash": "",
+      "content_hash": "sha256:eb5c37c7dd2e0269f3c361f17ffa2ec27fae48f0df1e2159c39e9ab2ef531558",
       "doc_path": "modules/vibe-index/PROP-005",
       "file": "spec/modules/vibe-index/PROP-005-package-index.md",
       "heading": "7. Auth, secrets, scope",
@@ -4127,7 +4127,7 @@
     },
     {
       "anchor": "ops",
-      "content_hash": "",
+      "content_hash": "sha256:6dec643a4c04dbc450970ce3d95f4c3f6a98be3a942219f240dc80aaac4f0059",
       "doc_path": "modules/vibe-index/PROP-005",
       "file": "spec/modules/vibe-index/PROP-005-package-index.md",
       "heading": "8. Operations",
@@ -4136,7 +4136,7 @@
     },
     {
       "anchor": "open",
-      "content_hash": "",
+      "content_hash": "sha256:9250946aef632ccfbdc2c377c4ab241004726fc8cd269730a37ec3988a9688c3",
       "doc_path": "modules/vibe-index/PROP-005",
       "file": "spec/modules/vibe-index/PROP-005-package-index.md",
       "heading": "9. Open questions",
@@ -4145,7 +4145,7 @@
     },
     {
       "anchor": "acceptance",
-      "content_hash": "",
+      "content_hash": "sha256:7c2929b23acac6bfe187253bd1bf989fda0df5c76f24ae36bc2895668c3fcf32",
       "doc_path": "modules/vibe-index/PROP-005",
       "file": "spec/modules/vibe-index/PROP-005-package-index.md",
       "heading": "10. Acceptance criteria",
@@ -4154,7 +4154,7 @@
     },
     {
       "anchor": "wire-up",
-      "content_hash": "",
+      "content_hash": "sha256:a2fc9585c13187a88cac4808a1cceecc5704b11daf819660aa87a60e99f4772a",
       "doc_path": "modules/vibe-index/PROP-005",
       "file": "spec/modules/vibe-index/PROP-005-package-index.md",
       "heading": "11. Wire-up scripts (informational, not shipped)",
@@ -4163,7 +4163,7 @@
     },
     {
       "anchor": "history",
-      "content_hash": "",
+      "content_hash": "sha256:a08db388d70e9e8719f9a6841c0d7e21b71ff96aadd1a2b5b6fccabeb9cd86bf",
       "doc_path": "modules/vibe-index/PROP-005",
       "file": "spec/modules/vibe-index/PROP-005-package-index.md",
       "heading": "12. Version history",
@@ -4172,7 +4172,7 @@
     },
     {
       "anchor": "root",
-      "content_hash": "",
+      "content_hash": "sha256:6569face80f87b3d1a80c4320613f663a164e4c7f0ef738de3fb58938670ddb1",
       "doc_path": "modules/vibe-registry/PROP-001",
       "file": "spec/modules/vibe-registry/PROP-001-git-backend.md",
       "heading": "PROP-001: Git-backed registry for `vibe-registry`",
@@ -4181,7 +4181,7 @@
     },
     {
       "anchor": "motivation",
-      "content_hash": "",
+      "content_hash": "sha256:aadb9707008ed4c6c57b6bcbfe74693350947be6a9ffc71584ed36d5b5dfc792",
       "doc_path": "modules/vibe-registry/PROP-001",
       "file": "spec/modules/vibe-registry/PROP-001-git-backend.md",
       "heading": "1. Motivation",
@@ -4190,7 +4190,7 @@
     },
     {
       "anchor": "decisions",
-      "content_hash": "",
+      "content_hash": "sha256:26969e42284b0dc302a88490a415cd54eb3cd61202657ea9487303fb92a2bb97",
       "doc_path": "modules/vibe-registry/PROP-001",
       "file": "spec/modules/vibe-registry/PROP-001-git-backend.md",
       "heading": "2. Decisions",
@@ -4199,7 +4199,7 @@
     },
     {
       "anchor": "backend",
-      "content_hash": "",
+      "content_hash": "sha256:626bb89fe6663cc891f3dba29e1fd1cef4eaea49fc3890f4351b4ff493da6046",
       "doc_path": "modules/vibe-registry/PROP-001",
       "file": "spec/modules/vibe-registry/PROP-001-git-backend.md",
       "heading": "2.1 Backend: shell out to `git`, not `git2`",
@@ -4208,7 +4208,7 @@
     },
     {
       "anchor": "backend-trait",
-      "content_hash": "",
+      "content_hash": "sha256:14b7083a31e7d3affbe8a941bb25bc6c62ea2acef393de4205548e7bb526885f",
       "doc_path": "modules/vibe-registry/PROP-001",
       "file": "spec/modules/vibe-registry/PROP-001-git-backend.md",
       "heading": "2.2 `GitBackend` trait",
@@ -4217,7 +4217,7 @@
     },
     {
       "anchor": "registry-trait",
-      "content_hash": "",
+      "content_hash": "sha256:964f1031ec6fc75c38a52ebad07c175ed6368e373def2423352aad4bc226a7fe",
       "doc_path": "modules/vibe-registry/PROP-001",
       "file": "spec/modules/vibe-registry/PROP-001-git-backend.md",
       "heading": "2.3 `Registry` trait",
@@ -4226,7 +4226,7 @@
     },
     {
       "anchor": "cache-layout",
-      "content_hash": "",
+      "content_hash": "sha256:a5dcd572494c091b60003dc8e104b401defd1d769835b1c549e46eacb04f3c40",
       "doc_path": "modules/vibe-registry/PROP-001",
       "file": "spec/modules/vibe-registry/PROP-001-git-backend.md",
       "heading": "2.4 Cache layout",
@@ -4235,7 +4235,7 @@
     },
     {
       "anchor": "freshness",
-      "content_hash": "",
+      "content_hash": "sha256:22b45eb195babdfdfc77cb0e5fe8a81257d1925b82de0e95ddd05803d516acf0",
       "doc_path": "modules/vibe-registry/PROP-001",
       "file": "spec/modules/vibe-registry/PROP-001-git-backend.md",
       "heading": "2.5 Freshness policy",
@@ -4244,7 +4244,7 @@
     },
     {
       "anchor": "source-uri",
-      "content_hash": "",
+      "content_hash": "sha256:a8002ebfb827ce8d89626c472f7e08a4bc417875be2a496b37422851380554f5",
       "doc_path": "modules/vibe-registry/PROP-001",
       "file": "spec/modules/vibe-registry/PROP-001-git-backend.md",
       "heading": "2.6 Lockfile `source_uri` format",
@@ -4253,7 +4253,7 @@
     },
     {
       "anchor": "windows-ux",
-      "content_hash": "",
+      "content_hash": "sha256:575f48cbdd2263c3f72ec37fdbdb2a5975904d1055440b70bb48f1acf0f14594",
       "doc_path": "modules/vibe-registry/PROP-001",
       "file": "spec/modules/vibe-registry/PROP-001-git-backend.md",
       "heading": "2.7 Windows UX and stderr parsing",
@@ -4262,7 +4262,7 @@
     },
     {
       "anchor": "rejected",
-      "content_hash": "",
+      "content_hash": "sha256:39bbf18057b17e202bc3f146e4072e75cec90413e703b121b0eb2f6cf4edea88",
       "doc_path": "modules/vibe-registry/PROP-001",
       "file": "spec/modules/vibe-registry/PROP-001-git-backend.md",
       "heading": "3. Rejected alternatives",
@@ -4271,7 +4271,7 @@
     },
     {
       "anchor": "out-of-scope",
-      "content_hash": "",
+      "content_hash": "sha256:1a4bfa77e0a549230bf5b55afe14a440e754c02464ae58c93ea3ad6f1e5d0a33",
       "doc_path": "modules/vibe-registry/PROP-001",
       "file": "spec/modules/vibe-registry/PROP-001-git-backend.md",
       "heading": "4. Out of scope for M1.1",
@@ -4280,7 +4280,7 @@
     },
     {
       "anchor": "acceptance",
-      "content_hash": "",
+      "content_hash": "sha256:6f5451a91d47528faf7952ba85c15fe7f50540ae048631b93527bde4934a681f",
       "doc_path": "modules/vibe-registry/PROP-001",
       "file": "spec/modules/vibe-registry/PROP-001-git-backend.md",
       "heading": "5. Acceptance (for M1.1 implementation)",
@@ -4289,7 +4289,7 @@
     },
     {
       "anchor": "open-questions",
-      "content_hash": "",
+      "content_hash": "sha256:f3f8ab55888cdd43f47e69996cd67b2bfce1656f8519f0572c437c76a4567da9",
       "doc_path": "modules/vibe-registry/PROP-001",
       "file": "spec/modules/vibe-registry/PROP-001-git-backend.md",
       "heading": "6. Open questions",
@@ -4298,7 +4298,7 @@
     },
     {
       "anchor": "root",
-      "content_hash": "",
+      "content_hash": "sha256:f9639506b7f8adf8583a5ef860dc16e5bf3a558882fd22eabf3e8c06c62e72e3",
       "doc_path": "modules/vibe-registry/PROP-002",
       "file": "spec/modules/vibe-registry/PROP-002-decentralized-registry.md",
       "heading": "PROP-002: Decentralized, mirror-friendly registry with capability-based depsolver",
@@ -4307,7 +4307,7 @@
     },
     {
       "anchor": "motivation",
-      "content_hash": "",
+      "content_hash": "sha256:7f3353aaa462ec5b33bf52de1dc0aec624356439ba9686d92a73c476fd69f151",
       "doc_path": "modules/vibe-registry/PROP-002",
       "file": "spec/modules/vibe-registry/PROP-002-decentralized-registry.md",
       "heading": "1. Motivation",
@@ -4316,7 +4316,7 @@
     },
     {
       "anchor": "decisions",
-      "content_hash": "",
+      "content_hash": "sha256:190e6ba32b2880fbaa935e6abbe0580f5bc69b5a8a50e473880733c317e31b27",
       "doc_path": "modules/vibe-registry/PROP-002",
       "file": "spec/modules/vibe-registry/PROP-002-decentralized-registry.md",
       "heading": "2. Decisions",
@@ -4325,7 +4325,7 @@
     },
     {
       "anchor": "identity",
-      "content_hash": "",
+      "content_hash": "sha256:815a5710c409dd87c5c557ef97957edd4e751879ef88eb19a98ade32fa5beca1",
       "doc_path": "modules/vibe-registry/PROP-002",
       "file": "spec/modules/vibe-registry/PROP-002-decentralized-registry.md",
       "heading": "2.1 Identity: content-addressed, URL-orthogonal",
@@ -4334,7 +4334,7 @@
     },
     {
       "anchor": "registry-model",
-      "content_hash": "",
+      "content_hash": "sha256:db822c03e20056ccb48c826a3ef7de64c86321ab5f969640ccd9f8fcf7956275",
       "doc_path": "modules/vibe-registry/PROP-002",
       "file": "spec/modules/vibe-registry/PROP-002-decentralized-registry.md",
       "heading": "2.2 Registry model: `[[registry]]` array, priority-ordered",
@@ -4343,7 +4343,7 @@
     },
     {
       "anchor": "registry-auth",
-      "content_hash": "",
+      "content_hash": "sha256:b440f8e4fbf9f54d2e4a4732eac57aacead2f32d58883a45d97073859873448c",
       "doc_path": "modules/vibe-registry/PROP-002",
       "file": "spec/modules/vibe-registry/PROP-002-decentralized-registry.md",
       "heading": "2.2.1 Per-registry authentication",
@@ -4352,7 +4352,7 @@
     },
     {
       "anchor": "mirror",
-      "content_hash": "",
+      "content_hash": "sha256:3d86f912e752e98cb3ee91c6fa7fb64a732510486f8f8085e143b7fd35a8ab51",
       "doc_path": "modules/vibe-registry/PROP-002",
       "file": "spec/modules/vibe-registry/PROP-002-decentralized-registry.md",
       "heading": "2.3 Mirror layer: transparent, integrity-verified",
@@ -4361,7 +4361,7 @@
     },
     {
       "anchor": "failure-discriminator",
-      "content_hash": "",
+      "content_hash": "sha256:0fb51da33eed264d3c71572cd03e9aa8bb7e2758cd6571faf80068ff07277bae",
       "doc_path": "modules/vibe-registry/PROP-002",
       "file": "spec/modules/vibe-registry/PROP-002-decentralized-registry.md",
       "heading": "2.3.1 Failure-mode discriminator: registry-walk vs mirror-walk",
@@ -4370,7 +4370,7 @@
     },
     {
       "anchor": "override",
-      "content_hash": "",
+      "content_hash": "sha256:62cd4e5d66465f00b66ca6fdcec9d5693db67bac185f6086c4bb6b55ae9850ef",
       "doc_path": "modules/vibe-registry/PROP-002",
       "file": "spec/modules/vibe-registry/PROP-002-decentralized-registry.md",
       "heading": "2.4 Overrides: surgical pin of source location",
@@ -4379,7 +4379,7 @@
     },
     {
       "anchor": "git-source",
-      "content_hash": "",
+      "content_hash": "sha256:deb02d6bce781a30174584662b3b289f64eb80666b8439c7ed5e367ce2d2b056",
       "doc_path": "modules/vibe-registry/PROP-002",
       "file": "spec/modules/vibe-registry/PROP-002-decentralized-registry.md",
       "heading": "2.4.1 Git-source declarations: `[requires.packages]` table-form",
@@ -4388,7 +4388,7 @@
     },
     {
       "anchor": "redirect",
-      "content_hash": "",
+      "content_hash": "sha256:bdd96ba0a2d7061e36abf1b8e2184d9bfc6d1521c5b9c225b1a5ce841d8b22c7",
       "doc_path": "modules/vibe-registry/PROP-002",
       "file": "spec/modules/vibe-registry/PROP-002-decentralized-registry.md",
       "heading": "2.4.2 Registry redirect: delegating package content to an external repo",
@@ -4397,7 +4397,7 @@
     },
     {
       "anchor": "layout",
-      "content_hash": "",
+      "content_hash": "sha256:d28aab9167298ee51d3a3e3e920dc4f567563ff826224705cddaab225d3c2a25",
       "doc_path": "modules/vibe-registry/PROP-002",
       "file": "spec/modules/vibe-registry/PROP-002-decentralized-registry.md",
       "heading": "2.5 Per-package layout: flat, tag-based",
@@ -4406,7 +4406,7 @@
     },
     {
       "anchor": "cache",
-      "content_hash": "",
+      "content_hash": "sha256:23f37d4a5907bf67959e772afcb10525519dcf0de5738e6099797c68743a2785",
       "doc_path": "modules/vibe-registry/PROP-002",
       "file": "spec/modules/vibe-registry/PROP-002-decentralized-registry.md",
       "heading": "2.6 Cache layout: organized by canonical registry URL",
@@ -4415,7 +4415,7 @@
     },
     {
       "anchor": "lockfile",
-      "content_hash": "",
+      "content_hash": "sha256:9eebf97a19fc9add4c88cf92de8a8cc6ada01a3f07ff63ee52758770abfa363b",
       "doc_path": "modules/vibe-registry/PROP-002",
       "file": "spec/modules/vibe-registry/PROP-002-decentralized-registry.md",
       "heading": "2.7 Lockfile schema v2",
@@ -4424,7 +4424,7 @@
     },
     {
       "anchor": "solver",
-      "content_hash": "",
+      "content_hash": "sha256:b256f8a1e2ae8429c30399925a420847586babeb0ba056f70f2dd02300384f8d",
       "doc_path": "modules/vibe-registry/PROP-002",
       "file": "spec/modules/vibe-registry/PROP-002-decentralized-registry.md",
       "heading": "2.8 Depsolver: resolvo primary, DepSolver trait for fallback",
@@ -4433,7 +4433,7 @@
     },
     {
       "anchor": "capability",
-      "content_hash": "",
+      "content_hash": "sha256:351872867e629427542ec698a2d3e9aaf0324f9a2a028771ba77fb0bcb0c483c",
       "doc_path": "modules/vibe-registry/PROP-002",
       "file": "spec/modules/vibe-registry/PROP-002-decentralized-registry.md",
       "heading": "2.9 Capability-based deps: `[provides]` / `[requires]` / `[[requires_any]]` / `[obsoletes]` / `[conflicts]`",
@@ -4442,7 +4442,7 @@
     },
     {
       "anchor": "publish",
-      "content_hash": "",
+      "content_hash": "sha256:7d064ac9e7c5f819b5aab3284a817611fd2aca9e334ee9817dae28ff35aa693c",
       "doc_path": "modules/vibe-registry/PROP-002",
       "file": "spec/modules/vibe-registry/PROP-002-decentralized-registry.md",
       "heading": "2.10 Publish utility: `vibe registry publish <path>`",
@@ -4451,7 +4451,7 @@
     },
     {
       "anchor": "jtd",
-      "content_hash": "",
+      "content_hash": "sha256:aee7c14e309c77697c38810dab08ee30b648b860da19193188d47c0dcdb1be0a",
       "doc_path": "modules/vibe-registry/PROP-002",
       "file": "spec/modules/vibe-registry/PROP-002-decentralized-registry.md",
       "heading": "2.11 JTD + codegen for wire contracts",
@@ -4460,7 +4460,7 @@
     },
     {
       "anchor": "perf",
-      "content_hash": "",
+      "content_hash": "sha256:f980b2574ad92cb8d39f7f093d500ab2e2111e09eab5506117b03e1626013709",
       "doc_path": "modules/vibe-registry/PROP-002",
       "file": "spec/modules/vibe-registry/PROP-002-decentralized-registry.md",
       "heading": "2.12 Performance and resolver I/O strategy",
@@ -4469,7 +4469,7 @@
     },
     {
       "anchor": "rejected",
-      "content_hash": "",
+      "content_hash": "sha256:403d4e6fbee7f591b660d4483583283de2736cb3953c44f20f0d1c9cbd0d9d80",
       "doc_path": "modules/vibe-registry/PROP-002",
       "file": "spec/modules/vibe-registry/PROP-002-decentralized-registry.md",
       "heading": "3. Rejected alternatives",
@@ -4478,7 +4478,7 @@
     },
     {
       "anchor": "out-of-scope",
-      "content_hash": "",
+      "content_hash": "sha256:0e0c2dd612b8ea5e7d8f2a58f2b2e589f093f31f2ca33eacbff1b46c3a9cc3cd",
       "doc_path": "modules/vibe-registry/PROP-002",
       "file": "spec/modules/vibe-registry/PROP-002-decentralized-registry.md",
       "heading": "4. Out of scope for Phase A",
@@ -4487,7 +4487,7 @@
     },
     {
       "anchor": "acceptance",
-      "content_hash": "",
+      "content_hash": "sha256:11c9855af2e0ed5940ea691797e46912ec143fe7f1ab82d364432b8dcd72c4d8",
       "doc_path": "modules/vibe-registry/PROP-002",
       "file": "spec/modules/vibe-registry/PROP-002-decentralized-registry.md",
       "heading": "5. Acceptance (Phase A)",
@@ -4496,7 +4496,7 @@
     },
     {
       "anchor": "phase-b",
-      "content_hash": "",
+      "content_hash": "sha256:f5165039826d9989d4c6c3aaa27c6060273666484d9a66315f84e8152225888f",
       "doc_path": "modules/vibe-registry/PROP-002",
       "file": "spec/modules/vibe-registry/PROP-002-decentralized-registry.md",
       "heading": "6. Phase B preview (M1.6)",
@@ -4505,7 +4505,7 @@
     },
     {
       "anchor": "open",
-      "content_hash": "",
+      "content_hash": "sha256:4fac5f0cab94baa0ebcf7f8c56ed7f83fb2fe23a5c495bf4412bf83a8d590e19",
       "doc_path": "modules/vibe-registry/PROP-002",
       "file": "spec/modules/vibe-registry/PROP-002-decentralized-registry.md",
       "heading": "7. Open questions",
@@ -4514,7 +4514,7 @@
     },
     {
       "anchor": "root",
-      "content_hash": "",
+      "content_hash": "sha256:576e4ae2510ca50a3fe583dd0cfea780bafb0275fa2dfaa0784d37538eb40287",
       "doc_path": "modules/vibe-registry/PROP-008",
       "file": "spec/modules/vibe-registry/PROP-008-qualified-naming.md",
       "heading": "PROP-008: Qualified package naming — groups, short aliases, collision detection",
@@ -4523,7 +4523,7 @@
     },
     {
       "anchor": "motivation",
-      "content_hash": "",
+      "content_hash": "sha256:61196f2e18fccf8f7e42651a6b4ae43bf325df541d5eac6d8069b2e7b3a22c6f",
       "doc_path": "modules/vibe-registry/PROP-008",
       "file": "spec/modules/vibe-registry/PROP-008-qualified-naming.md",
       "heading": "1. Motivation",
@@ -4532,7 +4532,7 @@
     },
     {
       "anchor": "decisions",
-      "content_hash": "",
+      "content_hash": "sha256:59443db529ca6bdf4c8a376d112576549f460e00146ebbc3189703b1777d615e",
       "doc_path": "modules/vibe-registry/PROP-008",
       "file": "spec/modules/vibe-registry/PROP-008-qualified-naming.md",
       "heading": "2. Decisions",
@@ -4541,7 +4541,7 @@
     },
     {
       "anchor": "group",
-      "content_hash": "",
+      "content_hash": "sha256:b089355d2cbd41f1f56578cc9528b3099e5f09e85fb16833f71654b1bfc8eff3",
       "doc_path": "modules/vibe-registry/PROP-008",
       "file": "spec/modules/vibe-registry/PROP-008-qualified-naming.md",
       "heading": "2.1 The `group` field",
@@ -4550,7 +4550,7 @@
     },
     {
       "anchor": "identity",
-      "content_hash": "",
+      "content_hash": "sha256:58d260b5ec8e30d086305655cbd0f01ca9a31fcf31459ec40cbe3b8106587207",
       "doc_path": "modules/vibe-registry/PROP-008",
       "file": "spec/modules/vibe-registry/PROP-008-qualified-naming.md",
       "heading": "2.2 Identity tuple — `(group, name, version, content_hash)`",
@@ -4559,7 +4559,7 @@
     },
     {
       "anchor": "kind",
-      "content_hash": "",
+      "content_hash": "sha256:c2df632c959efe3c4f4322b7ae75d066f672442a41cc578b4d8bdd4208c96306",
       "doc_path": "modules/vibe-registry/PROP-008",
       "file": "spec/modules/vibe-registry/PROP-008-qualified-naming.md",
       "heading": "2.3 `kind` becomes pure metadata",
@@ -4568,7 +4568,7 @@
     },
     {
       "anchor": "pkgref",
-      "content_hash": "",
+      "content_hash": "sha256:840a5039fbf36835f05e4146ef2ee7e5a255befab36e725b96f99fe70ed5ab47",
       "doc_path": "modules/vibe-registry/PROP-008",
       "file": "spec/modules/vibe-registry/PROP-008-qualified-naming.md",
       "heading": "2.4 pkgref grammar",
@@ -4577,7 +4577,7 @@
     },
     {
       "anchor": "repo-naming",
-      "content_hash": "",
+      "content_hash": "sha256:7fa43b37cfd43ad37228dc5387758406f974e385220afded819840ec11cc46b2",
       "doc_path": "modules/vibe-registry/PROP-008",
       "file": "spec/modules/vibe-registry/PROP-008-qualified-naming.md",
       "heading": "2.5 Repository naming — `naming = \"fqdn\"`",
@@ -4586,7 +4586,7 @@
     },
     {
       "anchor": "short-name",
-      "content_hash": "",
+      "content_hash": "sha256:3f035dfe204a6d215c21b2c64c62c26e39a30fbe86714319ee64dcbabee72d68",
       "doc_path": "modules/vibe-registry/PROP-008",
       "file": "spec/modules/vibe-registry/PROP-008-qualified-naming.md",
       "heading": "2.6 Short-name resolution",
@@ -4595,7 +4595,7 @@
     },
     {
       "anchor": "collision",
-      "content_hash": "",
+      "content_hash": "sha256:bdab6b8664951330a2d592b057567a30054ef924ae9274f2d37faa3b33d34efa",
       "doc_path": "modules/vibe-registry/PROP-008",
       "file": "spec/modules/vibe-registry/PROP-008-qualified-naming.md",
       "heading": "2.7 Collision vs conflict",
@@ -4604,7 +4604,7 @@
     },
     {
       "anchor": "index-ext",
-      "content_hash": "",
+      "content_hash": "sha256:5987c4b855eb837c988004325a08f83fae84a5f68781f00f6107d3ded7f8814b",
       "doc_path": "modules/vibe-registry/PROP-008",
       "file": "spec/modules/vibe-registry/PROP-008-qualified-naming.md",
       "heading": "2.8 Index extension",
@@ -4613,7 +4613,7 @@
     },
     {
       "anchor": "explorer",
-      "content_hash": "",
+      "content_hash": "sha256:d4ca04b5b1ced906e705ef37a4d360493b59faf182ff91c6e36a31d051c82501",
       "doc_path": "modules/vibe-registry/PROP-008",
       "file": "spec/modules/vibe-registry/PROP-008-qualified-naming.md",
       "heading": "2.9 Registry explorer",
@@ -4622,7 +4622,7 @@
     },
     {
       "anchor": "migration",
-      "content_hash": "",
+      "content_hash": "sha256:7eaf6879eceb081d189b4e2be4d2c2b557394474cae3c7dd4bc38e443e196ea8",
       "doc_path": "modules/vibe-registry/PROP-008",
       "file": "spec/modules/vibe-registry/PROP-008-qualified-naming.md",
       "heading": "3. Migration",
@@ -4631,7 +4631,7 @@
     },
     {
       "anchor": "rejected",
-      "content_hash": "",
+      "content_hash": "sha256:95e3f307b1fae1fa143fc51398c623e8750d66eea6e373cdb9079bf677db1cd9",
       "doc_path": "modules/vibe-registry/PROP-008",
       "file": "spec/modules/vibe-registry/PROP-008-qualified-naming.md",
       "heading": "4. Rejected alternatives",
@@ -4640,7 +4640,7 @@
     },
     {
       "anchor": "open",
-      "content_hash": "",
+      "content_hash": "sha256:706ef28131782bfb76ab16ff58a7d4cdd0d1ad2a42b0eb84deee3f5adee33b52",
       "doc_path": "modules/vibe-registry/PROP-008",
       "file": "spec/modules/vibe-registry/PROP-008-qualified-naming.md",
       "heading": "5. Open questions",
@@ -4649,7 +4649,7 @@
     },
     {
       "anchor": "phases",
-      "content_hash": "",
+      "content_hash": "sha256:73dd44b086c155f951e1cbab693cdd5e2bfce947298ccc7c536d30cb74c24d31",
       "doc_path": "modules/vibe-registry/PROP-008",
       "file": "spec/modules/vibe-registry/PROP-008-qualified-naming.md",
       "heading": "6. Phase plan",
@@ -4658,7 +4658,7 @@
     },
     {
       "anchor": "history",
-      "content_hash": "",
+      "content_hash": "sha256:b031c010350fd21df3f0781e318efeb50057aafab369ef1bf67f7992454fb043",
       "doc_path": "modules/vibe-registry/PROP-008",
       "file": "spec/modules/vibe-registry/PROP-008-qualified-naming.md",
       "heading": "7. Version history",
@@ -4667,7 +4667,7 @@
     },
     {
       "anchor": "root",
-      "content_hash": "",
+      "content_hash": "sha256:d4670067e70327526cd5003af126c0588a9f4c8c0430a367b8977278d3eec8a5",
       "doc_path": "modules/vibe-registry/PROP-010",
       "file": "spec/modules/vibe-registry/PROP-010-local-package-cache.md",
       "heading": "PROP-010: The local package cache — a shared offline store",
@@ -4676,7 +4676,7 @@
     },
     {
       "anchor": "motivation",
-      "content_hash": "",
+      "content_hash": "sha256:14f43a44c58313eedc275db2394efef5b72e4b4be56d97c5dc4f75b49baf341f",
       "doc_path": "modules/vibe-registry/PROP-010",
       "file": "spec/modules/vibe-registry/PROP-010-local-package-cache.md",
       "heading": "1. Motivation",
@@ -4685,7 +4685,7 @@
     },
     {
       "anchor": "decisions",
-      "content_hash": "",
+      "content_hash": "sha256:7cd6c73d9b6a3d1eb442ea87508163ed47da105a6d8a66636de0520d356c8ca5",
       "doc_path": "modules/vibe-registry/PROP-010",
       "file": "spec/modules/vibe-registry/PROP-010-local-package-cache.md",
       "heading": "2. Decisions",
@@ -4694,7 +4694,7 @@
     },
     {
       "anchor": "global",
-      "content_hash": "",
+      "content_hash": "sha256:1642cd887b3cd0e126ae677b8547b7f061c46ca9131f01767a18d680e58a675a",
       "doc_path": "modules/vibe-registry/PROP-010",
       "file": "spec/modules/vibe-registry/PROP-010-local-package-cache.md",
       "heading": "2.1 The cache is a machine-global, accretive store",
@@ -4703,7 +4703,7 @@
     },
     {
       "anchor": "scaffolding",
-      "content_hash": "",
+      "content_hash": "sha256:3f58ec250b92ca64a052df40e48b721327a08ad6958ff83353f776db86a26fa7",
       "doc_path": "modules/vibe-registry/PROP-010",
       "file": "spec/modules/vibe-registry/PROP-010-local-package-cache.md",
       "heading": "2.2 The cache serves work that does not exist yet",
@@ -4712,7 +4712,7 @@
     },
     {
       "anchor": "identity",
-      "content_hash": "",
+      "content_hash": "sha256:93e573309429b01a8ec1b0f0cb319c1a5340b7abacedd8ad61553a73170bb3c2",
       "doc_path": "modules/vibe-registry/PROP-010",
       "file": "spec/modules/vibe-registry/PROP-010-local-package-cache.md",
       "heading": "2.3 The cache is keyed by package identity",
@@ -4721,7 +4721,7 @@
     },
     {
       "anchor": "user-registries",
-      "content_hash": "",
+      "content_hash": "sha256:d5273ded0d41fbed21f2040cde5c8ec115c19f55f4f892bd7fcaeae1982d3a3e",
       "doc_path": "modules/vibe-registry/PROP-010",
       "file": "spec/modules/vibe-registry/PROP-010-local-package-cache.md",
       "heading": "2.4 User-level default registry configuration",
@@ -4730,7 +4730,7 @@
     },
     {
       "anchor": "offline",
-      "content_hash": "",
+      "content_hash": "sha256:31832c947c9b5adf7106b4e2feeec31de13789b96bf136877bdf9a2fcffd289d",
       "doc_path": "modules/vibe-registry/PROP-010",
       "file": "spec/modules/vibe-registry/PROP-010-local-package-cache.md",
       "heading": "2.5 `--offline` — the network-forbidden policy",
@@ -4739,7 +4739,7 @@
     },
     {
       "anchor": "resolution",
-      "content_hash": "",
+      "content_hash": "sha256:327db7e53336ec617f68b6c7dac882febcfa3cbeef2e3aeeb10a5662d2e6f355",
       "doc_path": "modules/vibe-registry/PROP-010",
       "file": "spec/modules/vibe-registry/PROP-010-local-package-cache.md",
       "heading": "2.6 Offline resolution",
@@ -4748,7 +4748,7 @@
     },
     {
       "anchor": "layout",
-      "content_hash": "",
+      "content_hash": "sha256:57650f1a75169da94ee2a0d95d30d628de9e324cc0f5401ddabd3387b21cd9d7",
       "doc_path": "modules/vibe-registry/PROP-010",
       "file": "spec/modules/vibe-registry/PROP-010-local-package-cache.md",
       "heading": "2.7 Cache layout and population",
@@ -4757,7 +4757,7 @@
     },
     {
       "anchor": "management",
-      "content_hash": "",
+      "content_hash": "sha256:ce6ffd0c3745839a29bd6cbdcb29c90e0dad7b55ddf8eaadeeb1dd355dc16e45",
       "doc_path": "modules/vibe-registry/PROP-010",
       "file": "spec/modules/vibe-registry/PROP-010-local-package-cache.md",
       "heading": "2.8 Cache management surface",
@@ -4766,7 +4766,7 @@
     },
     {
       "anchor": "layering",
-      "content_hash": "",
+      "content_hash": "sha256:1cf18bd5a656544c1bebd5441b7de44fc86c0cca8c0d78ad7671779b19e86656",
       "doc_path": "modules/vibe-registry/PROP-010",
       "file": "spec/modules/vibe-registry/PROP-010-local-package-cache.md",
       "heading": "2.9 Layering — the cache, `vibedeps/`, and the lockfile",
@@ -4775,7 +4775,7 @@
     },
     {
       "anchor": "surface",
-      "content_hash": "",
+      "content_hash": "sha256:b2b24d41a72a9d6b488d4ccd7e56151192db962c5b01bc1d39e65c03347b28a2",
       "doc_path": "modules/vibe-registry/PROP-010",
       "file": "spec/modules/vibe-registry/PROP-010-local-package-cache.md",
       "heading": "3. Command and crate surface",
@@ -4784,7 +4784,7 @@
     },
     {
       "anchor": "migration",
-      "content_hash": "",
+      "content_hash": "sha256:035de515beb23c7f35f1dd38ee067e5ae01cdc2ed1003570a9a8be38972c7d3a",
       "doc_path": "modules/vibe-registry/PROP-010",
       "file": "spec/modules/vibe-registry/PROP-010-local-package-cache.md",
       "heading": "4. Migration",
@@ -4793,7 +4793,7 @@
     },
     {
       "anchor": "open",
-      "content_hash": "",
+      "content_hash": "sha256:dda29bc133a3f610ee493277c8b5bd1ea6e3a46d277522a8c9201e5479f0ba90",
       "doc_path": "modules/vibe-registry/PROP-010",
       "file": "spec/modules/vibe-registry/PROP-010-local-package-cache.md",
       "heading": "5. Open questions",
@@ -4802,7 +4802,7 @@
     },
     {
       "anchor": "rejected",
-      "content_hash": "",
+      "content_hash": "sha256:37bdec17717e00ee544aab9321c502f6f4b2c9cb3aa6d8e3d11839b0b906d00f",
       "doc_path": "modules/vibe-registry/PROP-010",
       "file": "spec/modules/vibe-registry/PROP-010-local-package-cache.md",
       "heading": "6. Rejected / deferred alternatives",
@@ -4811,7 +4811,7 @@
     },
     {
       "anchor": "phases",
-      "content_hash": "",
+      "content_hash": "sha256:a2f33c0862e5b08066a7777656e101e3be2f98fb8d689a1d55dea83025df8d4e",
       "doc_path": "modules/vibe-registry/PROP-010",
       "file": "spec/modules/vibe-registry/PROP-010-local-package-cache.md",
       "heading": "7. Phase plan",
@@ -4820,7 +4820,7 @@
     },
     {
       "anchor": "history",
-      "content_hash": "",
+      "content_hash": "sha256:7efcb7bca7b07c48a6e48412dcfb454a241ee81a7c926ff0939cdefd7480dbce",
       "doc_path": "modules/vibe-registry/PROP-010",
       "file": "spec/modules/vibe-registry/PROP-010-local-package-cache.md",
       "heading": "8. Version history",
@@ -4829,7 +4829,7 @@
     },
     {
       "anchor": "problem",
-      "content_hash": "",
+      "content_hash": "sha256:923e42ebcd7c666762b8ea5f20c55eff3047d157060cd852f4663127e66b5d5e",
       "doc_path": "modules/vibe-resolver/PROP-003",
       "file": "spec/modules/vibe-resolver/PROP-003-dep-evolution.md",
       "heading": "1. Problem statement",
@@ -4838,7 +4838,7 @@
     },
     {
       "anchor": "decisions",
-      "content_hash": "",
+      "content_hash": "sha256:bff49ed2f5f28370b7d393ccf0bb7256621ad7f81715d49284a53d655bdea652",
       "doc_path": "modules/vibe-resolver/PROP-003",
       "file": "spec/modules/vibe-resolver/PROP-003-dep-evolution.md",
       "heading": "2. Decisions",
@@ -4847,7 +4847,7 @@
     },
     {
       "anchor": "solver-upgrade",
-      "content_hash": "",
+      "content_hash": "sha256:9b8fc92f6af8aae4b16f80974e535af32b46c7e91c7f34005741b3f8577ecd1c",
       "doc_path": "modules/vibe-resolver/PROP-003",
       "file": "spec/modules/vibe-resolver/PROP-003-dep-evolution.md",
       "heading": "2.1 Solver upgrade path: SAT-class engine behind the existing `DepSolver` trait",
@@ -4856,7 +4856,7 @@
     },
     {
       "anchor": "solver-backend",
-      "content_hash": "",
+      "content_hash": "sha256:af3e157adb7789ab60c008bef9d9b309a60f4f19e597876aa60f5ddadaeaa08d",
       "doc_path": "modules/vibe-resolver/PROP-003",
       "file": "spec/modules/vibe-resolver/PROP-003-dep-evolution.md",
       "heading": "2.2 SAT solver backend: libsolv (BSD-3-Clause), via thin Rust FFI",
@@ -4865,7 +4865,7 @@
     },
     {
       "anchor": "solver-features",
-      "content_hash": "",
+      "content_hash": "sha256:e3e66d5b610505702d68e70d18cf6d1fa043d837dfbe6596ada2a127557a3db0",
       "doc_path": "modules/vibe-resolver/PROP-003",
       "file": "spec/modules/vibe-resolver/PROP-003-dep-evolution.md",
       "heading": "2.3 SAT solver capabilities we rely on",
@@ -4874,7 +4874,7 @@
     },
     {
       "anchor": "features",
-      "content_hash": "",
+      "content_hash": "sha256:5cbbc81523d7c79e651833ea89420fccb9a027f02ddca0c80feec27c6e6054b1",
       "doc_path": "modules/vibe-resolver/PROP-003",
       "file": "spec/modules/vibe-resolver/PROP-003-dep-evolution.md",
       "heading": "2.4 Optional components (features) — cargo-tradition with vibevm twists",
@@ -4883,7 +4883,7 @@
     },
     {
       "anchor": "subskills",
-      "content_hash": "",
+      "content_hash": "sha256:26c62a4e803800966f338df1369a0be8b6924a8d1d99f33c5303779b812499d9",
       "doc_path": "modules/vibe-resolver/PROP-003",
       "file": "spec/modules/vibe-resolver/PROP-003-dep-evolution.md",
       "heading": "2.5 Subskills — vibevm-native optional content units with three delivery modes",
@@ -4892,7 +4892,7 @@
     },
     {
       "anchor": "delivery-modes",
-      "content_hash": "",
+      "content_hash": "sha256:51cd15be1cf2f134b8ffcb1c293c33dd5391d7bf67e9604fb3d0f3d8e7ebd81e",
       "doc_path": "modules/vibe-resolver/PROP-003",
       "file": "spec/modules/vibe-resolver/PROP-003-dep-evolution.md",
       "heading": "2.5.0 Three delivery modes — eager, lazy-push, lazy-pull",
@@ -4901,7 +4901,7 @@
     },
     {
       "anchor": "subskill-manifest",
-      "content_hash": "",
+      "content_hash": "sha256:429146b64ff9ac4a0276e59086b2d7e4f9815b9814a033ca154d0cde248c4c2a",
       "doc_path": "modules/vibe-resolver/PROP-003",
       "file": "spec/modules/vibe-resolver/PROP-003-dep-evolution.md",
       "heading": "2.5.1 Subskill manifest (`vibe-subskill.toml`)",
@@ -4910,7 +4910,7 @@
     },
     {
       "anchor": "subskill-activation",
-      "content_hash": "",
+      "content_hash": "sha256:9c812e2e077c61392e81f1258f340cd8c162e3f0727f318f032adb7837196891",
       "doc_path": "modules/vibe-resolver/PROP-003",
       "file": "spec/modules/vibe-resolver/PROP-003-dep-evolution.md",
       "heading": "2.5.2 Subskill activation channels — broader probe surface",
@@ -4919,7 +4919,7 @@
     },
     {
       "anchor": "llm-virtual-caps",
-      "content_hash": "",
+      "content_hash": "sha256:2f6c66548806ae24ba51fa401e033182a5e925ede088a1081f605eada6445ba2",
       "doc_path": "modules/vibe-resolver/PROP-003",
       "file": "spec/modules/vibe-resolver/PROP-003-dep-evolution.md",
       "heading": "2.5.3 LLM-emitted virtual capabilities (post-M1.5) — refactor of \"LLM-inferred activation\"",
@@ -4928,7 +4928,7 @@
     },
     {
       "anchor": "subskill-rationale",
-      "content_hash": "",
+      "content_hash": "sha256:2d1fe74abb5d89eb8abac412dc375eadc84b7178849b3f714c11af488b9f9ff3",
       "doc_path": "modules/vibe-resolver/PROP-003",
       "file": "spec/modules/vibe-resolver/PROP-003-dep-evolution.md",
       "heading": "2.5.4 Why subskills, not just more packages",
@@ -4937,7 +4937,7 @@
     },
     {
       "anchor": "subskill-recursion",
-      "content_hash": "",
+      "content_hash": "sha256:e5425122bb13ef83fc677ffe326a2e81c85b1d6d8189fd3380bd133c9b0f45a3",
       "doc_path": "modules/vibe-resolver/PROP-003",
       "file": "spec/modules/vibe-resolver/PROP-003-dep-evolution.md",
       "heading": "2.5.5 Recursive subskills",
@@ -4946,7 +4946,7 @@
     },
     {
       "anchor": "subskill-describes",
-      "content_hash": "",
+      "content_hash": "sha256:88f0512cd35457f3a8fa208d5f67676132f9ffdc55e88287746096b28b8e6d51",
       "doc_path": "modules/vibe-resolver/PROP-003",
       "file": "spec/modules/vibe-resolver/PROP-003-dep-evolution.md",
       "heading": "2.5.6 `describes` PURL on subskills",
@@ -4955,7 +4955,7 @@
     },
     {
       "anchor": "interface-tags",
-      "content_hash": "",
+      "content_hash": "sha256:1f6650b53eaf84b6f6975472c4f1b64b834b3bdb48b27c03872f4c6bc3241581",
       "doc_path": "modules/vibe-resolver/PROP-003",
       "file": "spec/modules/vibe-resolver/PROP-003-dep-evolution.md",
       "heading": "2.6 Capability-based interface tags — the abstract layer",
@@ -4964,7 +4964,7 @@
     },
     {
       "anchor": "conditional-deps",
-      "content_hash": "",
+      "content_hash": "sha256:c95b7d9b63ba9d03c9740b724820bd169c43c6e9482d3ec7ba16d56e37855cf9",
       "doc_path": "modules/vibe-resolver/PROP-003",
       "file": "spec/modules/vibe-resolver/PROP-003-dep-evolution.md",
       "heading": "2.6.1 Conditional dependencies — `[target.\"context(...)\".dependencies]`",
@@ -4973,7 +4973,7 @@
     },
     {
       "anchor": "req-conditional-grammar",
-      "content_hash": "",
+      "content_hash": "sha256:4507b88c24668fdbf90a06d6382a5913fe5fcd33b88be198190681b6af4d184f",
       "doc_path": "modules/vibe-resolver/PROP-003",
       "file": "spec/modules/vibe-resolver/PROP-003-dep-evolution.md",
       "heading": "The predicate grammar",
@@ -4984,7 +4984,7 @@
     },
     {
       "anchor": "design-conditional-when-to-use",
-      "content_hash": "",
+      "content_hash": "sha256:0ca1fa1b7c203551c93fd723b931b2fc64a41019360a1fe191a2d84713a098a6",
       "doc_path": "modules/vibe-resolver/PROP-003",
       "file": "spec/modules/vibe-resolver/PROP-003-dep-evolution.md",
       "heading": "When to use which",
@@ -4995,7 +4995,7 @@
     },
     {
       "anchor": "req-conditional-fixpoint",
-      "content_hash": "",
+      "content_hash": "sha256:3b80e066cd4183ca251df4eb44ddc929e315eacece9c3ea6e021d1f4ba0d0ea5",
       "doc_path": "modules/vibe-resolver/PROP-003",
       "file": "spec/modules/vibe-resolver/PROP-003-dep-evolution.md",
       "heading": "Conditional dependencies resolve to a fixed point",
@@ -5006,7 +5006,7 @@
     },
     {
       "anchor": "req-conditional-host-invariance",
-      "content_hash": "",
+      "content_hash": "sha256:b04df523ed197902bfbc8496d6d5a7fa345b7c756bd7d0e8d32b65980f189dd2",
       "doc_path": "modules/vibe-resolver/PROP-003",
       "file": "spec/modules/vibe-resolver/PROP-003-dep-evolution.md",
       "heading": "Predicate evaluation is host-invariant",
@@ -5017,7 +5017,7 @@
     },
     {
       "anchor": "req-conditional-composition",
-      "content_hash": "",
+      "content_hash": "sha256:9a2664cd9aae1c5b8f95893a90ce1e2e7680855b7b3f1e3426ae300d80a0b55d",
       "doc_path": "modules/vibe-resolver/PROP-003",
       "file": "spec/modules/vibe-resolver/PROP-003-dep-evolution.md",
       "heading": "Boolean composition over predicates",
@@ -5028,7 +5028,7 @@
     },
     {
       "anchor": "i18n",
-      "content_hash": "",
+      "content_hash": "sha256:91aec2707590142fd901428e183b07433ca1ee4834b4e94c4f474642f4fe5c10",
       "doc_path": "modules/vibe-resolver/PROP-003",
       "file": "spec/modules/vibe-resolver/PROP-003-dep-evolution.md",
       "heading": "2.7 Internationalization (i18n) — multi-language package content",
@@ -5037,7 +5037,7 @@
     },
     {
       "anchor": "i18n-naming",
-      "content_hash": "",
+      "content_hash": "sha256:c27b9676640d94e8cbe37429a64c02afcff9eaffd6b929d3f1d69b820b39666a",
       "doc_path": "modules/vibe-resolver/PROP-003",
       "file": "spec/modules/vibe-resolver/PROP-003-dep-evolution.md",
       "heading": "2.7.1 File naming — the chosen pattern",
@@ -5046,7 +5046,7 @@
     },
     {
       "anchor": "i18n-fallback",
-      "content_hash": "",
+      "content_hash": "sha256:0d4522b7ec75491db0eafbbddee0cff27cec310eac573a62b171200e858ec01a",
       "doc_path": "modules/vibe-resolver/PROP-003",
       "file": "spec/modules/vibe-resolver/PROP-003-dep-evolution.md",
       "heading": "2.7.2 Language preference resolution — fallback chain",
@@ -5055,7 +5055,7 @@
     },
     {
       "anchor": "i18n-prefs",
-      "content_hash": "",
+      "content_hash": "sha256:92c9b1a03c67b42cd8c40b4bfb1fc641e69280e56f664e6f0a638c635c58148c",
       "doc_path": "modules/vibe-resolver/PROP-003",
       "file": "spec/modules/vibe-resolver/PROP-003-dep-evolution.md",
       "heading": "2.7.3 Language preference declarations — three layers",
@@ -5064,7 +5064,7 @@
     },
     {
       "anchor": "i18n-fields",
-      "content_hash": "",
+      "content_hash": "sha256:8f2aa9d7a374d277ae42efa1855916a043bb4972383298037291a183225cf96f",
       "doc_path": "modules/vibe-resolver/PROP-003",
       "file": "spec/modules/vibe-resolver/PROP-003-dep-evolution.md",
       "heading": "2.7.4 Manifest-field translation (short strings)",
@@ -5073,7 +5073,7 @@
     },
     {
       "anchor": "i18n-lockfile",
-      "content_hash": "",
+      "content_hash": "sha256:f10618e0c1c5c06f1cb4a556c2ce4434f8bb569e3ebad293f50eeb328cac35c1",
       "doc_path": "modules/vibe-resolver/PROP-003",
       "file": "spec/modules/vibe-resolver/PROP-003-dep-evolution.md",
       "heading": "2.7.5 Lockfile impact",
@@ -5082,7 +5082,7 @@
     },
     {
       "anchor": "manifest",
-      "content_hash": "",
+      "content_hash": "sha256:f9290879b2d73a01cfbac8f48024f13b82195200ce7de53d2d68a5c3f63f5806",
       "doc_path": "modules/vibe-resolver/PROP-003",
       "file": "spec/modules/vibe-resolver/PROP-003-dep-evolution.md",
       "heading": "2.8 Manifest schema additions — the consolidated picture",
@@ -5091,7 +5091,7 @@
     },
     {
       "anchor": "lockfile-v3",
-      "content_hash": "",
+      "content_hash": "sha256:23937f806dd7605a372a85d9029974a2fbd03ef65d137f5ff29f54b54d62426d",
       "doc_path": "modules/vibe-resolver/PROP-003",
       "file": "spec/modules/vibe-resolver/PROP-003-dep-evolution.md",
       "heading": "2.9 Lockfile schema impact (v3)",
@@ -5100,7 +5100,7 @@
     },
     {
       "anchor": "cli",
-      "content_hash": "",
+      "content_hash": "sha256:28c7ba1518ef331b3b0f3b9da8816d9bc1a1de713a233713367f3b6e9f8e9572",
       "doc_path": "modules/vibe-resolver/PROP-003",
       "file": "spec/modules/vibe-resolver/PROP-003-dep-evolution.md",
       "heading": "2.10 CLI surface — additions and adjustments",
@@ -5109,7 +5109,7 @@
     },
     {
       "anchor": "migration",
-      "content_hash": "",
+      "content_hash": "sha256:6198c5357e695f74e507fc4a81d5f1028f5fa080e6209e1abf4db1bf7fd98b99",
       "doc_path": "modules/vibe-resolver/PROP-003",
       "file": "spec/modules/vibe-resolver/PROP-003-dep-evolution.md",
       "heading": "2.11 Migration path from `NaiveDepSolver`",
@@ -5118,7 +5118,7 @@
     },
     {
       "anchor": "algorithm",
-      "content_hash": "",
+      "content_hash": "sha256:7c2ad70e7e08a3aab7441b1460f89da779da92193b977920d4096049bb0b6fb2",
       "doc_path": "modules/vibe-resolver/PROP-003",
       "file": "spec/modules/vibe-resolver/PROP-003-dep-evolution.md",
       "heading": "3. SAT solver algorithm details",
@@ -5127,7 +5127,7 @@
     },
     {
       "anchor": "rule-encoding",
-      "content_hash": "",
+      "content_hash": "sha256:b0aaafe8e6785dda48e7b9acaa5fd6dd9488c960d3cb07d9c519805a41bb01b3",
       "doc_path": "modules/vibe-resolver/PROP-003",
       "file": "spec/modules/vibe-resolver/PROP-003-dep-evolution.md",
       "heading": "3.1 Rule encoding — vibevm concepts → libsolv rules",
@@ -5136,7 +5136,7 @@
     },
     {
       "anchor": "solver-phases",
-      "content_hash": "",
+      "content_hash": "sha256:04a036301913a47b78167360eea9b19c6eb81f2461703e9da3054a035c9037fc",
       "doc_path": "modules/vibe-resolver/PROP-003",
       "file": "spec/modules/vibe-resolver/PROP-003-dep-evolution.md",
       "heading": "3.2 Solver phases",
@@ -5145,7 +5145,7 @@
     },
     {
       "anchor": "determinism",
-      "content_hash": "",
+      "content_hash": "sha256:61782d528a6ed4a5d38df2576cc09f9242bf5a00bd17a84adebebdb30073662a",
       "doc_path": "modules/vibe-resolver/PROP-003",
       "file": "spec/modules/vibe-resolver/PROP-003-dep-evolution.md",
       "heading": "3.3 Determinism",
@@ -5154,7 +5154,7 @@
     },
     {
       "anchor": "perf",
-      "content_hash": "",
+      "content_hash": "sha256:18906a6659da9184b477b00a238f28165796b2cc10195917bfaa04749f4f0f2a",
       "doc_path": "modules/vibe-resolver/PROP-003",
       "file": "spec/modules/vibe-resolver/PROP-003-dep-evolution.md",
       "heading": "3.4 Performance envelope",
@@ -5163,7 +5163,7 @@
     },
     {
       "anchor": "rejected",
-      "content_hash": "",
+      "content_hash": "sha256:3b1adbdea14942b18da415ec6f0ec18c7d3df81ae2a6a81951bd6e975f8e7538",
       "doc_path": "modules/vibe-resolver/PROP-003",
       "file": "spec/modules/vibe-resolver/PROP-003-dep-evolution.md",
       "heading": "4. Rejected alternatives",
@@ -5172,7 +5172,7 @@
     },
     {
       "anchor": "out-of-scope",
-      "content_hash": "",
+      "content_hash": "sha256:3eea5da079b15279b012c5ca940835b1a25c1395e61a6c54e78f5df5a5dc01ea",
       "doc_path": "modules/vibe-resolver/PROP-003",
       "file": "spec/modules/vibe-resolver/PROP-003-dep-evolution.md",
       "heading": "5. Out of scope for this PROP",
@@ -5181,7 +5181,7 @@
     },
     {
       "anchor": "phases",
-      "content_hash": "",
+      "content_hash": "sha256:a7c635023f6c190f096710557316be27ec5c617a0621f33d2f08430bdcf755ef",
       "doc_path": "modules/vibe-resolver/PROP-003",
       "file": "spec/modules/vibe-resolver/PROP-003-dep-evolution.md",
       "heading": "6. Phases / staging plan",
@@ -5190,7 +5190,7 @@
     },
     {
       "anchor": "open",
-      "content_hash": "",
+      "content_hash": "sha256:a01bf5f1e8239f8b9829b35ac30b584443bbc98472c358b9a4ac11889a71bdcc",
       "doc_path": "modules/vibe-resolver/PROP-003",
       "file": "spec/modules/vibe-resolver/PROP-003-dep-evolution.md",
       "heading": "7. Open questions",
@@ -5199,7 +5199,7 @@
     },
     {
       "anchor": "references",
-      "content_hash": "",
+      "content_hash": "sha256:5577e1dd1c9b13aee37586f746afd04480c0578c93e67b58fa0362be140aaa60",
       "doc_path": "modules/vibe-resolver/PROP-003",
       "file": "spec/modules/vibe-resolver/PROP-003-dep-evolution.md",
       "heading": "8. References",
@@ -5208,7 +5208,7 @@
     },
     {
       "anchor": "root",
-      "content_hash": "",
+      "content_hash": "sha256:b64b3865eabcca7b4e2a448260d49dfe0355bed2789f042a6fb323e42465efb3",
       "doc_path": "modules/vibe-workspace/PROP-007",
       "file": "spec/modules/vibe-workspace/PROP-007-workspace.md",
       "heading": "PROP-007: Workspace — multi-package projects, recursive nesting, selective publish",
@@ -5217,7 +5217,7 @@
     },
     {
       "anchor": "motivation",
-      "content_hash": "",
+      "content_hash": "sha256:8cd68384e43553c526b3915a4fe9eae8b3f29ee603f4e87de4250e7be6a93209",
       "doc_path": "modules/vibe-workspace/PROP-007",
       "file": "spec/modules/vibe-workspace/PROP-007-workspace.md",
       "heading": "1. Motivation",
@@ -5226,7 +5226,7 @@
     },
     {
       "anchor": "decisions",
-      "content_hash": "",
+      "content_hash": "sha256:370dd163ebf6daf7e1c6c73603afac5220fd18384a1f20216ee7633dcc15bccf",
       "doc_path": "modules/vibe-workspace/PROP-007",
       "file": "spec/modules/vibe-workspace/PROP-007-workspace.md",
       "heading": "2. Decisions",
@@ -5235,7 +5235,7 @@
     },
     {
       "anchor": "workspace-section",
-      "content_hash": "",
+      "content_hash": "sha256:314e9fb6250ed14cb8e08c0ec4e2de4f12661b1c2cd076387a1199ffdff4eb82",
       "doc_path": "modules/vibe-workspace/PROP-007",
       "file": "spec/modules/vibe-workspace/PROP-007-workspace.md",
       "heading": "2.1 The `[workspace]` section",
@@ -5244,7 +5244,7 @@
     },
     {
       "anchor": "unified-manifest",
-      "content_hash": "",
+      "content_hash": "sha256:30fb3564a0460ae49d8d343bcd698287a4219c923ef594f37d0e08e0aea48702",
       "doc_path": "modules/vibe-workspace/PROP-007",
       "file": "spec/modules/vibe-workspace/PROP-007-workspace.md",
       "heading": "2.2 Unified manifest — one `vibe.toml`",
@@ -5253,7 +5253,7 @@
     },
     {
       "anchor": "nesting",
-      "content_hash": "",
+      "content_hash": "sha256:7222ce9885d40a1dbee6e1b61421814d787a5b12f68976216c1950ef473acb23",
       "doc_path": "modules/vibe-workspace/PROP-007",
       "file": "spec/modules/vibe-workspace/PROP-007-workspace.md",
       "heading": "2.3 Recursive nesting",
@@ -5262,7 +5262,7 @@
     },
     {
       "anchor": "lockfile",
-      "content_hash": "",
+      "content_hash": "sha256:0f25e9a8aa1d393cb712e55c2f150071109dbb7ae3678e89942cbed67cc6d549",
       "doc_path": "modules/vibe-workspace/PROP-007",
       "file": "spec/modules/vibe-workspace/PROP-007-workspace.md",
       "heading": "2.4 Single lockfile at the absolute root",
@@ -5271,7 +5271,7 @@
     },
     {
       "anchor": "path-source",
-      "content_hash": "",
+      "content_hash": "sha256:0646390b210e8de0af759d59a78567c09cfe0452f1857e7c0cb755c666672d65",
       "doc_path": "modules/vibe-workspace/PROP-007",
       "file": "spec/modules/vibe-workspace/PROP-007-workspace.md",
       "heading": "2.5 Cross-member dependencies — the `path` source",
@@ -5280,7 +5280,7 @@
     },
     {
       "anchor": "versions",
-      "content_hash": "",
+      "content_hash": "sha256:c425e24d42b20f8804e73143c528b525b270467b25b8e123acccbe7861288959",
       "doc_path": "modules/vibe-workspace/PROP-007",
       "file": "spec/modules/vibe-workspace/PROP-007-workspace.md",
       "heading": "2.6 Version placeholders — `[workspace.versions]`",
@@ -5289,7 +5289,7 @@
     },
     {
       "anchor": "selective-publish",
-      "content_hash": "",
+      "content_hash": "sha256:7af37f89eefce21bf87f0de0bcb4425983fc58fe72a68c0b4ab41e1f71d5b56e",
       "doc_path": "modules/vibe-workspace/PROP-007",
       "file": "spec/modules/vibe-workspace/PROP-007-workspace.md",
       "heading": "2.7 Selective publish",
@@ -5298,7 +5298,7 @@
     },
     {
       "anchor": "published-repos",
-      "content_hash": "",
+      "content_hash": "sha256:63d6d18417d0079ff59c8853d8737dd4ec81d8973af4afb5c2ef3615be3f13f4",
       "doc_path": "modules/vibe-workspace/PROP-007",
       "file": "spec/modules/vibe-workspace/PROP-007-workspace.md",
       "heading": "2.8 Published package repositories",
@@ -5307,7 +5307,7 @@
     },
     {
       "anchor": "root-package",
-      "content_hash": "",
+      "content_hash": "sha256:3bc8975ad31d818165c8ee5b3130baf89c0fecefe06213d46b9f3677cc06cdbe",
       "doc_path": "modules/vibe-workspace/PROP-007",
       "file": "spec/modules/vibe-workspace/PROP-007-workspace.md",
       "heading": "2.9 Root as a publishable package",
@@ -5316,7 +5316,7 @@
     },
     {
       "anchor": "surface",
-      "content_hash": "",
+      "content_hash": "sha256:27b60f2bb79eaa19c69b38b7e7c9aa86b82729f6429731a510d8bde9e65b1bf8",
       "doc_path": "modules/vibe-workspace/PROP-007",
       "file": "spec/modules/vibe-workspace/PROP-007-workspace.md",
       "heading": "3. Command and crate surface",
@@ -5325,7 +5325,7 @@
     },
     {
       "anchor": "vs-subskills",
-      "content_hash": "",
+      "content_hash": "sha256:b254deacf38d8ec695a54726f9b967c43a38748df54db1c6cd5a4f92c6cf896c",
       "doc_path": "modules/vibe-workspace/PROP-007",
       "file": "spec/modules/vibe-workspace/PROP-007-workspace.md",
       "heading": "4. Workspace members vs subskills",
@@ -5334,7 +5334,7 @@
     },
     {
       "anchor": "rejected",
-      "content_hash": "",
+      "content_hash": "sha256:05cb38780d73fd9bce27c169c06c2169f884613e8b2a0f2c34c13bc47c8882eb",
       "doc_path": "modules/vibe-workspace/PROP-007",
       "file": "spec/modules/vibe-workspace/PROP-007-workspace.md",
       "heading": "5. Rejected / deferred alternatives",
@@ -5343,7 +5343,7 @@
     },
     {
       "anchor": "open",
-      "content_hash": "",
+      "content_hash": "sha256:4dbe417cdcb28a98287c06a109e8ba5b467beedfbcd941cc54851eacb8034381",
       "doc_path": "modules/vibe-workspace/PROP-007",
       "file": "spec/modules/vibe-workspace/PROP-007-workspace.md",
       "heading": "6. Open questions",
@@ -5352,7 +5352,7 @@
     },
     {
       "anchor": "phases",
-      "content_hash": "",
+      "content_hash": "sha256:a9875329c5c844dbc3d22e97b1e9fca554909cf58c1a0e0e82f72bc2e6aa00f8",
       "doc_path": "modules/vibe-workspace/PROP-007",
       "file": "spec/modules/vibe-workspace/PROP-007-workspace.md",
       "heading": "7. Phase plan",
@@ -5361,7 +5361,7 @@
     },
     {
       "anchor": "history",
-      "content_hash": "",
+      "content_hash": "sha256:ede250e8b5d4e9a0b0aa950d5e18e0d6f9a8495cd72534a027e9751184ead003",
       "doc_path": "modules/vibe-workspace/PROP-007",
       "file": "spec/modules/vibe-workspace/PROP-007-workspace.md",
       "heading": "8. Version history",
@@ -5370,7 +5370,7 @@
     },
     {
       "anchor": "impl",
-      "content_hash": "",
+      "content_hash": "sha256:9ee9b0e19ab8fe240a1ee3a56796a8df18e168c46aeec98d048b104ddb45c059",
       "doc_path": "modules/vibe-workspace/PROP-007",
       "file": "spec/modules/vibe-workspace/PROP-007-workspace.md",
       "heading": "9. Implementation record",
@@ -5379,7 +5379,7 @@
     },
     {
       "anchor": "impl-phases",
-      "content_hash": "",
+      "content_hash": "sha256:a1538b31a844d7f4aefa38d4bbe559bdab2cda7e8b90cb91f84059e97ea93408",
       "doc_path": "modules/vibe-workspace/PROP-007",
       "file": "spec/modules/vibe-workspace/PROP-007-workspace.md",
       "heading": "9.1 What each phase delivered",
@@ -5388,7 +5388,7 @@
     },
     {
       "anchor": "impl-decisions",
-      "content_hash": "",
+      "content_hash": "sha256:8c7377cf890be9a766808ce552f202ee361bfb22b975413c5951d23988425ef7",
       "doc_path": "modules/vibe-workspace/PROP-007",
       "file": "spec/modules/vibe-workspace/PROP-007-workspace.md",
       "heading": "9.2 Decisions pinned during implementation",
@@ -5397,7 +5397,7 @@
     },
     {
       "anchor": "impl-deferred",
-      "content_hash": "",
+      "content_hash": "sha256:46116cf2d2fe53c2c884fb5c49f74dda21e8d013ae747826dd32a6036e51c751",
       "doc_path": "modules/vibe-workspace/PROP-007",
       "file": "spec/modules/vibe-workspace/PROP-007-workspace.md",
       "heading": "9.3 Deferred work",
@@ -5406,7 +5406,7 @@
     },
     {
       "anchor": "impl-map",
-      "content_hash": "",
+      "content_hash": "sha256:68efd69b7b52b9f199ae824bf885c1e84fb5fcd9be1ae96e3652cfbad50f4a54",
       "doc_path": "modules/vibe-workspace/PROP-007",
       "file": "spec/modules/vibe-workspace/PROP-007-workspace.md",
       "heading": "9.4 Crate and module map",
@@ -5415,7 +5415,7 @@
     },
     {
       "anchor": "impl-gates",
-      "content_hash": "",
+      "content_hash": "sha256:b3cbe23b95c52607fcbb616f2337f95ec16c56c06d1d6b9c9279c426a232f248",
       "doc_path": "modules/vibe-workspace/PROP-007",
       "file": "spec/modules/vibe-workspace/PROP-007-workspace.md",
       "heading": "9.5 Quality gates",
@@ -5424,7 +5424,7 @@
     },
     {
       "anchor": "root",
-      "content_hash": "",
+      "content_hash": "sha256:93bb499e862799f02666bc3600a9236376595345bd4f52146a06a98df538a1fe",
       "doc_path": "modules/vibe-workspace/PROP-009",
       "file": "spec/modules/vibe-workspace/PROP-009-loading-model.md",
       "heading": "PROP-009: Loading model — computed boot composition and the effective spec",
@@ -5433,7 +5433,7 @@
     },
     {
       "anchor": "motivation",
-      "content_hash": "",
+      "content_hash": "sha256:781d7b683217762039ab29a7013323037f81f39d4745e6ce96df6e00162424a0",
       "doc_path": "modules/vibe-workspace/PROP-009",
       "file": "spec/modules/vibe-workspace/PROP-009-loading-model.md",
       "heading": "1. Motivation",
@@ -5442,7 +5442,7 @@
     },
     {
       "anchor": "decisions",
-      "content_hash": "",
+      "content_hash": "sha256:c3f3fa75a9e2ef0cb6f2211e4411df22e51d39f6a6af2723e32c931d041b69fb",
       "doc_path": "modules/vibe-workspace/PROP-009",
       "file": "spec/modules/vibe-workspace/PROP-009-loading-model.md",
       "heading": "2. Decisions",
@@ -5451,7 +5451,7 @@
     },
     {
       "anchor": "two-trees",
-      "content_hash": "",
+      "content_hash": "sha256:42dcebfeb343635a8e9bdae35a75a53a8da64bc01c9fca96d4e7b2a0901e47df",
       "doc_path": "modules/vibe-workspace/PROP-009",
       "file": "spec/modules/vibe-workspace/PROP-009-loading-model.md",
       "heading": "2.1 Two trees — authored spec and materialised dependencies",
@@ -5460,7 +5460,7 @@
     },
     {
       "anchor": "effective-boot",
-      "content_hash": "",
+      "content_hash": "sha256:30721179e231f39e2834d83ad932c221d80a6d794a5bcae031264208628e44ef",
       "doc_path": "modules/vibe-workspace/PROP-009",
       "file": "spec/modules/vibe-workspace/PROP-009-loading-model.md",
       "heading": "2.2 The effective boot sequence",
@@ -5469,7 +5469,7 @@
     },
     {
       "anchor": "artifacts",
-      "content_hash": "",
+      "content_hash": "sha256:abad8b2b3390fa42dfbc60674994603650a6a9d99d910325b92a69d624845b2e",
       "doc_path": "modules/vibe-workspace/PROP-009",
       "file": "spec/modules/vibe-workspace/PROP-009-loading-model.md",
       "heading": "2.3 Generated boot artifacts",
@@ -5478,7 +5478,7 @@
     },
     {
       "anchor": "inclusion-types",
-      "content_hash": "",
+      "content_hash": "sha256:e970dc2f2ec34d73b707a58fecc593efd08b7f970d07e7f9b8f635f9e0c2258f",
       "doc_path": "modules/vibe-workspace/PROP-009",
       "file": "spec/modules/vibe-workspace/PROP-009-loading-model.md",
       "heading": "2.4 Inclusion types — `inline`, `static`, `dynamic`",
@@ -5487,7 +5487,7 @@
     },
     {
       "anchor": "ordering",
-      "content_hash": "",
+      "content_hash": "sha256:e40ee64e073ed3f96fb0e6fd989a1211b2d5f6e55dccbdf4ecfb7b6580ad0d93",
       "doc_path": "modules/vibe-workspace/PROP-009",
       "file": "spec/modules/vibe-workspace/PROP-009-loading-model.md",
       "heading": "2.5 Ordering by category — the `NN-` prefix is retired",
@@ -5496,7 +5496,7 @@
     },
     {
       "anchor": "schema",
-      "content_hash": "",
+      "content_hash": "sha256:63e6b05e4306b4cd4fc1ce0b163053a13a989dbe2c1e2c4b117200281c4e6dde",
       "doc_path": "modules/vibe-workspace/PROP-009",
       "file": "spec/modules/vibe-workspace/PROP-009-loading-model.md",
       "heading": "2.6 Manifest schema changes",
@@ -5505,7 +5505,7 @@
     },
     {
       "anchor": "install",
-      "content_hash": "",
+      "content_hash": "sha256:68f6efafe3b79b0ecb7be8c3e1ba6cbeb3a4cc615cc70988025a42bb97885af0",
       "doc_path": "modules/vibe-workspace/PROP-009",
       "file": "spec/modules/vibe-workspace/PROP-009-loading-model.md",
       "heading": "2.7 Workspace-aware `vibe install` / `vibe build`",
@@ -5514,7 +5514,7 @@
     },
     {
       "anchor": "engine",
-      "content_hash": "",
+      "content_hash": "sha256:3f39480e7c6f2762a8146fecdcec9cea30dec476d56d98fe3c7a88974f541dad",
       "doc_path": "modules/vibe-workspace/PROP-009",
       "file": "spec/modules/vibe-workspace/PROP-009-loading-model.md",
       "heading": "2.8 The computed-view engine — boot and the effective spec",
@@ -5523,7 +5523,7 @@
     },
     {
       "anchor": "uniform",
-      "content_hash": "",
+      "content_hash": "sha256:ecc9b280f6b5bf2c019842152b53dec1da373cd17561be82f497222f664f6b78",
       "doc_path": "modules/vibe-workspace/PROP-009",
       "file": "spec/modules/vibe-workspace/PROP-009-loading-model.md",
       "heading": "2.9 Uniform model — every project is a workspace",
@@ -5532,7 +5532,7 @@
     },
     {
       "anchor": "regen",
-      "content_hash": "",
+      "content_hash": "sha256:ce94a61e2a6fa2c90db0e932021e05851be51aa41899339841d87d226fffb43e",
       "doc_path": "modules/vibe-workspace/PROP-009",
       "file": "spec/modules/vibe-workspace/PROP-009-loading-model.md",
       "heading": "2.10 Regeneration — `vibe reinstall`",
@@ -5541,7 +5541,7 @@
     },
     {
       "anchor": "publish",
-      "content_hash": "",
+      "content_hash": "sha256:63b3219f5c359a58c13a6f31ce8a1a1c37f34960ffe85a92b73c3b1c067af14a",
       "doc_path": "modules/vibe-workspace/PROP-009",
       "file": "spec/modules/vibe-workspace/PROP-009-loading-model.md",
       "heading": "2.11 Published-copy regeneration",
@@ -5550,7 +5550,7 @@
     },
     {
       "anchor": "surface",
-      "content_hash": "",
+      "content_hash": "sha256:e22b030ea55c947fa1b9bbc16ab73e6649af85182d96bbde8f17db4bc40ed9d6",
       "doc_path": "modules/vibe-workspace/PROP-009",
       "file": "spec/modules/vibe-workspace/PROP-009-loading-model.md",
       "heading": "3. Command and crate surface",
@@ -5559,7 +5559,7 @@
     },
     {
       "anchor": "migration",
-      "content_hash": "",
+      "content_hash": "sha256:eee169ac644e90de2b84e7599817e6f7c20e50e45603fc0ead03bbf6a7a82f88",
       "doc_path": "modules/vibe-workspace/PROP-009",
       "file": "spec/modules/vibe-workspace/PROP-009-loading-model.md",
       "heading": "4. Migration",
@@ -5568,7 +5568,7 @@
     },
     {
       "anchor": "open",
-      "content_hash": "",
+      "content_hash": "sha256:c002f7ed6fd6f53a1b8884a3bf050f85dfdf248d6db6468a72c9ac3b4a249f06",
       "doc_path": "modules/vibe-workspace/PROP-009",
       "file": "spec/modules/vibe-workspace/PROP-009-loading-model.md",
       "heading": "5. Resolved questions",
@@ -5577,7 +5577,7 @@
     },
     {
       "anchor": "rejected",
-      "content_hash": "",
+      "content_hash": "sha256:c168588d1f425f7a9b769bbf1d67ebd0ce8e47c6a45366e0632177e09b29b842",
       "doc_path": "modules/vibe-workspace/PROP-009",
       "file": "spec/modules/vibe-workspace/PROP-009-loading-model.md",
       "heading": "6. Rejected / deferred alternatives",
@@ -5586,7 +5586,7 @@
     },
     {
       "anchor": "phases",
-      "content_hash": "",
+      "content_hash": "sha256:471fc100cc53ca87da5fff3dd24acf7a177981ebccf32ef748a6d2d897bd06d8",
       "doc_path": "modules/vibe-workspace/PROP-009",
       "file": "spec/modules/vibe-workspace/PROP-009-loading-model.md",
       "heading": "7. Phase plan",
@@ -5595,7 +5595,7 @@
     },
     {
       "anchor": "history",
-      "content_hash": "",
+      "content_hash": "sha256:fe2560f0b4833304e52c9c49735868ab7c1c0b1c973be2c3b7e8e322c63314a2",
       "doc_path": "modules/vibe-workspace/PROP-009",
       "file": "spec/modules/vibe-workspace/PROP-009-loading-model.md",
       "heading": "8. Version history",
@@ -5604,7 +5604,7 @@
     },
     {
       "anchor": "root",
-      "content_hash": "",
+      "content_hash": "sha256:36ef81bfec51086d7753ceee5312cc2c0a53103324bbfd70ea0ed06556bea608",
       "doc_path": "modules/vibe-workspace/PROP-011",
       "file": "spec/modules/vibe-workspace/PROP-011-incremental-install.md",
       "heading": "PROP-011: Incremental install — skip resolution when fresh, materialise only the diff",
@@ -5613,7 +5613,7 @@
     },
     {
       "anchor": "motivation",
-      "content_hash": "",
+      "content_hash": "sha256:b4c9e0288d05e08808430508be1d0a4d20fcfa06f168ec3c30109b8a8121cc6b",
       "doc_path": "modules/vibe-workspace/PROP-011",
       "file": "spec/modules/vibe-workspace/PROP-011-incremental-install.md",
       "heading": "1. Motivation",
@@ -5622,7 +5622,7 @@
     },
     {
       "anchor": "decisions",
-      "content_hash": "",
+      "content_hash": "sha256:3191d56d3884b05ef02a608b55619925f3d0bb2e12937e2a1acc056cb76c92b6",
       "doc_path": "modules/vibe-workspace/PROP-011",
       "file": "spec/modules/vibe-workspace/PROP-011-incremental-install.md",
       "heading": "2. Decisions",
@@ -5631,7 +5631,7 @@
     },
     {
       "anchor": "two-phases",
-      "content_hash": "",
+      "content_hash": "sha256:b1d042ccb225764b744b606bfe6404a9a3b63d9c74ade74638a8d7c553e3c182",
       "doc_path": "modules/vibe-workspace/PROP-011",
       "file": "spec/modules/vibe-workspace/PROP-011-incremental-install.md",
       "heading": "2.1 Separate resolution from application",
@@ -5640,7 +5640,7 @@
     },
     {
       "anchor": "skip-resolution",
-      "content_hash": "",
+      "content_hash": "sha256:660cde6902bf8e0e5be8cce9f4713b69e329fedf58f6d572fe86ecf2e6c2e83e",
       "doc_path": "modules/vibe-workspace/PROP-011",
       "file": "spec/modules/vibe-workspace/PROP-011-incremental-install.md",
       "heading": "2.2 Skip resolution when the lockfile is fresh",
@@ -5649,7 +5649,7 @@
     },
     {
       "anchor": "materialise-diff",
-      "content_hash": "",
+      "content_hash": "sha256:12f46ea8819f1a7b8d778ff1ec3f160cce0cb529230d16c0587a789eb8db08a4",
       "doc_path": "modules/vibe-workspace/PROP-011",
       "file": "spec/modules/vibe-workspace/PROP-011-incremental-install.md",
       "heading": "2.3 Materialise only the diff",
@@ -5658,7 +5658,7 @@
     },
     {
       "anchor": "boot-regen",
-      "content_hash": "",
+      "content_hash": "sha256:923d517efeedc3dca3fb01a7202f2fdc49d7ea145dacd50c1d90a7b0aa371058",
       "doc_path": "modules/vibe-workspace/PROP-011",
       "file": "spec/modules/vibe-workspace/PROP-011-incremental-install.md",
       "heading": "2.4 Boot regeneration stays whole-tree — and why that is fine",
@@ -5667,7 +5667,7 @@
     },
     {
       "anchor": "force",
-      "content_hash": "",
+      "content_hash": "sha256:2d852494e326900b5a6987937d1208388e451f4de8bf2a22f948fe6d22088e40",
       "doc_path": "modules/vibe-workspace/PROP-011",
       "file": "spec/modules/vibe-workspace/PROP-011-incremental-install.md",
       "heading": "2.5 Bypasses — no new flag",
@@ -5676,7 +5676,7 @@
     },
     {
       "anchor": "surface",
-      "content_hash": "",
+      "content_hash": "sha256:d0598eebbf9ec246131c820e3c206009debc72197fed4a6e4c9abfce4733dd2d",
       "doc_path": "modules/vibe-workspace/PROP-011",
       "file": "spec/modules/vibe-workspace/PROP-011-incremental-install.md",
       "heading": "3. Command and crate surface",
@@ -5685,7 +5685,7 @@
     },
     {
       "anchor": "migration",
-      "content_hash": "",
+      "content_hash": "sha256:b380f61f6637088d6c385d8c58fd7f7933297727354f5a8963129ea0d5a2649c",
       "doc_path": "modules/vibe-workspace/PROP-011",
       "file": "spec/modules/vibe-workspace/PROP-011-incremental-install.md",
       "heading": "4. Migration",
@@ -5694,7 +5694,7 @@
     },
     {
       "anchor": "open",
-      "content_hash": "",
+      "content_hash": "sha256:439f152e49576afd0accd6b3de496bdfaeec8393948da287d041e4616d0e84e3",
       "doc_path": "modules/vibe-workspace/PROP-011",
       "file": "spec/modules/vibe-workspace/PROP-011-incremental-install.md",
       "heading": "5. Resolved questions",
@@ -5703,7 +5703,7 @@
     },
     {
       "anchor": "rejected",
-      "content_hash": "",
+      "content_hash": "sha256:ad0bd0170a2ee3f25c3827243c4de322aa2640ca58906cf22309eb6321880137",
       "doc_path": "modules/vibe-workspace/PROP-011",
       "file": "spec/modules/vibe-workspace/PROP-011-incremental-install.md",
       "heading": "6. Rejected / deferred alternatives",
@@ -5712,7 +5712,7 @@
     },
     {
       "anchor": "phases",
-      "content_hash": "",
+      "content_hash": "sha256:b6c10867e6efc66bbf16f63784b42498fb6070e385bfb317e3f5dcc251649d6f",
       "doc_path": "modules/vibe-workspace/PROP-011",
       "file": "spec/modules/vibe-workspace/PROP-011-incremental-install.md",
       "heading": "7. Phase plan",
@@ -5721,7 +5721,7 @@
     },
     {
       "anchor": "history",
-      "content_hash": "",
+      "content_hash": "sha256:251de6a9ba7573f663b56bfe7f6e707b918df29573e889c2eae1ce1964e658e4",
       "doc_path": "modules/vibe-workspace/PROP-011",
       "file": "spec/modules/vibe-workspace/PROP-011-incremental-install.md",
       "heading": "8. Version history",
@@ -5730,7 +5730,7 @@
     },
     {
       "anchor": "root",
-      "content_hash": "",
+      "content_hash": "sha256:86fbcc861086bb94b94125b7cf9a99aa104d7dc9bbf68db1536e51aaad45b4d2",
       "doc_path": "modules/vibe-workspace/PROP-012",
       "file": "spec/modules/vibe-workspace/PROP-012-managed-redirect-block.md",
       "heading": "PROP-012: The managed redirect block — vibevm as a co-tenant of the agent instruction files",
@@ -5739,7 +5739,7 @@
     },
     {
       "anchor": "motivation",
-      "content_hash": "",
+      "content_hash": "sha256:d8566f33e46a589cee1d0638646b6fe657e002c25a4d159c385cc68e7f17614c",
       "doc_path": "modules/vibe-workspace/PROP-012",
       "file": "spec/modules/vibe-workspace/PROP-012-managed-redirect-block.md",
       "heading": "1. Motivation",
@@ -5748,7 +5748,7 @@
     },
     {
       "anchor": "decisions",
-      "content_hash": "",
+      "content_hash": "sha256:d57a423f09cbecbeb77cb19adf19c0a9d6302cff2ceab6201933f40f5a4238e4",
       "doc_path": "modules/vibe-workspace/PROP-012",
       "file": "spec/modules/vibe-workspace/PROP-012-managed-redirect-block.md",
       "heading": "2. Decisions",
@@ -5757,7 +5757,7 @@
     },
     {
       "anchor": "co-tenant",
-      "content_hash": "",
+      "content_hash": "sha256:45545d1e281f22373fb2dcf3783877dc6bbd6bc8a0d41524ca5d28a109906abb",
       "doc_path": "modules/vibe-workspace/PROP-012",
       "file": "spec/modules/vibe-workspace/PROP-012-managed-redirect-block.md",
       "heading": "2.1 vibevm owns one delimited block, nothing else",
@@ -5766,7 +5766,7 @@
     },
     {
       "anchor": "markers",
-      "content_hash": "",
+      "content_hash": "sha256:354adc69d8d3626d0bdbdfd5247ac575bda06b0b0f7050a9f3d02f9814ad76df",
       "doc_path": "modules/vibe-workspace/PROP-012",
       "file": "spec/modules/vibe-workspace/PROP-012-managed-redirect-block.md",
       "heading": "2.2 The markers, and well-formedness",
@@ -5775,7 +5775,7 @@
     },
     {
       "anchor": "create",
-      "content_hash": "",
+      "content_hash": "sha256:5ed96b2cb09c78658b9c37a68fd068e5a76ad6a138f917540449fad78e83787c",
       "doc_path": "modules/vibe-workspace/PROP-012",
       "file": "spec/modules/vibe-workspace/PROP-012-managed-redirect-block.md",
       "heading": "2.3 Malformed → hard stop; absent → create; present → splice",
@@ -5784,7 +5784,7 @@
     },
     {
       "anchor": "placement",
-      "content_hash": "",
+      "content_hash": "sha256:bbd8cdccfe973d27a5697bf47e03e30f045886ef1089e173a66c079827a036b7",
       "doc_path": "modules/vibe-workspace/PROP-012",
       "file": "spec/modules/vibe-workspace/PROP-012-managed-redirect-block.md",
       "heading": "2.4 Placement is the user's — vibevm never moves the block",
@@ -5793,7 +5793,7 @@
     },
     {
       "anchor": "plan-time",
-      "content_hash": "",
+      "content_hash": "sha256:4abb46870098e62ee981401bb476bc87d16cab60a19cc22cb4ccf15df8153cdb",
       "doc_path": "modules/vibe-workspace/PROP-012",
       "file": "spec/modules/vibe-workspace/PROP-012-managed-redirect-block.md",
       "heading": "2.5 Validate before mutate",
@@ -5802,7 +5802,7 @@
     },
     {
       "anchor": "content",
-      "content_hash": "",
+      "content_hash": "sha256:088b3166a2cbc5f9d44bcac97780fcf85c1bdbc82fa3da5a71362dee887c5408",
       "doc_path": "modules/vibe-workspace/PROP-012",
       "file": "spec/modules/vibe-workspace/PROP-012-managed-redirect-block.md",
       "heading": "2.6 The block content is unchanged — this PROP changes the envelope, not the payload",
@@ -5811,7 +5811,7 @@
     },
     {
       "anchor": "surface",
-      "content_hash": "",
+      "content_hash": "sha256:a5befdc957cf0ab767ffb0bb729d3da456ff00e3934435f5012ceb848c708a0d",
       "doc_path": "modules/vibe-workspace/PROP-012",
       "file": "spec/modules/vibe-workspace/PROP-012-managed-redirect-block.md",
       "heading": "3. Command and crate surface",
@@ -5820,7 +5820,7 @@
     },
     {
       "anchor": "migration",
-      "content_hash": "",
+      "content_hash": "sha256:16601a9cb4df8608386ae26b42631a78af13af9549df219f7fc13bd7b95b530f",
       "doc_path": "modules/vibe-workspace/PROP-012",
       "file": "spec/modules/vibe-workspace/PROP-012-managed-redirect-block.md",
       "heading": "4. Migration",
@@ -5829,7 +5829,7 @@
     },
     {
       "anchor": "open",
-      "content_hash": "",
+      "content_hash": "sha256:ebe2584fc93bbafc9350533c17038f680318d145740ba7929f6aeae04f283595",
       "doc_path": "modules/vibe-workspace/PROP-012",
       "file": "spec/modules/vibe-workspace/PROP-012-managed-redirect-block.md",
       "heading": "5. Open questions",
@@ -5838,7 +5838,7 @@
     },
     {
       "anchor": "rejected",
-      "content_hash": "",
+      "content_hash": "sha256:216060f0f8941ba32fde8c62aed201874f178fe484a23b3817f861a9894b1322",
       "doc_path": "modules/vibe-workspace/PROP-012",
       "file": "spec/modules/vibe-workspace/PROP-012-managed-redirect-block.md",
       "heading": "6. Rejected / deferred alternatives",
@@ -5847,7 +5847,7 @@
     },
     {
       "anchor": "phases",
-      "content_hash": "",
+      "content_hash": "sha256:7624185934f5ce3db90d95d7efa77e1f3c99fd47ee34d7a1e5f6e5c8aa9189e1",
       "doc_path": "modules/vibe-workspace/PROP-012",
       "file": "spec/modules/vibe-workspace/PROP-012-managed-redirect-block.md",
       "heading": "7. Phase plan",
@@ -5856,7 +5856,7 @@
     },
     {
       "anchor": "history",
-      "content_hash": "",
+      "content_hash": "sha256:bba0c16ba3f9b1c30d376d70ee90b3297e46c055b7189a97427783468a0e184b",
       "doc_path": "modules/vibe-workspace/PROP-012",
       "file": "spec/modules/vibe-workspace/PROP-012-managed-redirect-block.md",
       "heading": "8. Version history",
@@ -5865,7 +5865,7 @@
     },
     {
       "anchor": "what-tessl-is",
-      "content_hash": "",
+      "content_hash": "sha256:7be077e2eba6a4f0408a16df42dcaa3b42c45b57ad5269f78c7564639be96f5a",
       "doc_path": "research/PROP-004",
       "file": "spec/research/PROP-004-tessl-comparative-research.md",
       "heading": "1. What Tessl is — in their own words",
@@ -5874,7 +5874,7 @@
     },
     {
       "anchor": "primitives",
-      "content_hash": "",
+      "content_hash": "sha256:ed708730e295501d8467e3579fc7b23b186b201355175fc8253d7fcadf3cb0d2",
       "doc_path": "research/PROP-004",
       "file": "spec/research/PROP-004-tessl-comparative-research.md",
       "heading": "2. Primitives — the Tessl object model",
@@ -5883,7 +5883,7 @@
     },
     {
       "anchor": "tile",
-      "content_hash": "",
+      "content_hash": "sha256:32d93783e0b6a43f4b29d2074827dc84b9248ccefbd5f99a7f4797fd186b7c41",
       "doc_path": "research/PROP-004",
       "file": "spec/research/PROP-004-tessl-comparative-research.md",
       "heading": "2.1 Tile",
@@ -5892,7 +5892,7 @@
     },
     {
       "anchor": "skill",
-      "content_hash": "",
+      "content_hash": "sha256:198ce70c9f7719b4f9f0c6e521b2623dc438ea1217f4a8133f6420c6e1cdf9a4",
       "doc_path": "research/PROP-004",
       "file": "spec/research/PROP-004-tessl-comparative-research.md",
       "heading": "2.2 Skill (`SKILL.md`)",
@@ -5901,7 +5901,7 @@
     },
     {
       "anchor": "rule",
-      "content_hash": "",
+      "content_hash": "sha256:5980cce2fbba01b57b15d3187e8a9b9996adfe0d220c2495263032373c239f5e",
       "doc_path": "research/PROP-004",
       "file": "spec/research/PROP-004-tessl-comparative-research.md",
       "heading": "2.3 Rule",
@@ -5910,7 +5910,7 @@
     },
     {
       "anchor": "doc",
-      "content_hash": "",
+      "content_hash": "sha256:a80f916452f817d4a82b2b91cf038eab52730c1f28b4fe9ece48407a59369036",
       "doc_path": "research/PROP-004",
       "file": "spec/research/PROP-004-tessl-comparative-research.md",
       "heading": "2.4 Documentation (`docs/`)",
@@ -5919,7 +5919,7 @@
     },
     {
       "anchor": "scenario",
-      "content_hash": "",
+      "content_hash": "sha256:8c8c228e7f7cd9bd81dd6b0e8a3fe50b79b3ffdeeaf9cd10b4446b8333b9effe",
       "doc_path": "research/PROP-004",
       "file": "spec/research/PROP-004-tessl-comparative-research.md",
       "heading": "2.5 Scenario (`scenario.json` + `task.md` + `criteria.json`)",
@@ -5928,7 +5928,7 @@
     },
     {
       "anchor": "eval",
-      "content_hash": "",
+      "content_hash": "sha256:e511d6a9f292aa7ec7e1edf44e1e91d4896bdad0c44e6dfc00d452e137e4e32a",
       "doc_path": "research/PROP-004",
       "file": "spec/research/PROP-004-tessl-comparative-research.md",
       "heading": "2.6 Eval / Evaluation",
@@ -5937,7 +5937,7 @@
     },
     {
       "anchor": "purl",
-      "content_hash": "",
+      "content_hash": "sha256:08017892f0b2e0a4f42a671f7ce473ee3ef67db77bd66e095e7ec9e4d6b05ab4",
       "doc_path": "research/PROP-004",
       "file": "spec/research/PROP-004-tessl-comparative-research.md",
       "heading": "2.7 PURL (Package URL) and `describes` linkage",
@@ -5946,7 +5946,7 @@
     },
     {
       "anchor": "workspace",
-      "content_hash": "",
+      "content_hash": "sha256:009916b1abc526f6b1d800f72bafb2b6fc5f59e1d955bce884fff283a6fc3265",
       "doc_path": "research/PROP-004",
       "file": "spec/research/PROP-004-tessl-comparative-research.md",
       "heading": "2.8 Workspace",
@@ -5955,7 +5955,7 @@
     },
     {
       "anchor": "context",
-      "content_hash": "",
+      "content_hash": "sha256:6f3c1161e6bdca1d04290879ed738ffdf9e72a1a39c18c7fe75e892146775727",
       "doc_path": "research/PROP-004",
       "file": "spec/research/PROP-004-tessl-comparative-research.md",
       "heading": "2.9 Context — the umbrella concept",
@@ -5964,7 +5964,7 @@
     },
     {
       "anchor": "delivery-modes",
-      "content_hash": "",
+      "content_hash": "sha256:ae25023427bffbd43778108cc7c4f342cba6ec3276593732ed65a70e40d56fba",
       "doc_path": "research/PROP-004",
       "file": "spec/research/PROP-004-tessl-comparative-research.md",
       "heading": "2.10 Three context-delivery modes — the load-bearing distinction",
@@ -5973,7 +5973,7 @@
     },
     {
       "anchor": "review-rubric",
-      "content_hash": "",
+      "content_hash": "sha256:03d1e9663d6183d62fea35bb12c1affa86cc12e755f2c01edf8a9097927a02cc",
       "doc_path": "research/PROP-004",
       "file": "spec/research/PROP-004-tessl-comparative-research.md",
       "heading": "2.11 Review scoring rubric (three axes)",
@@ -5982,7 +5982,7 @@
     },
     {
       "anchor": "optimize",
-      "content_hash": "",
+      "content_hash": "sha256:d208eedf5fa3d9274390119bea0ab6945ba34db0d667346166d6fea5f9b74b65",
       "doc_path": "research/PROP-004",
       "file": "spec/research/PROP-004-tessl-comparative-research.md",
       "heading": "2.12 `--optimize` auto-improvement loop",
@@ -5991,7 +5991,7 @@
     },
     {
       "anchor": "codebase-readiness",
-      "content_hash": "",
+      "content_hash": "sha256:6ef6028cf66ae24e9373f8b563317d9e7f12a3baeecb2fff76f0cb354d2fb127",
       "doc_path": "research/PROP-004",
       "file": "spec/research/PROP-004-tessl-comparative-research.md",
       "heading": "2.13 Codebase-readiness eval — eval from real commits",
@@ -6000,7 +6000,7 @@
     },
     {
       "anchor": "multi-model",
-      "content_hash": "",
+      "content_hash": "sha256:f82200cacfb9dd86588541c3762f052ba4e0244c5ef4e12bae45a692fba9bb27",
       "doc_path": "research/PROP-004",
       "file": "spec/research/PROP-004-tessl-comparative-research.md",
       "heading": "2.14 Multi-model A/B comparison",
@@ -6009,7 +6009,7 @@
     },
     {
       "anchor": "mcp",
-      "content_hash": "",
+      "content_hash": "sha256:a63aca2f03c7f89cb8d3eb47d72c9453973fcf83163b2591ab5ea6a46b95600f",
       "doc_path": "research/PROP-004",
       "file": "spec/research/PROP-004-tessl-comparative-research.md",
       "heading": "2.15 MCP server and `query_library_docs`",
@@ -6018,7 +6018,7 @@
     },
     {
       "anchor": "snyk",
-      "content_hash": "",
+      "content_hash": "sha256:57116ff5fe889777a41e1df0acc2359241458205c2d91e2aede5b14f90d2a976",
       "doc_path": "research/PROP-004",
       "file": "spec/research/PROP-004-tessl-comparative-research.md",
       "heading": "2.16 Snyk-driven security gating",
@@ -6027,7 +6027,7 @@
     },
     {
       "anchor": "auto-update",
-      "content_hash": "",
+      "content_hash": "sha256:98ca4021a7372848d1e154497948b85e8e59148dc0441d764363a487c75510ee",
       "doc_path": "research/PROP-004",
       "file": "spec/research/PROP-004-tessl-comparative-research.md",
       "heading": "2.17 Auto-update",
@@ -6036,7 +6036,7 @@
     },
     {
       "anchor": "git-integration",
-      "content_hash": "",
+      "content_hash": "sha256:2f2cad61dba482eb9c97c805993d3be52233f26d722133db5d488fa2d36da3b3",
       "doc_path": "research/PROP-004",
       "file": "spec/research/PROP-004-tessl-comparative-research.md",
       "heading": "2.18 GitHub / GitLab integration",
@@ -6045,7 +6045,7 @@
     },
     {
       "anchor": "spec-driven",
-      "content_hash": "",
+      "content_hash": "sha256:d334de13fef5f81eb225fc626174c9950a39a634a9e5b50fbf6cabb0c40bfaef",
       "doc_path": "research/PROP-004",
       "file": "spec/research/PROP-004-tessl-comparative-research.md",
       "heading": "2.19 Progressive enhancement: spec-driven development skill",
@@ -6054,7 +6054,7 @@
     },
     {
       "anchor": "outdated",
-      "content_hash": "",
+      "content_hash": "sha256:08c465bb9f1b42966e763caace836e9b3f788f8384a35bb2efb5a857a8b2f5be",
       "doc_path": "research/PROP-004",
       "file": "spec/research/PROP-004-tessl-comparative-research.md",
       "heading": "2.20 `tessl outdated` and update workflows",
@@ -6063,7 +6063,7 @@
     },
     {
       "anchor": "cli",
-      "content_hash": "",
+      "content_hash": "sha256:551ac616bdb2938b8fc5cb03901e754ec3aab0c5a99de61e29d5a5267dfc528c",
       "doc_path": "research/PROP-004",
       "file": "spec/research/PROP-004-tessl-comparative-research.md",
       "heading": "3. CLI surface — complete documented inventory",
@@ -6072,7 +6072,7 @@
     },
     {
       "anchor": "formats",
-      "content_hash": "",
+      "content_hash": "sha256:a0b79fb47992ce04afc36b7021c14a843882421c95d62668a013b8234efafa00",
       "doc_path": "research/PROP-004",
       "file": "spec/research/PROP-004-tessl-comparative-research.md",
       "heading": "4. File formats and on-disk shapes",
@@ -6081,7 +6081,7 @@
     },
     {
       "anchor": "gaps",
-      "content_hash": "",
+      "content_hash": "sha256:efe47103a3d56799f503f7d28a029469abf3cbd6c00f6406229058b0de003177",
       "doc_path": "research/PROP-004",
       "file": "spec/research/PROP-004-tessl-comparative-research.md",
       "heading": "5. The gap — what Tessl does that vibevm does not",
@@ -6090,7 +6090,7 @@
     },
     {
       "anchor": "roadmap-deltas",
-      "content_hash": "",
+      "content_hash": "sha256:e99551bb9e87911ab0a6d29cc9a763a02ea78f2b504389ec65239d1e2a761985",
       "doc_path": "research/PROP-004",
       "file": "spec/research/PROP-004-tessl-comparative-research.md",
       "heading": "6. Roadmap deltas",
@@ -6099,7 +6099,7 @@
     },
     {
       "anchor": "sources",
-      "content_hash": "",
+      "content_hash": "sha256:a96693b20108e66bc939d4ac06271119242c1fe05b9159d3496c3a0bad026019",
       "doc_path": "research/PROP-004",
       "file": "spec/research/PROP-004-tessl-comparative-research.md",
       "heading": "7. Source URLs and re-fetch procedure",
@@ -6108,7 +6108,7 @@
     },
     {
       "anchor": "vibevm-leads",
-      "content_hash": "",
+      "content_hash": "sha256:9669da30e5defd0a34a35a17f347892087c2ee54a7fbf7e973b41f8300b26474",
       "doc_path": "research/PROP-004",
       "file": "spec/research/PROP-004-tessl-comparative-research.md",
       "heading": "8. Where vibevm leads — Tessl gaps",
@@ -6117,7 +6117,7 @@
     },
     {
       "anchor": "reading",
-      "content_hash": "",
+      "content_hash": "sha256:ae3eb0b6a70dbe433d2a492489883dc6be817be6556731e69fcd519903c1ab59",
       "doc_path": "research/PROP-004",
       "file": "spec/research/PROP-004-tessl-comparative-research.md",
       "heading": "9. Reading list — adjacent projects and concepts",
