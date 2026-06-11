@@ -18,6 +18,9 @@
 //!   in terraform acceptance lines.
 //! - `tripwire` — list debt-registry entries whose `touch:` tripwires
 //!   fire on the current change set. Warn-only.
+//! - `fast-loop` — the Class-E `cell-fast-loop-present` checker
+//!   (discipline card scaffold-e-fast-loop): every cell builds and
+//!   tests in isolation inside the per-cell budget.
 //!
 //! Entry shape follows the standard `xtask` pattern. Keep this
 //! crate dep-light: clap + anyhow + std; the heavy lifting lives in
@@ -95,6 +98,26 @@ enum Cmd {
         #[command(subcommand)]
         cmd: ConformCmd,
     },
+
+    /// The Class-E fast-loop checker, `cell-fast-loop-present`
+    /// (discipline card scaffold-e-fast-loop, Band 3): every cell —
+    /// a workspace crate today — builds and tests in isolation
+    /// inside the per-cell budget. Test failures always fail the
+    /// command; budget overruns warn unless `--enforce-budget`.
+    FastLoop {
+        /// Check a single cell (workspace member name) instead of all.
+        #[arg(long)]
+        cell: Option<String>,
+
+        /// Per-cell first-signal budget, seconds (card default: 60).
+        #[arg(long, default_value_t = 60)]
+        budget: u64,
+
+        /// Fail (non-zero exit) on budget overruns, not only on
+        /// red tests. Off during Phase-1 remediation; the gate mode.
+        #[arg(long)]
+        enforce_budget: bool,
+    },
 }
 
 #[derive(Subcommand, Debug)]
@@ -158,7 +181,167 @@ fn main() -> Result<()> {
                     ..
                 },
         } => run_trace_explain(&target, json, prose),
+        Cmd::FastLoop {
+            cell,
+            budget,
+            enforce_budget,
+        } => run_fast_loop(cell.as_deref(), budget, enforce_budget),
     }
+}
+
+/// One cell's fast-loop measurement.
+struct CellRun {
+    cell: String,
+    seconds: f64,
+    tests: usize,
+    passed: bool,
+}
+
+/// Workspace member names via `cargo metadata --no-deps`, sorted.
+fn workspace_members(root: &Path) -> Result<Vec<String>> {
+    let out = Command::new("cargo")
+        .args(["metadata", "--no-deps", "--format-version", "1"])
+        .current_dir(root)
+        .output()
+        .context("spawning cargo metadata")?;
+    if !out.status.success() {
+        bail!(
+            "cargo metadata failed: {}",
+            String::from_utf8_lossy(&out.stderr)
+        );
+    }
+    let meta: serde_json::Value =
+        serde_json::from_slice(&out.stdout).context("parsing cargo metadata JSON")?;
+    let mut names: Vec<String> = meta["packages"]
+        .as_array()
+        .context("cargo metadata: no packages array")?
+        .iter()
+        .filter_map(|p| p["name"].as_str().map(str::to_string))
+        .collect();
+    names.sort();
+    Ok(names)
+}
+
+/// The fast-loop checker: per cell, run `cargo nextest run -p <cell>`
+/// in isolation and measure wall-clock to the verdict. The verdict
+/// (pass/fail + test count) comes from the same nextest output the
+/// test-gate parses, so the two gates cannot disagree on what a test
+/// result is.
+fn run_fast_loop(cell: Option<&str>, budget_secs: u64, enforce_budget: bool) -> Result<()> {
+    use specmap_core::testgate;
+
+    let root = repo_root()?;
+    let cells = match cell {
+        Some(one) => vec![one.to_string()],
+        None => workspace_members(&root)?,
+    };
+    let budget = budget_secs as f64;
+
+    let mut runs: Vec<CellRun> = Vec::new();
+    for name in &cells {
+        let started = std::time::Instant::now();
+        let out = Command::new("cargo")
+            .args([
+                "nextest",
+                "run",
+                "-p",
+                name,
+                "--no-fail-fast",
+                // A cell with zero tests still fast-loops: the build IS
+                // the first signal there (stub and generated crates).
+                "--no-tests=pass",
+                "--status-level",
+                "all",
+                "--color",
+                "never",
+            ])
+            .current_dir(&root)
+            .output()
+            .context("spawning cargo nextest (install: `cargo install cargo-nextest --locked`)")?;
+        let seconds = started.elapsed().as_secs_f64();
+
+        let mut combined = String::from_utf8_lossy(&out.stdout).into_owned();
+        combined.push('\n');
+        combined.push_str(&String::from_utf8_lossy(&out.stderr));
+        let results = testgate::parse_nextest_output(&combined);
+        let failed = results
+            .values()
+            .filter(|s| **s == testgate::RunStatus::Fail)
+            .count();
+        // "No tests" is a legal cell state (stub crates); nextest exits
+        // zero there. A non-zero exit with zero parsed results is a
+        // build failure — isolation is broken, report it as red.
+        let passed = out.status.success() && failed == 0;
+
+        let over = if seconds > budget { " OVER BUDGET" } else { "" };
+        eprintln!(
+            "  fast-loop: {name} — {} in {seconds:.1}s ({} test result(s)){over}",
+            if passed { "ok" } else { "RED" },
+            results.len(),
+        );
+        runs.push(CellRun {
+            cell: name.clone(),
+            seconds,
+            tests: results.len(),
+            passed,
+        });
+    }
+
+    // Machine-readable report for the adoption LOG (derived data,
+    // never committed — same contract as target/conform/).
+    let report_dir = root.join("target").join("fast-loop");
+    std::fs::create_dir_all(&report_dir)?;
+    let json: Vec<serde_json::Value> = runs
+        .iter()
+        .map(|r| {
+            serde_json::json!({
+                "cell": r.cell,
+                "seconds": (r.seconds * 10.0).round() / 10.0,
+                "tests": r.tests,
+                "passed": r.passed,
+                "within_budget": r.seconds <= budget,
+            })
+        })
+        .collect();
+    let report_path = report_dir.join("report.json");
+    std::fs::write(&report_path, serde_json::to_string_pretty(&json)?)?;
+
+    let red: Vec<&CellRun> = runs.iter().filter(|r| !r.passed).collect();
+    let over: Vec<&CellRun> = runs.iter().filter(|r| r.seconds > budget).collect();
+    let within = runs.len() - over.len();
+    eprintln!(
+        "xtask fast-loop: {}/{} cell(s) within the {budget_secs}s budget \
+         ({:.0}%), {} red; report at {}.",
+        within,
+        runs.len(),
+        100.0 * within as f64 / runs.len().max(1) as f64,
+        red.len(),
+        report_path
+            .strip_prefix(&root)
+            .unwrap_or(&report_path)
+            .display()
+    );
+    if !red.is_empty() {
+        bail!(
+            "fast-loop: {} cell(s) RED in isolation: {}",
+            red.len(),
+            red.iter()
+                .map(|r| r.cell.as_str())
+                .collect::<Vec<_>>()
+                .join(", ")
+        );
+    }
+    if enforce_budget && !over.is_empty() {
+        bail!(
+            "fast-loop: {} cell(s) over the {budget_secs}s budget: {}",
+            over.len(),
+            over.iter()
+                .map(|r| format!("{} ({:.1}s)", r.cell, r.seconds))
+                .collect::<Vec<_>>()
+                .join(", ")
+        );
+    }
+    Ok(())
 }
 
 fn run_trace_explain(target: &str, json: bool, prose: bool) -> Result<()> {

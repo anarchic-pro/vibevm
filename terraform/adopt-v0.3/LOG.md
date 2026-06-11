@@ -125,3 +125,50 @@ suspects preserved; the Discipline is an installed package pinned
 by `vibevm.discipline.lock`; `spec/neworder/` is a shim.
 Predictions P0-1 (with the cache-defect caveat) and P0-2 recorded
 with verdicts in `PREDICTIONS.md`.
+
+---
+
+## 2026-06-11 — Phase 1: Substrate — the fast loop (Class E)
+
+**Scope.** Card `scaffold-e-fast-loop` adopted repo-wide. Cell
+granularity for the loop is the workspace crate (18 members); the
+finer `#[cell]`-manifest grain stays the modification unit, but the
+isolated build+test unit Rust actually offers is the package.
+
+**What landed.** `cargo xtask fast-loop [--cell <name>]
+[--budget <secs>] [--enforce-budget]` — the card's checker
+`cell-fast-loop-present`, implemented. Per cell it runs
+`cargo nextest run -p <cell>` in isolation, measures wall-clock to
+the verdict, parses results with the same testgate parser the
+test-gate uses (the two gates cannot disagree on what a test result
+is), and writes a machine-readable report to
+`target/fast-loop/report.json` (derived, never committed). Test
+failures always fail the command; budget overruns warn unless
+`--enforce-budget` — and since the whole workspace already fits,
+enforce-budget is safe to use at raid checkpoints from day one.
+
+**Measurement (warm target, 2026-06-11):** 18/18 cells within the
+60s budget — 100%, against the card's ≥90% prediction. Worst cell:
+`vibe-cli` ~23s (269 results); median ~2s. Zero red cells, zero
+hidden coupling. The card graduates from *specified* to
+*implemented* on the pilot.
+
+**Checker-shape finding (feeds the card's Band 2):** nextest exits
+4 on a zero-test crate; the first run reported four stub/generated
+cells (vibe-graph, vibe-llm, vibe-wire, xtask) as RED for having no
+tests. That is a false signal — a zero-test cell's *build* is its
+first signal — fixed with `--no-tests=pass`. Lesson for the card:
+"builds and tests in isolation" must define the no-tests case
+explicitly or every adopter rediscovers this edge.
+
+**Gate semantics going forward.** `fast-loop --enforce-budget`
+joins the raid-checkpoint panel (structure changes); it does NOT
+join `tools/self-check.sh`, which already runs the full workspace
+test suite — duplicating ~80s of tests into every self-check buys
+nothing the panel does not already buy. Doctests are not yet in the
+loop (nextest does not run them); they enter via the Phase-2 G
+card, which will wire `cargo test --doc -p <cell>` into fast-loop.
+
+**Phase 1 exit: met.** Every cell independently buildable +
+testable inside budget; checker implemented and green; P1-1
+recorded with verdict.
