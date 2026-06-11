@@ -23,9 +23,7 @@ use proptest::prelude::*;
 use specmark::verifies;
 use vibe_core::manifest::Manifest;
 use vibe_core::{Group, PackageRef, VersionSpec};
-use vibe_resolver::{
-    DepProvider, DepProviderError, DepSolver, NaiveDepSolver, ResolvedGraph, SolveError,
-};
+use vibe_resolver::{DepProvider, DepProviderError, DepSolver, NaiveDepSolver, ResolvedGraph};
 
 fn org() -> Group {
     Group::parse("org.vibevm").unwrap()
