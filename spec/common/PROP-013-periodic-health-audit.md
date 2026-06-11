@@ -55,6 +55,13 @@ An audit run walks these categories. The checklist is **living** (§2.5) — eve
 - **D3 · Escape hatches.** `#[allow(dead_code)]`, `#[allow(clippy::…)]`, and similar — each justified once, never revisited (`grep -rn '#\[allow'`).
 - **D4 · Dependency staleness.** Outdated crates and security advisories (`cargo update --dry-run`; `cargo audit` / `cargo outdated` when installed).
 
+**E — discipline depth (AI-Native).** Added by the 2026-06-12 run: after the Discipline v0.2 adoption, "adopted" is true at the surface — this category measures how deep it actually goes.
+
+- **E1 · Spec granularity & typing.** Are spec documents unit-ified at REQ grain with kind/revision/status lines, or merely heading-anchored? An untyped unit cannot carry revision discipline — PROP-014's asymmetric invalidation and the unbumped-hash audit are dormant for it. *Aid:* `specmap.json` — units per file, the `kind` histogram. *Known instance:* at the category's birth, 347 of 352 units were untyped; the formal REQ fabric was PROP-003's pilot five.
+- **E2 · Edge coverage.** Which crates and specs carry `implements`/`verifies` edges, and which are bare? Watch for *implemented features whose PROP has zero inbound edges* (PROP-012 at this category's birth) and test suites with no `#[verifies]` anywhere. *Aid:* edges-per-crate and units-with-inbound-edge counts from `specmap.json`; a `#[verifies]` census.
+- **E3 · Cell & seam structure.** Seam traits without `#[cell]` manifests; god-files (R3-013); single-impl speculative seams; hardcoded dispatch where a seam belongs; test monoliths. *Aid:* `grep '#\[cell('`, the `pub trait` inventory, a file-length census.
+- **E4 · Checker-vs-card gaps.** Conform rules implemented weaker than the card they cite; guide-mandated checkers that do not exist (a rule with no checker is a WISH); committed gate artifacts that have silently rotted. *Aid:* read each rule's `check()` against its card's ops block; probe gates empirically on a clean tree.
+
 ### 2.3 The inventory — `AUDIT.md` {#inventory}
 
 Each run records its findings in **`AUDIT.md`** at the repository root — a curated, append-only chronicle, one dated section per run (the shape of `CHANGELOG.md`). Every finding carries:
@@ -132,3 +139,4 @@ A run need not finish every fix — it must finish the *inventory*. Fixing is th
 ## 7. Version history {#history}
 
 - **2026-05-23 — draft 1, in force.** Owner-requested after the M1.19 session surfaced a milestone-grade defect — `vibe init` scaffolding broken projects — that the per-commit gate and ~800 hermetic tests missed. The process, the §2.2 checklist, the `AUDIT.md` inventory, the severity / disposition model, and the per-milestone cadence floor are defined here. The first (seed) run is recorded in [`AUDIT.md`](../../AUDIT.md).
+- **2026-06-12 — category E (discipline depth) added** by that day's owner-requested full sweep — the first post-adoption depth audit. Per §2.5 the category is permanent: the same gap (surface adoption mistaken for depth) is never re-missed. The run also demonstrated E4's empirical-probe clause — gate #1 of the merge panel was red on a clean tree while believed green.
