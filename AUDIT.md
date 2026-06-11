@@ -382,3 +382,55 @@ to -01 stands: owner to confirm the rewrite was intentional.
   next resolver touch. **AUD-0016** (no designated unsafe-audit crates;
   now 8 frozen) — filed, owner decision. **AUD-0017** — folded into
   **2026-06-12-03** (DBT-0019, escalated).
+
+### Same-day disposition update — the depth program executed
+
+The owner directed the filed program to completion the same day
+(«вся программа глубины должна быть выполнена до конца»); all seven
+filed P2s closed in one commit series (hashes in the WAL checkpoint):
+
+- **-02 · fixed.** 67 kind/revision lines typed the implemented PROPs'
+  decision units; the formal REQ fabric grew 5 → 72 typed units
+  (59 `req` + 13 `design`).
+- **-03 · fixed (DBT-0019 closed).** The scanner reads
+  `VIBEVM-SPEC.md` as a root spec doc; 90 anchors landed additively;
+  the vibe-core trio carries scope! edges; vibe-cli left the ratchet
+  exemption (21 module markers); the six dispositions retired. The MCP
+  surface got the honest treatment instead of a wrong edge: DBT-0020
+  + 10 dispositions.
+- **-04 · fixed.** Edges 198 → 347, tagged items 190 → 337; PROP-012
+  went 0-edged → implemented+verified (block engine, vibe-check rule,
+  plan-time validation all tagged); item-grain landed in vibe-index
+  (54 → 76 items), vibe-workspace (8 → 31), vibe-core (13 → 41).
+- **-05 · fixed.** `#[verifies]` 40 → 104; the strongest suites of
+  vibe-cli (17), vibe-core (16), vibe-index (9), vibe-registry (3+3
+  oracle), vibe-workspace (10), vibe-check (oracle) now machine-link
+  to their REQ units, r-pinned.
+- **-06 · fixed.** `#[cell]` manifests 4 → 18: the `Registry` seam's
+  three production variants (local / git-monorepo / git-per-package,
+  each with a cell-has-oracle reference) and vibe-check's new `Check`
+  seam (11 check cells behind one `all_checks()` registration point).
+  Residual, recorded: Registry-cell *selection* is config-driven, not
+  yet R-001-flag-driven — the frozen
+  `R-001|commands/install.rs|LocalRegistry` finding is its tracker.
+- **-07 · fixed.** All six named cuts executed: CLI
+  `commands/registry.rs` 3245 → 6 modules; `multi_registry_resolver`
+  2870 → 5; `git_package_registry` 2539 → 4; `vibe-check` 2010 → root
+  + 11 cell files (every file ≤ 600); `manifest/package.rs` 1755 →
+  597-line hub + 4; `conform-core` 1811 → 7; `cli_e2e.rs` 5673 → 4
+  feature binaries + common (109/109 tests green). Residual 28
+  over-budget files frozen under `file-length`, shrink-only.
+- **-08 · fixed.** Three rules + one widening shipped and frozen via
+  the new `cargo xtask conform freeze`: `error-message-cites-req`
+  (68 frozen), `file-length` 600 (28), `no-unwrap-in-domain` (24 —
+  the honest domain count once cfg(test) scoping is real),
+  `seam-has-doctest` beyond lib.rs (1 new: `GitBackend`). Baseline
+  130 entries total, shrink-only from here.
+- **-09 · reduced, open.** vibe-index gained item-grain tags and 9
+  verifies edges; the `PackageScanner` seam (zero traits in 9.8 kLOC)
+  remains the open structural item.
+- **-10 / -11** unchanged (accepted / open).
+- One forced deviation recorded en route: the e2e install cluster
+  lives in `tests/cli_pkg_cycle.rs` — Windows UAC installer detection
+  (os error 740) refuses unelevated exes whose names contain
+  "install"/"update"/"setup"; the PROP-007 §9.5 lesson, met again.
