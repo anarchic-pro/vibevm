@@ -16,7 +16,7 @@
 use specmark::spec;
 use thiserror::Error;
 
-use crate::{ActivationContext, CapabilityTag};
+use crate::ActivationContext;
 
 /// Parsed conditional-dep predicate.
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -98,6 +98,7 @@ mod tests {
     use specmark::verifies;
 
     use super::*;
+    use crate::CapabilityTag;
 
     #[test]
     #[verifies(
