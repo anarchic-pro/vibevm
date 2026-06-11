@@ -893,42 +893,42 @@
       "crate_name": "vibe-resolver",
       "file": "crates/vibe-resolver/src/conditional.rs",
       "item_kind": "fn",
-      "line": 154,
+      "line": 155,
       "symbol": "vibe_resolver::conditional::tests::evaluates_against_present"
     },
     {
       "crate_name": "vibe-resolver",
       "file": "crates/vibe-resolver/src/conditional.rs",
       "item_kind": "fn",
-      "line": 167,
+      "line": 168,
       "symbol": "vibe_resolver::conditional::tests::evaluates_against_provides"
     },
     {
       "crate_name": "vibe-resolver",
       "file": "crates/vibe-resolver/src/conditional.rs",
       "item_kind": "fn",
-      "line": 138,
+      "line": 139,
       "symbol": "vibe_resolver::conditional::tests::flags_unsupported_richer_forms"
     },
     {
       "crate_name": "vibe-resolver",
       "file": "crates/vibe-resolver/src/conditional.rs",
       "item_kind": "fn",
-      "line": 102,
+      "line": 103,
       "symbol": "vibe_resolver::conditional::tests::parses_simple_present_predicate"
     },
     {
       "crate_name": "vibe-resolver",
       "file": "crates/vibe-resolver/src/conditional.rs",
       "item_kind": "fn",
-      "line": 112,
+      "line": 113,
       "symbol": "vibe_resolver::conditional::tests::parses_with_whitespace"
     },
     {
       "crate_name": "vibe-resolver",
       "file": "crates/vibe-resolver/src/conditional.rs",
       "item_kind": "fn",
-      "line": 122,
+      "line": 123,
       "symbol": "vibe_resolver::conditional::tests::rejects_malformed"
     },
     {
@@ -2287,7 +2287,7 @@
     {
       "file": "crates/vibe-resolver/src/conditional.rs",
       "from_symbol": "vibe_resolver::conditional::tests::evaluates_against_present",
-      "line": 155,
+      "line": 156,
       "provenance": "authored",
       "uri": "spec://vibevm/modules/vibe-resolver/PROP-003#req-conditional-host-invariance",
       "verb": "verifies",
@@ -2296,7 +2296,7 @@
     {
       "file": "crates/vibe-resolver/src/conditional.rs",
       "from_symbol": "vibe_resolver::conditional::tests::evaluates_against_provides",
-      "line": 168,
+      "line": 169,
       "provenance": "authored",
       "uri": "spec://vibevm/modules/vibe-resolver/PROP-003#req-conditional-host-invariance",
       "verb": "verifies",
@@ -2305,7 +2305,7 @@
     {
       "file": "crates/vibe-resolver/src/conditional.rs",
       "from_symbol": "vibe_resolver::conditional::tests::flags_unsupported_richer_forms",
-      "line": 139,
+      "line": 140,
       "provenance": "authored",
       "uri": "spec://vibevm/modules/vibe-resolver/PROP-003#req-conditional-grammar",
       "verb": "verifies",
@@ -2314,7 +2314,7 @@
     {
       "file": "crates/vibe-resolver/src/conditional.rs",
       "from_symbol": "vibe_resolver::conditional::tests::parses_simple_present_predicate",
-      "line": 103,
+      "line": 104,
       "provenance": "authored",
       "uri": "spec://vibevm/modules/vibe-resolver/PROP-003#req-conditional-grammar",
       "verb": "verifies",
@@ -2323,7 +2323,7 @@
     {
       "file": "crates/vibe-resolver/src/conditional.rs",
       "from_symbol": "vibe_resolver::conditional::tests::parses_with_whitespace",
-      "line": 113,
+      "line": 114,
       "provenance": "authored",
       "uri": "spec://vibevm/modules/vibe-resolver/PROP-003#req-conditional-grammar",
       "verb": "verifies",
@@ -2332,7 +2332,7 @@
     {
       "file": "crates/vibe-resolver/src/conditional.rs",
       "from_symbol": "vibe_resolver::conditional::tests::rejects_malformed",
-      "line": 123,
+      "line": 124,
       "provenance": "authored",
       "uri": "spec://vibevm/modules/vibe-resolver/PROP-003#req-conditional-grammar",
       "verb": "verifies",
