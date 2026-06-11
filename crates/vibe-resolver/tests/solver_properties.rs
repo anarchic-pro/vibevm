@@ -23,6 +23,7 @@ use proptest::prelude::*;
 use specmark::verifies;
 use vibe_core::manifest::Manifest;
 use vibe_core::{Group, PackageRef, VersionSpec};
+use vibe_resolver::sat::Sat;
 use vibe_resolver::{DepProvider, DepProviderError, DepSolver, NaiveDepSolver, ResolvedGraph};
 
 fn org() -> Group {
@@ -325,8 +326,7 @@ proptest! {
     }
 
     /// The differential harness proves itself: a solver agrees with a
-    /// second instance of itself on every world. Phase 7 swaps one
-    /// side for the SAT solver (DBT-0011's landing pad).
+    /// second instance of itself on every world.
     #[test]
     #[verifies("spec://vibevm/modules/vibe-resolver/PROP-003#solver-upgrade")]
     fn differential_harness_smoke(world in world_strategy(), picks in prop::collection::vec(0usize..6, 1..=3)) {
@@ -334,5 +334,50 @@ proptest! {
         let b = NaiveDepSolver::new(WorldProvider::new(&world));
         let roots = root_refs(&world, &picks);
         assert_solvers_agree(&a, &b, &roots)?;
+    }
+
+    /// THE Phase-7 differential (DBT-0011): the backtracking solver
+    /// against the naive solver over every generated world, under the
+    /// DOMINANCE contract — the documented divergence of this pair
+    /// (card scaffold-d: "a future divergence is recorded with its
+    /// debt id before the assertion is relaxed"):
+    ///
+    /// - naive solves  → sat must solve IDENTICALLY (no silent drift);
+    /// - naive fails   → sat may solve (that superiority is sat's
+    ///   reason to exist — the first-pick-wins trap arises naturally
+    ///   in generated worlds: a root picks a dep's highest version,
+    ///   another path carets a lower major) or fail the same class;
+    /// - sat fails where naive solves → always a bug.
+    ///
+    /// The very first run of the strict-equality version of this test
+    /// found a generated world where naive conflicts and sat solves —
+    /// the oracle demonstrating the cells' semantic difference before
+    /// any human enumerated it.
+    #[test]
+    #[verifies("spec://vibevm/modules/vibe-resolver/PROP-003#solver-upgrade")]
+    fn differential_naive_vs_sat_dominance(world in world_strategy(), picks in prop::collection::vec(0usize..6, 1..=3)) {
+        let naive = NaiveDepSolver::new(WorldProvider::new(&world));
+        let sat = Sat::new(WorldProvider::new(&world));
+        let roots = root_refs(&world, &picks);
+        match (naive.solve(&roots), sat.solve(&roots)) {
+            (Ok(gn), Ok(gs)) => {
+                prop_assert_eq!(normalize(&gn), normalize(&gs), "sat drifted on a naive-solvable world");
+            }
+            (Err(_), Ok(_)) => { /* sat's documented superiority */ }
+            (Err(en), Err(es)) => {
+                prop_assert_eq!(
+                    std::mem::discriminant(&en),
+                    std::mem::discriminant(&es),
+                    "error classes diverge: {} vs {}",
+                    en,
+                    es
+                );
+            }
+            (Ok(_), Err(e)) => {
+                return Err(TestCaseError::fail(format!(
+                    "sat failed a world naive solves: {e}"
+                )));
+            }
+        }
     }
 }
