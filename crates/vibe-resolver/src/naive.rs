@@ -59,6 +59,13 @@ impl<P: DepProvider> DepSolver for NaiveDepSolver<P> {
             .iter()
             .map(|r| Ok((require_group(r)?.clone(), r.name.clone())))
             .collect::<Result<_, SolveError>>()?;
+        // Duplicate root keys are a legal input (`vibe install x@1 x@2`
+        // must surface VersionConflict through the normal path, never a
+        // panic): each duplicate is enqueued and constraint-checked
+        // individually; the roots-first output pass below then collapses
+        // the key on the second remove(), which finds nothing. Only the
+        // OUTPUT side carries a uniqueness contract — witnessed in the
+        // `rest` loop below.
         for r in roots {
             state.queue.push_back(EnqueuedPkg {
                 pkgref: r.clone(),
@@ -94,6 +101,14 @@ impl<P: DepProvider> DepSolver for NaiveDepSolver<P> {
             (a.0.0.as_str(), a.0.1.as_str()).cmp(&(b.0.0.as_str(), b.0.1.as_str()))
         });
         for ((group, name), entry) in rest {
+            // The roots-first pass above removed every root key from
+            // `chosen`; a root-flagged entry surviving into `rest`
+            // would break the "roots are a prefix" ordering contract
+            // the lockfile's `[meta].root_dependencies` is built from.
+            debug_assert!(
+                !entry.is_root,
+                "root-flagged entry escaped the roots-first pass: {group}/{name}"
+            );
             packages.push(node_from_entry(group, name, entry, false));
         }
 

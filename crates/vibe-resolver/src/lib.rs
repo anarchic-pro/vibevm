@@ -50,7 +50,7 @@ pub mod local_registry_provider;
 pub mod multi_registry_provider;
 pub mod naive;
 
-pub use activation::{ActivationContext, ActivationOutcome};
+pub use activation::{ActivationContext, ActivationOutcome, CapabilityTag, TagError};
 pub use features::{
     FeatureError, FeatureExpansion, FeatureRequest, FeatureValue, expand_features,
     validate_features_table,
@@ -87,7 +87,7 @@ pub use naive::NaiveDepSolver;
 #[spec(implements = "spec://vibevm/modules/vibe-registry/PROP-002#lockfile")]
 pub struct ResolvedNode {
     /// Reverse-FQDN group — half of the `(group, name)` identity tuple
-    /// (PROP-008 §2.3). `kind` is pure metadata and is not carried here.
+    /// (PROP-008 §2.2). `kind` is pure metadata and is not carried here.
     pub group: Group,
     pub name: String,
     pub version: semver::Version,

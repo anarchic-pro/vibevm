@@ -132,7 +132,11 @@ pub struct FeatureRequest {
 
 /// Expand a `[features]` table from the requested starting set.
 ///
-/// Cycles are detected and rejected. Unknown feature names referenced
+/// Cycles **terminate silently**: an already-expanded feature is
+/// skipped via the `seen` set, never reported as an error — a cycle
+/// in a features table is redundant, not wrong (verified by the
+/// `cycles_terminate` test; AUD-0014 corrected this line, which used
+/// to claim cycles were "rejected"). Unknown feature names referenced
 /// from one feature's activation list flag as `UnknownFeature`.
 /// Exclusive-group violations flag as `ExclusiveViolation`. The caller
 /// is expected to surface diagnostics actionably (e.g. through

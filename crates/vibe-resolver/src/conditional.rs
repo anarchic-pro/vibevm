@@ -16,7 +16,7 @@
 use specmark::spec;
 use thiserror::Error;
 
-use crate::ActivationContext;
+use crate::{ActivationContext, CapabilityTag};
 
 /// Parsed conditional-dep predicate.
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -72,7 +72,7 @@ impl ConditionalPredicate {
     pub fn evaluate(&self, ctx: &ActivationContext) -> bool {
         match self {
             ConditionalPredicate::Present(key) => {
-                ctx.present.contains(key) || ctx.provides.contains(key)
+                ctx.present.contains(key.as_str()) || ctx.provides.contains(key.as_str())
             }
         }
     }
@@ -160,7 +160,7 @@ mod tests {
         let p = ConditionalPredicate::Present("stack:rust".into());
         let mut ctx = ActivationContext::default();
         assert!(!p.evaluate(&ctx));
-        ctx.add_present("stack:rust");
+        ctx.add_present(CapabilityTag::parse("stack:rust").unwrap());
         assert!(p.evaluate(&ctx));
     }
 
@@ -173,7 +173,7 @@ mod tests {
         let p = ConditionalPredicate::Present("interface:build-system".into());
         let mut ctx = ActivationContext::default();
         assert!(!p.evaluate(&ctx));
-        ctx.add_provides("interface:build-system");
+        ctx.add_provides(CapabilityTag::parse("interface:build-system").unwrap());
         assert!(p.evaluate(&ctx));
     }
 }

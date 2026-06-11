@@ -13,11 +13,82 @@
 //! (PROP-003 §2.5.3) is orthogonal and lives in a future module
 //! once `vibe-llm` is real.
 
+use std::borrow::Borrow;
 use std::collections::BTreeSet;
 use std::path::Path;
 
 use specmark::spec;
+use thiserror::Error;
 use vibe_core::manifest::ActivationRules;
+
+/// A context tag in the closed `<namespace>:<name>` form the
+/// activation channels match against — `flow:wal`, `stack:rust`,
+/// `capability:wal-protocol`, `interface:build-system`.
+///
+/// The seam used to take bare `String`s, so a caller could feed
+/// `"rust"` where `"stack:rust"` was meant and the probe would just
+/// silently never match (card scaffold-b-typed-builders: the
+/// statistically-likely wrong call must not type-check). Parsing is
+/// the only constructor; the namespace separator is the invariant.
+///
+/// ```
+/// use vibe_resolver::activation::CapabilityTag;
+///
+/// let tag = CapabilityTag::parse("stack:rust").unwrap();
+/// assert_eq!(tag.as_str(), "stack:rust");
+/// assert!(CapabilityTag::parse("rust").is_err());
+/// ```
+#[derive(Debug, Clone, PartialEq, Eq, PartialOrd, Ord)]
+#[spec(implements = "spec://vibevm/modules/vibe-resolver/PROP-003#subskill-activation")]
+pub struct CapabilityTag(String);
+
+/// Why a raw string is not a [`CapabilityTag`].
+#[derive(Debug, Error)]
+#[spec(implements = "spec://vibevm/modules/vibe-resolver/PROP-003#subskill-activation")]
+pub enum TagError {
+    #[error(
+        "context tag `{0}` is missing the `<namespace>:` prefix \
+         (examples: `stack:rust`, `capability:wal-protocol`)"
+    )]
+    MissingNamespace(String),
+
+    #[error("context tag `{0}` has an empty namespace or name half")]
+    EmptyHalf(String),
+}
+
+impl CapabilityTag {
+    /// Parse the closed `<namespace>:<name>` form. Both halves must be
+    /// non-empty; no other shape exists.
+    pub fn parse(raw: impl Into<String>) -> Result<Self, TagError> {
+        let raw = raw.into();
+        let Some((ns, name)) = raw.split_once(':') else {
+            return Err(TagError::MissingNamespace(raw));
+        };
+        if ns.is_empty() || name.is_empty() {
+            return Err(TagError::EmptyHalf(raw));
+        }
+        Ok(CapabilityTag(raw))
+    }
+
+    pub fn as_str(&self) -> &str {
+        &self.0
+    }
+}
+
+impl std::fmt::Display for CapabilityTag {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.write_str(&self.0)
+    }
+}
+
+/// Lets `BTreeSet<CapabilityTag>::contains(&str)` work — the rule
+/// strings in a manifest's `[activation]` block stay plain strings
+/// (schema surface), and the lookup bridges the two.
+impl Borrow<str> for CapabilityTag {
+    fn borrow(&self) -> &str {
+        &self.0
+    }
+}
 
 /// Snapshot of project / machine state used to evaluate context probes.
 /// Built once per `vibe install` invocation; re-used across every
@@ -27,11 +98,11 @@ use vibe_core::manifest::ActivationRules;
 pub struct ActivationContext {
     /// Capabilities and pkgrefs present in the resolved graph.
     /// Examples: `flow:wal`, `stack:rust`, `capability:wal-protocol`.
-    pub present: BTreeSet<String>,
+    pub present: BTreeSet<CapabilityTag>,
 
     /// Interface tags provided by some package in the graph.
     /// Examples: `interface:build-system`, `interface:auth-provider`.
-    pub provides: BTreeSet<String>,
+    pub provides: BTreeSet<CapabilityTag>,
 
     /// Project root absolute path. Used for `if_files` glob matching.
     pub project_root: Option<std::path::PathBuf>,
@@ -45,12 +116,12 @@ pub struct ActivationContext {
 }
 
 impl ActivationContext {
-    pub fn add_present(&mut self, key: impl Into<String>) {
-        self.present.insert(key.into());
+    pub fn add_present(&mut self, tag: CapabilityTag) {
+        self.present.insert(tag);
     }
 
-    pub fn add_provides(&mut self, key: impl Into<String>) {
-        self.provides.insert(key.into());
+    pub fn add_provides(&mut self, tag: CapabilityTag) {
+        self.provides.insert(tag);
     }
 }
 
@@ -86,7 +157,11 @@ pub fn evaluate(
 ) -> ActivationOutcome {
     let mut channels: Vec<&'static str> = Vec::new();
 
-    if !rules.if_present.is_empty() && rules.if_present.iter().any(|tag| ctx.present.contains(tag))
+    if !rules.if_present.is_empty()
+        && rules
+            .if_present
+            .iter()
+            .any(|tag| ctx.present.contains(tag.as_str()))
     {
         channels.push("if_present");
     }
@@ -94,7 +169,7 @@ pub fn evaluate(
         && rules
             .if_provides
             .iter()
-            .any(|tag| ctx.provides.contains(tag))
+            .any(|tag| ctx.provides.contains(tag.as_str()))
     {
         channels.push("if_provides");
     }
@@ -368,7 +443,7 @@ mod tests {
             ..Default::default()
         };
         let mut ctx = ActivationContext::default();
-        ctx.add_present("stack:rust");
+        ctx.add_present(CapabilityTag::parse("stack:rust").unwrap());
         let outcome = evaluate(&rules, &ctx, None);
         assert!(outcome.active);
         assert_eq!(outcome.channels_matched, vec!["if_present"]);
@@ -393,7 +468,7 @@ mod tests {
             ..Default::default()
         };
         let mut ctx = ActivationContext::default();
-        ctx.add_provides("interface:build-system");
+        ctx.add_provides(CapabilityTag::parse("interface:build-system").unwrap());
         let outcome = evaluate(&rules, &ctx, None);
         assert!(outcome.active);
         assert_eq!(outcome.channels_matched, vec!["if_provides"]);
@@ -486,7 +561,7 @@ mod tests {
             language_chain: vec!["en".into()],
             ..Default::default()
         };
-        ctx.add_present("stack:rust");
+        ctx.add_present(CapabilityTag::parse("stack:rust").unwrap());
         let outcome = evaluate(&rules, &ctx, None);
         assert!(outcome.active);
         assert_eq!(outcome.channels_matched.len(), 2);

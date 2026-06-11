@@ -254,3 +254,72 @@ rules active; test-gate 1082 results / 0 failed / 3 skipped
 **Phase 2 exit: met.** P2-1 recorded (pending by design —
 measurement deferred), P2-2 standing; both cards' checkers
 implemented and green on the gated set.
+
+---
+
+## 2026-06-11 — Phase 3: Typed builders (B) + runnable contracts (C)
+
+**Scope.** Cards `scaffold-b-typed-builders` (gate) and
+`scaffold-c-runnable-contracts` (inline) on the resolver and
+lockfile seams, scoped tightly per the B card's Non-Goals ("NOT
+typestate everywhere — over-typing fights idiom").
+
+**Class B landed — `CapabilityTag` on the activation seam.**
+`ActivationContext.present/provides` were `BTreeSet<String>` with
+`add_present(impl Into<String>)`: a caller could feed `"rust"`
+where `"stack:rust"` was meant and the probe would silently never
+match — the exact statistically-likely-wrong-call shape the card
+names. Now the sets hold `CapabilityTag` (parse-only constructor,
+`<namespace>:<name>` both halves non-empty, `Borrow<str>` so
+manifest rule strings still look up directly), and the wrong call
+fails `cargo check`. The migration itself was the live demo: the
+compiler enumerated every call site (vibe-cli's
+`build_activation_context`, the conditional-dep tests) as
+mismatched-types errors. A trybuild compile-fail test
+(`tests/ui/bare_string_tag.rs`) pins the wrong shape red — the
+card's checker step 5, implemented. `build_activation_context`
+became `Result` (parse failures are loud, not skipped), and
+`TagError` carries the REQ edge per the Phase-2 F rule.
+
+**Recognition fired, application declined (recorded per the card's
+Goals/Non-Goals):** the `is_root: bool` parameter through
+`process_one`/`EnqueuedPkg` matched the detector ("bool args"), but
+it is cell-internal, not a seam — typing it would be the
+over-typing the card forbids. The `seam-protocol-typed` conform
+rule (the checker's T-sem half) needs signature facts the frontend
+does not yet carry — queued as frontend v3 work; the trybuild half
+stands in. The card is implemented-with-a-named-gap, honestly.
+
+**Class C landed — three witnesses, one false start.**
+
+- naive.rs: the roots-first output ordering contract — a
+  root-flagged entry surviving into the sorted `rest` would break
+  the prefix invariant `[meta].root_dependencies` builds on; now a
+  debug_assert at the build site.
+- lockfile.rs: `(group, name)` uniqueness witnessed at `read()` —
+  `find`/`find_mut`/`remove` treat the pair as a unique key, and a
+  hand-edited duplicate would make lookups position-dependent.
+- features.rs: AUD-0014 closed — the doc claimed cycles are
+  "detected and rejected"; they terminate silently via the `seen`
+  set (the `cycles_terminate` test proves it). Lying prose is
+  adversarial input (guide §8); the line now states the truth and
+  cites the test. AUD-0015 closed in the same sweep (ResolvedNode
+  doc cited PROP-008 §2.3 for identity; it is §2.2).
+- **The false start, kept on the record:** the first draft also
+  asserted root-key uniqueness at solver input. The existing
+  `detects_version_conflict_across_paths` test killed it in
+  seconds — duplicate roots are legal input that must surface
+  VersionConflict through the normal path. A wrong contract costs
+  a red test in the loop; that asymmetry is the card working as
+  designed, witnessed from the failure side. handle_disjunction
+  needed nothing: its loud early-return Err IS the contract.
+
+**Gate panel at phase close (all green):** specmap --check clean —
+352 units / **173 items / 180 edges** (+3: CapabilityTag, TagError,
+the compile_fail scope) / 0 suspects; conform 6 frozen / 0 new;
+test-gate **1083** results / 0 failed / 3 skipped (+1 trybuild);
+self-check all four steps.
+
+**Phase 3 exit: met.** P3-1 (compile-time error class) held and
+demonstrated live; P3-2 (loud witnesses) held with the
+counter-lesson recorded.

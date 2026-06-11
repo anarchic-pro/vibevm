@@ -308,6 +308,21 @@ impl Lockfile {
                 expected: CURRENT_SCHEMA_VERSION,
             });
         }
+        // `find`/`find_mut`/`remove` below treat `(group, name)` as a
+        // unique key — first match wins. A lockfile carrying duplicate
+        // identities would make those lookups silently
+        // position-dependent; the solver never emits duplicates, so a
+        // duplicate here means a hand-edited or corrupted file.
+        debug_assert!(
+            lockfile
+                .packages
+                .iter()
+                .map(|p| (&p.group, &p.name))
+                .collect::<std::collections::BTreeSet<_>>()
+                .len()
+                == lockfile.packages.len(),
+            "lockfile carries duplicate (group, name) identities"
+        );
         Ok(lockfile)
     }
 

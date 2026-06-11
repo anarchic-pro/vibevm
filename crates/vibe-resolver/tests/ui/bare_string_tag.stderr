@@ -1,0 +1,13 @@
+error[E0308]: mismatched types
+ --> tests/ui/bare_string_tag.rs:9:21
+  |
+9 |     ctx.add_present("rust");
+  |         ----------- ^^^^^^ expected `CapabilityTag`, found `&str`
+  |         |
+  |         arguments to this method are incorrect
+  |
+note: method defined here
+ --> src/activation.rs
+  |
+  |     pub fn add_present(&mut self, tag: CapabilityTag) {
+  |            ^^^^^^^^^^^

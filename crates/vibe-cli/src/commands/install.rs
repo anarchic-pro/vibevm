@@ -15,7 +15,7 @@ use vibe_core::user_config::UserConfig;
 use vibe_core::{Group, PackageRef, VersionSpec};
 use vibe_registry::{CachedPackage, LocalRegistry, MultiRegistryResolver};
 use vibe_resolver::{
-    ActivationContext, FeatureExpansion, FeatureRequest, ResolvedNode,
+    ActivationContext, CapabilityTag, FeatureExpansion, FeatureRequest, ResolvedNode,
     conditional::ConditionalPredicate, expand_features,
 };
 use vibe_workspace::Workspace;
@@ -330,7 +330,7 @@ pub fn run(ctx: &output::Context, args: InstallArgs) -> Result<()> {
             fetched.iter().map(|f| &f.cached),
             &project_root,
             &language_chain,
-        );
+        )?;
         let mut extra: Vec<PackageRef> = Vec::new();
         for f in &fetched {
             for (pred_str, target) in &f.cached.manifest.conditional_deps {
@@ -1145,7 +1145,7 @@ fn build_activation_context<'a, I>(
     cached: I,
     project_root: &Path,
     language_chain: &[String],
-) -> ActivationContext
+) -> Result<ActivationContext>
 where
     I: IntoIterator<Item = &'a CachedPackage>,
 {
@@ -1160,11 +1160,19 @@ where
         // `<kind>:<name>` tag (PROP-003 §2.6.1), consistent with the
         // `<type>:<name>` shape of capability / interface tags. This is
         // not a package label — identity remains `(group, name)`.
-        ctx.add_present(format!("{}:{}", c.package_meta().kind, c.resolved.name));
+        // Both shapes are `:`-qualified by construction, so the parse
+        // can only fail on a malformed manifest that slipped past
+        // validation — which deserves the loud exit, not a silent skip.
+        let kind_tag =
+            CapabilityTag::parse(format!("{}:{}", c.package_meta().kind, c.resolved.name))
+                .with_context(|| format!("package tag for `{}`", c.resolved.name))?;
+        ctx.add_present(kind_tag);
         for cap in &c.manifest.provides.capabilities {
-            let qualified = cap.qualified();
+            let qualified = CapabilityTag::parse(cap.qualified())
+                .with_context(|| format!("capability tag of `{}`", c.resolved.name))?;
+            let is_interface = qualified.as_str().starts_with("interface:");
             ctx.add_present(qualified.clone());
-            if qualified.starts_with("interface:") {
+            if is_interface {
                 ctx.add_provides(qualified);
             }
         }
@@ -1172,7 +1180,7 @@ where
             ctx.describes_types.insert(purl.purl_type.clone());
         }
     }
-    ctx
+    Ok(ctx)
 }
 
 #[cfg(test)]
