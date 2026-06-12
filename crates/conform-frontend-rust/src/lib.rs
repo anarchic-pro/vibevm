@@ -23,7 +23,8 @@ impl Frontend for RustFrontend {
         // it, so old cached facts are simply never read again.
         // v2: is_pub + has_doctest on Item; ErrorVariant facts.
         // v3: FileMetrics per file; UnwrapUse with cfg(test) scoping.
-        "3"
+        // v4: UnwrapUse with fn-grain spec(deviates) scoping.
+        "4"
     }
 
     fn extract(&self, _file: &str, _crate_name: &str, module: &str, text: &str) -> Vec<Fact> {
@@ -36,6 +37,7 @@ impl Frontend for RustFrontend {
                 lines: text.lines().count() as u32,
             }],
             test_depth: 0,
+            deviating_depth: 0,
         };
         v.visit_file(&ast);
         v.facts.sort_by_key(|f| match f {
@@ -57,6 +59,13 @@ struct Extractor {
     /// Nonzero while visiting a `#[cfg(test)]` module or `#[test]`
     /// fn — `UnwrapUse` facts inside carry `in_test: true`.
     test_depth: u32,
+    /// Nonzero while visiting a fn (free or impl method) whose attrs
+    /// carry `#[spec(deviates = …)]` — `UnwrapUse` facts inside carry
+    /// `in_deviation: true`. Fn-grain only: a deviates edge on an
+    /// impl, struct, or mod records a different deviation (the
+    /// solver-choice edges on `Sat` / `NaiveDepSolver` are the live
+    /// counter-examples) and grants no unwrap amnesty.
+    deviating_depth: u32,
 }
 
 /// `#[cfg(test)]` / `#[cfg(any(test, ...))]` — the same shape the
@@ -79,6 +88,24 @@ fn is_test_fn(attrs: &[syn::Attribute]) -> bool {
     attrs
         .iter()
         .any(|a| a.path().segments.last().is_some_and(|s| s.ident == "test"))
+}
+
+/// `#[spec(deviates = "…", reason = "…")]` — the verb is the first
+/// token inside `spec(...)` (specmark-grammar parses verb-first), so
+/// only the `deviates` verb matches; `spec(implements = …)` does not.
+fn is_spec_deviates(attrs: &[syn::Attribute]) -> bool {
+    attrs.iter().any(|a| {
+        if a.path().segments.last().is_none_or(|s| s.ident != "spec") {
+            return false;
+        }
+        match &a.meta {
+            syn::Meta::List(list) => matches!(
+                list.tokens.clone().into_iter().next(),
+                Some(proc_macro2::TokenTree::Ident(i)) if i == "deviates"
+            ),
+            _ => false,
+        }
+    })
 }
 
 fn attr_text(attrs: &[syn::Attribute]) -> Vec<String> {
@@ -144,9 +171,27 @@ impl<'ast> Visit<'ast> for Extractor {
         if in_test {
             self.test_depth += 1;
         }
+        let deviating = is_spec_deviates(&node.attrs);
+        if deviating {
+            self.deviating_depth += 1;
+        }
         syn::visit::visit_item_fn(self, node);
+        if deviating {
+            self.deviating_depth -= 1;
+        }
         if in_test {
             self.test_depth -= 1;
+        }
+    }
+
+    fn visit_impl_item_fn(&mut self, node: &'ast syn::ImplItemFn) {
+        let deviating = is_spec_deviates(&node.attrs);
+        if deviating {
+            self.deviating_depth += 1;
+        }
+        syn::visit::visit_impl_item_fn(self, node);
+        if deviating {
+            self.deviating_depth -= 1;
         }
     }
 
@@ -168,6 +213,7 @@ impl<'ast> Visit<'ast> for Extractor {
                 method: m,
                 line: line_of(&node.method),
                 in_test: self.test_depth > 0,
+                in_deviation: self.deviating_depth > 0,
             });
         }
         syn::visit::visit_expr_method_call(self, node);
@@ -388,6 +434,45 @@ mod tests {
                 ("unwrap", true),
                 ("unwrap", true),
             ],
+            "{facts:?}"
+        );
+    }
+
+    #[test]
+    fn unwrap_in_deviation_scopes_fn_grain_only() {
+        let facts = extract(
+            r#"
+            pub fn plain() { Some(1).unwrap(); }
+
+            #[spec(deviates = "spec://p/d#a", reason = "recorded boundary")]
+            pub fn testified() { Some(1).unwrap(); }
+
+            #[spec(implements = "spec://p/d#a")]
+            pub fn implementing() { Some(1).unwrap(); }
+
+            pub struct S;
+            impl S {
+                #[spec(deviates = "spec://p/d#a", reason = "method-grain testimony")]
+                fn method(&self) { Some(1).unwrap(); }
+                fn bare(&self) { Some(1).unwrap(); }
+            }
+
+            #[spec(deviates = "spec://p/d#other", reason = "about the impl, not unwraps")]
+            impl T for S {
+                fn no_amnesty(&self) { Some(1).unwrap(); }
+            }
+            "#,
+        );
+        let unwraps: Vec<bool> = facts
+            .iter()
+            .filter_map(|f| match f {
+                Fact::UnwrapUse { in_deviation, .. } => Some(*in_deviation),
+                _ => None,
+            })
+            .collect();
+        assert_eq!(
+            unwraps,
+            vec![false, true, false, true, false, false],
             "{facts:?}"
         );
     }

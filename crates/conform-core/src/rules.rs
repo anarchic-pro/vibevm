@@ -516,8 +516,10 @@ impl Rule for FileLength {
 /// Guide §6 — `no-unwrap-in-domain`: `.unwrap()` / `.expect()` in
 /// domain logic converts a contract violation into a panic. Call
 /// sites inside `#[cfg(test)]` modules and `#[test]` functions are
-/// exempt (the facts carry `in_test`); legitimate boundaries
-/// record `#[spec(deviates, reason)]` and freeze in the baseline.
+/// exempt (the facts carry `in_test`); a justified boundary records
+/// `#[spec(deviates = …, reason = …)]` on the carrying fn, and the
+/// facts see the testimony (`in_deviation`, frontend v4) — the rule
+/// honors it instead of freezing the site in the baseline.
 ///
 /// ```
 /// use conform_core::rules::NoUnwrapInDomain;
@@ -528,8 +530,15 @@ impl Rule for FileLength {
 ///     file: "crates/x/src/m.rs".into(),
 ///     crate_name: "x".into(),
 ///     facts: vec![
-///         Fact::UnwrapUse { method: "unwrap".into(), line: 9, in_test: false },
-///         Fact::UnwrapUse { method: "unwrap".into(), line: 90, in_test: true },
+///         Fact::UnwrapUse {
+///             method: "unwrap".into(), line: 9, in_test: false, in_deviation: false,
+///         },
+///         Fact::UnwrapUse {
+///             method: "unwrap".into(), line: 90, in_test: true, in_deviation: false,
+///         },
+///         Fact::UnwrapUse {
+///             method: "expect".into(), line: 120, in_test: false, in_deviation: true,
+///         },
 ///     ],
 /// };
 /// assert_eq!(rule.check(&[domain]).len(), 1);
@@ -565,11 +574,12 @@ impl Rule for NoUnwrapInDomain {
                     method,
                     line,
                     in_test,
+                    in_deviation,
                 } = f
                 else {
                     continue;
                 };
-                if *in_test {
+                if *in_test || *in_deviation {
                     continue;
                 }
                 let ordinal = seen.entry(method.as_str()).or_insert(0);
@@ -581,7 +591,8 @@ impl Rule for NoUnwrapInDomain {
                         "discipline://rust-ai-native/guide#bans-and-escape-hatches",
                         &format!("`.{method}()` in domain logic"),
                         "return through the layer's error enum, or record \
-                         #[spec(deviates, reason)] at a justified boundary",
+                         #[spec(deviates = <uri>, reason = …)] on the \
+                         carrying fn",
                     ),
                     why: self.why(),
                     fingerprint: format!("no-unwrap-in-domain|{}|{method}#{ordinal}", sf.file),

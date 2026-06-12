@@ -64,10 +64,16 @@ pub enum Fact {
     /// A `.unwrap()` / `.expect(...)` call site. `in_test` marks call
     /// sites inside `#[cfg(test)]` modules or `#[test]` functions,
     /// where the ban does not apply (GUIDE-AI-NATIVE-RUST §6).
+    /// `in_deviation` marks sites inside a fn carrying
+    /// `#[spec(deviates = …, reason = …)]` — recorded testimony the
+    /// rule honors instead of flagging. Deliberately fn-grain: a
+    /// deviates edge on a wider item (impl, struct, mod) records a
+    /// different deviation, not unwrap amnesty for everything inside.
     UnwrapUse {
         method: String,
         line: u32,
         in_test: bool,
+        in_deviation: bool,
     },
 }
 
