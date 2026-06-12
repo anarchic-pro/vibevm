@@ -51,16 +51,21 @@ check` 0/0/0). Specmap and conform re-certified after the final
 `cargo fmt` pass — the gate-invocation lesson applied.
 
 **Open after the program (the shrink backlog + owner items):**
-the 130-entry conform baseline is the work queue — 68 error messages
-to upgrade to the Class-F grammar, 28 files to shrink under 600, 24
-domain unwrap/expect sites to convert or `deviates`-mark, 1
-seam-doctest (`GitBackend`), 1 R-001 (`LocalRegistry` constructed in
-`commands/install.rs` — Registry-cell selection is config-driven, not
-yet R-001-wired); the `PackageScanner` seam for vibe-index (audit -09,
-open); DBT-0020 (MCP spec home — needs a FEAT/PROP or an owner
-VIBEVM-SPEC amendment); plus the pre-program owner items below
-(publishing, solver selection, PROP-010 session, predictions,
-PROP-014 amendment, Discipline v0.3).
+the 130-entry conform baseline is the work queue, and
+[`spec/terraforms/SHRINK-PLAN-v0.1.md`](terraforms/SHRINK-PLAN-v0.1.md)
+(authored 2026-06-12, owner-requested) is its execution plan — six
+phases, ~14 gated batches: hygiene + GitBackend doctest + frontend v4
+deviates-awareness → R-001 wiring of Registry-cell construction → the
+24 unwrap sites (convert / deviates-testify / cfg(test)) → the 68
+messages to the fixed product grammar («… (violates spec://…; fix:
+…)») → the 23 active over-budget files (tests-out lever first) → the
+`PackageScanner` seam (audit -09). Exit state: baseline 130 → 10
+(8 unsafe-gate owner-gated + the 2 MCP-parked files — DBT-0020
+untouched per owner instruction). `CONFORM_GATED` expansion to
+vibe-core / vibe-index is explicitly the NEXT plan's opening move,
+not this one's. Plus the pre-program owner items below (publishing,
+solver selection, PROP-010 session, predictions, PROP-014 amendment,
+Discipline v0.3).
 
 ---
 
