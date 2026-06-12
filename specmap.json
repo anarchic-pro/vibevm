@@ -389,29 +389,15 @@
       "crate_name": "vibe-cli",
       "file": "crates/vibe-cli/src/commands/install/mod.rs",
       "item_kind": "mod",
-      "line": 7,
+      "line": 12,
       "symbol": "vibe_cli::commands::install"
     },
     {
       "crate_name": "vibe-cli",
-      "file": "crates/vibe-cli/src/commands/install/pipeline.rs",
-      "item_kind": "mod",
-      "line": 6,
-      "symbol": "vibe_cli::commands::install::pipeline"
-    },
-    {
-      "crate_name": "vibe-cli",
-      "file": "crates/vibe-cli/src/commands/install/planning.rs",
+      "file": "crates/vibe-cli/src/commands/install/report.rs",
       "item_kind": "mod",
       "line": 5,
-      "symbol": "vibe_cli::commands::install::planning"
-    },
-    {
-      "crate_name": "vibe-cli",
-      "file": "crates/vibe-cli/src/commands/install/recording.rs",
-      "item_kind": "mod",
-      "line": 5,
-      "symbol": "vibe_cli::commands::install::recording"
+      "symbol": "vibe_cli::commands::install::report"
     },
     {
       "crate_name": "vibe-cli",
@@ -419,13 +405,6 @@
       "item_kind": "mod",
       "line": 5,
       "symbol": "vibe_cli::commands::install::resolver"
-    },
-    {
-      "crate_name": "vibe-cli",
-      "file": "crates/vibe-cli/src/commands/install/tests.rs",
-      "item_kind": "mod",
-      "line": 3,
-      "symbol": "vibe_cli::commands::install::tests"
     },
     {
       "crate_name": "vibe-cli",
@@ -1721,6 +1700,69 @@
       "item_kind": "fn",
       "line": 103,
       "symbol": "vibe_index::types::repomd::tests::repomd_round_trips"
+    },
+    {
+      "crate_name": "vibe-install",
+      "file": "crates/vibe-install/src/lib.rs",
+      "item_kind": "mod",
+      "line": 26,
+      "symbol": "vibe_install"
+    },
+    {
+      "crate_name": "vibe-install",
+      "file": "crates/vibe-install/src/apply.rs",
+      "item_kind": "mod",
+      "line": 5,
+      "symbol": "vibe_install::apply"
+    },
+    {
+      "crate_name": "vibe-install",
+      "file": "crates/vibe-install/src/error.rs",
+      "item_kind": "mod",
+      "line": 5,
+      "symbol": "vibe_install::error"
+    },
+    {
+      "crate_name": "vibe-install",
+      "file": "crates/vibe-install/src/error.rs",
+      "item_kind": "enum",
+      "line": 12,
+      "symbol": "vibe_install::error::Error"
+    },
+    {
+      "crate_name": "vibe-install",
+      "file": "crates/vibe-install/src/events.rs",
+      "item_kind": "mod",
+      "line": 6,
+      "symbol": "vibe_install::events"
+    },
+    {
+      "crate_name": "vibe-install",
+      "file": "crates/vibe-install/src/fetched.rs",
+      "item_kind": "mod",
+      "line": 6,
+      "symbol": "vibe_install::fetched"
+    },
+    {
+      "crate_name": "vibe-install",
+      "file": "crates/vibe-install/src/plan.rs",
+      "item_kind": "mod",
+      "line": 7,
+      "symbol": "vibe_install::plan"
+    },
+    {
+      "crate_name": "vibe-install",
+      "file": "crates/vibe-install/src/plan.rs",
+      "item_kind": "fn",
+      "line": 365,
+      "symbol": "vibe_install::plan::expand_conditional_deps"
+    },
+    {
+      "crate_name": "vibe-install",
+      "file": "crates/vibe-install/src/record.rs",
+      "item_kind": "mod",
+      "line": 6,
+      "symbol": "vibe_install::record"
     },
     {
       "crate_name": "vibe-publish",
@@ -3269,30 +3311,14 @@
     {
       "file": "crates/vibe-cli/src/commands/install/mod.rs",
       "from_symbol": "vibe_cli::commands::install",
-      "line": 7,
+      "line": 12,
       "provenance": "authored",
       "uri": "spec://vibevm/VIBEVM-SPEC#install-workflow-in-detail",
       "verb": "implements"
     },
     {
-      "file": "crates/vibe-cli/src/commands/install/pipeline.rs",
-      "from_symbol": "vibe_cli::commands::install::pipeline",
-      "line": 6,
-      "provenance": "authored",
-      "uri": "spec://vibevm/VIBEVM-SPEC#install-workflow-in-detail",
-      "verb": "implements"
-    },
-    {
-      "file": "crates/vibe-cli/src/commands/install/planning.rs",
-      "from_symbol": "vibe_cli::commands::install::planning",
-      "line": 5,
-      "provenance": "authored",
-      "uri": "spec://vibevm/VIBEVM-SPEC#install-workflow-in-detail",
-      "verb": "implements"
-    },
-    {
-      "file": "crates/vibe-cli/src/commands/install/recording.rs",
-      "from_symbol": "vibe_cli::commands::install::recording",
+      "file": "crates/vibe-cli/src/commands/install/report.rs",
+      "from_symbol": "vibe_cli::commands::install::report",
       "line": 5,
       "provenance": "authored",
       "uri": "spec://vibevm/VIBEVM-SPEC#install-workflow-in-detail",
@@ -3302,14 +3328,6 @@
       "file": "crates/vibe-cli/src/commands/install/resolver.rs",
       "from_symbol": "vibe_cli::commands::install::resolver",
       "line": 5,
-      "provenance": "authored",
-      "uri": "spec://vibevm/VIBEVM-SPEC#install-workflow-in-detail",
-      "verb": "implements"
-    },
-    {
-      "file": "crates/vibe-cli/src/commands/install/tests.rs",
-      "from_symbol": "vibe_cli::commands::install::tests",
-      "line": 3,
       "provenance": "authored",
       "uri": "spec://vibevm/VIBEVM-SPEC#install-workflow-in-detail",
       "verb": "implements"
@@ -4862,6 +4880,78 @@
       "uri": "spec://vibevm/modules/vibe-index/PROP-005#layout",
       "verb": "verifies",
       "pinned_r": 1
+    },
+    {
+      "file": "crates/vibe-install/src/lib.rs",
+      "from_symbol": "vibe_install",
+      "line": 26,
+      "provenance": "authored",
+      "uri": "spec://vibevm/VIBEVM-SPEC#install-workflow-in-detail",
+      "verb": "implements"
+    },
+    {
+      "file": "crates/vibe-install/src/apply.rs",
+      "from_symbol": "vibe_install::apply",
+      "line": 5,
+      "provenance": "authored",
+      "uri": "spec://vibevm/VIBEVM-SPEC#install-workflow-in-detail",
+      "verb": "implements"
+    },
+    {
+      "file": "crates/vibe-install/src/error.rs",
+      "from_symbol": "vibe_install::error",
+      "line": 5,
+      "provenance": "authored",
+      "uri": "spec://vibevm/VIBEVM-SPEC#install-workflow-in-detail",
+      "verb": "implements"
+    },
+    {
+      "file": "crates/vibe-install/src/error.rs",
+      "from_symbol": "vibe_install::error::Error",
+      "line": 13,
+      "provenance": "authored",
+      "uri": "spec://vibevm/VIBEVM-SPEC#install-workflow-in-detail",
+      "verb": "implements"
+    },
+    {
+      "file": "crates/vibe-install/src/events.rs",
+      "from_symbol": "vibe_install::events",
+      "line": 6,
+      "provenance": "authored",
+      "uri": "spec://vibevm/VIBEVM-SPEC#install-workflow-in-detail",
+      "verb": "implements"
+    },
+    {
+      "file": "crates/vibe-install/src/fetched.rs",
+      "from_symbol": "vibe_install::fetched",
+      "line": 6,
+      "provenance": "authored",
+      "uri": "spec://vibevm/VIBEVM-SPEC#install-workflow-in-detail",
+      "verb": "implements"
+    },
+    {
+      "file": "crates/vibe-install/src/plan.rs",
+      "from_symbol": "vibe_install::plan",
+      "line": 7,
+      "provenance": "authored",
+      "uri": "spec://vibevm/VIBEVM-SPEC#install-workflow-in-detail",
+      "verb": "implements"
+    },
+    {
+      "file": "crates/vibe-install/src/plan.rs",
+      "from_symbol": "vibe_install::plan::expand_conditional_deps",
+      "line": 388,
+      "provenance": "authored",
+      "uri": "spec://vibevm/modules/vibe-resolver/PROP-003#req-conditional-fixpoint",
+      "verb": "implements"
+    },
+    {
+      "file": "crates/vibe-install/src/record.rs",
+      "from_symbol": "vibe_install::record",
+      "line": 6,
+      "provenance": "authored",
+      "uri": "spec://vibevm/VIBEVM-SPEC#install-workflow-in-detail",
+      "verb": "implements"
     },
     {
       "file": "crates/vibe-publish/src/lib.rs",

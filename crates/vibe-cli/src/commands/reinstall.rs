@@ -36,6 +36,7 @@ use dialoguer::Confirm;
 use vibe_core::manifest::{Lockfile, Manifest};
 use vibe_core::user_config::SlotIntegrity;
 use vibe_core::{Group, PackageKind, PackageRef, VersionSpec};
+use vibe_install::InstallSource;
 use vibe_workspace::Workspace;
 use vibe_workspace::install::{ResolvedDep, apply_resolution, regenerate_boot};
 use vibe_workspace::vibedeps;

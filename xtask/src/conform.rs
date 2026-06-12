@@ -15,6 +15,7 @@ use crate::repo_root;
 const CONFORM_GATED: &[&str] = &[
     "vibe-core",
     "vibe-index",
+    "vibe-install",
     "vibe-resolver",
     "conform-core",
     "specmap-core",

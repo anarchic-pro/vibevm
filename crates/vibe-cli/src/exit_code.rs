@@ -65,10 +65,19 @@ pub fn as_exit_code(err: &anyhow::Error) -> ExitCode {
     }
     // A malformed `<vibevm>` block (PROP-012 §2.3) is conflict-shaped —
     // vibevm and the instruction file disagree on the managed region.
-    // Walk the chain so a `.context()` wrapper cannot hide it.
+    // Walk the chain so a `.context()` wrapper cannot hide it. The
+    // orchestrator's transparent envelope forwards Display but not the
+    // wrapped error itself as a chain element, so its variant is
+    // matched explicitly alongside the bare form.
     for cause in err.chain() {
         if let Some(vibe_workspace::WorkspaceError::MalformedRedirectBlock { .. }) =
             cause.downcast_ref::<vibe_workspace::WorkspaceError>()
+        {
+            return ExitCode::from(PACKAGE_CONFLICT);
+        }
+        if let Some(vibe_install::Error::Workspace(
+            vibe_workspace::WorkspaceError::MalformedRedirectBlock { .. },
+        )) = cause.downcast_ref::<vibe_install::Error>()
         {
             return ExitCode::from(PACKAGE_CONFLICT);
         }
@@ -115,6 +124,19 @@ mod tests {
             path: std::path::PathBuf::from("CLAUDE.md"),
             reason: "two `<vibevm>` markers".to_string(),
         });
+        assert_eq!(as_exit_code(&err), ExitCode::from(PACKAGE_CONFLICT));
+    }
+
+    #[test]
+    fn malformed_redirect_block_maps_to_three_through_the_orchestrator() {
+        // The same failure arriving inside vibe-install's transparent
+        // envelope must keep its conflict-shaped exit code.
+        let err = anyhow::Error::from(vibe_install::Error::Workspace(
+            vibe_workspace::WorkspaceError::MalformedRedirectBlock {
+                path: std::path::PathBuf::from("CLAUDE.md"),
+                reason: "two `<vibevm>` markers".to_string(),
+            },
+        ));
         assert_eq!(as_exit_code(&err), ExitCode::from(PACKAGE_CONFLICT));
     }
 }

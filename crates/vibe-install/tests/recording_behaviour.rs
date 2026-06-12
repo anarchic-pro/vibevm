@@ -1,10 +1,13 @@
-//! Unit tests for the install recording helpers.
+//! Behavioural tests for the recording toolkit — the manifest merge
+//! discipline and pin finalisation. Integration-grain because the
+//! crate sets `[lib] test = false`: a unit-test harness would be named
+//! `vibe_install-<hash>.exe`, which Windows UAC installer detection
+//! (os error 740, PROP-007 §9.5) refuses to launch; this binary's
+//! name carries no such substring.
 
-specmark::scope!("spec://vibevm/VIBEVM-SPEC#install-workflow-in-detail");
-
-use super::recording::{finalize_pkgref_for_manifest, merge_manifest_requires};
 use vibe_core::PackageRef;
 use vibe_core::manifest::{Manifest, ProjectSection};
+use vibe_install::{finalize_pkgref_for_manifest, merge_manifest_requires};
 
 fn empty_manifest() -> Manifest {
     Manifest {
@@ -105,6 +108,24 @@ fn finalize_exact_with_no_cli_version() {
     let cli = PackageRef::parse("flow:wal").unwrap();
     let out = finalize_pkgref_for_manifest(&cli, &vsemver("0.1.5"), true);
     assert_eq!(out.to_string(), "flow:wal@=0.1.5");
+}
+
+#[test]
+fn finalize_survives_build_metadata() {
+    // Regression: the string round-trip `VersionReq::parse("={v}")`
+    // panicked on versions carrying build metadata; the structural
+    // Comparator form drops the metadata (it never participates in
+    // constraint matching) instead of panicking.
+    let cli = PackageRef::parse("flow:wal").unwrap();
+    let with_meta = vsemver("0.1.5+nightly.20260612");
+    for exact in [true, false] {
+        let out = finalize_pkgref_for_manifest(&cli, &with_meta, exact);
+        let rendered = out.to_string();
+        assert!(
+            !rendered.contains("nightly"),
+            "build metadata must not leak into the constraint: {rendered}"
+        );
+    }
 }
 
 #[test]

@@ -2174,6 +2174,7 @@ dependencies = [
  "vibe-check",
  "vibe-core",
  "vibe-graph",
+ "vibe-install",
  "vibe-mcp",
  "vibe-publish",
  "vibe-registry",
@@ -2238,6 +2239,20 @@ dependencies = [
  "tracing-subscriber",
  "vibe-core",
  "walkdir",
+]
+
+[[package]]
+name = "vibe-install"
+version = "0.1.0-dev"
+dependencies = [
+ "semver",
+ "specmark",
+ "thiserror 2.0.18",
+ "tracing",
+ "vibe-core",
+ "vibe-registry",
+ "vibe-resolver",
+ "vibe-workspace",
 ]
 
 [[package]]

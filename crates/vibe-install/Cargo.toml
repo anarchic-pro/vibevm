@@ -1,0 +1,29 @@
+[package]
+name = "vibe-install"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+authors.workspace = true
+license-file.workspace = true
+publish.workspace = true
+repository.workspace = true
+homepage.workspace = true
+description = "The install orchestrator - plan/apply over an abstract InstallSource; the CLI keeps argument parsing, confirmation, and cell construction"
+
+[lib]
+# Windows UAC installer detection (os error 740, PROP-007 §9.5) refuses
+# unelevated executables whose names contain "install" - a unit-test
+# harness would be `vibe_install-<hash>.exe` and never launch on the
+# dev machine. The crate's tests are integration tests under safely
+# named binaries in tests/ instead.
+test = false
+
+[dependencies]
+semver.workspace = true
+specmark.workspace = true
+thiserror.workspace = true
+tracing.workspace = true
+vibe-core.workspace = true
+vibe-registry.workspace = true
+vibe-resolver.workspace = true
+vibe-workspace.workspace = true

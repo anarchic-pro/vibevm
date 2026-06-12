@@ -9,23 +9,17 @@ use std::path::Path;
 use anyhow::{Context, Result, anyhow, bail};
 use vibe_core::manifest::Manifest;
 use vibe_core::{Group, PackageRef};
-use vibe_registry::{CachedPackage, LocalRegistry, MultiRegistryResolver};
+use vibe_install::InstallSource;
+use vibe_registry::{CachedPackage, LocalRegistry, MultiRegistryResolver, RegistryError};
 
 use crate::cli::InstallArgs;
 
 /// Either a M0-shape local-directory registry (used by `--registry <path>`
 /// and the in-tree fixture path) or a full PROP-002 multi-registry
 /// resolver covering the `[[registry]]` / `[[mirror]]` / `[[override]]`
-/// sections in `vibe.toml`.
-///
-/// Both branches expose:
-/// - [`Self::resolve_and_fetch`] — returns a [`CachedPackage`] with
-///   lockfile-v2 provenance fields populated by the underlying impl
-///   (`None` / `false` for the local-dir path; populated for the
-///   per-package + override paths).
-/// - [`Self::solve`] — runs the depsolver against this resolver via the
-///   appropriate `DepProvider` adapter. Returns the full transitive
-///   graph the install pipeline materialises.
+/// sections in `vibe.toml`. The orchestrator consumes it through the
+/// [`InstallSource`] seam; construction stays here at the CLI's
+/// composition root (R-001).
 pub(crate) enum InstallResolver {
     Local(LocalRegistry),
     // Boxed: `MultiRegistryResolver` is by far the larger variant
@@ -35,34 +29,34 @@ pub(crate) enum InstallResolver {
     Multi(Box<MultiRegistryResolver>),
 }
 
-impl InstallResolver {
+impl InstallSource for InstallResolver {
     /// Resolve `pkgref` and materialise its content into the
     /// per-project cache. `expected_hash` (typically the lockfile pin
     /// for `(pkgref.kind, pkgref.name, version)`) is forwarded to the
     /// multi-registry path's mirror-aware fetch so a source serving
     /// disagreeing bytes can be skipped in favour of a matching one.
     /// The local-directory path ignores the hint — there's only ever
-    /// one source on that path, and integrity is checked by
-    /// `plan_install` against the lockfile pin.
-    pub(crate) fn resolve_and_fetch(
+    /// one source on that path, and integrity is checked against the
+    /// lockfile pin at apply time.
+    fn resolve_and_fetch(
         &self,
         pkgref: &PackageRef,
         cache_root: &Path,
         expected_hash: Option<&str>,
-    ) -> Result<CachedPackage> {
+    ) -> Result<CachedPackage, RegistryError> {
         match self {
             InstallResolver::Local(r) => {
                 let resolved = r.resolve(pkgref)?;
-                Ok(r.fetch(&resolved, cache_root)?)
+                r.fetch(&resolved, cache_root)
             }
             InstallResolver::Multi(m) => {
                 let resolution = m.resolve(pkgref)?;
-                Ok(m.fetch_with_expected_hash(&resolution, cache_root, expected_hash)?)
+                m.fetch_with_expected_hash(&resolution, cache_root, expected_hash)
             }
         }
     }
 
-    pub(crate) fn solve(
+    fn solve(
         &self,
         roots: &[PackageRef],
     ) -> Result<vibe_resolver::ResolvedGraph, vibe_resolver::SolveError> {
@@ -79,12 +73,16 @@ impl InstallResolver {
         };
         solver.solve(roots)
     }
+}
 
+impl InstallResolver {
     /// Enumerate every `group` that publishes a package of the bare
     /// `name` — the candidate set short-name resolution (PROP-008
     /// §2.6) walks. The local-directory path scans the registry tree;
     /// the multi-registry path walks each registry's index. The result
-    /// is de-duplicated and sorted; `len() > 1` is a collision.
+    /// is de-duplicated and sorted; `len() > 1` is a collision. Not
+    /// part of [`InstallSource`]: qualification is the CLI's input
+    /// boundary, not the orchestrator's.
     pub(crate) fn candidate_groups(&self, name: &str) -> Result<Vec<Group>> {
         match self {
             InstallResolver::Local(r) => Ok(r.candidate_groups(name)?),

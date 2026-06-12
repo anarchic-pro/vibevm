@@ -22,6 +22,7 @@ use anyhow::{Context, Result, anyhow, bail};
 use dialoguer::Confirm;
 use vibe_core::manifest::{LockedPackage, Lockfile, Manifest, SourceKind};
 use vibe_core::{Group, PackageRef, VersionSpec};
+use vibe_install::InstallSource;
 use vibe_registry::CachedPackage;
 use vibe_workspace::Workspace;
 use vibe_workspace::install::regenerate_boot;
