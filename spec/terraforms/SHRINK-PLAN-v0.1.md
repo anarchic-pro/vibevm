@@ -13,16 +13,16 @@ Baseline at plan time: **130** = 68 `error-message-cites-req` + 28 `file-length`
 
 Exit state: **10** = 8 `unsafe-gate` (owner-gated, out of scope) + 2 `file-length` (the parked MCP pair: `commands/mcp.rs` 2460, `vibe-mcp/src/tools.rs` 681 — splitting them would mint new modules with no honest `scope!` target until DBT-0020 resolves).
 
-Everything else reaches zero. Three `file-length` entries are already stale (post-fmt sizes: `commands/search.rs` 566, `output.rs` 556, `git_registry.rs` 554) — they prune in Phase 0 for free.
+Everything else reaches zero. **Correction (2026-06-12, Phase 0 execution):** the authoring premise that three `file-length` entries were stale (`commands/search.rs` 566, `output.rs` 556, `git_registry.rs` 554 "post-fmt") is **falsified** — those figures were non-blank-line counts; the rule counts physical lines (`text.lines().count()` in the frontend), and the real sizes are 609 / 612 / 608. The trio is genuinely over budget and moves to Phase 4, whose active set is **26** files, not 23. The Phase-0 freeze was a zero-diff no-op, as the empirical check proved.
 
 ## 1. Phase 0 — hygiene and one-shots (one sitting)
 
-- **Prune the stale trio**: `cargo xtask conform freeze`, diff shows exactly −3 `file-length` lines, nothing added.
+- **Prune the stale trio — executed and falsified (2026-06-12)**: `cargo xtask conform freeze` produced a zero diff; the trio is live at 609/612/608 physical lines (the 566/556/554 premise measured non-blank lines). No prune; the three files join Phase 4's batches (§0 correction).
 - **`GitBackend` doctest** (`git_backend/mod.rs`): one compiled example of canonical use — constructing a backend and the trait-object shape consumers hold. Kills the lone `seam-has-doctest` entry. The trait has six methods and one production impl; the doctest shows the seam, not the plumbing (a `no_run` shell-git example is acceptable; an in-memory fake is better if cheap).
 - **Frontend v4 — deviates-aware `UnwrapUse`**: the `no-unwrap-in-domain` escape hatch is `#[spec(deviates, reason)]` (guide §6), but the v3 facts cannot see it. The extractor gains a `deviating_depth` (same shape as `test_depth`): inside an item whose attrs carry `spec(deviates …)`, `UnwrapUse` facts set `in_deviation: true`; the rule skips them. Version bump retires v3 slots. This is the prerequisite for Phase 2's (b)-arm — without it, "legitimate boundary" and "unconverted debt" are indistinguishable in the baseline.
 
-*Exit:* baseline 130 → 126; all five panel gates green.
-*Prediction:* the prune is pure shrink — zero new findings from the freeze.
+*Exit (revised 2026-06-12):* baseline 130 → 129 — the `GitBackend` doctest is Phase 0's only shrink; all five panel gates green.
+*Prediction:* the prune is pure shrink — **falsified**: the freeze was zero-diff because the findings are live, not stale (measurement-method mismatch, recorded per the instrument discipline).
 
 ## 2. Phase 1 — R-001 wiring: Registry-cell construction leaves the veins (one sitting)
 
@@ -67,7 +67,7 @@ Each batch: grep tests for asserted message substrings FIRST (`assert!(…contai
 *Exit:* `error-message-cites-req` = 0; `vibe check` and one live error path eyeballed per crate (message reads sane to a human, not URI soup).
 *Prediction:* fewer than 10 test expectations break across all 68 edits — most tests match discriminants, not strings.
 
-## 5. Phase 4 — the 23 active over-budget files (six crate batches)
+## 5. Phase 4 — the 26 active over-budget files (six crate batches)
 
 Two levers, in order of preference:
 
@@ -76,17 +76,17 @@ Two levers, in order of preference:
 
 | Batch | Files (current lines) | Lever |
 |---|---|---|
-| **4a** vibe-registry | fetch.rs 1406 · walk.rs 1077 · shell.rs 1021 · mrr/mod.rs 628 · gpr/mod.rs 626 · sources.rs 611 | tests-out first (the four split children are test-heavy by construction); shell.rs splits preflight/classify/ops if needed |
+| **4a** vibe-registry | fetch.rs 1406 · walk.rs 1077 · shell.rs 1021 · mrr/mod.rs 628 · gpr/mod.rs 626 · sources.rs 611 · git_registry.rs 608 | tests-out first (the four split children are test-heavy by construction; git_registry.rs has its inline mod at :341 — prime tests-out, cell file-set form); shell.rs splits preflight/classify/ops if needed |
 | **4b** vibe-workspace | publish.rs 1057 · lib.rs 887 · boot_artifacts.rs 761 · install.rs 748 | tests-out first; publish.rs likely also splits staging vs selection |
-| **4c** vibe-cli commands | redirect.rs 1457 · install.rs 1234 · config.rs 900 · show.rs 899 · workspace.rs 898 | redirect.rs splits create/sync/update; install.rs splits along its ten pipeline stages (and inherits Phase 1's slimming); show/workspace/config per-subcommand |
-| **4d** vibe-cli core + xtask | xtask/main.rs 1193 · cli.rs 1014 | xtask per-subcommand modules; cli.rs per command-family arg structs |
+| **4c** vibe-cli commands | redirect.rs 1457 · install.rs 1234 · config.rs 900 · show.rs 899 · workspace.rs 898 · search.rs 609 | redirect.rs splits create/sync/update; install.rs splits along its ten pipeline stages (and inherits Phase 1's slimming); show/workspace/config per-subcommand; search.rs has no inline tests — needs a real seam look (report assembly vs querying is the likely cut) |
+| **4d** vibe-cli core + xtask | xtask/main.rs 1193 · cli.rs 1014 · output.rs 612 | xtask per-subcommand modules; cli.rs per command-family arg structs; output.rs inline mod at :371 — prime tests-out |
 | **4e** conform + resolver | rules.rs 1097 · naive.rs 753 | rules.rs per rule family (structure/diagnostics/budget); naive.rs is a manifested cell — tests-out only, the solver body stays one file |
 | **4f** vibe-publish + vibe-core | lib.rs 798 · git_publish.rs 696 · document.rs 675 · package_ref.rs 614 | publish lib.rs splits token/creator-trait/orchestrator (RepoCreator seam intact); the two vibe-core files are tests-out candidates |
 
 Every batch: build + crate tests + clippy + `conform check` (scope the crate) + re-freeze with shrink-only diff; specmap regen rides each batch (line moves).
 
 *Exit:* `file-length` = 2 (the MCP pair), explicitly annotated in the baseline's note field if one is added, else in the WAL.
-*Predictions:* the tests-out lever alone clears ≥8 of 23; no public API changes anywhere in the phase.
+*Predictions:* the tests-out lever alone clears ≥10 of 26 (output.rs and git_registry.rs joined as prime candidates); no public API changes anywhere in the phase.
 
 ## 6. Phase 5 — the PackageScanner seam (audit -09; one raid)
 
