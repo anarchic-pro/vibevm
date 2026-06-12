@@ -51,7 +51,9 @@ pub use publish::{
 /// Errors raised while discovering or loading a workspace.
 ///
 /// Messages carry the offending path or pattern, so the operator knows
-/// which manifest to repair:
+/// which manifest to repair, and every display string ends with the
+/// Class-F machine tail — `(violates spec://…; fix: …)` — so a failing
+/// run is navigable back to the requirement without source access:
 ///
 /// ```
 /// use vibe_workspace::WorkspaceError;
@@ -61,20 +63,33 @@ pub use publish::{
 /// };
 /// assert_eq!(
 ///     err.to_string(),
-///     "workspace nesting cycle: `packages/a` is reached more than once",
+///     "workspace nesting cycle: `packages/a` is reached more than once \
+///      (violates spec://vibevm/modules/vibe-workspace/PROP-007#nesting; \
+///      fix: remove the members entry that re-lists an ancestor workspace)",
 /// );
 /// ```
 #[derive(Debug, Error)]
 #[spec(implements = "spec://vibevm/modules/vibe-workspace/PROP-007#nesting")]
 pub enum WorkspaceError {
     /// No `vibe.toml` exists at or above the starting directory.
-    #[error("no `vibe.toml` found at or above `{}`", .start.display())]
+    #[error(
+        "no `vibe.toml` found at or above `{}` \
+         (violates spec://vibevm/modules/vibe-workspace/PROP-007#nesting; \
+         fix: run inside a vibevm project or create a `vibe.toml` at the \
+         project root)",
+        .start.display()
+    )]
     NoManifest { start: PathBuf },
 
     /// A node's `vibe.toml` failed to read or validate. The inner error is
     /// boxed — `vibe_core::Error` is large, and an unboxed copy would bloat
     /// every `Result` in this crate (`clippy::result_large_err`).
-    #[error("manifest at `{}` is invalid", .path.display())]
+    #[error(
+        "manifest at `{}` is invalid \
+         (violates spec://vibevm/modules/vibe-workspace/PROP-007#unified-manifest; \
+         fix: repair that vibe.toml — the underlying error names the defect)",
+        .path.display()
+    )]
     Manifest {
         path: PathBuf,
         #[source]
@@ -85,7 +100,10 @@ pub enum WorkspaceError {
     /// names a directory that does not exist or carries no `vibe.toml`.
     #[error(
         "workspace member `{pattern}` declared in `{declared_in}` does not exist \
-         or carries no vibe.toml"
+         or carries no vibe.toml \
+         (violates spec://vibevm/modules/vibe-workspace/PROP-007#workspace-section; \
+         fix: create the member directory with a vibe.toml or drop the entry \
+         from [workspace].members)"
     )]
     MemberNotFound {
         pattern: String,
@@ -94,32 +112,58 @@ pub enum WorkspaceError {
 
     /// A member resolved to a directory outside the absolute root. Every
     /// member must live under the root so its `rel_path` is portable.
-    #[error("workspace member `{path}` lies outside the workspace root `{root}`")]
+    #[error(
+        "workspace member `{path}` lies outside the workspace root `{root}` \
+         (violates spec://vibevm/modules/vibe-workspace/PROP-007#nesting; \
+         fix: move the member under the workspace root or drop it from \
+         [workspace].members)"
+    )]
     MemberOutsideRoot { path: String, root: String },
 
     /// A `[workspace]` transitively lists itself — the member graph is not
     /// a tree.
-    #[error("workspace nesting cycle: `{path}` is reached more than once")]
+    #[error(
+        "workspace nesting cycle: `{path}` is reached more than once \
+         (violates spec://vibevm/modules/vibe-workspace/PROP-007#nesting; \
+         fix: remove the members entry that re-lists an ancestor workspace)"
+    )]
     NestingCycle { path: String },
 
     /// A `members` glob pattern is syntactically invalid.
-    #[error("invalid member glob pattern `{pattern}`: {reason}")]
+    #[error(
+        "invalid member glob pattern `{pattern}`: {reason} \
+         (violates spec://vibevm/modules/vibe-workspace/PROP-007#workspace-section; \
+         fix: correct the glob in [workspace].members)"
+    )]
     BadGlob { pattern: String, reason: String },
 
     /// A filesystem operation failed.
-    #[error("I/O error on `{}`: {reason}", .path.display())]
+    #[error(
+        "I/O error on `{}`: {reason} \
+         (violates spec://vibevm/modules/vibe-workspace/PROP-007#nesting; \
+         fix: check that the path exists and is readable, then retry)",
+        .path.display()
+    )]
     Io { path: PathBuf, reason: String },
 
     /// A `version.var` placeholder names no entry in any enclosing
     /// `[workspace.versions]` table.
     #[error(
         "version placeholder `{var}` referenced in `{declared_in}` is defined in no \
-         enclosing [workspace.versions]"
+         enclosing [workspace.versions] \
+         (violates spec://vibevm/modules/vibe-workspace/PROP-007#versions; \
+         fix: define `{var}` in a [workspace.versions] table of an enclosing \
+         workspace)"
     )]
     UnknownVersionVar { var: String, declared_in: String },
 
     /// A `[workspace.versions]` entry holds an unparseable version constraint.
-    #[error("[workspace.versions] placeholder `{var}` has an invalid constraint `{constraint}`")]
+    #[error(
+        "[workspace.versions] placeholder `{var}` has an invalid constraint \
+         `{constraint}` \
+         (violates spec://vibevm/modules/vibe-workspace/PROP-007#versions; \
+         fix: give the placeholder a parseable constraint such as `0.0.1` or `^0.3`)"
+    )]
     BadVersionVar { var: String, constraint: String },
 
     /// A `version.var` dependency entry fails `PackageRef` validation when
@@ -161,14 +205,23 @@ pub enum WorkspaceError {
 
     /// The dependency boot graph handed to the computed-view engine
     /// contains a cycle — a package transitively requires itself.
-    #[error("boot dependency cycle among: {packages}")]
+    #[error(
+        "boot dependency cycle among: {packages} \
+         (violates spec://vibevm/modules/vibe-workspace/PROP-009#effective-boot; \
+         fix: break the [requires] cycle among the listed packages)"
+    )]
     BootDependencyCycle { packages: String },
 
     /// A `CLAUDE.md` / `AGENTS.md` / `GEMINI.md` carries a malformed
     /// vibevm managed block — not exactly one well-formed `<vibevm>` …
     /// `</vibevm>` pair (PROP-012 §2.3). vibevm never guesses which block
     /// is canonical; the operator repairs the file by hand.
-    #[error("malformed <vibevm> block in `{}`: {reason}", .path.display())]
+    #[error(
+        "malformed <vibevm> block in `{}`: {reason} \
+         (violates spec://vibevm/modules/vibe-workspace/PROP-012#markers; \
+         fix: repair the file by hand to exactly one <vibevm>/</vibevm> pair)",
+        .path.display()
+    )]
     MalformedRedirectBlock { path: PathBuf, reason: String },
 }
 
