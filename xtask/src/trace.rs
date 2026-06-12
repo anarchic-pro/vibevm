@@ -1,0 +1,36 @@
+//! `cargo xtask trace …` — traceability queries over the specmap
+//! (PROP-014 §2.6). Pilot home: promotion to `vibe trace` is a Phase 4
+//! decision.
+
+use anyhow::Result;
+
+use crate::repo_root;
+
+pub(crate) fn run_trace_explain(target: &str, json: bool, prose: bool) -> Result<()> {
+    let root = repo_root()?;
+    // Build fresh in-memory: explain answers for the tree as it is,
+    // never for a stale committed artefact.
+    let map = specmap_core::index::build(&root);
+    if prose {
+        let render = specmap_core::ledger::prose_explain(&root, &map, target)?;
+        print!("{}", render.text);
+        let t = specmap_core::ledger::load_telemetry(&root);
+        eprintln!(
+            "xtask trace explain --prose: {} (epoch {}; ledger telemetry: {} hit(s), {} miss(es)).",
+            if render.cached {
+                "cache hit"
+            } else {
+                "computed fresh"
+            },
+            render.epoch.short(),
+            t.hits,
+            t.misses
+        );
+    } else if json {
+        let v = specmap_core::explain::explain_json(&map, target)?;
+        println!("{}", serde_json::to_string_pretty(&v)?);
+    } else {
+        print!("{}", specmap_core::explain::explain_text(&map, target)?);
+    }
+    Ok(())
+}
