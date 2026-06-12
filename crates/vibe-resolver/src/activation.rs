@@ -48,11 +48,17 @@ pub struct CapabilityTag(String);
 pub enum TagError {
     #[error(
         "context tag `{0}` is missing the `<namespace>:` prefix \
-         (examples: `stack:rust`, `capability:wal-protocol`)"
+         (examples: `stack:rust`, `capability:wal-protocol`) \
+         (violates spec://vibevm/modules/vibe-resolver/PROP-003#subskill-activation; \
+         fix: write the tag in the closed `<namespace>:<name>` form)"
     )]
     MissingNamespace(String),
 
-    #[error("context tag `{0}` has an empty namespace or name half")]
+    #[error(
+        "context tag `{0}` has an empty namespace or name half \
+         (violates spec://vibevm/modules/vibe-resolver/PROP-003#subskill-activation; \
+         fix: fill both halves of the `<namespace>:<name>` form)"
+    )]
     EmptyHalf(String),
 }
 

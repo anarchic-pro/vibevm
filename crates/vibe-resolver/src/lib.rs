@@ -265,16 +265,26 @@ pub trait DepSolver {
 /// };
 /// assert_eq!(
 ///     err.to_string(),
-///     "package `org.vibevm/nope` is not available in any configured registry",
+///     "package `org.vibevm/nope` is not available in any configured registry \
+///      (violates spec://vibevm/modules/vibe-registry/PROP-002#failure-discriminator; \
+///      fix: check the name, or add the registry that hosts it to [[registry]])",
 /// );
 /// ```
 #[derive(Debug, Error)]
 #[spec(implements = "spec://vibevm/modules/vibe-registry/PROP-002#failure-discriminator")]
 pub enum DepProviderError {
-    #[error("package `{group}/{name}` is not available in any configured registry")]
+    #[error(
+        "package `{group}/{name}` is not available in any configured registry \
+         (violates spec://vibevm/modules/vibe-registry/PROP-002#failure-discriminator; \
+         fix: check the name, or add the registry that hosts it to [[registry]])"
+    )]
     UnknownPackage { group: Group, name: String },
 
-    #[error("no version of `{group}/{name}` matches `{constraint}`")]
+    #[error(
+        "no version of `{group}/{name}` matches `{constraint}` \
+         (violates spec://vibevm/modules/vibe-registry/PROP-002#failure-discriminator; \
+         fix: relax the version constraint or publish a matching release)"
+    )]
     NoMatchingVersion {
         group: Group,
         name: String,
@@ -290,7 +300,11 @@ pub enum DepProviderError {
     /// `Display` carries the same multi-line summary the
     /// underlying `RegistryError::PackageNotFoundEverywhere`
     /// produces, so prose-only consumers see no regression.
-    #[error("{summary}")]
+    #[error(
+        "{summary} \
+         (violates spec://vibevm/modules/vibe-registry/PROP-002#failure-discriminator; \
+         fix: check the name, or add the registry that hosts it to [[registry]])"
+    )]
     AggregateNotFound {
         group: Group,
         name: String,
@@ -298,7 +312,11 @@ pub enum DepProviderError {
         attempts: Vec<vibe_registry::RegistryWalkAttempt>,
     },
 
-    #[error("{0}")]
+    #[error(
+        "{0} \
+         (violates spec://vibevm/modules/vibe-registry/PROP-002#failure-discriminator; \
+         fix: act on the underlying provider failure named in the message)"
+    )]
     Other(String),
 }
 
@@ -325,7 +343,9 @@ pub enum SolveError {
     #[error(
         "version conflict on `{package}`: already chose `{existing}`, but \
          a later constraint requires `{new_constraint}`. Pin a single \
-         constraint that satisfies both, or use `[[override]]` to break the tie."
+         constraint that satisfies both, or use `[[override]]` to break the tie. \
+         (violates spec://vibevm/modules/vibe-registry/PROP-002#capability; \
+         fix: pin one [requires] constraint satisfying both, or add an [[override]])"
     )]
     VersionConflict {
         package: String,
@@ -335,14 +355,18 @@ pub enum SolveError {
 
     #[error(
         "package `{package}` declares `[conflicts]` against `{against}`, which \
-         is also being installed in this graph"
+         is also being installed in this graph \
+         (violates spec://vibevm/modules/vibe-registry/PROP-002#capability; \
+         fix: remove one of the two packages, or drop the [conflicts] entry)"
     )]
     ConflictsDeclared { package: String, against: String },
 
     #[error(
         "capability `{capability}` required by `{requirer}` is not provided by \
          any package in the resolved graph. Add a package whose `[provides].capabilities` \
-         includes `{capability}`, or pin a concrete `[requires].packages` entry."
+         includes `{capability}`, or pin a concrete `[requires].packages` entry. \
+         (violates spec://vibevm/modules/vibe-registry/PROP-002#capability; \
+         fix: add a provider of the capability or a concrete [requires].packages entry)"
     )]
     CapabilityUnmet {
         capability: String,
@@ -351,7 +375,9 @@ pub enum SolveError {
 
     #[error(
         "all alternatives in `[[requires_any]]` declared by `{requirer}` failed to \
-         resolve: {alternatives:?}"
+         resolve: {alternatives:?} \
+         (violates spec://vibevm/modules/vibe-registry/PROP-002#capability; \
+         fix: make at least one `one_of` alternative resolvable)"
     )]
     DisjunctionUnsatisfiable {
         requirer: String,

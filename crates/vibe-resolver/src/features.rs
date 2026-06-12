@@ -288,16 +288,32 @@ pub fn validate_features_table(table: &FeaturesTable) -> Vec<String> {
 #[derive(Debug, Error, PartialEq, Eq)]
 #[spec(implements = "spec://vibevm/modules/vibe-resolver/PROP-003#features")]
 pub enum FeatureError {
-    #[error("unknown feature: {0}")]
+    #[error(
+        "unknown feature: {0} \
+         (violates spec://vibevm/modules/vibe-resolver/PROP-003#features; \
+         fix: declare the feature in the [features] table or fix the name)"
+    )]
     UnknownFeature(String),
 
-    #[error("private feature `{0}` cannot be activated by name")]
+    #[error(
+        "private feature `{0}` cannot be activated by name \
+         (violates spec://vibevm/modules/vibe-resolver/PROP-003#features; \
+         fix: activate a public feature that pulls it in, or drop the `_` prefix)"
+    )]
     PrivateFeature(String),
 
-    #[error("malformed feature activation `{0}`")]
+    #[error(
+        "malformed feature activation `{0}` \
+         (violates spec://vibevm/modules/vibe-resolver/PROP-003#features; \
+         fix: use `feat`, `dep:name`, `name/feat`, `name?/feat`, or `subskill:path`)"
+    )]
     Malformed(String),
 
-    #[error("exclusive group `{group}` violated — multiple features active: {active:?}")]
+    #[error(
+        "exclusive group `{group}` violated — multiple features active: {active:?} \
+         (violates spec://vibevm/modules/vibe-resolver/PROP-003#features; \
+         fix: activate at most one feature from the group)"
+    )]
     ExclusiveViolation { group: String, active: Vec<String> },
 }
 

@@ -209,11 +209,18 @@ impl<'a> Parser<'a> {
     r = 1
 )]
 pub enum PredicateError {
-    #[error("malformed conditional-dep predicate `{0}` (expected `context(<key>)`)")]
+    #[error(
+        "malformed conditional-dep predicate `{0}` (expected `context(<key>)`) \
+         (violates spec://vibevm/modules/vibe-resolver/PROP-003#req-conditional-grammar; \
+         fix: compose context keys with `and` / `or` / `not` inside `context(...)`)"
+    )]
     Malformed(String),
 
     #[error(
-        "conditional-dep predicate `{0}` uses an unsupported form. Today only `context(<key>)` (capability/pkgref/interface tag) is recognised."
+        "conditional-dep predicate `{0}` uses an unsupported form. Today only \
+         `context(<key>)` (capability/pkgref/interface tag) is recognised. \
+         (violates spec://vibevm/modules/vibe-resolver/PROP-003#req-conditional-grammar; \
+         fix: probe forms like `if_files = …` belong in [activation], not in `context(...)`)"
     )]
     Unsupported(String),
 }
