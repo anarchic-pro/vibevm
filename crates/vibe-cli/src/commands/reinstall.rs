@@ -205,7 +205,7 @@ fn run_force(
             requires: locked
                 .dependencies
                 .iter()
-                .filter_map(|p| p.group.clone().map(|g| (g, p.name.clone())))
+                .filter_map(|p| p.group.clone().map(|g| (g, p.name.to_string())))
                 .collect(),
         });
     }

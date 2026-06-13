@@ -176,7 +176,7 @@ fn read_subskill_run(args: &Value, ctx: &ServerContext) -> Result<Value, ToolErr
             .project_root
             .join(".vibe/cache")
             .join(entry.kind.as_str())
-            .join(&entry.name)
+            .join(entry.name.as_str())
             .join(format!("v{}", entry.version));
         let sub_root = cache_root.join("subskills").join(&sub.path);
         for rel in &sub.cache_files {
@@ -301,7 +301,7 @@ fn materialise_subskill_run(args: &Value, ctx: &ServerContext) -> Result<Value, 
         .project_root
         .join(".vibe/cache")
         .join(entry.kind.as_str())
-        .join(&entry.name)
+        .join(entry.name.as_str())
         .join(format!("v{}", entry.version));
     let sub_root = cache_root.join("subskills").join(&sub.path);
 
@@ -363,7 +363,7 @@ fn parse_pkgref(s: &str) -> Result<(Group, String), ToolError> {
             "`{s}`: package reference must be group-qualified — write `<group>/<name>`"
         ))
     })?;
-    Ok((group, pkgref.name))
+    Ok((group, pkgref.name.to_string()))
 }
 
 /// Convenience for tests: write a lockfile fixture into a fresh

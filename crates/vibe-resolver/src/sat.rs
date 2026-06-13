@@ -53,7 +53,7 @@ impl<'a, P: DepProvider> BoundedProvider<'a, P> {
         let Some(group) = pkgref.group.clone() else {
             return Ok(pkgref.clone());
         };
-        let key = (group, pkgref.name.clone());
+        let key = (group, pkgref.name.to_string());
         let Some(bound) = self.bounds.get(&key) else {
             return Ok(pkgref.clone());
         };
@@ -142,12 +142,13 @@ impl<P: DepProvider> Sat<P> {
         bound: &semver::Version,
     ) -> Option<semver::Version> {
         let req = semver::VersionReq::parse(&format!("<{bound}")).ok()?;
-        let probe = PackageRef {
-            kind: None,
-            group: Some(key.0.clone()),
-            name: key.1.clone(),
-            version: VersionSpec::Req(req),
-        };
+        let probe = PackageRef::new(
+            None,
+            Some(key.0.clone()),
+            key.1.clone(),
+            VersionSpec::Req(req),
+        )
+        .ok()?;
         self.provider.resolve_version(&probe).ok()
     }
 }
@@ -314,13 +315,12 @@ mod tests {
             &self,
             pkgref: &PackageRef,
         ) -> Result<semver::Version, DepProviderError> {
-            let cands =
-                self.entries
-                    .get(&pkgref.name)
-                    .ok_or_else(|| DepProviderError::UnknownPackage {
-                        group: Group::parse("org.vibevm").unwrap(),
-                        name: pkgref.name.clone(),
-                    })?;
+            let cands = self.entries.get(pkgref.name.as_str()).ok_or_else(|| {
+                DepProviderError::UnknownPackage {
+                    group: Group::parse("org.vibevm").unwrap(),
+                    name: pkgref.name.to_string(),
+                }
+            })?;
             cands
                 .iter()
                 .rev()
@@ -329,7 +329,7 @@ mod tests {
                 .cloned()
                 .ok_or_else(|| DepProviderError::NoMatchingVersion {
                     group: Group::parse("org.vibevm").unwrap(),
-                    name: pkgref.name.clone(),
+                    name: pkgref.name.to_string(),
                     constraint: format!("{}", pkgref.version),
                 })
         }

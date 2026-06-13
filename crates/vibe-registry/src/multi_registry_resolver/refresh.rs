@@ -34,7 +34,7 @@ impl MultiRegistryResolver {
             } else {
                 report.skipped.push(SkippedEntry {
                     group: entry.group.clone(),
-                    name: entry.name.clone(),
+                    name: entry.name.to_string(),
                     reason: "lockfile entry has neither `registry` nor `overridden = true` \
                              (likely installed via `--registry <path>` or a legacy v1 path)"
                         .to_string(),
@@ -53,7 +53,7 @@ impl MultiRegistryResolver {
         let Some(reg) = self.registries.iter().find(|r| r.name() == registry_name) else {
             report.skipped.push(SkippedEntry {
                 group: entry.group.clone(),
-                name: entry.name.clone(),
+                name: entry.name.to_string(),
                 reason: format!(
                     "lockfile names registry `{registry_name}` but no `[[registry]]` with that \
                      name exists in `vibe.toml` — drop the lockfile entry or restore the registry"
@@ -67,10 +67,10 @@ impl MultiRegistryResolver {
             .source_ref
             .clone()
             .unwrap_or_else(|| format!("v{}", entry.version));
-        reg.refresh_package(&entry.group, &entry.name, &refname)?;
+        reg.refresh_package(&entry.group, entry.name.as_str(), &refname)?;
         report.refreshed.push(RefreshedEntry {
             group: entry.group.clone(),
-            name: entry.name.clone(),
+            name: entry.name.to_string(),
             via: RefreshedVia::Registry(registry_name.to_string()),
             refname,
         });
@@ -87,11 +87,11 @@ impl MultiRegistryResolver {
             .source_ref
             .clone()
             .unwrap_or_else(|| DEFAULT_OVERRIDE_REF.to_string());
-        let clone_dir = self.override_clone_dir(&entry.group, &entry.name);
+        let clone_dir = self.override_clone_dir(&entry.group, entry.name.as_str());
         ensure_clone_at(self.backend.as_ref(), &url, &refname, &clone_dir)?;
         report.refreshed.push(RefreshedEntry {
             group: entry.group.clone(),
-            name: entry.name.clone(),
+            name: entry.name.to_string(),
             via: RefreshedVia::Override,
             refname,
         });

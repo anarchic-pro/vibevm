@@ -161,7 +161,7 @@ pub(super) fn apply_git_source_flag(
     let dep = GitPackageDep {
         kind: pr.kind,
         group: pr_group.clone(),
-        name: pr.name.clone(),
+        name: pr.name.to_string(),
         url,
         ref_kind,
         version: None,

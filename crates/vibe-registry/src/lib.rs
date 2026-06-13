@@ -221,7 +221,7 @@ pub enum RegistryError {
 ///             .ok_or_else(|| RegistryError::UnqualifiedPkgref(pkgref.to_string()))?;
 ///         Err(RegistryError::UnknownPackage {
 ///             group,
-///             name: pkgref.name.clone(),
+///             name: pkgref.name.to_string(),
 ///         })
 ///     }
 ///     fn fetch(

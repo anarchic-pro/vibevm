@@ -160,7 +160,7 @@ pub fn plan<S: InstallSource + ?Sized>(
             std::collections::HashSet::new();
         for (_, node) in discovered.iter_nodes() {
             for p in &node.requires.packages {
-                if seen.insert((p.group.clone(), p.name.clone())) {
+                if seen.insert((p.group.clone(), p.name.to_string())) {
                     all.push(p.clone());
                 }
             }
@@ -314,7 +314,7 @@ pub fn plan<S: InstallSource + ?Sized>(
                 .meta
                 .dependencies
                 .iter()
-                .filter_map(|p| p.group.clone().map(|g| (g, p.name.clone())))
+                .filter_map(|p| p.group.clone().map(|g| (g, p.name.to_string())))
                 .collect(),
         })
         .collect();
@@ -464,7 +464,7 @@ fn expand_conditional_deps<S: InstallSource + ?Sized>(
         // De-duplicate by the `(group, name)` identity (PROP-008 §2.3).
         let mut seen: std::collections::HashSet<(Option<Group>, String)> =
             std::collections::HashSet::new();
-        combined.retain(|r| seen.insert((r.group.clone(), r.name.clone())));
+        combined.retain(|r| seen.insert((r.group.clone(), r.name.to_string())));
         let new_graph = source.solve(&combined)?;
         for node in new_graph.iter() {
             if fetched.iter().any(|g| {

@@ -132,7 +132,7 @@ pub(super) fn run_vendor(ctx: &output::Context, args: RegistryVendorArgs) -> Res
         if entry.overridden {
             skipped.push(SkippedReportEntry {
                 group: entry.group.as_str().to_string(),
-                name: entry.name.clone(),
+                name: entry.name.to_string(),
                 reason: format!(
                     "[[override]]-served (source_url `{}`); vendor it manually if you need offline coverage",
                     entry.source_url
@@ -143,7 +143,7 @@ pub(super) fn run_vendor(ctx: &output::Context, args: RegistryVendorArgs) -> Res
         let Some(reg_name) = entry.registry.as_deref() else {
             skipped.push(SkippedReportEntry {
                 group: entry.group.as_str().to_string(),
-                name: entry.name.clone(),
+                name: entry.name.to_string(),
                 reason: "lockfile entry has no `registry` (likely installed via `--registry <path>` or a legacy v1 path)"
                     .to_string(),
             });
@@ -152,7 +152,7 @@ pub(super) fn run_vendor(ctx: &output::Context, args: RegistryVendorArgs) -> Res
         let Some(reg) = mrr.registries().iter().find(|r| r.name() == reg_name) else {
             skipped.push(SkippedReportEntry {
                 group: entry.group.as_str().to_string(),
-                name: entry.name.clone(),
+                name: entry.name.to_string(),
                 reason: format!(
                     "lockfile names registry `{reg_name}` but no `[[registry]]` with that name exists in `vibe.toml`"
                 ),
@@ -229,7 +229,7 @@ pub(super) fn run_vendor(ctx: &output::Context, args: RegistryVendorArgs) -> Res
         ));
         vendored.push(VendoredReportEntry {
             group: entry.group.as_str().to_string(),
-            name: entry.name.clone(),
+            name: entry.name.to_string(),
             registry: reg_name.to_string(),
             repo_dir: forward_slash_display(&vendor_repo),
             refname,

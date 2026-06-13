@@ -67,9 +67,9 @@ impl MultiRegistryResolver {
         }
         let resolved = ResolvedPackage {
             group: dep.group.clone(),
-            name: pkgref.name.clone(),
+            name: pkgref.name.to_string(),
             version: meta.version.clone(),
-            source_dir: self.git_source_clone_dir(&dep.group, &pkgref.name),
+            source_dir: self.git_source_clone_dir(&dep.group, pkgref.name.as_str()),
         };
         Ok(MultiResolution {
             resolved,
@@ -136,7 +136,7 @@ impl MultiRegistryResolver {
         }
         let resolved = ResolvedPackage {
             group: dep.group.clone(),
-            name: pkgref.name.clone(),
+            name: pkgref.name.to_string(),
             version: meta.version.clone(),
             source_dir: dep.package_dir.clone(),
         };

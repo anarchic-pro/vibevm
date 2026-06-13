@@ -57,7 +57,7 @@ impl<P: DepProvider> DepSolver for NaiveDepSolver<P> {
         let mut state = SolverState::new();
         let root_keys: Vec<(Group, String)> = roots
             .iter()
-            .map(|r| Ok((require_group(r)?.clone(), r.name.clone())))
+            .map(|r| Ok((require_group(r)?.clone(), r.name.to_string())))
             .collect::<Result<_, SolveError>>()?;
         // Duplicate root keys are a legal input (`vibe install x@1 x@2`
         // must surface VersionConflict through the normal path, never a
@@ -124,7 +124,7 @@ impl<P: DepProvider> DepSolver for NaiveDepSolver<P> {
         for node in packages.iter_mut() {
             for dep in node.dependencies.iter_mut() {
                 if let Some(group) = dep.group.clone()
-                    && let Some(version) = resolved_versions.get(&(group, dep.name.clone()))
+                    && let Some(version) = resolved_versions.get(&(group, dep.name.to_string()))
                     && let Ok(req) = semver::VersionReq::parse(&format!("={version}"))
                 {
                     *dep = PackageRef {
@@ -160,7 +160,7 @@ impl<P: DepProvider> NaiveDepSolver<P> {
         is_root: bool,
     ) -> Result<(), SolveError> {
         let group = require_group(&pkgref)?.clone();
-        let key = (group.clone(), pkgref.name.clone());
+        let key = (group.clone(), pkgref.name.to_string());
 
         // If a conflict was declared against this exact (group, name) by
         // some prior package in the graph, refuse to add it.
@@ -205,13 +205,13 @@ impl<P: DepProvider> NaiveDepSolver<P> {
         let version = self.provider.resolve_version(&pkgref)?;
         let manifest = self
             .provider
-            .fetch_manifest(&group, &pkgref.name, &version)?;
+            .fetch_manifest(&group, pkgref.name.as_str(), &version)?;
 
         // Refuse if this package's declared `[conflicts]` collide with
         // anything already in the graph.
         for c in &manifest.conflicts.packages {
             let cg = require_group(c)?;
-            let ck = (cg.clone(), c.name.clone());
+            let ck = (cg.clone(), c.name.to_string());
             if state.chosen.contains_key(&ck) {
                 return Err(SolveError::ConflictsDeclared {
                     package: pkgref.qualified_name(),
@@ -225,11 +225,13 @@ impl<P: DepProvider> NaiveDepSolver<P> {
             let cg = require_group(c)?;
             state
                 .declared_conflicts
-                .insert((cg.clone(), c.name.clone()));
+                .insert((cg.clone(), c.name.to_string()));
         }
         for o in &manifest.obsoletes.packages {
             let og = require_group(o)?;
-            state.declared_obsolete.insert((og.clone(), o.name.clone()));
+            state
+                .declared_obsolete
+                .insert((og.clone(), o.name.to_string()));
         }
 
         // Index provided capabilities BEFORE verifying requires — a
@@ -241,7 +243,7 @@ impl<P: DepProvider> NaiveDepSolver<P> {
                 .providers_index
                 .entry(cap.qualified())
                 .or_default()
-                .push((group.clone(), pkgref.name.clone(), cap_version));
+                .push((group.clone(), pkgref.name.to_string(), cap_version));
         }
 
         // Capture direct package deps verbatim — they go straight into the
@@ -347,7 +349,10 @@ fn handle_disjunction(
     // If any alternative is already chosen, satisfied.
     for opt in &disj.one_of {
         let og = require_group(opt)?;
-        if state.chosen.contains_key(&(og.clone(), opt.name.clone())) {
+        if state
+            .chosen
+            .contains_key(&(og.clone(), opt.name.to_string()))
+        {
             return Ok(());
         }
     }

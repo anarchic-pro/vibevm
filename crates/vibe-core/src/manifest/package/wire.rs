@@ -77,11 +77,11 @@ impl From<Requires> for RequiresWire {
     fn from(r: Requires) -> Self {
         let mut packages: BTreeMap<String, RequiresPackageEntryWire> = BTreeMap::new();
         for p in &r.packages {
-            let key = wire_key(p.kind, p.group.as_ref(), &p.name);
+            let key = wire_key(p.kind, p.group.as_ref(), p.name.as_str());
             let link = p
                 .group
                 .as_ref()
-                .and_then(|g| r.links.get(&link_key(g, &p.name)).copied());
+                .and_then(|g| r.links.get(&link_key(g, p.name.as_str())).copied());
             let constraint = version_spec_to_constraint_str(&p.version);
             // A registry dep carrying a declared `link` cannot use the
             // bare constraint-string form — it must round-trip as an
@@ -225,7 +225,7 @@ impl TryFrom<RequiresWire> for Requires {
         let mut seen: std::collections::HashSet<(Group, String)> = std::collections::HashSet::new();
         for (group, name) in packages
             .iter()
-            .filter_map(|p| p.group.clone().map(|g| (g, p.name.clone())))
+            .filter_map(|p| p.group.clone().map(|g| (g, p.name.to_string())))
             .chain(
                 git_packages
                     .iter()
@@ -271,7 +271,7 @@ fn parse_pkgref_key(key: &str) -> Result<(Option<PackageKind>, Group, String)> {
         reason: "a manifest dependency must be group-qualified — write `<group>/<name>`"
             .to_string(),
     })?;
-    Ok((pr.kind, group, pr.name))
+    Ok((pr.kind, group, pr.name.to_string()))
 }
 
 fn inline_to_registry_pkgref(

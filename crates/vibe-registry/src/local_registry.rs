@@ -144,7 +144,7 @@ impl LocalRegistry {
             .group
             .as_ref()
             .ok_or_else(|| RegistryError::UnqualifiedPkgref(pkgref.to_string()))?;
-        let versions = self.list_versions(group, &pkgref.name)?;
+        let versions = self.list_versions(group, pkgref.name.as_str())?;
         let picked = match &pkgref.version {
             VersionSpec::Latest => {
                 // Latest stable = highest version with no pre-release segment.
@@ -160,7 +160,7 @@ impl LocalRegistry {
         let Some(version) = picked else {
             return Err(RegistryError::NoMatchingVersion {
                 group: group.clone(),
-                name: pkgref.name.clone(),
+                name: pkgref.name.to_string(),
                 req: match &pkgref.version {
                     VersionSpec::Latest => "latest".to_string(),
                     VersionSpec::Req(r) => r.to_string(),
@@ -170,11 +170,11 @@ impl LocalRegistry {
         let source_dir = self
             .root
             .join(group.as_str())
-            .join(&pkgref.name)
+            .join(pkgref.name.as_str())
             .join(format!("v{version}"));
         Ok(ResolvedPackage {
             group: group.clone(),
-            name: pkgref.name.clone(),
+            name: pkgref.name.to_string(),
             version,
             source_dir,
         })

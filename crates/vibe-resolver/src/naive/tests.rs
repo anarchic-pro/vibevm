@@ -61,14 +61,14 @@ mod fixtures {
             pkgref: &PackageRef,
         ) -> Result<semver::Version, crate::DepProviderError> {
             let group = pkgref.group.clone().unwrap_or_else(org);
-            let key = (group.clone(), pkgref.name.clone());
+            let key = (group.clone(), pkgref.name.to_string());
             let entries = self.entries.borrow();
             let candidates =
                 entries
                     .get(&key)
                     .ok_or_else(|| crate::DepProviderError::UnknownPackage {
                         group: group.clone(),
-                        name: pkgref.name.clone(),
+                        name: pkgref.name.to_string(),
                     })?;
             // Pick highest matching version, prefer stable.
             let mut versions: Vec<&semver::Version> = candidates.iter().map(|(v, _)| v).collect();
@@ -81,7 +81,7 @@ mod fixtures {
                 .copied()
                 .ok_or_else(|| crate::DepProviderError::NoMatchingVersion {
                     group,
-                    name: pkgref.name.clone(),
+                    name: pkgref.name.to_string(),
                     constraint: format!("{}", pkgref.version),
                 })?;
             Ok(pick.clone())

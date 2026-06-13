@@ -31,7 +31,7 @@ use std::path::{Path, PathBuf};
 use serde::{Deserialize, Serialize};
 
 use crate::error::Result;
-use crate::package_ref::{Group, PackageKind, PackageRef, VersionSpec};
+use crate::package_ref::{Group, PackageKind, PackageName, PackageRef, VersionSpec};
 
 use super::{read_toml, write_toml};
 
@@ -151,7 +151,7 @@ pub enum SourceKind {
 #[serde(deny_unknown_fields)]
 pub struct LockedPackage {
     pub kind: PackageKind,
-    pub name: String,
+    pub name: PackageName,
     /// Reverse-FQDN group (PROP-008 §2.1). With `name` it forms the
     /// package's `(group, name, version, content_hash)` identity; `kind`
     /// is metadata, not part of identity (PROP-008 §2.2 / §2.3).

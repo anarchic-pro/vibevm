@@ -204,7 +204,7 @@ impl GitPackageRegistry {
             .group
             .as_ref()
             .ok_or_else(|| RegistryError::UnqualifiedPkgref(pkgref.to_string()))?;
-        let versions = self.list_versions(group, &pkgref.name)?;
+        let versions = self.list_versions(group, pkgref.name.as_str())?;
         let picked = match &pkgref.version {
             VersionSpec::Latest => versions.iter().rev().find(|v| v.pre.is_empty()).cloned(),
             VersionSpec::Req(req) => versions
@@ -217,7 +217,7 @@ impl GitPackageRegistry {
         let Some(version) = picked else {
             return Err(RegistryError::NoMatchingVersion {
                 group: group.clone(),
-                name: pkgref.name.clone(),
+                name: pkgref.name.to_string(),
                 req: match &pkgref.version {
                     VersionSpec::Latest => "latest".to_string(),
                     VersionSpec::Req(r) => r.to_string(),
@@ -226,9 +226,9 @@ impl GitPackageRegistry {
         };
         Ok(ResolvedPackage {
             group: group.clone(),
-            name: pkgref.name.clone(),
+            name: pkgref.name.to_string(),
             version,
-            source_dir: self.package_clone_dir(group, &pkgref.name),
+            source_dir: self.package_clone_dir(group, pkgref.name.as_str()),
         })
     }
 

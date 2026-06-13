@@ -2587,7 +2587,7 @@
       "crate_name": "vibe-resolver",
       "file": "crates/vibe-resolver/src/sat.rs",
       "item_kind": "impl",
-      "line": 173,
+      "line": 174,
       "symbol": "vibe_resolver::sat::<impl DepSolver for Sat<P>>"
     },
     {
@@ -5979,7 +5979,7 @@
     {
       "file": "crates/vibe-resolver/src/sat.rs",
       "from_symbol": "vibe_resolver::sat::<impl DepSolver for Sat<P>>",
-      "line": 173,
+      "line": 174,
       "provenance": "authored",
       "uri": "spec://vibevm/modules/vibe-registry/PROP-002#solver",
       "verb": "deviates",

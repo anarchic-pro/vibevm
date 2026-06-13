@@ -6,7 +6,7 @@
 specmark::scope!("spec://vibevm/VIBEVM-SPEC#install-workflow-in-detail");
 
 use vibe_core::manifest::{LockedPackage, Lockfile, Manifest, SourceKind};
-use vibe_core::{PackageRef, VersionSpec};
+use vibe_core::{PackageName, PackageRef, VersionSpec};
 use vibe_resolver::ResolvedNode;
 
 use crate::fetched::Fetched;
@@ -35,7 +35,7 @@ pub fn exact_pinned_pkgref(node: &ResolvedNode) -> PackageRef {
     PackageRef {
         kind: None,
         group: Some(node.group.clone()),
-        name: node.name.clone(),
+        name: PackageName::from_validated(node.name.clone()),
         version: VersionSpec::Req(req_with_op(semver::Op::Exact, &node.version)),
     }
 }
@@ -153,7 +153,7 @@ pub(crate) fn locked_package_from_fetched(f: &Fetched, language: Option<&str>) -
     LockedPackage {
         kind: c.package_meta().kind,
         group: c.resolved.group.clone(),
-        name: c.resolved.name.clone(),
+        name: PackageName::from_validated(c.resolved.name.clone()),
         version: c.resolved.version.clone(),
         registry: c.registry_name.clone(),
         source_url: c.source_uri.clone(),

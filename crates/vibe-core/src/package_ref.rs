@@ -150,6 +150,128 @@ impl From<Group> for String {
     }
 }
 
+/// A package's **name** — kebab-case, unique within its [`Group`]
+/// (PROP-008 §2.2).
+///
+/// The grammar is the shared kebab-case rule ([`validate_package_name`]):
+/// one or more lowercase ASCII alphanumeric segments joined by single
+/// hyphens, first and last characters alphanumeric, no doubled hyphens.
+/// `serde(transparent)`, so the wire form is the bare string a manifest
+/// or lockfile already carries; the validation lives in the constructor
+/// and at the [`PackageRef`] parse seam.
+///
+/// ```
+/// use vibe_core::PackageRef;
+///
+/// let r = PackageRef::parse("org.vibevm/wal").unwrap();
+/// assert_eq!(r.name.as_str(), "wal");
+/// assert_eq!(r.name, "wal"); // compares against &str directly
+///
+/// // The name grammar is enforced at the parse seam:
+/// assert!(PackageRef::parse("org.vibevm/Not-Kebab").is_err());
+/// ```
+#[derive(Debug, Clone, PartialEq, Eq, Hash, PartialOrd, Ord, Serialize, Deserialize)]
+#[serde(transparent)]
+pub struct PackageName(String);
+
+impl PackageName {
+    /// Parse and validate a package name against the kebab-case grammar.
+    pub fn parse(input: &str) -> Result<Self> {
+        validate_package_name(input)?;
+        Ok(PackageName(input.to_owned()))
+    }
+
+    /// Wrap a string already proven to be a valid package name — one
+    /// reconstructed from a `(group, name)` identity that itself came
+    /// from a validated [`PackageRef`]. The resolver and registry layers
+    /// carry names as bare strings internally, but only ever names that
+    /// already passed [`PackageName::parse`] at the input boundary, so
+    /// re-validating here would be a check that can never fail. For
+    /// untrusted input use [`PackageName::parse`].
+    pub fn from_validated(name: String) -> Self {
+        PackageName(name)
+    }
+
+    /// The name as a string slice — e.g. `wal`.
+    pub fn as_str(&self) -> &str {
+        &self.0
+    }
+}
+
+impl fmt::Display for PackageName {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        f.write_str(&self.0)
+    }
+}
+
+// Read-ergonomics: a validated name reads as the `str` it wraps, so it
+// passes anywhere a `&str` argument is expected and answers `str`
+// methods directly. Construction stays the guarded seam (`parse` /
+// `from_validated`); `Deref` grants no way to forge an invalid name.
+impl std::ops::Deref for PackageName {
+    type Target = str;
+
+    fn deref(&self) -> &str {
+        &self.0
+    }
+}
+
+impl FromStr for PackageName {
+    type Err = Error;
+
+    fn from_str(s: &str) -> Result<Self> {
+        PackageName::parse(s)
+    }
+}
+
+impl From<PackageName> for String {
+    fn from(n: PackageName) -> String {
+        n.0
+    }
+}
+
+impl AsRef<str> for PackageName {
+    fn as_ref(&self) -> &str {
+        &self.0
+    }
+}
+
+impl PartialEq<str> for PackageName {
+    fn eq(&self, other: &str) -> bool {
+        self.0 == other
+    }
+}
+
+impl PartialEq<&str> for PackageName {
+    fn eq(&self, other: &&str) -> bool {
+        self.0 == *other
+    }
+}
+
+impl PartialEq<String> for PackageName {
+    fn eq(&self, other: &String) -> bool {
+        &self.0 == other
+    }
+}
+
+impl PartialEq<PackageName> for String {
+    fn eq(&self, other: &PackageName) -> bool {
+        self == &other.0
+    }
+}
+
+impl PartialEq<PackageName> for str {
+    fn eq(&self, other: &PackageName) -> bool {
+        self == other.0
+    }
+}
+
+impl PartialEq<PackageName> for &str {
+    fn eq(&self, other: &PackageName) -> bool {
+        *self == other.0
+    }
+}
+
 /// What the user wrote after `@` (if anything).
 ///
 /// Spec examples (`VIBEVM-SPEC.md` §7.1):
@@ -237,7 +359,7 @@ pub struct PackageRef {
     /// Reverse-FQDN group. `None` only for an unresolved short CLI ref; a
     /// manifest pkgref is always qualified (PROP-008 §2.6).
     pub group: Option<Group>,
-    pub name: String,
+    pub name: PackageName,
     pub version: VersionSpec,
 }
 
@@ -250,8 +372,7 @@ impl PackageRef {
         name: impl Into<String>,
         version: VersionSpec,
     ) -> Result<Self> {
-        let name = name.into();
-        validate_package_name(&name)?;
+        let name = PackageName::parse(&name.into())?;
         Ok(PackageRef {
             kind,
             group,
@@ -284,7 +405,7 @@ impl PackageRef {
             Some((g, n)) => (Some(Group::parse(g)?), n),
             None => (None, after_kind),
         };
-        validate_package_name(name_str)?;
+        let name = PackageName::parse(name_str)?;
 
         let version = match version_part {
             None => VersionSpec::Latest,
@@ -294,7 +415,7 @@ impl PackageRef {
         Ok(PackageRef {
             kind,
             group,
-            name: name_str.to_owned(),
+            name,
             version,
         })
     }
@@ -307,7 +428,7 @@ impl PackageRef {
     pub fn qualified_name(&self) -> String {
         match &self.group {
             Some(group) => format!("{group}/{}", self.name),
-            None => self.name.clone(),
+            None => self.name.to_string(),
         }
     }
 
@@ -326,7 +447,7 @@ impl fmt::Display for PackageRef {
         if let Some(group) = &self.group {
             write!(f, "{group}/")?;
         }
-        f.write_str(&self.name)?;
+        f.write_str(self.name.as_str())?;
         match &self.version {
             VersionSpec::Latest => Ok(()),
             VersionSpec::Req(req) => write!(f, "@{req}"),

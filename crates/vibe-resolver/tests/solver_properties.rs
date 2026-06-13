@@ -91,13 +91,12 @@ impl WorldProvider {
 
 impl DepProvider for WorldProvider {
     fn resolve_version(&self, pkgref: &PackageRef) -> Result<semver::Version, DepProviderError> {
-        let candidates =
-            self.entries
-                .get(&pkgref.name)
-                .ok_or_else(|| DepProviderError::UnknownPackage {
-                    group: org(),
-                    name: pkgref.name.clone(),
-                })?;
+        let candidates = self.entries.get(pkgref.name.as_str()).ok_or_else(|| {
+            DepProviderError::UnknownPackage {
+                group: org(),
+                name: pkgref.name.to_string(),
+            }
+        })?;
         let mut versions: Vec<&semver::Version> = candidates.iter().map(|(v, _)| v).collect();
         versions.sort();
         versions
@@ -107,7 +106,7 @@ impl DepProvider for WorldProvider {
             .map(|v| (*v).clone())
             .ok_or_else(|| DepProviderError::NoMatchingVersion {
                 group: org(),
-                name: pkgref.name.clone(),
+                name: pkgref.name.to_string(),
                 constraint: format!("{}", pkgref.version),
             })
     }

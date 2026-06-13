@@ -239,7 +239,7 @@ fn locked_package(
     LockedPackage {
         kind: cached.package_meta().kind,
         group: cached.resolved.group.clone(),
-        name: cached.resolved.name.clone(),
+        name: vibe_core::PackageName::from_validated(cached.resolved.name.clone()),
         version: cached.resolved.version.clone(),
         registry: cached.registry_name.clone(),
         source_url: cached.source_uri.clone(),

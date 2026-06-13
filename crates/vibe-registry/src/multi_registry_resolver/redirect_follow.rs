@@ -160,7 +160,8 @@ impl MultiRegistryResolver {
                 ),
             });
         }
-        let target_manifest = target_reg.fetch_manifest_at_ref(group, &pkgref.name, &target_ref)?;
+        let target_manifest =
+            target_reg.fetch_manifest_at_ref(group, pkgref.name.as_str(), &target_ref)?;
         let target_meta =
             target_manifest
                 .require_package()
@@ -187,9 +188,9 @@ impl MultiRegistryResolver {
         let stub_url = stub_reg.package_repo_url(group, &stub_resolved.name)?;
         let resolved = ResolvedPackage {
             group: group.clone(),
-            name: pkgref.name.clone(),
+            name: pkgref.name.to_string(),
             version: target_meta.version.clone(),
-            source_dir: self.redirect_clone_dir(group, &pkgref.name),
+            source_dir: self.redirect_clone_dir(group, pkgref.name.as_str()),
         };
         Ok(MultiResolution {
             resolved,

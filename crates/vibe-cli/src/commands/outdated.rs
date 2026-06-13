@@ -105,7 +105,7 @@ pub fn run(ctx: &output::Context, args: OutdatedArgs) -> Result<()> {
         };
         entries.push(OutdatedEntry {
             group: p.group.to_string(),
-            name: p.name.clone(),
+            name: p.name.to_string(),
             installed: installed.to_string(),
             latest: latest.map(|v| v.to_string()),
             status,

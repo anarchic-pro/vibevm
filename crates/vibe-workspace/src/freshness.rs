@@ -110,8 +110,8 @@ pub fn check(workspace: &Workspace, lockfile: &Lockfile) -> Freshness {
                     pr.name
                 ));
             };
-            declared_roots.insert((group.clone(), pr.name.clone()));
-            let Some(locked) = lockfile.find(&group, &pr.name) else {
+            declared_roots.insert((group.clone(), pr.name.to_string()));
+            let Some(locked) = lockfile.find(&group, pr.name.as_str()) else {
                 return stale(format!(
                     "`{}/{}` is declared in `{rel}` but absent from vibe.lock",
                     group, pr.name
@@ -134,7 +134,7 @@ pub fn check(workspace: &Workspace, lockfile: &Lockfile) -> Freshness {
         .meta
         .root_dependencies
         .iter()
-        .filter_map(|p| p.group.clone().map(|g| (g, p.name.clone())))
+        .filter_map(|p| p.group.clone().map(|g| (g, p.name.to_string())))
         .collect();
     if declared_roots != locked_roots {
         return stale(
@@ -147,7 +147,7 @@ pub fn check(workspace: &Workspace, lockfile: &Lockfile) -> Freshness {
     // be tolerated. A fresh clone with a committed `vibedeps/` satisfies
     // this; a gitignored or hand-deleted slot does not.
     for p in &lockfile.packages {
-        if !vibedeps::is_materialised(&workspace.root, p.kind, &p.name, &p.version) {
+        if !vibedeps::is_materialised(&workspace.root, p.kind, p.name.as_str(), &p.version) {
             return stale(format!(
                 "`{}/{}@{}` has no materialised vibedeps/ slot",
                 p.group, p.name, p.version
@@ -201,7 +201,7 @@ pub fn hold_pins(declared_roots: &[PackageRef], lockfile: &Lockfile) -> Vec<Pack
             let Some(group) = root.group.as_ref() else {
                 return root.clone();
             };
-            match lockfile.find(group, &root.name) {
+            match lockfile.find(group, root.name.as_str()) {
                 Some(locked)
                     if locked.source_kind == Some(SourceKind::Registry)
                         && satisfies(&root.version, &locked.version) =>

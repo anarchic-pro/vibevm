@@ -213,13 +213,13 @@ impl MultiRegistryResolver {
         if attempts.is_empty() {
             return Err(RegistryError::UnknownPackage {
                 group: group.clone(),
-                name: pkgref.name.clone(),
+                name: pkgref.name.to_string(),
             });
         }
         let summary = format_walk_attempts(&attempts);
         Err(RegistryError::PackageNotFoundEverywhere {
             group: group.clone(),
-            name: pkgref.name.clone(),
+            name: pkgref.name.to_string(),
             summary,
             attempts,
         })
@@ -260,9 +260,9 @@ impl MultiRegistryResolver {
         }
         let resolved = ResolvedPackage {
             group: group.clone(),
-            name: pkgref.name.clone(),
+            name: pkgref.name.to_string(),
             version: meta.version.clone(),
-            source_dir: self.override_clone_dir(group, &pkgref.name),
+            source_dir: self.override_clone_dir(group, pkgref.name.as_str()),
         };
         Ok(MultiResolution {
             resolved,
