@@ -68,7 +68,7 @@ fn main() -> ExitCode {
             // ambient env itself (CONVERT-PLAN v0.1 §1 item 0.4).
             let search_env = commands::search::SearchEnv {
                 github_api_base: read_env_opt(commands::search::GITHUB_API_BASE_ENV),
-                cache_dir: read_env_opt(commands::search_cache::CACHE_ROOT_ENV),
+                cache_dir: read_env_opt(vibe_registry::search::cache::CACHE_ROOT_ENV),
             };
             commands::search::run(&ctx, args, search_env)
         }

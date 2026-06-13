@@ -29,8 +29,9 @@ use vibe_core::PackageKind;
 use vibe_core::manifest::Manifest;
 use vibe_registry::{IndexClient, SearchHit, index_url_for};
 
+use vibe_registry::search::cache::{self as search_cache, CacheKey};
+
 use crate::cli::SearchArgs;
-use crate::commands::search_cache::{self, CacheKey};
 use crate::commands::search_full_scan::{self, FullScanHit};
 use crate::output;
 
@@ -210,7 +211,7 @@ pub fn run(ctx: &output::Context, args: SearchArgs, env: SearchEnv) -> Result<()
                             && let Err(e) = search_cache::save(root, &cache_key, &results)
                         {
                             tracing::debug!(
-                                target: "vibe_cli::search_cache",
+                                target: "vibe_registry::search::cache",
                                 "could not write cache entry for {}: {e}",
                                 reg.name
                             );

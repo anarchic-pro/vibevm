@@ -36,6 +36,7 @@ pub mod index_client;
 mod local_registry;
 pub mod multi_registry_resolver;
 mod registry_cache;
+pub mod search;
 
 pub use git_backend::{GitBackend, GitError, ShellGit};
 pub use git_package_registry::GitPackageRegistry;

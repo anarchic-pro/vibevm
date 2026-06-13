@@ -31,7 +31,8 @@ use std::time::{SystemTime, UNIX_EPOCH};
 
 use serde::{Deserialize, Serialize};
 use sha2::{Digest, Sha256};
-use vibe_registry::SearchResults;
+
+use crate::SearchResults;
 
 /// Default TTL for a cache entry. 1 hour mirrors the registry-cache
 /// freshness rule from PROP-001 §2.5 — the same "metadata older than
@@ -209,7 +210,8 @@ mod tests {
     use super::*;
     use tempfile::tempdir;
     use vibe_core::PackageKind;
-    use vibe_registry::SearchHit;
+
+    use crate::SearchHit;
 
     fn sample_results() -> SearchResults {
         SearchResults {

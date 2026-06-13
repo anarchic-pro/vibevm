@@ -555,13 +555,6 @@
     },
     {
       "crate_name": "vibe-cli",
-      "file": "crates/vibe-cli/src/commands/search_cache.rs",
-      "item_kind": "mod",
-      "line": 25,
-      "symbol": "vibe_cli::commands::search_cache"
-    },
-    {
-      "crate_name": "vibe-cli",
       "file": "crates/vibe-cli/src/commands/search_full_scan.rs",
       "item_kind": "mod",
       "line": 26,
@@ -1936,14 +1929,14 @@
       "crate_name": "vibe-registry",
       "file": "crates/vibe-registry/src/lib.rs",
       "item_kind": "fn",
-      "line": 388,
+      "line": 389,
       "symbol": "vibe_registry::CachedPackage::package_meta"
     },
     {
       "crate_name": "vibe-registry",
       "file": "crates/vibe-registry/src/lib.rs",
       "item_kind": "enum",
-      "line": 53,
+      "line": 54,
       "symbol": "vibe_registry::RegistryError"
     },
     {
@@ -2148,6 +2141,13 @@
       "item_kind": "mod",
       "line": 13,
       "symbol": "vibe_registry::registry_cache"
+    },
+    {
+      "crate_name": "vibe-registry",
+      "file": "crates/vibe-registry/src/search/cache.rs",
+      "item_kind": "mod",
+      "line": 25,
+      "symbol": "vibe_registry::search::cache"
     },
     {
       "crate_name": "vibe-registry",
@@ -3580,14 +3580,6 @@
       "file": "crates/vibe-cli/src/commands/search/purl.rs",
       "from_symbol": "vibe_cli::commands::search::purl",
       "line": 4,
-      "provenance": "authored",
-      "uri": "spec://vibevm/modules/vibe-index/PROP-005#root",
-      "verb": "implements"
-    },
-    {
-      "file": "crates/vibe-cli/src/commands/search_cache.rs",
-      "from_symbol": "vibe_cli::commands::search_cache",
-      "line": 25,
       "provenance": "authored",
       "uri": "spec://vibevm/modules/vibe-index/PROP-005#root",
       "verb": "implements"
@@ -5243,7 +5235,7 @@
     {
       "file": "crates/vibe-registry/src/lib.rs",
       "from_symbol": "vibe_registry::CachedPackage::package_meta",
-      "line": 395,
+      "line": 396,
       "provenance": "authored",
       "uri": "spec://vibevm/discipline/ENGINE-CONFORM-v0.1#rules",
       "verb": "deviates",
@@ -5252,7 +5244,7 @@
     {
       "file": "crates/vibe-registry/src/lib.rs",
       "from_symbol": "vibe_registry::RegistryError",
-      "line": 73,
+      "line": 74,
       "provenance": "authored",
       "uri": "spec://vibevm/modules/vibe-registry/PROP-002#failure-discriminator",
       "verb": "implements"
@@ -5488,6 +5480,14 @@
       "line": 13,
       "provenance": "authored",
       "uri": "spec://vibevm/modules/vibe-registry/PROP-001#cache-layout",
+      "verb": "implements"
+    },
+    {
+      "file": "crates/vibe-registry/src/search/cache.rs",
+      "from_symbol": "vibe_registry::search::cache",
+      "line": 25,
+      "provenance": "authored",
+      "uri": "spec://vibevm/modules/vibe-index/PROP-005#root",
       "verb": "implements"
     },
     {
