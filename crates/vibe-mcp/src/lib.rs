@@ -68,6 +68,12 @@ pub const SERVER_VERSION: &str = env!("CARGO_PKG_VERSION");
 /// its scope; reload happens at the start of each tool dispatch so
 /// concurrent `vibe install` runs surface their changes on the next
 /// invocation without a server restart.
+///
+/// ```
+/// use vibe_mcp::ServerContext;
+/// let ctx = ServerContext::new("/some/project");
+/// assert!(ctx.project_root.ends_with("project"));
+/// ```
 pub struct ServerContext {
     /// Project root — the directory containing `vibe.toml` and
     /// `vibe.lock`.
@@ -95,6 +101,16 @@ impl ServerContext {
 }
 
 /// Metadata for a registered tool — surfaces in `tools/list` responses.
+///
+/// ```
+/// use vibe_mcp::ToolDescriptor;
+/// let d = ToolDescriptor {
+///     name: "query_package".into(),
+///     description: "Look up a package".into(),
+///     input_schema: serde_json::json!({ "type": "object" }),
+/// };
+/// assert_eq!(d.name, "query_package");
+/// ```
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct ToolDescriptor {
     pub name: String,
@@ -108,6 +124,12 @@ pub struct ToolDescriptor {
 /// dispatcher can decide whether to render the error as a tool-level
 /// failure (`isError: true` in the result payload) or as a transport-
 /// level JSON-RPC error.
+///
+/// ```
+/// use vibe_mcp::ToolError;
+/// let e = ToolError::NotFound("org.vibevm/wal".into());
+/// assert!(e.to_string().contains("not found"));
+/// ```
 #[derive(Debug, Error)]
 #[spec(implements = "spec://vibevm/modules/vibe-mcp/PROP-015#errors")]
 pub enum ToolError {
@@ -150,6 +172,12 @@ pub enum ToolError {
 /// The MCP server itself. Construct with a `ServerContext` and a
 /// `Transport`; call [`Server::run`] to drive the request/response
 /// loop until the transport's input ends.
+///
+/// ```
+/// use vibe_mcp::{Server, ServerContext, MemoryTransport};
+/// // Construct over an in-memory transport (production uses stdio).
+/// let _server = Server::new(MemoryTransport::with_input(""), ServerContext::new("."));
+/// ```
 pub struct Server<T: Transport> {
     transport: T,
     context: ServerContext,
@@ -306,6 +334,15 @@ impl Server<StdioTransport> {
     }
 }
 
+/// The server's transport / protocol failure surface — distinct from
+/// [`ToolError`] (per-tool, rendered in-band) and [`JsonRpcError`]
+/// (per-request). Surfaces only from [`Server::run`].
+///
+/// ```
+/// use vibe_mcp::ServerError;
+/// let e: ServerError = std::io::Error::other("pipe closed").into();
+/// assert!(e.to_string().contains("transport error"));
+/// ```
 #[derive(Debug, Error)]
 #[spec(implements = "spec://vibevm/modules/vibe-mcp/PROP-015#errors")]
 pub enum ServerError {
@@ -324,8 +361,18 @@ pub enum ServerError {
     Json(#[from] serde_json::Error),
 }
 
-/// Helper for tests: wire a one-shot request through an in-memory
-/// transport and return the raw response line.
+/// Wire a one-shot request through an in-memory transport and return the
+/// raw response line — the canonical way to drive the server in tests.
+///
+/// ```
+/// use vibe_mcp::{dispatch_one, ServerContext};
+/// let resp = dispatch_one(
+///     ServerContext::new("."),
+///     r#"{"jsonrpc":"2.0","id":1,"method":"ping"}"#,
+/// )
+/// .unwrap();
+/// assert!(resp.contains("\"id\":1"));
+/// ```
 pub fn dispatch_one(context: ServerContext, request_line: &str) -> Result<String, ServerError> {
     let transport = MemoryTransport::with_input(request_line.to_string() + "\n");
     let mut server = Server::new(transport, context);

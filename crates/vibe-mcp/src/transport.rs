@@ -4,14 +4,36 @@
 //! process. Production uses [`StdioTransport`]; tests use
 //! [`MemoryTransport`] which buffers input and captures output.
 
+specmark::scope!("spec://vibevm/modules/vibe-mcp/PROP-015#server");
+
 use std::io::{self, BufRead, BufReader, Read, Write};
 use std::sync::Mutex;
 
-/// Bidirectional line-delimited transport.
+/// Bidirectional line-delimited transport (PROP-015 §2.1).
 ///
 /// `read_line` returns `Ok(Some(line))` for each newline-terminated
 /// chunk in the input stream, `Ok(None)` on EOF, or `Err` on I/O
 /// failure. Writers append a single trailing `\n`.
+///
+/// ```
+/// use vibe_mcp::Transport;
+/// use std::io;
+///
+/// // A transport that yields one canned line then EOF, dropping writes.
+/// struct OneShot(Option<String>);
+/// impl Transport for OneShot {
+///     fn read_line(&mut self) -> io::Result<Option<String>> {
+///         Ok(self.0.take())
+///     }
+///     fn write_line(&mut self, _line: &str) -> io::Result<()> {
+///         Ok(())
+///     }
+/// }
+///
+/// let mut t = OneShot(Some("hello\n".to_string()));
+/// assert_eq!(t.read_line().unwrap().as_deref(), Some("hello\n"));
+/// assert_eq!(t.read_line().unwrap(), None);
+/// ```
 pub trait Transport {
     fn read_line(&mut self) -> io::Result<Option<String>>;
     fn write_line(&mut self, line: &str) -> io::Result<()>;
@@ -77,7 +99,7 @@ impl MemoryTransport {
     }
 
     pub fn take_output(&self) -> String {
-        let mut guard = self.output.lock().unwrap();
+        let mut guard = self.output.lock().unwrap_or_else(|e| e.into_inner());
         let bytes = std::mem::take(&mut *guard);
         String::from_utf8_lossy(&bytes).into_owned()
     }
@@ -94,7 +116,7 @@ impl Transport for MemoryTransport {
     }
 
     fn write_line(&mut self, line: &str) -> io::Result<()> {
-        let mut guard = self.output.lock().unwrap();
+        let mut guard = self.output.lock().unwrap_or_else(|e| e.into_inner());
         guard.extend_from_slice(line.as_bytes());
         guard.push(b'\n');
         Ok(())

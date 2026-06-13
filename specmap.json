@@ -415,6 +415,13 @@
     },
     {
       "crate_name": "vibe-cli",
+      "file": "crates/vibe-cli/src/commands/mcp/mod.rs",
+      "item_kind": "mod",
+      "line": 41,
+      "symbol": "vibe_cli::commands::mcp"
+    },
+    {
+      "crate_name": "vibe-cli",
       "file": "crates/vibe-cli/src/commands/outdated.rs",
       "item_kind": "mod",
       "line": 18,
@@ -1845,14 +1852,14 @@
       "crate_name": "vibe-mcp",
       "file": "crates/vibe-mcp/src/lib.rs",
       "item_kind": "enum",
-      "line": 309,
+      "line": 337,
       "symbol": "vibe_mcp::ServerError"
     },
     {
       "crate_name": "vibe-mcp",
       "file": "crates/vibe-mcp/src/lib.rs",
       "item_kind": "enum",
-      "line": 107,
+      "line": 123,
       "symbol": "vibe_mcp::ToolError"
     },
     {
@@ -1906,6 +1913,20 @@
     },
     {
       "crate_name": "vibe-mcp",
+      "file": "crates/vibe-mcp/src/jsonrpc.rs",
+      "item_kind": "mod",
+      "line": 8,
+      "symbol": "vibe_mcp::jsonrpc"
+    },
+    {
+      "crate_name": "vibe-mcp",
+      "file": "crates/vibe-mcp/src/jsonrpc.rs",
+      "item_kind": "enum",
+      "line": 131,
+      "symbol": "vibe_mcp::jsonrpc::ParseError"
+    },
+    {
+      "crate_name": "vibe-mcp",
       "file": "crates/vibe-mcp/src/tools.rs",
       "item_kind": "mod",
       "line": 11,
@@ -1915,29 +1936,36 @@
       "crate_name": "vibe-mcp",
       "file": "crates/vibe-mcp/src/tools.rs",
       "item_kind": "struct",
-      "line": 265,
+      "line": 263,
       "symbol": "vibe_mcp::tools::MaterialiseSubskill"
     },
     {
       "crate_name": "vibe-mcp",
       "file": "crates/vibe-mcp/src/tools.rs",
       "item_kind": "trait",
-      "line": 21,
+      "line": 19,
       "symbol": "vibe_mcp::tools::McpTool"
     },
     {
       "crate_name": "vibe-mcp",
       "file": "crates/vibe-mcp/src/tools.rs",
       "item_kind": "struct",
-      "line": 58,
+      "line": 56,
       "symbol": "vibe_mcp::tools::QueryPackage"
     },
     {
       "crate_name": "vibe-mcp",
       "file": "crates/vibe-mcp/src/tools.rs",
       "item_kind": "struct",
-      "line": 140,
+      "line": 138,
       "symbol": "vibe_mcp::tools::ReadSubskill"
+    },
+    {
+      "crate_name": "vibe-mcp",
+      "file": "crates/vibe-mcp/src/transport.rs",
+      "item_kind": "mod",
+      "line": 7,
+      "symbol": "vibe_mcp::transport"
     },
     {
       "crate_name": "vibe-publish",
@@ -3597,6 +3625,14 @@
       "line": 5,
       "provenance": "authored",
       "uri": "spec://vibevm/VIBEVM-SPEC#command-summary",
+      "verb": "implements"
+    },
+    {
+      "file": "crates/vibe-cli/src/commands/mcp/mod.rs",
+      "from_symbol": "vibe_cli::commands::mcp",
+      "line": 41,
+      "provenance": "authored",
+      "uri": "spec://vibevm/modules/vibe-mcp/PROP-015#lifecycle",
       "verb": "implements"
     },
     {
@@ -5315,7 +5351,7 @@
     {
       "file": "crates/vibe-mcp/src/lib.rs",
       "from_symbol": "vibe_mcp::ServerError",
-      "line": 310,
+      "line": 347,
       "provenance": "authored",
       "uri": "spec://vibevm/modules/vibe-mcp/PROP-015#errors",
       "verb": "implements"
@@ -5323,7 +5359,7 @@
     {
       "file": "crates/vibe-mcp/src/lib.rs",
       "from_symbol": "vibe_mcp::ToolError",
-      "line": 112,
+      "line": 134,
       "provenance": "authored",
       "uri": "spec://vibevm/modules/vibe-mcp/PROP-015#errors",
       "verb": "implements"
@@ -5385,6 +5421,22 @@
       "verb": "implements"
     },
     {
+      "file": "crates/vibe-mcp/src/jsonrpc.rs",
+      "from_symbol": "vibe_mcp::jsonrpc",
+      "line": 8,
+      "provenance": "authored",
+      "uri": "spec://vibevm/modules/vibe-mcp/PROP-015#server",
+      "verb": "implements"
+    },
+    {
+      "file": "crates/vibe-mcp/src/jsonrpc.rs",
+      "from_symbol": "vibe_mcp::jsonrpc::ParseError",
+      "line": 132,
+      "provenance": "authored",
+      "uri": "spec://vibevm/modules/vibe-mcp/PROP-015#server",
+      "verb": "implements"
+    },
+    {
       "file": "crates/vibe-mcp/src/tools.rs",
       "from_symbol": "vibe_mcp::tools",
       "line": 11,
@@ -5395,7 +5447,7 @@
     {
       "file": "crates/vibe-mcp/src/tools.rs",
       "from_symbol": "vibe_mcp::tools::MaterialiseSubskill",
-      "line": 269,
+      "line": 267,
       "provenance": "authored",
       "uri": "spec://vibevm/modules/vibe-mcp/PROP-015#tools",
       "verb": "implements"
@@ -5403,7 +5455,7 @@
     {
       "file": "crates/vibe-mcp/src/tools.rs",
       "from_symbol": "vibe_mcp::tools::McpTool",
-      "line": 36,
+      "line": 34,
       "provenance": "authored",
       "uri": "spec://vibevm/modules/vibe-mcp/PROP-015#tools",
       "verb": "implements"
@@ -5411,7 +5463,7 @@
     {
       "file": "crates/vibe-mcp/src/tools.rs",
       "from_symbol": "vibe_mcp::tools::QueryPackage",
-      "line": 61,
+      "line": 59,
       "provenance": "authored",
       "uri": "spec://vibevm/modules/vibe-mcp/PROP-015#tools",
       "verb": "implements"
@@ -5419,9 +5471,17 @@
     {
       "file": "crates/vibe-mcp/src/tools.rs",
       "from_symbol": "vibe_mcp::tools::ReadSubskill",
-      "line": 143,
+      "line": 141,
       "provenance": "authored",
       "uri": "spec://vibevm/modules/vibe-mcp/PROP-015#tools",
+      "verb": "implements"
+    },
+    {
+      "file": "crates/vibe-mcp/src/transport.rs",
+      "from_symbol": "vibe_mcp::transport",
+      "line": 7,
+      "provenance": "authored",
+      "uri": "spec://vibevm/modules/vibe-mcp/PROP-015#server",
       "verb": "implements"
     },
     {

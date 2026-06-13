@@ -38,6 +38,8 @@
 //! on Windows, `~/Library/Application Support` on macOS, `~/.config`
 //! on Linux. `<home>` is `dirs::home_dir()`.
 
+specmark::scope!("spec://vibevm/modules/vibe-mcp/PROP-015#lifecycle");
+
 use std::fs;
 use std::io::IsTerminal;
 use std::path::{Path, PathBuf};

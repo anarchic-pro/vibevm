@@ -10,8 +10,6 @@
 
 specmark::scope!("spec://vibevm/modules/vibe-mcp/PROP-015#tools");
 
-use std::path::PathBuf;
-
 use serde_json::{Value, json};
 use specmark::{cell, spec};
 use vibe_core::{Group, PackageRef};
@@ -407,17 +405,4 @@ fn parse_pkgref(s: &str) -> Result<(Group, String), ToolError> {
         ))
     })?;
     Ok((group, pkgref.name.to_string()))
-}
-
-/// Convenience for tests: write a lockfile fixture into a fresh project
-/// root and return the [`ServerContext`].
-#[doc(hidden)]
-pub fn _test_context_with_fixture(project_root: PathBuf, lockfile_text: &str) -> ServerContext {
-    std::fs::write(
-        project_root.join("vibe.toml"),
-        "[project]\nname=\"x\"\nversion=\"0.0.1\"\n",
-    )
-    .unwrap();
-    std::fs::write(project_root.join("vibe.lock"), lockfile_text).unwrap();
-    ServerContext::new(project_root)
 }

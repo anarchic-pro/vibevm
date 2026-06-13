@@ -34,6 +34,7 @@ const CONFORM_GATED: &[&str] = &[
     "vibe-cli",
     "specmark",
     "specmark-grammar",
+    "vibe-mcp",
 ];
 
 /// Crates deliberately *outside* `CONFORM_GATED`, each paired with the
@@ -45,11 +46,6 @@ const CONFORM_GATED: &[&str] = &[
 /// `every_crate_is_gated_or_exempt` keeps it honest against the
 /// workspace so a new crate cannot slip in unclassified.
 const CONFORM_EXEMPT: &[(&str, &str)] = &[
-    (
-        "vibe-mcp",
-        "parked behind DBT-0020 (the MCP spec home); flips in the owner-gated \
-         CONVERT-PLAN Phase 7 once the spec lands",
-    ),
     (
         "vibe-graph",
         "M0 stub, no code yet — the task-graph runner per VIBEVM-SPEC §5 is unbuilt; \
