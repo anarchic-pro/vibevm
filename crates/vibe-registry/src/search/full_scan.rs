@@ -96,6 +96,18 @@ pub struct FullScanHit {
 /// `https://api.github.com`. Returns `None` for non-GitHub URLs so
 /// the caller can fall through to the registries-unsupported bucket
 /// without raising an error.
+///
+/// ```
+/// use vibe_registry::search::full_scan::detect_github_org;
+///
+/// // The first path segment of a github.com URL is the org.
+/// assert_eq!(
+///     detect_github_org("https://github.com/vibevm/specs"),
+///     Some("vibevm".to_string())
+/// );
+/// // A non-GitHub host has no org to walk — the caller falls through.
+/// assert_eq!(detect_github_org("https://gitverse.ru/anarchic/vibevm"), None);
+/// ```
 pub fn detect_github_org(url: &str) -> Option<String> {
     let parsed = reqwest::Url::parse(url).ok()?;
     if parsed.host_str() != Some("github.com") {
@@ -425,41 +437,6 @@ fn score_manifest(
     (score, matched)
 }
 
-/// Tokenise a free-text query the same way the server does:
-/// lowercase ASCII alphanumeric runs, drop tokens shorter than 2
-/// characters, drop trivial English stopwords. Kept inline to avoid
-/// pulling the server-side index crate.
-pub fn tokenise_query(query: &str) -> Vec<String> {
-    const STOPWORDS: &[&str] = &[
-        "a", "an", "and", "are", "as", "at", "be", "by", "for", "from", "has", "he", "in", "is",
-        "it", "its", "of", "on", "or", "she", "that", "the", "this", "to", "was", "were", "with",
-        "you", "your",
-    ];
-    let mut out = Vec::new();
-    let mut buf = String::new();
-    for c in query.chars() {
-        if c.is_ascii_alphanumeric() {
-            buf.push(c.to_ascii_lowercase());
-        } else if !buf.is_empty() {
-            push_if_keepable(&mut out, std::mem::take(&mut buf), STOPWORDS);
-        }
-    }
-    if !buf.is_empty() {
-        push_if_keepable(&mut out, buf, STOPWORDS);
-    }
-    out
-}
-
-fn push_if_keepable(out: &mut Vec<String>, tok: String, stopwords: &[&str]) {
-    if tok.len() < 2 {
-        return;
-    }
-    if stopwords.contains(&tok.as_str()) {
-        return;
-    }
-    out.push(tok);
-}
-
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -570,14 +547,5 @@ mod tests {
             let decoded = decode_base64(&encoded).unwrap();
             assert_eq!(decoded, body, "round-trip failed for {body:?}");
         }
-    }
-
-    #[test]
-    fn tokenise_query_drops_stopwords_and_short_tokens() {
-        let toks = tokenise_query("the WAL log discipline");
-        assert!(!toks.contains(&"the".into()));
-        assert!(toks.contains(&"wal".into()));
-        assert!(toks.contains(&"log".into()));
-        assert!(toks.contains(&"discipline".into()));
     }
 }

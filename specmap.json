@@ -2158,6 +2158,13 @@
     },
     {
       "crate_name": "vibe-registry",
+      "file": "crates/vibe-registry/src/search/query.rs",
+      "item_kind": "mod",
+      "line": 7,
+      "symbol": "vibe_registry::search::query"
+    },
+    {
+      "crate_name": "vibe-registry",
       "file": "crates/vibe-registry/tests/index_fast_path.rs",
       "item_kind": "fn",
       "line": 229,
@@ -5501,6 +5508,14 @@
       "file": "crates/vibe-registry/src/search/full_scan.rs",
       "from_symbol": "vibe_registry::search::full_scan::FullScanError",
       "line": 48,
+      "provenance": "authored",
+      "uri": "spec://vibevm/modules/vibe-registry/PROP-002#registry-model",
+      "verb": "implements"
+    },
+    {
+      "file": "crates/vibe-registry/src/search/query.rs",
+      "from_symbol": "vibe_registry::search::query",
+      "line": 7,
       "provenance": "authored",
       "uri": "spec://vibevm/modules/vibe-registry/PROP-002#registry-model",
       "verb": "implements"

@@ -8,3 +8,4 @@
 
 pub mod cache;
 pub mod full_scan;
+pub mod query;

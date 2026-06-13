@@ -29,6 +29,7 @@ use vibe_core::PackageKind;
 use vibe_core::manifest::Manifest;
 use vibe_registry::search::cache::{self as search_cache, CacheKey};
 use vibe_registry::search::full_scan::{self as search_full_scan, FullScanHit};
+use vibe_registry::search::query;
 use vibe_registry::{IndexClient, SearchHit, index_url_for};
 
 use crate::cli::SearchArgs;
@@ -427,7 +428,7 @@ fn run_full_scan_for_registry(
         .ok()
         .map(|t| t.value().to_string());
     let token_ref = token.as_deref();
-    let query_tokens = search_full_scan::tokenise_query(query);
+    let query_tokens = query::tokenise_query(query);
     if query_tokens.is_empty() {
         return Err("query has no searchable tokens after stopword filtering".into());
     }
