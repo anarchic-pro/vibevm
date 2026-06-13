@@ -7465,7 +7465,7 @@
     },
     {
       "anchor": "root",
-      "content_hash": "sha256:3563fe0bdda859f19714ba001090bf9c825adf3df3f5ae487adafade21600670",
+      "content_hash": "sha256:260c980dc9196f5f0339534221628a7e3a1da5394efeab189d914ed8cafbe397",
       "doc_path": "common/PROP-000",
       "file": "spec/common/PROP-000.md",
       "heading": "PROP-000: Foundational technical decisions",
@@ -7672,12 +7672,14 @@
     },
     {
       "anchor": "token-secrecy",
-      "content_hash": "sha256:b5834c16489c761119cad8a40d5989898f6033084a77dca2aa1740789bfd978e",
+      "content_hash": "sha256:388cd74338894dda5c71a8a6f0b8d15dd622bca4b60750545f825d26b72057cb",
       "doc_path": "common/PROP-000",
       "file": "spec/common/PROP-000.md",
       "heading": "20. Token secrecy and adapter scope",
       "line": 277,
-      "uri": "spec://vibevm/common/PROP-000#token-secrecy"
+      "uri": "spec://vibevm/common/PROP-000#token-secrecy",
+      "kind": "req",
+      "revision": 1
     },
     {
       "anchor": "root",

@@ -276,6 +276,8 @@ The obligation is pinned here (rather than only in the guides themselves) so tha
 
 ## 20. Token secrecy and adapter scope {#token-secrecy}
 
+`req r1`
+
 **Decision.** Publish tokens, registry-API tokens, and any LLM-provider keys handled by vibevm are surface secrets. They MUST NOT appear in any human- or machine-readable surface that vibevm produces. Concretely:
 
 - **Never printed.** Not to stdout, stderr, the CLI log, the `--json` event stream, error messages, panic traces, telemetry, or the lockfile. The CLI prints the *source* of a token (explicit / env-var name / file path) but never the value. The in-process wrapper type (`vibe_publish::Token`, future `vibe_llm::ApiKey`) MUST redact on `Display` and `Debug` — verified by unit tests.
