@@ -48,6 +48,7 @@ pub const DEFAULT_GITVERSE_HOST_NAME: &str = "gitverse.ru";
 /// `;version=1` suffix the API returns 400 Bad Request.
 const GITVERSE_ACCEPT: &str = "application/vnd.gitverse.object+json;version=1";
 
+#[specmark::cell(seam = "RepoCreator", variant = "gitverse")]
 pub struct GitVerseCreator {
     api_base: String,
     host_name: String,

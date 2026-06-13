@@ -9,8 +9,8 @@ use vibe_core::manifest::{
     DEFAULT_REGISTRY_NAME, DEFAULT_REGISTRY_URL, Manifest, NamingConvention,
 };
 use vibe_publish::{
-    DirectGitCreator, PublishConfig, Publisher, creator_for_url, extract_host_segment,
-    extract_org_segment, load_token_for_host,
+    PublishConfig, Publisher, creator_for_url, extract_host_segment, extract_org_segment,
+    load_token_for_host,
 };
 
 use crate::cli::RegistryPublishArgs;
@@ -271,8 +271,10 @@ pub(super) fn run_publish(ctx: &output::Context, args: RegistryPublishArgs) -> R
     Ok(())
 }
 
-/// Execute the no-API publish path. Builds a [`DirectGitCreator`] for
-/// the supplied URL, threads it through the regular [`Publisher`] flow
+/// Execute the no-API publish path. Builds the
+/// [`DirectGitCreator`](vibe_publish::DirectGitCreator) cell (in the
+/// registry module, per R-001) for the supplied URL, threads it through
+/// the regular [`Publisher`] flow
 /// — which short-circuits at `direct_repo_url` — and renders the
 /// outcome. No token loading, no host-API call.
 fn run_publish_direct(
@@ -299,7 +301,7 @@ fn run_publish_direct(
     ));
     ctx.step("No host API in play — pushing with local git credentials.");
 
-    let creator = DirectGitCreator::new(url.to_string());
+    let creator = crate::registry::direct_git_creator(url.to_string());
     // `org_url` and `naming` are irrelevant on the direct path —
     // [`Publisher::publish`] short-circuits before consulting them.
     // Pass through harmless placeholders so the config validates.

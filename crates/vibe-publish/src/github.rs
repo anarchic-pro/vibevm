@@ -64,6 +64,7 @@ fn user_agent() -> String {
     format!("vibe-publish/{}", env!("CARGO_PKG_VERSION"))
 }
 
+#[specmark::cell(seam = "RepoCreator", variant = "github")]
 pub struct GitHubCreator {
     api_base: String,
     host_name: String,

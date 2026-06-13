@@ -28,6 +28,7 @@ use crate::{CreateOpts, PublishError, RepoCreator, RepoInfo, extract_host_segmen
 /// Direct-push adapter. Constructed from a single repo URL; carries
 /// no token, no API client, no org scoping. Every [`RepoCreator`]
 /// method except [`RepoCreator::push_url`] is a no-op or refusal.
+#[specmark::cell(seam = "RepoCreator", variant = "direct")]
 pub struct DirectGitCreator {
     /// Repo URL the operator supplied. Used verbatim as the push URL
     /// — vibevm never rewrites or augments it.
