@@ -8747,6 +8747,128 @@
     },
     {
       "anchor": "root",
+      "content_hash": "sha256:d475c5cea4d31dad9be1cb728a22fdb1f524f348cb0f0317c795a4eee28eb8a2",
+      "doc_path": "modules/vibe-mcp/PROP-015",
+      "file": "spec/modules/vibe-mcp/PROP-015-mcp-integration.md",
+      "heading": "PROP-015 — MCP server and agent integration",
+      "line": 1,
+      "uri": "spec://vibevm/modules/vibe-mcp/PROP-015#root"
+    },
+    {
+      "anchor": "motivation",
+      "content_hash": "sha256:1146c5f2a4f87698e387ac7f716a6a4fdc178226421e804cfa2a34d68cfe3e92",
+      "doc_path": "modules/vibe-mcp/PROP-015",
+      "file": "spec/modules/vibe-mcp/PROP-015-mcp-integration.md",
+      "heading": "1. Motivation",
+      "line": 21,
+      "uri": "spec://vibevm/modules/vibe-mcp/PROP-015#motivation"
+    },
+    {
+      "anchor": "decisions",
+      "content_hash": "sha256:5f64ff1c1b4df67f5192a8dbd218ed8e97bdb60cd124a330a42acf167a04e433",
+      "doc_path": "modules/vibe-mcp/PROP-015",
+      "file": "spec/modules/vibe-mcp/PROP-015-mcp-integration.md",
+      "heading": "2. Decisions",
+      "line": 40,
+      "uri": "spec://vibevm/modules/vibe-mcp/PROP-015#decisions"
+    },
+    {
+      "anchor": "server",
+      "content_hash": "sha256:2f1e88aa32d3e05de2a19bbf84d92173a28e881a84af8feeb460231b6a361fd7",
+      "doc_path": "modules/vibe-mcp/PROP-015",
+      "file": "spec/modules/vibe-mcp/PROP-015-mcp-integration.md",
+      "heading": "2.1 The server: JSON-RPC 2.0 over stdio",
+      "line": 42,
+      "uri": "spec://vibevm/modules/vibe-mcp/PROP-015#server",
+      "kind": "req",
+      "revision": 1
+    },
+    {
+      "anchor": "tools",
+      "content_hash": "sha256:312b171d3a7f7b214fc940d1725b4ec6c446d8aa64398acc0addfde5614add16",
+      "doc_path": "modules/vibe-mcp/PROP-015",
+      "file": "spec/modules/vibe-mcp/PROP-015-mcp-integration.md",
+      "heading": "2.2 The tool surface: one seam, three tools",
+      "line": 59,
+      "uri": "spec://vibevm/modules/vibe-mcp/PROP-015#tools",
+      "kind": "req",
+      "revision": 1
+    },
+    {
+      "anchor": "errors",
+      "content_hash": "sha256:10df1fc06f15bc44542d66f711c4cc5b3b96b3eb28012546b60d369c0871e433",
+      "doc_path": "modules/vibe-mcp/PROP-015",
+      "file": "spec/modules/vibe-mcp/PROP-015-mcp-integration.md",
+      "heading": "2.3 Tool and server errors cite their REQ",
+      "line": 87,
+      "uri": "spec://vibevm/modules/vibe-mcp/PROP-015#errors",
+      "kind": "req",
+      "revision": 1
+    },
+    {
+      "anchor": "agent-detection",
+      "content_hash": "sha256:07ae47c65a5e0072720cfc32c04870e8aee189677a92bfd05751f1f882aab9f0",
+      "doc_path": "modules/vibe-mcp/PROP-015",
+      "file": "spec/modules/vibe-mcp/PROP-015-mcp-integration.md",
+      "heading": "2.4 Agent detection",
+      "line": 96,
+      "uri": "spec://vibevm/modules/vibe-mcp/PROP-015#agent-detection",
+      "kind": "req",
+      "revision": 1
+    },
+    {
+      "anchor": "agent-config",
+      "content_hash": "sha256:18bfdef9166fd01e245d24a87bc80d8a25d76fea91d437e5731fcbf104848052",
+      "doc_path": "modules/vibe-mcp/PROP-015",
+      "file": "spec/modules/vibe-mcp/PROP-015-mcp-integration.md",
+      "heading": "2.5 Per-agent configuration",
+      "line": 108,
+      "uri": "spec://vibevm/modules/vibe-mcp/PROP-015#agent-config",
+      "kind": "req",
+      "revision": 1
+    },
+    {
+      "anchor": "skill",
+      "content_hash": "sha256:37898ff9f8bdd97b8bda2a3daa0ccd45398cd4f00420864473a95b251db7b8d1",
+      "doc_path": "modules/vibe-mcp/PROP-015",
+      "file": "spec/modules/vibe-mcp/PROP-015-mcp-integration.md",
+      "heading": "2.6 Skill materialisation",
+      "line": 129,
+      "uri": "spec://vibevm/modules/vibe-mcp/PROP-015#skill",
+      "kind": "req",
+      "revision": 1
+    },
+    {
+      "anchor": "lifecycle",
+      "content_hash": "sha256:5ec2912aa10e4e65918eda6f686abb9dd2f6c60aabc0040342745354029bb3d0",
+      "doc_path": "modules/vibe-mcp/PROP-015",
+      "file": "spec/modules/vibe-mcp/PROP-015-mcp-integration.md",
+      "heading": "2.7 The integration lifecycle",
+      "line": 141,
+      "uri": "spec://vibevm/modules/vibe-mcp/PROP-015#lifecycle",
+      "kind": "req",
+      "revision": 1
+    },
+    {
+      "anchor": "out-of-scope",
+      "content_hash": "sha256:90cc8fba5fd468a32ecaa48866a7d2b118c78a6f59792de266b9a7ec58964670",
+      "doc_path": "modules/vibe-mcp/PROP-015",
+      "file": "spec/modules/vibe-mcp/PROP-015-mcp-integration.md",
+      "heading": "3. Out of scope",
+      "line": 160,
+      "uri": "spec://vibevm/modules/vibe-mcp/PROP-015#out-of-scope"
+    },
+    {
+      "anchor": "acceptance",
+      "content_hash": "sha256:f42169d1c6f65c19c1f0f8895a76b4b01ad58be6af300a15794d451f826ffd58",
+      "doc_path": "modules/vibe-mcp/PROP-015",
+      "file": "spec/modules/vibe-mcp/PROP-015-mcp-integration.md",
+      "heading": "4. Acceptance",
+      "line": 171,
+      "uri": "spec://vibevm/modules/vibe-mcp/PROP-015#acceptance"
+    },
+    {
+      "anchor": "root",
       "content_hash": "sha256:6569face80f87b3d1a80c4320613f663a164e4c7f0ef738de3fb58938670ddb1",
       "doc_path": "modules/vibe-registry/PROP-001",
       "file": "spec/modules/vibe-registry/PROP-001-git-backend.md",
