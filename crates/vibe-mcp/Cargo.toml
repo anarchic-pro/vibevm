@@ -11,6 +11,7 @@ homepage.workspace = true
 description = "Model Context Protocol server for vibevm — exposes installed packages and subskills to coding agents over stdio JSON-RPC"
 
 [dependencies]
+specmark.workspace = true
 vibe-core.workspace = true
 serde.workspace = true
 serde_json.workspace = true

@@ -29,13 +29,14 @@
 //! tool's identity beyond the registered name.
 
 #![forbid(unsafe_code)]
+specmark::scope!("spec://vibevm/modules/vibe-mcp/PROP-015#server");
 
 use std::collections::BTreeMap;
 use std::path::PathBuf;
-use std::sync::Arc;
 
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
+use specmark::spec;
 use thiserror::Error;
 use vibe_core::manifest::Lockfile;
 
@@ -44,6 +45,7 @@ pub mod tools;
 pub mod transport;
 
 pub use jsonrpc::{JsonRpcError, JsonRpcMessage, JsonRpcRequest, JsonRpcResponse};
+pub use tools::{McpTool, default_tools};
 pub use transport::{MemoryTransport, StdioTransport, Transport};
 
 /// MCP protocol version this server speaks. The shipped MCP spec uses
@@ -98,31 +100,46 @@ pub struct ToolDescriptor {
     pub input_schema: Value,
 }
 
-/// Tool implementation — a closure receiving the parsed argument JSON
-/// and the server context, returning a JSON value to embed in the
-/// response.
-pub type ToolHandler =
-    Arc<dyn Fn(&Value, &ServerContext) -> Result<Value, ToolError> + Send + Sync>;
-
 /// Per-tool error surface. Distinct from `JsonRpcError` so the
 /// dispatcher can decide whether to render the error as a tool-level
 /// failure (`isError: true` in the result payload) or as a transport-
 /// level JSON-RPC error.
 #[derive(Debug, Error)]
+#[spec(implements = "spec://vibevm/modules/vibe-mcp/PROP-015#errors")]
 pub enum ToolError {
-    #[error("invalid arguments: {0}")]
+    #[error(
+        "invalid arguments: {0} \
+         (violates spec://vibevm/modules/vibe-mcp/PROP-015#tools; \
+          fix: pass arguments matching the tool's inputSchema)"
+    )]
     InvalidArguments(String),
 
-    #[error("not found: {0}")]
+    #[error(
+        "not found: {0} \
+         (violates spec://vibevm/modules/vibe-mcp/PROP-015#tools; \
+          fix: install the package, or query one the lockfile carries)"
+    )]
     NotFound(String),
 
-    #[error("io error: {0}")]
+    #[error(
+        "io error: {0} \
+         (violates spec://vibevm/modules/vibe-mcp/PROP-015#tools; \
+          fix: check the project tree and cache are readable)"
+    )]
     Io(#[from] std::io::Error),
 
-    #[error("vibe-core error: {0}")]
+    #[error(
+        "vibe-core error: {0} \
+         (violates spec://vibevm/modules/vibe-mcp/PROP-015#tools; \
+          fix: act on the wrapped vibe-core error)"
+    )]
     Core(#[from] vibe_core::Error),
 
-    #[error("internal error: {0}")]
+    #[error(
+        "internal error: {0} \
+         (violates spec://vibevm/modules/vibe-mcp/PROP-015#tools; \
+          fix: this is a server-side invariant break — report it)"
+    )]
     Internal(String),
 }
 
@@ -132,12 +149,7 @@ pub enum ToolError {
 pub struct Server<T: Transport> {
     transport: T,
     context: ServerContext,
-    tools: BTreeMap<String, RegisteredTool>,
-}
-
-struct RegisteredTool {
-    descriptor: ToolDescriptor,
-    handler: ToolHandler,
+    tools: BTreeMap<String, Box<dyn McpTool>>,
 }
 
 impl<T: Transport> Server<T> {
@@ -151,22 +163,17 @@ impl<T: Transport> Server<T> {
         s
     }
 
-    /// Hot-add a tool. Used by tests; production calls this once during
-    /// construction via `register_default_tools`. Inserting a tool
-    /// with an existing name overwrites the previous entry.
-    pub fn register_tool(&mut self, descriptor: ToolDescriptor, handler: ToolHandler) {
-        self.tools.insert(
-            descriptor.name.clone(),
-            RegisteredTool {
-                descriptor,
-                handler,
-            },
-        );
+    /// Hot-add a tool behind the [`McpTool`] seam. Used by tests;
+    /// production calls this once during construction via
+    /// `register_default_tools`. Registering a tool whose
+    /// `descriptor().name` already exists overwrites the previous entry.
+    pub fn register_tool(&mut self, tool: Box<dyn McpTool>) {
+        self.tools.insert(tool.descriptor().name, tool);
     }
 
     fn register_default_tools(&mut self) {
-        for (descriptor, handler) in tools::default_set() {
-            self.register_tool(descriptor, handler);
+        for tool in tools::default_tools() {
+            self.register_tool(tool);
         }
     }
 
@@ -229,8 +236,8 @@ impl<T: Transport> Server<T> {
     }
 
     fn handle_tools_list(&self, req: JsonRpcRequest) -> JsonRpcResponse {
-        let descriptors: Vec<&ToolDescriptor> =
-            self.tools.values().map(|t| &t.descriptor).collect();
+        let descriptors: Vec<ToolDescriptor> =
+            self.tools.values().map(|t| t.descriptor()).collect();
         let result = serde_json::json!({
             "tools": descriptors,
         });
@@ -258,7 +265,7 @@ impl<T: Transport> Server<T> {
                 );
             }
         };
-        match (tool.handler)(&args, &self.context) {
+        match tool.run(&args, &self.context) {
             Ok(value) => {
                 let text = match &value {
                     Value::String(s) => s.clone(),
@@ -296,11 +303,20 @@ impl Server<StdioTransport> {
 }
 
 #[derive(Debug, Error)]
+#[spec(implements = "spec://vibevm/modules/vibe-mcp/PROP-015#errors")]
 pub enum ServerError {
-    #[error("transport error: {0}")]
+    #[error(
+        "transport error: {0} \
+         (violates spec://vibevm/modules/vibe-mcp/PROP-015#server; \
+          fix: check the stdio transport is connected)"
+    )]
     Transport(#[from] std::io::Error),
 
-    #[error("json error: {0}")]
+    #[error(
+        "json error: {0} \
+         (violates spec://vibevm/modules/vibe-mcp/PROP-015#server; \
+          fix: send well-formed JSON-RPC 2.0 messages)"
+    )]
     Json(#[from] serde_json::Error),
 }
 
