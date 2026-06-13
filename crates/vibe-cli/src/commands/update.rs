@@ -242,7 +242,7 @@ fn locked_package(
         name: vibe_core::PackageName::from_validated(cached.resolved.name.clone()),
         version: cached.resolved.version.clone(),
         registry: cached.registry_name.clone(),
-        source_url: cached.source_uri.clone(),
+        source_url: vibe_core::SourceUrl::new(cached.source_uri.clone()),
         source_ref: cached.source_ref.clone(),
         resolved_commit: cached.resolved_commit.clone(),
         content_hash: vibe_core::ContentHash::from_validated(cached.content_hash.clone()),

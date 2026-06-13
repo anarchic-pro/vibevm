@@ -33,6 +33,7 @@ use serde::{Deserialize, Serialize};
 use crate::content_hash::ContentHash;
 use crate::error::Result;
 use crate::package_ref::{Group, PackageKind, PackageName, PackageRef, VersionSpec};
+use crate::provenance::{SourceUrl, TraceId};
 
 use super::{read_toml, write_toml};
 
@@ -135,7 +136,7 @@ pub struct VirtualCapabilityRecord {
     pub emitter: String,
     /// Trace ID of the LLM run that emitted this capability. Links into
     /// the `vibe build` audit log.
-    pub trace_id: String,
+    pub trace_id: TraceId,
     /// ISO-8601 timestamp.
     pub emitted_at: String,
 }
@@ -184,7 +185,7 @@ pub struct LockedPackage {
     /// entries; for a path-source entry (`source_kind = "path"`) it is the
     /// member's path relative to the workspace root — portable, never an
     /// absolute path.
-    pub source_url: String,
+    pub source_url: SourceUrl,
 
     /// Git ref the content was fetched at — typically the version tag
     /// (`v0.3.0`). `None` for non-git registries (`file://…`) and v1
