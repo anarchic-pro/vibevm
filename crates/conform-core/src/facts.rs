@@ -88,6 +88,18 @@ pub enum Fact {
         in_test: bool,
         in_deviation: bool,
     },
+    /// A `std::env::{var,var_os,set_var,remove_var}` access site — the
+    /// R-001 ambient-coupling signal (PROP-014's `ambient-env` rule).
+    /// `in_test` marks sites inside `#[cfg(test)]` / `#[test]`; the rule
+    /// scopes those out. `in_deviation` marks sites inside a fn carrying
+    /// `#[spec(deviates = …, reason = …)]` — the recorded testimony the
+    /// rule honors. Fn-grain, same as [`Fact::UnwrapUse`].
+    EnvRead {
+        method: String,
+        line: u32,
+        in_test: bool,
+        in_deviation: bool,
+    },
 }
 
 /// Facts of one source file, with its repo-relative path.

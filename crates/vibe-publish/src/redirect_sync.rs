@@ -242,6 +242,12 @@ pub fn sync_redirect_tags(
 /// resolved token using the same shape M1.14 plumbing applies
 /// (`https://x-access-token:<TOKEN>@host/...`). Other auth regimes
 /// (`credential-helper`, `ssh`) trust the local git's auth path.
+#[spec(
+    deviates = "spec://vibevm/discipline/ENGINE-CONFORM-v0.1#rules",
+    reason = "ambient-env: the target token env-var name is discovered at runtime from \
+              the stub's `vibe-redirect.toml` (`token_env`, or a host-derived default), \
+              so the read cannot move to a composition root that has not yet read the marker"
+)]
 pub fn build_target_fetch_url(
     target_url: &str,
     redirect: &RedirectSection,

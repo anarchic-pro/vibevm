@@ -80,6 +80,30 @@ const CONFORM_EXEMPT: &[(&str, &str)] = &[
 /// own list and grows crate-by-crate as later phases convert each.
 const GATED_PUB_DOCTEST: &[&str] = &["vibe-core"];
 
+/// Files where reading the ambient environment is sanctioned (the
+/// `ambient-env` rule, R-001 projection — CONVERT-PLAN v0.1 §5.2): the
+/// env-promotion composition root, the per-crate config-resolution
+/// points (user-config / cache-root / token / git-binary / index-URL
+/// discovery), and the surfaces whose job *is* to read or display env.
+/// A gated crate reading env in any *other* file fails the gate;
+/// extending this list is a deliberate, reviewed decision, exactly like
+/// `CONFORM_GATED`. The fn-grain `#[spec(deviates, reason)]` escape
+/// remains for an inherent-env domain read in a non-root file (e.g. the
+/// resolver's `[activation]` predicate evaluation).
+const ENV_ROOTS: &[&str] = &[
+    "crates/vibe-cli/src/main.rs",
+    "crates/vibe-cli/src/output.rs",
+    "crates/vibe-cli/src/commands/show/config.rs",
+    "crates/vibe-core/src/user_config.rs",
+    "crates/vibe-index/src/scanner/git_cli.rs",
+    "crates/vibe-publish/src/post_hook.rs",
+    "crates/vibe-publish/src/token.rs",
+    "crates/vibe-registry/src/git_backend/shell.rs",
+    "crates/vibe-registry/src/git_package_registry/mod.rs",
+    "crates/vibe-registry/src/index_client.rs",
+    "crates/vibe-registry/src/registry_cache.rs",
+];
+
 /// The standing rule set, constructed in one place so `conform check`
 /// and `conform freeze` can never drift apart.
 struct ConformRules {
@@ -93,6 +117,7 @@ struct ConformRules {
     err_msg: conform_core::rules::ErrorMessageCitesReq,
     file_len: conform_core::rules::FileLength,
     no_unwrap: conform_core::rules::NoUnwrapInDomain,
+    ambient_env: conform_core::rules::AmbientEnv,
 }
 
 impl ConformRules {
@@ -138,6 +163,16 @@ impl ConformRules {
             no_unwrap: rules::NoUnwrapInDomain {
                 gated_crates: CONFORM_GATED,
             },
+            // CONVERT-PLAN v0.1 §5.2 — the R-001 projection onto env
+            // access: env-audit owns env mutation, ENV_ROOTS records the
+            // sanctioned reader files, and an inherent-env domain read
+            // elsewhere testifies fn-grain (the resolver's activation
+            // predicate eval). Born ratcheted like its budget siblings.
+            ambient_env: rules::AmbientEnv {
+                gated_crates: CONFORM_GATED,
+                audit_crates: &["env-audit"],
+                roots: ENV_ROOTS,
+            },
         }
     }
 
@@ -153,6 +188,7 @@ impl ConformRules {
             &self.err_msg,
             &self.file_len,
             &self.no_unwrap,
+            &self.ambient_env,
         ]
     }
 }

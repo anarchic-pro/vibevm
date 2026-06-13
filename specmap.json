@@ -1920,6 +1920,13 @@
     },
     {
       "crate_name": "vibe-publish",
+      "file": "crates/vibe-publish/src/redirect_sync.rs",
+      "item_kind": "fn",
+      "line": 239,
+      "symbol": "vibe_publish::redirect_sync::build_target_fetch_url"
+    },
+    {
+      "crate_name": "vibe-publish",
       "file": "crates/vibe-publish/src/token.rs",
       "item_kind": "mod",
       "line": 31,
@@ -2328,6 +2335,13 @@
       "crate_name": "vibe-resolver",
       "file": "crates/vibe-resolver/src/activation.rs",
       "item_kind": "fn",
+      "line": 260,
+      "symbol": "vibe_resolver::activation::command_resolves_on_path"
+    },
+    {
+      "crate_name": "vibe-resolver",
+      "file": "crates/vibe-resolver/src/activation.rs",
+      "item_kind": "fn",
       "line": 143,
       "symbol": "vibe_resolver::activation::evaluate"
     },
@@ -2335,49 +2349,49 @@
       "crate_name": "vibe-resolver",
       "file": "crates/vibe-resolver/src/activation.rs",
       "item_kind": "fn",
-      "line": 434,
+      "line": 441,
       "symbol": "vibe_resolver::activation::tests::empty_rules_inactive"
     },
     {
       "crate_name": "vibe-resolver",
       "file": "crates/vibe-resolver/src/activation.rs",
       "item_kind": "fn",
-      "line": 518,
+      "line": 525,
       "symbol": "vibe_resolver::activation::tests::if_describes_match_uses_subskill_type"
     },
     {
       "crate_name": "vibe-resolver",
       "file": "crates/vibe-resolver/src/activation.rs",
       "item_kind": "fn",
-      "line": 483,
+      "line": 490,
       "symbol": "vibe_resolver::activation::tests::if_files_match_via_glob"
     },
     {
       "crate_name": "vibe-resolver",
       "file": "crates/vibe-resolver/src/activation.rs",
       "item_kind": "fn",
-      "line": 543,
+      "line": 550,
       "symbol": "vibe_resolver::activation::tests::if_language_match"
     },
     {
       "crate_name": "vibe-resolver",
       "file": "crates/vibe-resolver/src/activation.rs",
       "item_kind": "fn",
-      "line": 444,
+      "line": 451,
       "symbol": "vibe_resolver::activation::tests::if_present_match"
     },
     {
       "crate_name": "vibe-resolver",
       "file": "crates/vibe-resolver/src/activation.rs",
       "item_kind": "fn",
-      "line": 469,
+      "line": 476,
       "symbol": "vibe_resolver::activation::tests::if_provides_match"
     },
     {
       "crate_name": "vibe-resolver",
       "file": "crates/vibe-resolver/src/activation.rs",
       "item_kind": "fn",
-      "line": 558,
+      "line": 565,
       "symbol": "vibe_resolver::activation::tests::multiple_channels_compose"
     },
     {
@@ -5282,6 +5296,15 @@
       "verb": "implements"
     },
     {
+      "file": "crates/vibe-publish/src/redirect_sync.rs",
+      "from_symbol": "vibe_publish::redirect_sync::build_target_fetch_url",
+      "line": 245,
+      "provenance": "authored",
+      "uri": "spec://vibevm/discipline/ENGINE-CONFORM-v0.1#rules",
+      "verb": "deviates",
+      "reason": "ambient-env: the target token env-var name is discovered at runtime from the stub's `vibe-redirect.toml` (`token_env`, or a host-derived default), so the read cannot move to a composition root that has not yet read the marker"
+    },
+    {
       "file": "crates/vibe-publish/src/token.rs",
       "from_symbol": "vibe_publish::token",
       "line": 31,
@@ -5769,6 +5792,15 @@
     },
     {
       "file": "crates/vibe-resolver/src/activation.rs",
+      "from_symbol": "vibe_resolver::activation::command_resolves_on_path",
+      "line": 260,
+      "provenance": "authored",
+      "uri": "spec://vibevm/discipline/ENGINE-CONFORM-v0.1#rules",
+      "verb": "deviates",
+      "reason": "ambient-env: the `if_command` activation channel (PROP-003 §2.5.2) resolves a command against PATH — reading `PATH` is the predicate's definition, inherent-env domain, not config a composition root could thread in ahead of the user's `[activation]` rule"
+    },
+    {
+      "file": "crates/vibe-resolver/src/activation.rs",
       "from_symbol": "vibe_resolver::activation::evaluate",
       "line": 151,
       "provenance": "authored",
@@ -5787,7 +5819,7 @@
     {
       "file": "crates/vibe-resolver/src/activation.rs",
       "from_symbol": "vibe_resolver::activation::tests::empty_rules_inactive",
-      "line": 435,
+      "line": 442,
       "provenance": "authored",
       "uri": "spec://vibevm/modules/vibe-resolver/PROP-003#subskill-activation",
       "verb": "verifies"
@@ -5795,7 +5827,7 @@
     {
       "file": "crates/vibe-resolver/src/activation.rs",
       "from_symbol": "vibe_resolver::activation::tests::if_describes_match_uses_subskill_type",
-      "line": 519,
+      "line": 526,
       "provenance": "authored",
       "uri": "spec://vibevm/modules/vibe-resolver/PROP-003#subskill-activation",
       "verb": "verifies"
@@ -5803,7 +5835,7 @@
     {
       "file": "crates/vibe-resolver/src/activation.rs",
       "from_symbol": "vibe_resolver::activation::tests::if_files_match_via_glob",
-      "line": 484,
+      "line": 491,
       "provenance": "authored",
       "uri": "spec://vibevm/modules/vibe-resolver/PROP-003#subskill-activation",
       "verb": "verifies"
@@ -5811,7 +5843,7 @@
     {
       "file": "crates/vibe-resolver/src/activation.rs",
       "from_symbol": "vibe_resolver::activation::tests::if_language_match",
-      "line": 544,
+      "line": 551,
       "provenance": "authored",
       "uri": "spec://vibevm/modules/vibe-resolver/PROP-003#subskill-activation",
       "verb": "verifies"
@@ -5819,7 +5851,7 @@
     {
       "file": "crates/vibe-resolver/src/activation.rs",
       "from_symbol": "vibe_resolver::activation::tests::if_present_match",
-      "line": 445,
+      "line": 452,
       "provenance": "authored",
       "uri": "spec://vibevm/modules/vibe-resolver/PROP-003#subskill-activation",
       "verb": "verifies"
@@ -5827,7 +5859,7 @@
     {
       "file": "crates/vibe-resolver/src/activation.rs",
       "from_symbol": "vibe_resolver::activation::tests::if_provides_match",
-      "line": 470,
+      "line": 477,
       "provenance": "authored",
       "uri": "spec://vibevm/modules/vibe-resolver/PROP-003#subskill-activation",
       "verb": "verifies"
@@ -5835,7 +5867,7 @@
     {
       "file": "crates/vibe-resolver/src/activation.rs",
       "from_symbol": "vibe_resolver::activation::tests::multiple_channels_compose",
-      "line": 559,
+      "line": 566,
       "provenance": "authored",
       "uri": "spec://vibevm/modules/vibe-resolver/PROP-003#subskill-activation",
       "verb": "verifies"

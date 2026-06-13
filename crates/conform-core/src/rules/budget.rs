@@ -275,3 +275,119 @@ impl Rule for NoUnwrapInDomain {
         out
     }
 }
+
+/// `ambient-env` (R-001 projection): `std::env::{var,var_os,set_var,
+/// remove_var}` reads the ambient environment, which is hidden coupling —
+/// env access belongs at the composition root, where it is visible and
+/// the resolved value can be threaded in (guide §1, R-001). The rule
+/// fires on gated crates for any [`Fact::EnvRead`] outside three escapes:
+/// the designated env-mutation crate (`env-audit`, exempt wholesale, it
+/// owns the unsafe `set_var`/`remove_var` behind a safe API); a recorded
+/// composition / config-resolution file in [`roots`](Self::roots); and a
+/// fn-grain `#[spec(deviates = …, reason = …)]` testimony (`in_deviation`,
+/// frontend v6). Test-context reads (`in_test`) are scoped out.
+///
+/// ```
+/// use conform_core::rules::AmbientEnv;
+/// use conform_core::{Fact, Rule, SourceFacts};
+///
+/// let rule = AmbientEnv {
+///     gated_crates: &["x"],
+///     audit_crates: &["env-audit"],
+///     roots: &["crates/x/src/main.rs"],
+/// };
+/// let domain = SourceFacts {
+///     file: "crates/x/src/deep.rs".into(),
+///     crate_name: "x".into(),
+///     facts: vec![
+///         Fact::EnvRead { method: "var".into(), line: 9, in_test: false, in_deviation: false },
+///         // A testified read is honored, not flagged.
+///         Fact::EnvRead { method: "var".into(), line: 20, in_test: false, in_deviation: true },
+///     ],
+/// };
+/// assert_eq!(rule.check(&[domain]).len(), 1);
+/// // A read in a recorded composition root is exempt.
+/// let root = SourceFacts {
+///     file: "crates/x/src/main.rs".into(),
+///     crate_name: "x".into(),
+///     facts: vec![Fact::EnvRead {
+///         method: "var".into(), line: 5, in_test: false, in_deviation: false,
+///     }],
+/// };
+/// assert!(rule.check(&[root]).is_empty());
+/// ```
+pub struct AmbientEnv {
+    pub gated_crates: &'static [&'static str],
+    /// The designated env-mutation crate(s) — exempt wholesale.
+    pub audit_crates: &'static [&'static str],
+    /// Repo-relative paths of the recorded composition / config-resolution
+    /// files where env access is sanctioned (R-001). Adding env access to
+    /// a new file is a deliberate edit here, reviewed like `CONFORM_GATED`.
+    pub roots: &'static [&'static str],
+}
+
+impl Rule for AmbientEnv {
+    fn id(&self) -> &'static str {
+        "ambient-env"
+    }
+    fn why(&self) -> &'static str {
+        "ambient env access is hidden coupling: reads belong at the \
+         composition root where they are visible and the value is threaded \
+         in, not scattered through domain — a new reader is a recorded \
+         decision or a testified deviation (GUIDE-AI-NATIVE-RUST §1, R-001)"
+    }
+    fn check(&self, facts: &[SourceFacts]) -> Vec<Finding> {
+        let mut out = Vec::new();
+        for sf in facts {
+            if !self.gated_crates.contains(&sf.crate_name.as_str()) {
+                continue;
+            }
+            if self.audit_crates.contains(&sf.crate_name.as_str()) {
+                continue;
+            }
+            if !sf.file.contains("/src/") {
+                continue;
+            }
+            // A recorded composition root reads env by design.
+            if self.roots.iter().any(|r| sf.file == *r) {
+                continue;
+            }
+            // Per-file per-method ordinal fingerprints, never line
+            // numbers (the stop.rs 33→35 lesson).
+            let mut seen: std::collections::BTreeMap<&str, u32> = std::collections::BTreeMap::new();
+            for f in &sf.facts {
+                let Fact::EnvRead {
+                    method,
+                    line,
+                    in_test,
+                    in_deviation,
+                } = f
+                else {
+                    continue;
+                };
+                if *in_test || *in_deviation {
+                    continue;
+                }
+                let counter = seen.entry(method.as_str()).or_insert(0);
+                let ordinal = *counter;
+                *counter += 1;
+                out.push(Finding {
+                    rule: self.id(),
+                    file: sf.file.clone(),
+                    line: *line,
+                    message: req_message(
+                        "discipline://rust-ai-native/guide#bans-and-escape-hatches",
+                        &format!("`env::{method}()` reads the ambient environment outside a recorded composition root"),
+                        "read it at the composition root and thread the value in, add the \
+                         file to the rule's roots, or record #[spec(deviates = <uri>, \
+                         reason = …)] on the carrying fn",
+                    ),
+                    why: self.why(),
+                    fingerprint: format!("ambient-env|{}|{method}#{ordinal}", sf.file),
+                });
+            }
+        }
+        out.sort();
+        out
+    }
+}

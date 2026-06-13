@@ -257,6 +257,13 @@ fn any_file_matches(root: &Path, patterns: &[String]) -> bool {
     false
 }
 
+#[spec(
+    deviates = "spec://vibevm/discipline/ENGINE-CONFORM-v0.1#rules",
+    reason = "ambient-env: the `if_command` activation channel (PROP-003 §2.5.2) resolves \
+              a command against PATH — reading `PATH` is the predicate's definition, \
+              inherent-env domain, not config a composition root could thread in ahead of \
+              the user's `[activation]` rule"
+)]
 fn command_resolves_on_path(name: &str) -> bool {
     let path_var = match std::env::var_os("PATH") {
         Some(v) => v,

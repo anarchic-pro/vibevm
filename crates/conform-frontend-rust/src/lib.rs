@@ -50,7 +50,9 @@ impl Frontend for RustFrontend {
         // v4: UnwrapUse with fn-grain spec(deviates) scoping.
         // v5: UnsafeUse with the same test/deviates scoping, and
         //     unsafe impl methods extracted (they were invisible).
-        "5"
+        // v6: EnvRead facts (env::var/var_os/set_var/remove_var) for the
+        //     ambient-env rule, with the same test/deviates scoping.
+        "6"
     }
 
     fn extract(&self, _file: &str, _crate_name: &str, module: &str, text: &str) -> Vec<Fact> {
@@ -73,7 +75,8 @@ impl Frontend for RustFrontend {
             | Fact::Ctor { line, .. }
             | Fact::UnsafeUse { line, .. }
             | Fact::ErrorVariant { line, .. }
-            | Fact::UnwrapUse { line, .. } => *line,
+            | Fact::UnwrapUse { line, .. }
+            | Fact::EnvRead { line, .. } => *line,
         });
         v.facts
     }
@@ -356,6 +359,24 @@ impl<'ast> Visit<'ast> for Extractor {
                 self.facts.push(Fact::Ctor {
                     type_name: segs[segs.len() - 2].clone(),
                     line: line_of(node),
+                });
+            }
+            // `env::{var,var_os,set_var,remove_var}` — the ambient-env
+            // signal. Matches `std::env::var(...)` and `env::var(...)` by
+            // the trailing `env::<method>` shape; carries the same
+            // test/deviates scoping as `UnwrapUse`.
+            if segs.len() >= 2
+                && segs[segs.len() - 2] == "env"
+                && matches!(
+                    segs[segs.len() - 1].as_str(),
+                    "var" | "var_os" | "set_var" | "remove_var"
+                )
+            {
+                self.facts.push(Fact::EnvRead {
+                    method: segs[segs.len() - 1].clone(),
+                    line: line_of(node),
+                    in_test: self.test_depth > 0,
+                    in_deviation: self.deviating_depth > 0,
                 });
             }
         }

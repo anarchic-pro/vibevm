@@ -16,7 +16,7 @@ mod budget;
 mod diagnostics;
 mod structure;
 
-pub use budget::{FileLength, NoUnwrapInDomain, UnsafeGate};
+pub use budget::{AmbientEnv, FileLength, NoUnwrapInDomain, UnsafeGate};
 pub use diagnostics::{ErrorEnumCitesReq, ErrorMessageCitesReq, PubDoctest, SeamHasDoctest};
 pub use structure::{CellHasOracle, CellIsolation, FlagSites};
 
