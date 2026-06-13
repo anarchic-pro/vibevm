@@ -1,254 +1,246 @@
 # CONTINUE.md — cold-resume checkpoint
 
-_Written 2026-06-12 at session end (the second session of this day).
-**The SHRINK PLAN is executed to completion**: all six phases of
-[`spec/terraforms/SHRINK-PLAN-v0.1.md`](spec/terraforms/SHRINK-PLAN-v0.1.md)
-ran the same day the plan was authored — conform baseline **130 → 10**
-(the owner-gated unsafe octet + the two MCP-parked files, exactly the
-plan's §0 exit arithmetic), the five-gate panel green on the final
-tree, ~20 commits (`254b974` … `d39769b`) pushed. The session also
-recorded the **session-resume contract** in the `CLAUDE.md` trio:
-«восстанови сессию» restores state, reports, and STOPS — the owner
-steers from there._
+_Written 2026-06-13 mid-execution of **CONVERT-PLAN v0.1** under the owner
+goal «выполнить CONVERT-PLAN-v0.1 до конца, фаза 7 тоже разгейчена».
+Phases 0, 1, 2 are **complete**; Phase 3 core depth (3.2, 3.4, 3.5) is
+done; the large remaining phases need dedicated continuation. 30 commits
+this run (`6f41359` … `4be55c6`), all on `origin/main`, panel green at
+every commit._
 
-> **`spec/WAL.md` is the canonical living state.** If this snapshot
-> and the WAL disagree, the WAL wins. Boot first (`CLAUDE.md` →
-> `spec/boot/INDEX.md` → its files, including the two installed
-> Discipline snippets → `spec/WAL.md`), then read this.
+> **`spec/WAL.md` is the canonical living state and its header is
+> current.** If this snapshot and the WAL disagree, the WAL wins. Boot
+> first (`CLAUDE.md` → `spec/boot/INDEX.md` → its files incl. the two
+> Discipline snippets → `spec/WAL.md`), then read this. The **git log is
+> the authoritative per-item record** — every commit cites its
+> CONVERT-PLAN item.
 
 ---
 
 ## TL;DR
 
-The owner set the goal «SHRINK-PLAN-v0.1.md должен быть выполнен до
-конца», and it was: Phase 0 (hygiene + `GitBackend` doctest +
-frontend v4 deviates-awareness), Phase 1 (R-001 wiring of
-Registry-cell construction), Phase 2 (all 24 unwrap sites — 18
-restructures, 3 honest conversions, 3 `#[spec(deviates)]`
-testimonies; the rule's count is **zero**), Phase 3 (all 68 error
-messages in the Class-F grammar via four parallel agents; **zero**),
-Phase 4 (all 26 active over-budget files ≤ 600 physical lines via six
-parallel agents, ~40 new modules; `file-length` = 2, the parked MCP
-pair), Phase 5 (the `PackageScanner` seam: trait + two `#[cell]`
-variants + seam-driving oracles; **cell-has-oracle green at 20
-cells**). Three plan predictions were falsified and recorded in place
-(the stale-trio premise, the ≥1/3 deviates rate); four held (≤50-line
-Phase 1, <10 broken expectations in Phase 3, tests-out ≥10 in Phase
-4, zero new test files in Phase 5). Earlier the same day (previous
-session): the PROP-013 depth audit and the depth program itself.
+The owner set «execute CONVERT-PLAN-v0.1 to completion, Phase 7 also
+un-gated». The plan (`spec/terraforms/CONVERT-PLAN-v0.1.md`) is a
+~15–18-sitting full-depth conversion of strata B/C. This run executed
+**Phases 0–2 completely and Phase 3's core depth (3.2, 3.4, 3.5)** to
+high quality — the five-gate panel green on every commit, a full
+`self-check` confirmed all-green. The remaining work — Phase 3's two
+structural niceties (3.1, 3.3), and Phases 4, 5, 6, 7 — is genuinely
+large (Phase 4 moves ~2.5k LOC; Phase 7 overhauls vibe-mcp), and is
+mapped precisely below + in the WAL header.
 
 ## Where work stands
 
-- **Branch `main` @ `d39769b`** (plus this checkpoint's commits), in
-  sync with `origin/main`; working tree clean. (`new`,
-  `m1.17-workspace` remain as retained merged branches.)
-- **No active blocker. No self-running next unit remains** — the
-  shrink plan was the queue, and it is drained. Everything that
-  follows is owner-gated (see "Owner court" below); the natural
-  candidate for the next working session is **authoring the
-  gate-expansion plan** (`CONFORM_GATED` → vibe-core / vibe-index),
-  which the shrink plan explicitly reserved as the NEXT plan's
-  opening move.
-- **Gate panel, all green on this tree** (each gate's own exit code):
-  `cargo xtask specmap --check` — 442 units / 394 items / 404 edges /
-  0 suspects / 0 gated orphans (10 DBT-0020 dispositions, 7 exempt
-  crates); `cargo xtask conform check` — 10 frozen / 0 new (9 rules;
-  residual = 8 unsafe-gate + 2 MCP file-length); `cargo xtask
-  test-gate` — 1123 results / 0 failed / 3 skipped, xfail-strict;
-  `cargo xtask fast-loop --enforce-budget` — 18/18 < 60s;
-  `bash tools/self-check.sh` — fmt, workspace tests, clippy -D
-  warnings, `vibe check` 0/0/0.
+- **Branch `main` @ `4be55c6`**, in sync with `origin/main`, working tree
+  clean. (Plus this checkpoint's commits.)
+- **No blocker. The panel is green.** The next unit is the plan's next
+  item, in order: Phase 3 tail (3.1 → 3.3) then Phase 4.
+- **Gate panel** (each gate's own exit code, last verified): `specmap
+  --check` — 442 units / 413 items / 424 edges / 0 suspects / 0 warnings;
+  `conform check` — **57 frozen / 0 new** (file-length: 2 [the parked MCP
+  pair]; pub-doctest: 55 [vibe-core's ratcheted type doc-debt, see
+  below]); `self-check.sh` — all green.
 
-## Session-resume contract (NEW — read before resuming)
+## What this run delivered (Phases 0–2 complete + Phase 3 core)
 
-`CLAUDE.md` (and its identical `AGENTS.md` / `GEMINI.md` copies) now
-carries a **Session-resume command** section: «ВОССТАНОВИ СЕССИЮ» /
-«RESUME SESSION» means boot fully, verify repository state
-empirically, **report in chat, and stop**. No code edits, no plan
-execution, no commits, no pushes until the owner sets direction. Any
-"next step" named in this file is a *candidate for the report*, not
-an authorisation.
+- **Phase 0 — hygiene** (8 commits, `173bb15`…`616e9db`): PROP-014
+  self-marks its six units (specmap warnings 6→0); stub-status headers;
+  ServerLock → crate-level `src/lock.rs` seam; `vibe search` reads env at
+  the composition root; short-name drops len-checked expects;
+  conform-frontend-rust + env-audit gated → **CONFORM_GATED 12** with a
+  checked `CONFORM_EXEMPT` reasons table (partition test).
+- **Phase 1 — vibe-core armor** (`173bb15`…`00cf8c1`): all **7 newtypes**
+  — RelPath, PackageName, CapabilityNamespace, CapabilityName,
+  ContentHash, SourceUrl, TraceId — serde-transparent + `Deref<str>`
+  (Deref is what collapses the read-site cascades; `from_validated`/`new`
+  at trusted reconstruction seams, `parse` validates only untrusted
+  input). 9 vibe-core seam doctests. **The `pub-doctest` Class-G gate**
+  (`647ce68`) — froze vibe-core's 55 undocumented public *types*
+  shrink-only (the plan predicted single-digit; FALSIFIED). Lockfile's
+  explicit lockfile-schema edge.
+- **Phase 2 — declare surfaces**: RepoCreator's 3 adapters became
+  `#[cell]`s with a seam-driving oracle (cells 20→23) + the R-001
+  construction moved to the registry module (`3bd4cfc`); token-redaction
+  tests gained `#[verifies]` (`14ce2b0`); `Publisher::publish` got its
+  error contract (`54446d0`); BootBand pins the effective-boot order
+  (`8e65a1d`). **vibe-install (2.4) was already full-depth from v0.2** —
+  §10 left it untouched.
+- **Phase 3 — vibe-index core depth**: the in-RAM Index teaches its full
+  read/write lifecycle by doctest via a new public
+  `VersionEntry::minimal(kind, group, name, version)` fixture builder
+  (`eb85cbb`, `bc540db`); the rate-limiter's refill is a pure runnable
+  model `refilled_tokens(...)` with a doctest (`e6c0ac1`); the 21 ApiError
+  RFC-7807 `detail` strings carry Class-F `(violates spec://…#http;
+  fix:…)` tails (`4be55c6`).
 
-## Candidate next steps (for the resume report)
+## EXACT next-steps recipe (resume here, in plan order)
 
-1. **Author the gate-expansion plan** (the reserved next move):
-   `CONFORM_GATED` grows to vibe-core and vibe-index, freezing their
-   error enums / seams / unwraps as the new ratcheted queue.
-   vibe-index is pre-paid: it already carries two cells, a seam
-   doctest, and oracle tests from Phase 5.
-2. **Owner-court items** (unchanged, any time): the history-rewrite
-   question (what re-hashed the adoption-day chain — audit -01 rider,
-   still unanswered); publishing the two Discipline packages;
-   production solver selection (R-001 flag `solver=sat`); the
-   PROP-010 design session; DBT-0020 (MCP spec home; two files parked
-   behind it — the baseline's residual file-length pair); the four
-   open-instrument predictions; the PROP-014 external-namespace
-   amendment — **new input from this session**: unwrap testimonies
-   cite `ENGINE-CONFORM-v0.1#rules` because `discipline://` is not
-   addressable in specmark's grammar; Discipline v0.3 inputs.
-3. The unsafe-gate octet (AUD-0016) stays an owner decision; the
-   audit-crate designation would drain it.
+1. **Phase 3 tail** (both non-gate-forced — vibe-index is already
+   gate-green; do for depth):
+   - **3.1 server seams + fakes**: make `TokenStore` /
+     `RateLimiter` (in `crates/vibe-index/src/server/`) trait seams with
+     in-memory fakes, `AppState` holds the seam objects, handlers consume
+     them, new unit tests drive handlers through the fakes; the existing
+     `server_e2e` / `rate_limit_e2e` suites stay as behavioral oracles. No
+     `#[cell]` (one production variant — §10); the seam + fake is the
+     deliverable. *Substantial — a DI refactor of the server wiring; do
+     with care.*
+   - **3.3 split `types/entry.rs`** (499 lines, 15 structs) into a module
+     family `types/entry/{mod,compat,provides,…}.rs`, each ≤150 lines,
+     every child carrying the parent's `scope!`. *Mechanical but
+     UNFORCED (entry.rs is under the 600 budget); modest value.*
+2. **Phase 4 — vibe-cli facade diet (HUGE).** Move ~2.5k LOC of domain to
+   gated lib crates, then flip vibe-cli into `CONFORM_GATED`:
+   - 4.1 search domain (`commands/search_full_scan.rs`,
+     `search_cache.rs`, the scoring half of `search.rs`) →
+     `vibe-registry::search` module family, born gated (scope! + edges +
+     Class-F errors + doctests). 4.2 vendor + redirect-sync →
+     vibe-registry. 4.3 `apply_git_source_flag` manifest mutation →
+     vibe-install typed request. 4.4 init.rs templates → data
+     (`include_str!`). 4.5 Class-F on the CLI's remaining thiserror
+     enums. 4.6 drain then flip `CONFORM_GATED += vibe-cli` → 13.
+3. **Phase 5 — toolchain under its own law.**
+   - 5.1 flip specmark + specmark-grammar into `CONFORM_GATED`. **GOTCHA
+     (this run found it): NOT zero-drain.** The flip surfaces **12
+     seam-has-doctest findings** — 8 on specmark-grammar's public grammar
+     API (`Verb`, `SpecUri`, `EdgeSpec`, `SpecArgs`, `UriArgs`,
+     `CellArgs`, `is_valid_anchor`, `parse_spec_uri`) and 4 on specmark's
+     proc-macros (`spec`, `verifies`, `scope`, `cell`). Drain them with
+     doctests before flipping (the *Args ones parse via `syn`, awkward;
+     the proc-macros need doctests that *invoke* `#[specmark::…]` — valid
+     in a proc-macro crate's doctests). Also remove both from the
+     `CONFORM_EXEMPT` table when flipping (the partition test
+     `every_crate_is_gated_or_exempt` enforces disjointness). The
+     `scope!`-bootstrap exemption stays only in `specmap-ratchet.json`.
+   - 5.2 the new `ambient-env` rule (R-001 projection): needs a frontend
+     bump to emit `EnvRead` facts (env::var/var_os/set_var outside
+     `#[cfg(test)]`); the rule fires on gated crates for reads outside the
+     recorded roots (`vibe-cli/src/main.rs`, vibe-index reindex root) and
+     outside env-audit; escape via fn-grain `#[spec(deviates)]`.
+     Phase-0.4 already pre-cleaned the two known search-env reads.
+   - 5.3 xtask stays exempt on the record.
+4. **Phase 6 — spec layer truth pass.** *Largely satisfied already:* the
+   foundation types are in the retrieval index via `scope!` inheritance;
+   PROP-011 `#skip-resolution` is already pinned by freshness.rs's
+   `scope!`, `#materialise-diff` by user_config.rs's. PROP-010 already
+   reads DRAFT/requirements-record (6.4 is effectively done). REMAINING:
+   6.1 PROP-000 kind audit (24 units — mark `req`/informative), 6.3
+   process-doc `guide`/informative markers (PROP-006/013/LEDGER/
+   BROWNFIELD). Low code-risk, tedious. Mind: adding an `implements` edge
+   to an UNMARKED unit raises a pin-into-unmarked-unit specmap warning
+   (Phase 0.3 lesson) — mark the unit `req r1` in the same change.
+5. **Phase 7 — MCP endgame (OWNER UN-GATED — DBT-0020 lifted; HUGE).**
+   7.1 spec home `spec/modules/vibe-mcp/PROP-0xx`. 7.2 vibe-mcp
+   `tools.rs` (720 lines) → `McpTool` trait + 3 `#[cell]`s + Class-F +
+   scope! + oracles. 7.3 drain the **2638-line**
+   `vibe-cli/src/commands/mcp.rs` (agent detection, config writers, skill
+   gen) into vibe-mcp behind typed surfaces, templates → data, CLI ≤600.
+   7.4 close the ledgers: vibe-mcp exits `specmap-ratchet.json` exempt
+   and enters `CONFORM_GATED`; **both `file-length` baseline entries
+   drain; baseline → 0**; the 10 DBT-0020 dispositioned orphans resolve.
 
-## Non-obvious findings (this session)
+## Cadence (the discipline every batch follows)
 
-- **Measure line counts with the gate's own counter.** The plan's
-  "stale trio" premise came from `Measure-Object -Line` (skips
-  blanks); the conform rule counts `text.lines().count()` (physical).
-  566/556/554 vs 609/612/608 — the prune was a no-op and the trio was
-  real Phase-4 work. Probe empirically; never trust a number whose
-  measuring tool you can't name.
-- **The conform frontend parses files standalone.** A
-  `#[cfg(test)] #[path = "<stem>/tests.rs"] mod tests;` include keeps
-  the module tree identical, but the scanner never sees the parent's
-  cfg-gate — non-`#[test]` fixture items in the moved file leak
-  `no-unwrap-in-domain` facts. House device: wrap fixtures in an
-  inner `#[cfg(test)] mod fixtures { … }` (+ re-export). Every
-  Phase-4 tests-out file uses it.
-- **Frozen unsafe-gate ordinals pin code in place.** All four
-  `unsafe-gate|output.rs|block#N` fingerprints live in *test-only*
-  env guards; moving them to the new tests file would mint four new
-  findings. The guards stayed in `output.rs` as `#[cfg(test)]` items
-  in original order.
-- **The deviates grammar is stricter than the discipline's sketch.**
-  `#[spec(deviates, reason)]` (the guide's shorthand) does not parse;
-  specmark requires `deviates = "<spec://uri>"` + mandatory `reason`,
-  and the URI must resolve to a live unit (suspect check). The
-  spec-side home chosen for unwrap testimonies:
-  `spec://vibevm/discipline/ENGINE-CONFORM-v0.1#rules` (the unit that
-  defines deviation-acknowledgment). Frontend v4 honors the verb at
-  **fn grain only** — impl/struct/mod-level deviates (the live
-  solver-choice edges) grant no unwrap amnesty.
-- **A freeze never legalises new findings.** The first 2a freeze
-  would have written 3 grammarless new variants into the baseline
-  (+3/−11); the baseline was `git restore`d, the messages fixed to
-  carry the grammar, and only then re-frozen (−11/+0). New error
-  variants must be *born* in the Class-F grammar.
-- **Two "invariants" weren't.** `Manifest::validate()` provably does
-  not check var-dep names (the old expect's claim was unverified →
-  real user-reachable error, new `BadVarDepRef` variant), and
-  `RedirectSection`'s pub fields admit pinned-without-pinned_ref
-  programmatic construction (→ `MalformedMeta`). Also fixed latent:
-  `VersionReq::parse("={version}")` panics on build metadata —
-  replaced with typed `semver::Comparator` construction.
-- **`pub(super)` items cannot be re-exported wider** (E0364) — the
-  Phase-4c children use `pub(in crate::commands::registry)`.
-- **CellHasOracle detects references via Import/Ctor facts** in
-  `crates/<crate>/tests/` — importing the cell type in the test file
-  satisfies it; struct-literal construction alone does not (no Ctor
-  fact without `::new`).
-- Machine quirks (carried over, still true): Windows UAC blocks
-  test exes named \*install\* (PROP-007 §9.5); PowerShell 5.1
-  corrupts UTF-8-no-BOM round-trips (edit via tools only; `git
-  restore` to recover); `bash` in PowerShell resolves to WSL —
-  `tools/self-check.sh` runs through Git Bash; PS 5.1 wraps native
-  stderr in fake NativeCommandError noise (check `$LASTEXITCODE`,
-  not the red text); one transient `cargo test` exit 255 with all
-  binaries green resolved on re-run.
+Per-crate gated batch → topic commit(s) citing the CONVERT-PLAN item →
+`cargo build` + crate tests + `cargo fmt --all` + `cargo xtask conform
+check` (0 new) + `cargo xtask specmap --check` (regen on any tag/line
+move) + a shrink-only freeze diff where the baseline is touched. Run
+`bash tools/self-check.sh` (via Git Bash, NOT WSL) at phase boundaries —
+**check `$?`, not a tail pipe** (a `| tail` masks the real exit code).
+Any batch is a safe stopping point.
 
-## Repository map (delta vs the depth-program era)
+## Non-obvious findings (this run)
 
-```
-vibevm/
-├── spec/terraforms/SHRINK-PLAN-v0.1.md   ← status: EXECUTED (header carries the record)
-├── conform-baseline.json                 ← 10 entries: 8 unsafe-gate + 2 MCP (all owner-gated)
-├── CLAUDE.md / AGENTS.md / GEMINI.md     ← + Session-resume command section
-├── crates/
-│   ├── vibe-registry/src/
-│   │   ├── git_package_registry/{mod,auth,urls,fetch,lookup,test_support}.rs
-│   │   │                                 ← fetch split; package_urls returns (primary, mirrors)
-│   │   ├── multi_registry_resolver/{mod,walk,dispatch,redirect_follow,sources,refresh,test_support}.rs
-│   │   └── */tests.rs                    ← tests-out idiom everywhere (#[path] + fixtures mod)
-│   ├── vibe-index/src/scanner/           ← THE NEW SEAM
-│   │   ├── mod.rs                        ← trait PackageScanner + doctest
-│   │   ├── from_clones.rs                ← cell: PackageScanner/from-clones
-│   │   ├── from_github.rs                ← cell: PackageScanner/from-github
-│   │   └── org_walk.rs                   ← the shared walk (ex-from_clones.rs, renamed with history)
-│   ├── vibe-cli/src/
-│   │   ├── cli.rs + cli/{registry,pkg,mcp,inspect,workspace}.rs   ← arg families
-│   │   ├── output.rs + output/tests.rs   ← unsafe guards pinned in output.rs
-│   │   └── commands/
-│   │       ├── install/{mod,pipeline,planning,recording,resolver,tests}.rs
-│   │       ├── registry/redirect/{mod,create,sync,update,tests}.rs
-│   │       ├── registry/config/{mod,list,add,mirror,remove,test,tests}.rs
-│   │       ├── show/{mod,effective,config,features,subskills,purls}.rs
-│   │       ├── workspace/{mod,publish,origin,tests}.rs
-│   │       └── search.rs + search/purl.rs
-│   ├── vibe-workspace/src/{lib,expand}.rs + publish/{staging,tests}.rs
-│   ├── vibe-publish/src/{lib,creator,orchestrator}.rs
-│   ├── conform-core/src/rules/{mod,structure,diagnostics,budget,tests}.rs
-│   ├── conform-frontend-rust/            ← v4: UnwrapUse.in_deviation (fn-grain)
-│   └── vibe-core/src/manifest/document/tests.rs, package_ref/tests.rs
-├── xtask/src/main.rs + {codemod,codegen,conform,fast_loop,tripwire,test_gate,specmap,trace}.rs
-└── crates/vibe-cli/src/commands/mcp.rs   ← still 2638 lines, PARKED (DBT-0020)
-```
+- **Deref<str> collapses newtype cascades.** PackageName's raw grep was
+  ~50 sites; with `Deref` + `PartialEq<str>` the real edits were a
+  handful of construction sites. Define ergonomic newtypes (Display,
+  Deref, PartialEq against str, From) and the compiler-led cascade is
+  small. The hard sites are reconstruction-from-validated-String in gated
+  crates (no unwrap allowed) → `from_validated` (a documented infallible
+  constructor) beats a fake-fallible signature that mints dead error
+  paths.
+- **The frontend already emits `is_pub` + `has_doctest`** on `Fact::Item`
+  (since v2) — `pub-doctest` (1.4) needed no frontend bump. Model new
+  conform rules on the existing ones in
+  `crates/conform-core/src/rules/{structure,diagnostics}.rs`; wire into
+  `xtask/src/conform.rs` `ConformRules` + its `refs()`; a Class-G rule
+  gets its own gated list (`GATED_PUB_DOCTEST`).
+- **A new conform rule's flip freezes its pre-existing findings ONCE**
+  (legal growth); thereafter shrink-only. `conform freeze` is the legal
+  moment. But a CRATE flip into `CONFORM_GATED` must NOT widen the
+  baseline (drain first) — `pub-doctest`'s landing froze 55, but the
+  conform-frontend-rust / env-audit flips drained to zero (0.7).
+- **`seam-has-doctest` lens**: lib.rs items + traits anywhere. So a crate
+  that re-exports its types from submodules (vibe-core) had its types
+  unseen — `pub-doctest` widened the lens to all public types under
+  `src/`.
+- **Files at the 600 budget are landmines**: boot.rs is exactly 600 after
+  2.3; an added line trips `file-length`. Use the tests-out idiom (the
+  Phase-4-of-SHRINK recipe) to split, or keep additions tiny.
+- Machine quirks (still true): Windows UAC blocks test exes named
+  \*install\*; PowerShell 5.1 corrupts UTF-8-no-BOM round-trips (edit via
+  tools, recover via `git restore`); `bash` in PowerShell = WSL, so
+  `self-check.sh` runs through Git Bash; `git commit` via `-F - <<'MSG'`
+  heredoc only (backtick `-m` double-corrupted messages before).
 
-## Decisions in force (this session's additions, long form)
+## Standing items
 
-- **The resume boundary is the owner's steering point.** Resume
-  commands restore and report only; execution starts when the owner
-  says so. (`CLAUDE.md` §Session-resume command; born from this
-  morning's misfire.)
-- **Deviates-testimony target policy:** pure-invariant unwrap escapes
-  cite `ENGINE-CONFORM-v0.1#rules` with a reason naming the rule and
-  the invariant; fn-grain only. An unrelated deviation on a wider
-  item never exempts what's inside it.
-- **The tests-out idiom is fixed:** production file keeps its place;
-  `#[cfg(test)] #[path = "<stem>/tests.rs"] mod tests;` + the moved
-  body wraps its fixtures in `#[cfg(test)] mod fixtures`. One idiom,
-  used by every Phase-4 file.
-- **New error variants are born in the Class-F grammar** — the rule
-  catches grammarless newcomers, and the freeze must never widen.
-- **The shrink plan's residual is owner court by design:** the unsafe
-  octet (AUD-0016) and the MCP pair (DBT-0020) park in the baseline
-  until their owner decisions land.
-- All prior-era decisions stand (four rules; spec-first flow; no CI
-  by owner decision; xfail-strict; derived data regenerated, never
-  hand-edited; `specmap.json` regenerated with every unit/tag/line
-  move; MCP parked; baseline shrink-only with freeze + diff review).
+- **The 55-entry pub-doctest freeze is ratcheted debt** on vibe-core's
+  public types (the plan's single-digit prediction was falsified — 55
+  types beyond the 9 primary seams). The gate stops NEW undocumented
+  types; draining the 55 is continuous ratchet work, not a phase blocker.
+- **5.1 is NOT zero-drain** (12 seam-doctest findings — see Phase 5
+  above); this run reverted the trial flip to keep the tree clean.
+- Owner-court (carried, unchanged): the 2026-06-11 history-rewrite
+  question (AUDIT 2026-06-12-01 rider); publishing the two Discipline
+  packages; production solver selection; PROP-010 design session;
+  Discipline v0.3 inputs.
 
-## Recent commit chain (newest first; all 2026-06-12, this session)
+## Recent commit chain (newest first; all this run, 2026-06-13)
 
 ```
-d39769b docs(wal): shrink-plan checkpoint - executed to completion
-475fa75 feat(index): the PackageScanner seam - two scanner cells manifested
-eb21099 chore(conform): freeze the Phase-4 baseline - the file debt is drained
-c79d685 refactor(publish): batch 4f - publish lib splits, core sheds tests
-f420afc refactor(conform): batch 4e - rules split per family, naive sheds tests
-c89c9aa refactor(cli): batch 4d - the arg hub, output, and xtask decompose
-15babfa refactor(cli): batch 4c - six command files become module families
-31886c2 refactor(workspace): batch 4b - four files under the budget
-7ebcae4 refactor(registry): batch 4a - seven files under the 600-line budget
-52067e3 chore(conform): freeze the Phase-3 baseline - the message debt is gone
-7747f1a refactor(workspace): batch 3d - 11 messages enter the Class-F grammar
-56832f5 refactor(resolver): batch 3c - 16 messages enter the Class-F grammar
-9902980 refactor(publish): batch 3b - 18 messages enter the Class-F grammar
-77b3f8b refactor(registry): batch 3a - 23 messages enter the Class-F grammar
-729578d refactor(registry): batch 2b - the unwrap ban reaches zero
-01d9eaa refactor(workspace): batch 2a - eleven unwrap sites leave the domain
-ad714fc refactor(cli): Registry-cell construction moves into the registry
-9fa6d54 docs(boot): the resume command restores state and stops
-30639e6 feat(conform): frontend v4 - fn-grain deviates testimony on unwraps
-83c0b7f docs(registry): GitBackend seam doctest - baseline sheds its entry
-254b974 docs(spec): the stale-trio premise is falsified - trio to Phase 4
-158806c docs(wal): session-end checkpoint                  (prior session)
-10e2d64 docs(continue): session-end cold-resume checkpoint (prior session)
+4be55c6 docs(index): HTTP error details carry their spec tail        (3.5)
+8ae3fc7 docs(wal): Phase 3 core depth done (3.2, 3.4); the rest mapped
+bc540db feat(index): VersionEntry::minimal lets the index doctest …  (3.4)
+e6c0ac1 feat(index): the rate-limiter's refill is a runnable model   (3.2)
+eb85cbb docs(index): the in-RAM Index teaches its read path …        (3.4)
+fed8737 docs(wal): Phases 1 and 2 complete, Phase 3 next
+8e65a1d docs(workspace): BootBand pins the effective-boot order      (2.3)
+54446d0 docs(publish): Publisher::publish carries its error contract (2.2)
+14ce2b0 docs(publish): token-redaction tests verify the secrecy REQ  (2.1)
+3bd4cfc feat(publish): RepoCreator's three adapters become cells     (2.1)
+00cf8c1 docs(core): Lockfile carries an explicit lockfile-schema edge(1.5)
+647ce68 feat(conform): pub-doctest rule gates vibe-core's type …     (1.4)
+9fd2418 docs(wal): Phase 1.1 complete (all seven newtypes), 1.3 done
+f99976e feat(core): SourceUrl and TraceId newtypes complete the 1.1 …(1.1)
+4c46eae feat(core): ContentHash newtype for the identity digest      (1.1)
+987c50b docs(wal): CONVERT-PLAN v0.1 in-progress checkpoint
+17f7344 docs(core): doctests on the Manifest, Lockfile, UserConfig … (1.3)
+0eac0cc docs(core): compiled doctests on the identity seams          (1.3)
+0258639 feat(core): CapabilityNamespace and CapabilityName newtypes  (1.1)
+7d4f041 feat(core): PackageName newtype for kebab-case package …     (1.1)
+69ec16e feat(core): RelPath newtype for portable workspace …         (1.1)
+616e9db chore(conform): exemptions carry recorded reasons           (0.1)
+8e3ea13 chore(conform): frontend-rust and env-audit enter the gate  (0.7)
+006db88 docs(conform): RustFrontend declares its seam doctest       (0.7)
+555cceb refactor(cli): search reads its env at the composition root (0.4)
+0392127 docs(spec): PROP-014 marks its own six units                (0.3)
+413f8fd refactor(index): ServerLock becomes a crate-level lock seam  (0.6)
+37e3f5c refactor(cli): short-name resolution drops len-checked …     (0.5)
+173bb15 docs(graph,llm): stub crates declare their deferred scope    (0.2)
 ```
-
-(The session-end checkpoint commits for this file and the WAL land
-immediately after `d39769b`.)
 
 ## Quick-start
 
 ```sh
 cargo xtask specmap --check              # index + orphan ratchet
-cargo xtask conform check                # facts → 9 rules → SARIF → baseline
-cargo xtask conform freeze               # rewrite baseline (legality: new rule or shrink, diff-reviewed)
+cargo xtask conform check                # facts → 9 rules → SARIF → baseline (57 frozen / 0 new)
+cargo xtask conform freeze               # rewrite baseline (legal: new rule, or shrink, diff-reviewed)
 cargo xtask test-gate                    # nextest, xfail-strict
-cargo xtask fast-loop --enforce-budget   # 18 cells < 60s
-bash tools/self-check.sh                 # via Git Bash, NOT WSL
-cargo xtask trace explain <symbol|uri> [--text|--json|--prose]
+cargo xtask fast-loop --enforce-budget   # cells < 60s
+bash tools/self-check.sh                 # via Git Bash, NOT WSL — check $?, not a tail pipe
 ```
 
 Session-resume phrase: `восстанови сессию` — **restores state and
-reports, then waits for the owner's direction** (the CLAUDE.md
-contract). The WAL supersedes this snapshot wherever they diverge.
+reports, then waits for the owner's direction** (the CLAUDE.md contract).
+The plan is `spec/terraforms/CONVERT-PLAN-v0.1.md`; the WAL supersedes
+this snapshot wherever they diverge.
