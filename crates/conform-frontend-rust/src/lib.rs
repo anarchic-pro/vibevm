@@ -11,6 +11,30 @@ use syn::visit::Visit;
 
 specmark::scope!("spec://vibevm/discipline/ENGINE-CONFORM-v0.1#frontends");
 
+/// The Rust T-syn [`Frontend`](conform_core::Frontend): parse a source
+/// string into conform facts in-process.
+///
+/// `RustFrontend` is a zero-sized seam — construct it directly and call
+/// [`extract`](conform_core::Frontend::extract). Every extraction opens
+/// with the file's line metrics, then the tagged items in source order;
+/// an unparseable file yields zero such facts (B5), never an error.
+///
+/// ```
+/// use conform_core::Frontend;
+/// use conform_frontend_rust::RustFrontend;
+///
+/// let facts = RustFrontend.extract(
+///     "lib.rs",
+///     "demo",
+///     "demo",
+///     "pub fn answer() -> u32 { 42 }\n",
+/// );
+/// assert!(!facts.is_empty()); // at least the FileMetrics fact
+/// assert_eq!(RustFrontend.id(), "rust-syn");
+///
+/// // Unparseable input is tolerated: zero facts, no panic.
+/// assert!(RustFrontend.extract("x.rs", "demo", "demo", "fn (").is_empty());
+/// ```
 pub struct RustFrontend;
 
 impl Frontend for RustFrontend {
