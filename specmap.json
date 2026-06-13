@@ -555,13 +555,6 @@
     },
     {
       "crate_name": "vibe-cli",
-      "file": "crates/vibe-cli/src/commands/search_full_scan.rs",
-      "item_kind": "mod",
-      "line": 26,
-      "symbol": "vibe_cli::commands::search_full_scan"
-    },
-    {
-      "crate_name": "vibe-cli",
       "file": "crates/vibe-cli/src/commands/short_name.rs",
       "item_kind": "mod",
       "line": 19,
@@ -2151,6 +2144,20 @@
     },
     {
       "crate_name": "vibe-registry",
+      "file": "crates/vibe-registry/src/search/full_scan.rs",
+      "item_kind": "mod",
+      "line": 26,
+      "symbol": "vibe_registry::search::full_scan"
+    },
+    {
+      "crate_name": "vibe-registry",
+      "file": "crates/vibe-registry/src/search/full_scan.rs",
+      "item_kind": "enum",
+      "line": 46,
+      "symbol": "vibe_registry::search::full_scan::FullScanError"
+    },
+    {
+      "crate_name": "vibe-registry",
       "file": "crates/vibe-registry/tests/index_fast_path.rs",
       "item_kind": "fn",
       "line": 229,
@@ -3580,14 +3587,6 @@
       "file": "crates/vibe-cli/src/commands/search/purl.rs",
       "from_symbol": "vibe_cli::commands::search::purl",
       "line": 4,
-      "provenance": "authored",
-      "uri": "spec://vibevm/modules/vibe-index/PROP-005#root",
-      "verb": "implements"
-    },
-    {
-      "file": "crates/vibe-cli/src/commands/search_full_scan.rs",
-      "from_symbol": "vibe_cli::commands::search_full_scan",
-      "line": 26,
       "provenance": "authored",
       "uri": "spec://vibevm/modules/vibe-index/PROP-005#root",
       "verb": "implements"
@@ -5488,6 +5487,22 @@
       "line": 25,
       "provenance": "authored",
       "uri": "spec://vibevm/modules/vibe-index/PROP-005#root",
+      "verb": "implements"
+    },
+    {
+      "file": "crates/vibe-registry/src/search/full_scan.rs",
+      "from_symbol": "vibe_registry::search::full_scan",
+      "line": 26,
+      "provenance": "authored",
+      "uri": "spec://vibevm/modules/vibe-registry/PROP-002#registry-model",
+      "verb": "implements"
+    },
+    {
+      "file": "crates/vibe-registry/src/search/full_scan.rs",
+      "from_symbol": "vibe_registry::search::full_scan::FullScanError",
+      "line": 48,
+      "provenance": "authored",
+      "uri": "spec://vibevm/modules/vibe-registry/PROP-002#registry-model",
       "verb": "implements"
     },
     {

@@ -11,7 +11,6 @@ pub mod outdated;
 pub mod registry;
 pub mod reinstall;
 pub mod search;
-pub mod search_full_scan;
 pub mod short_name;
 pub mod show;
 pub mod uninstall;

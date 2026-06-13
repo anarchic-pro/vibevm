@@ -27,12 +27,11 @@ use anyhow::{Context, Result, bail};
 use serde::Serialize;
 use vibe_core::PackageKind;
 use vibe_core::manifest::Manifest;
+use vibe_registry::search::cache::{self as search_cache, CacheKey};
+use vibe_registry::search::full_scan::{self as search_full_scan, FullScanHit};
 use vibe_registry::{IndexClient, SearchHit, index_url_for};
 
-use vibe_registry::search::cache::{self as search_cache, CacheKey};
-
 use crate::cli::SearchArgs;
-use crate::commands::search_full_scan::{self, FullScanHit};
 use crate::output;
 
 mod purl;
