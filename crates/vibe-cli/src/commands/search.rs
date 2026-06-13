@@ -227,25 +227,25 @@ pub fn run(ctx: &output::Context, args: SearchArgs, env: SearchEnv) -> Result<()
                     }
                 }
             }
-            None if full_scan => match run_full_scan_for_registry(
-                &query,
-                kind_filter,
-                reg,
-                &github_api_base,
-            ) {
-                Ok(hits) => {
-                    full_scanned.push(reg.name.clone());
-                    for h in hits {
-                        insert_hit_keep_highest(&mut by_pkg, make_full_scan_hit_row(&h, &reg.name));
+            None if full_scan => {
+                match run_full_scan_for_registry(&query, kind_filter, reg, &github_api_base) {
+                    Ok(hits) => {
+                        full_scanned.push(reg.name.clone());
+                        for h in hits {
+                            insert_hit_keep_highest(
+                                &mut by_pkg,
+                                make_full_scan_hit_row(&h, &reg.name),
+                            );
+                        }
+                    }
+                    Err(reason) => {
+                        full_scan_unsupported.push(UnreachableRegistry {
+                            name: reg.name.clone(),
+                            reason,
+                        });
                     }
                 }
-                Err(reason) => {
-                    full_scan_unsupported.push(UnreachableRegistry {
-                        name: reg.name.clone(),
-                        reason,
-                    });
-                }
-            },
+            }
             None => {
                 unconfigured.push(reg.name.clone());
             }
