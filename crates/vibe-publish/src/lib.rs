@@ -38,6 +38,7 @@ pub mod github;
 pub mod gitverse;
 mod orchestrator;
 pub mod post_hook;
+pub mod redirect_sync;
 pub mod token;
 
 pub use creator::{CreateOpts, RepoCreator, RepoInfo};

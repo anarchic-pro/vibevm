@@ -501,7 +501,7 @@
       "crate_name": "vibe-cli",
       "file": "crates/vibe-cli/src/commands/registry/redirect/sync.rs",
       "item_kind": "mod",
-      "line": 5,
+      "line": 8,
       "symbol": "vibe_cli::commands::registry::redirect::sync"
     },
     {
@@ -1831,7 +1831,7 @@
       "crate_name": "vibe-publish",
       "file": "crates/vibe-publish/src/lib.rs",
       "item_kind": "enum",
-      "line": 96,
+      "line": 97,
       "symbol": "vibe_publish::PublishError"
     },
     {
@@ -1889,6 +1889,20 @@
       "item_kind": "enum",
       "line": 65,
       "symbol": "vibe_publish::post_hook::HookError"
+    },
+    {
+      "crate_name": "vibe-publish",
+      "file": "crates/vibe-publish/src/redirect_sync.rs",
+      "item_kind": "mod",
+      "line": 18,
+      "symbol": "vibe_publish::redirect_sync"
+    },
+    {
+      "crate_name": "vibe-publish",
+      "file": "crates/vibe-publish/src/redirect_sync.rs",
+      "item_kind": "enum",
+      "line": 28,
+      "symbol": "vibe_publish::redirect_sync::RedirectSyncError"
     },
     {
       "crate_name": "vibe-publish",
@@ -3551,7 +3565,7 @@
     {
       "file": "crates/vibe-cli/src/commands/registry/redirect/sync.rs",
       "from_symbol": "vibe_cli::commands::registry::redirect::sync",
-      "line": 5,
+      "line": 8,
       "provenance": "authored",
       "uri": "spec://vibevm/modules/vibe-registry/PROP-002#redirect",
       "verb": "implements"
@@ -5151,7 +5165,7 @@
     {
       "file": "crates/vibe-publish/src/lib.rs",
       "from_symbol": "vibe_publish::PublishError",
-      "line": 112,
+      "line": 113,
       "provenance": "authored",
       "uri": "spec://vibevm/modules/vibe-registry/PROP-002#publish",
       "verb": "implements"
@@ -5218,6 +5232,22 @@
       "line": 68,
       "provenance": "authored",
       "uri": "spec://vibevm/modules/vibe-index/PROP-005#integration",
+      "verb": "implements"
+    },
+    {
+      "file": "crates/vibe-publish/src/redirect_sync.rs",
+      "from_symbol": "vibe_publish::redirect_sync",
+      "line": 18,
+      "provenance": "authored",
+      "uri": "spec://vibevm/modules/vibe-registry/PROP-002#redirect",
+      "verb": "implements"
+    },
+    {
+      "file": "crates/vibe-publish/src/redirect_sync.rs",
+      "from_symbol": "vibe_publish::redirect_sync::RedirectSyncError",
+      "line": 31,
+      "provenance": "authored",
+      "uri": "spec://vibevm/modules/vibe-registry/PROP-002#redirect",
       "verb": "implements"
     },
     {

@@ -2,7 +2,6 @@
 
 specmark::scope!("spec://vibevm/modules/vibe-registry/PROP-002#redirect");
 
-use super::sync::{build_target_fetch_url, derive_target_token_env, inject_token_into_url};
 use super::update::{
     build_redirect_update_commit_msg, compute_updated_redirect_section, diff_redirect_sections,
 };
@@ -12,7 +11,10 @@ use std::path::PathBuf;
 use vibe_core::manifest::{AuthKind, RedirectSection, RefPolicy};
 
 // -----------------------------------------------------------------
-// redirect / redirect-sync helpers (PROP-002 §2.4.2)
+// redirect helpers (PROP-002 §2.4.2). The tag-sync helpers
+// (build_target_fetch_url / derive_target_token_env / inject_token_into_url)
+// moved with the domain into `vibe_publish::redirect_sync`; their unit
+// tests live there now (CONVERT-PLAN v0.1 §4.2).
 // -----------------------------------------------------------------
 
 #[test]
@@ -62,71 +64,6 @@ fn build_redirect_readme_includes_description_when_present() {
         Some("delegated to acme-corp"),
     );
     assert!(r.contains("delegated to acme-corp"));
-}
-
-#[test]
-fn derive_target_token_env_uppercase_and_underscore() {
-    assert_eq!(
-        derive_target_token_env("https://gitlab.acme.example/x").as_deref(),
-        Some("VIBEVM_TARGET_TOKEN_GITLAB_ACME_EXAMPLE")
-    );
-    assert_eq!(
-        derive_target_token_env("https://gitverse.ru/y").as_deref(),
-        Some("VIBEVM_TARGET_TOKEN_GITVERSE_RU")
-    );
-}
-
-#[test]
-fn inject_token_passes_through_ssh_form() {
-    let url = "git@github.com:vibespecs/flow-wal.git";
-    assert_eq!(inject_token_into_url(url, "secret"), url);
-}
-
-#[test]
-fn inject_token_skips_already_credentialed_https() {
-    let url = "https://existing:cred@github.com/x/y";
-    assert_eq!(inject_token_into_url(url, "newtoken"), url);
-}
-
-#[test]
-fn inject_token_embeds_into_https() {
-    let url = "https://github.com/vibespecs/flow-wal.git";
-    let out = inject_token_into_url(url, "abc123");
-    assert_eq!(
-        out,
-        "https://x-access-token:abc123@github.com/vibespecs/flow-wal.git"
-    );
-}
-
-#[test]
-fn build_target_fetch_url_none_passes_through() {
-    let section = RedirectSection {
-        target_url: "https://example.invalid/x".into(),
-        ref_policy: RefPolicy::PassThroughTag,
-        pinned_ref: None,
-        auth: AuthKind::None,
-        token_env: None,
-        description: None,
-    };
-    let out = build_target_fetch_url("https://example.invalid/x", &section).unwrap();
-    assert_eq!(out, "https://example.invalid/x");
-}
-
-#[test]
-fn build_target_fetch_url_token_env_demands_var_set() {
-    let section = RedirectSection {
-        target_url: "https://example.invalid/x".into(),
-        ref_policy: RefPolicy::PassThroughTag,
-        pinned_ref: None,
-        auth: AuthKind::TokenEnv,
-        token_env: Some("VIBEVM_TEST_DEFINITELY_UNSET_TOKEN_VAR".into()),
-        description: None,
-    };
-    let err = build_target_fetch_url("https://example.invalid/x", &section).unwrap_err();
-    assert!(
-        err.to_string()
-            .contains("VIBEVM_TEST_DEFINITELY_UNSET_TOKEN_VAR")
-    );
 }
 
 // -----------------------------------------------------------------

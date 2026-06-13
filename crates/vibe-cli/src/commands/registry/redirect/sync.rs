@@ -1,11 +1,15 @@
-//! `vibe registry redirect-sync` — target→stub tag mirroring
-//! (PROP-002 §2.4.2). Hosts the shared sync leg reused by
-//! `redirect --sync` and `redirect-update --resync`.
+//! `vibe registry redirect-sync` — the CLI surface for target→stub tag
+//! mirroring (PROP-002 §2.4.2). Argument parsing, registry resolution,
+//! the stub-existence probe, and rendering live here; the tag-mirroring
+//! domain lives in [`vibe_publish::redirect_sync`] (CONVERT-PLAN v0.1
+//! §4.2). Hosts the shared CLI leg reused by `redirect --sync` and
+//! `redirect-update --resync`.
 
 specmark::scope!("spec://vibevm/modules/vibe-registry/PROP-002#redirect");
 
 use anyhow::{Context, Result, anyhow, bail};
 use vibe_core::manifest::{Manifest, RegistrySection};
+use vibe_publish::redirect_sync::{self, RedirectSyncEvent, RedirectSyncObserver};
 use vibe_publish::{
     creator_for_url, extract_host_segment, extract_org_segment, load_token_for_host,
 };
@@ -15,6 +19,29 @@ use crate::commands::registry::resolve_project_root;
 use crate::output;
 
 use super::{RedirectSyncReport, require_group, resolve_target_registry};
+
+/// Renders [`RedirectSyncEvent`]s as the progressive per-tag output the
+/// tag-sync loop used to print inline.
+struct CliRedirectSyncObserver<'a>(&'a output::Context);
+
+impl RedirectSyncObserver for CliRedirectSyncObserver<'_> {
+    fn on(&self, event: RedirectSyncEvent) {
+        match event {
+            RedirectSyncEvent::WouldPush { tag } => {
+                self.0.step(&format!(
+                    "Would push tag `{tag}` (target has it; stub does not)"
+                ));
+            }
+            RedirectSyncEvent::Pushed { tag } => {
+                self.0.step(&format!("Pushed tag `{tag}` into stub"));
+            }
+            RedirectSyncEvent::AlreadyPresent { tag } => {
+                self.0
+                    .skipped(&format!("tag `{tag}`"), "already present on stub");
+            }
+        }
+    }
+}
 
 pub(in crate::commands::registry) fn run_redirect_sync(
     ctx: &output::Context,
@@ -127,9 +154,13 @@ pub(in crate::commands::registry) fn run_redirect_sync(
     }
     Ok(())
 }
-/// Inner sync logic — shared by `vibe registry redirect --sync` and
-/// `vibe registry redirect-sync`. Reads the stub's `vibe-redirect.toml`,
-/// enumerates target tags, pushes the missing ones into the stub.
+
+/// CLI-side leg shared by `redirect-sync`, `redirect --sync`, and
+/// `redirect-update --resync`: drive [`vibe_publish::redirect_sync`]'s
+/// tag-mirroring through a rendering observer and shape the result into
+/// the JSON-envelope [`RedirectSyncReport`]. The domain (shallow-clone,
+/// marker read, tag classification, push) lives in vibe-publish; this
+/// wrapper owns only the ctx→observer and outcome→report translation.
 pub(super) fn do_redirect_sync(
     ctx: &output::Context,
     registry_section: &RegistrySection,
@@ -139,172 +170,19 @@ pub(super) fn do_redirect_sync(
     push_url: &str,
     dry_run: bool,
 ) -> Result<RedirectSyncReport> {
-    use vibe_core::manifest::{RedirectFile, RefPolicy};
-    use vibe_publish::git_publish;
-
-    // Step 1: shallow-clone the stub so we can read the marker file
-    // and have a working tree to anchor new tags onto.
-    let stub_clone = git_publish::shallow_clone(push_url).map_err(|e| anyhow!("{e}"))?;
-    let marker_path = stub_clone.path().join(RedirectFile::FILENAME);
-    if !marker_path.exists() {
-        bail!(
-            "stub at `{stub_url}` does not carry `{}` at HEAD — is this actually a redirect \
-             stub? `vibe registry redirect-sync` only operates on stub repos.",
-            RedirectFile::FILENAME
-        );
-    }
-    let stub_file = RedirectFile::read(&marker_path).with_context(|| {
-        format!(
-            "parsing `{}` from stub `{stub_url}`",
-            RedirectFile::FILENAME
-        )
-    })?;
-
-    // Pinned policy — stub tags don't pass through, so syncing is a
-    // semantic mistake.
-    if matches!(stub_file.redirect.ref_policy, RefPolicy::Pinned) {
-        bail!(
-            "stub `{stub_url}` uses `ref_policy = \"pinned\"` — every consumer resolves to \
-             `pinned_ref = {:?}` regardless of stub tag, so there is nothing to sync. Edit \
-             `{}` to change the policy if you want pass-through behaviour.",
-            stub_file.redirect.pinned_ref.as_deref().unwrap_or(""),
-            RedirectFile::FILENAME
-        );
-    }
-
-    let target_url = stub_file.redirect.target_url.clone();
-    if target_url_hint != "<read-from-stub>" && target_url_hint != target_url {
-        // The CLI surface (`--to`) only matches the stub on `redirect`
-        // since `redirect-sync` reads from the stub itself. The hint
-        // disagreeing is a sanity check, not a hard error — log it.
-        tracing::debug!(
-            target: "vibe_cli::registry::redirect_sync",
-            "target_url hint `{target_url_hint}` disagrees with stub-stored `{target_url}`; using stub"
-        );
-    }
-
-    // Step 2: build a target-side fetch URL with credentials if the
-    // stub declares `auth = "token-env"`. Public targets need no token.
-    let target_fetch_url = build_target_fetch_url(&target_url, &stub_file.redirect)?;
-
-    // Step 3: list tags on both sides.
-    let target_tags = git_publish::ls_remote_tags(&target_fetch_url).map_err(|e| anyhow!("{e}"))?;
-    // For listing stub tags we use `git ls-remote` directly so we do
-    // not depend on the shallow clone having all refs (it does, by
-    // virtue of `--single-branch`, but ls-remote is the source of truth).
-    let stub_tags = git_publish::ls_remote_tags(push_url).map_err(|e| anyhow!("{e}"))?;
-
-    // Step 4: classify.
-    let mut to_push: Vec<String> = Vec::new();
-    let mut already: Vec<String> = Vec::new();
-    for t in &target_tags {
-        if stub_tags.iter().any(|s| s == t) {
-            already.push(t.clone());
-        } else {
-            to_push.push(t.clone());
-        }
-    }
-    to_push.sort();
-    already.sort();
-
-    if dry_run {
-        for t in &to_push {
-            ctx.step(&format!(
-                "Would push tag `{t}` (target has it; stub does not)"
-            ));
-        }
-        for t in &already {
-            ctx.skipped(&format!("tag `{t}`"), "already present on stub");
-        }
-        return Ok(RedirectSyncReport {
-            ok: true,
-            command: "registry:redirect-sync",
-            registry: registry_section.name.clone(),
-            pkgref: pkgref_qualified.to_string(),
-            stub_url: stub_url.to_string(),
-            target_url,
-            pushed_tags: to_push,
-            already_present: already,
-            dry_run: true,
-        });
-    }
-
-    // Step 5: push the missing tags. Each tag is annotated, anchored
-    // at the stub's `main` commit. Stubs are flat — tag → marker file
-    // — so the commit is identical regardless of which target tag the
-    // stub tag fronts.
-    for t in &to_push {
-        git_publish::push_tag_only(stub_clone.path(), push_url, t).map_err(|e| anyhow!("{e}"))?;
-        ctx.step(&format!("Pushed tag `{t}` into stub"));
-    }
-    for t in &already {
-        ctx.skipped(&format!("tag `{t}`"), "already present on stub");
-    }
-
+    let observer = CliRedirectSyncObserver(ctx);
+    let outcome =
+        redirect_sync::sync_redirect_tags(&observer, stub_url, target_url_hint, push_url, dry_run)
+            .map_err(|e| anyhow!("{e}"))?;
     Ok(RedirectSyncReport {
         ok: true,
         command: "registry:redirect-sync",
         registry: registry_section.name.clone(),
         pkgref: pkgref_qualified.to_string(),
         stub_url: stub_url.to_string(),
-        target_url,
-        pushed_tags: to_push,
-        already_present: already,
-        dry_run: false,
+        target_url: outcome.target_url,
+        pushed_tags: outcome.pushed_tags,
+        already_present: outcome.already_present,
+        dry_run,
     })
-}
-
-/// Build a fetch URL for the target side of a redirect, applying
-/// `[redirect].auth` if it asks for token-based auth. For `auth = "none"`
-/// this returns the URL verbatim; for `auth = "token-env"` it injects
-/// the resolved token using the same shape M1.14 plumbing applies
-/// (`https://x-access-token:<TOKEN>@host/...`). Other auth regimes
-/// (`credential-helper`, `ssh`) trust the local git's auth path.
-pub(super) fn build_target_fetch_url(
-    target_url: &str,
-    redirect: &vibe_core::manifest::RedirectSection,
-) -> Result<String> {
-    use vibe_core::manifest::AuthKind;
-    match redirect.auth {
-        AuthKind::None | AuthKind::CredentialHelper | AuthKind::Ssh => Ok(target_url.to_string()),
-        AuthKind::TokenEnv => {
-            let env_name = redirect
-                .token_env
-                .clone()
-                .or_else(|| derive_target_token_env(target_url))
-                .ok_or_else(|| {
-                    anyhow!(
-                        "target URL `{target_url}` declares auth = \"token-env\" but no \
-                         `token_env` is set and the host cannot be derived for a default \
-                         env-var name"
-                    )
-                })?;
-            let value = std::env::var(&env_name).map_err(|_| {
-                anyhow!(
-                    "target URL `{target_url}` declares auth = \"token-env\" with env-var \
-                     `{env_name}` but the variable is unset or empty in this shell"
-                )
-            })?;
-            Ok(inject_token_into_url(target_url, &value))
-        }
-    }
-}
-
-pub(super) fn derive_target_token_env(target_url: &str) -> Option<String> {
-    let host = extract_host_segment(target_url).ok()?;
-    let upper = host.to_ascii_uppercase().replace(['.', '-'], "_");
-    Some(format!("VIBEVM_TARGET_TOKEN_{upper}"))
-}
-
-pub(super) fn inject_token_into_url(url: &str, token: &str) -> String {
-    if !url.starts_with("https://") {
-        // SSH-form / file:// — token has nowhere to land; pass through.
-        return url.to_string();
-    }
-    let rest = &url[8..]; // past "https://"
-    if rest.contains('@') {
-        // Already credentialed — caller's choice; do not double-inject.
-        return url.to_string();
-    }
-    format!("https://x-access-token:{token}@{rest}")
 }
