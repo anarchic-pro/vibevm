@@ -50,6 +50,7 @@ use vibe_mcp::agent_config::{
     merge_json, merge_toml, read_json, read_toml, strip_json_entry, strip_toml_entry,
 };
 use vibe_mcp::agents::{Agent, ConfigFormat, ConfigPayload, Scope, What, detect_agents};
+use vibe_mcp::install::{AgentInstallReport, SkillInstallReport, install_skill};
 use vibe_mcp::{Server, ServerContext};
 
 use crate::cli::{
@@ -58,12 +59,6 @@ use crate::cli::{
 };
 use crate::exit_code::InstallError;
 use crate::output;
-
-/// Bytes of the `vibevm` SKILL.md template, vendored at compile time.
-/// The agent-profile + detection domain moved to `vibe_mcp::agents`
-/// (CONVERT-PLAN v0.1 §7.3); this template and the config-entry key stay
-/// with the CLI's skill writer / config I/O until those drain too.
-const SKILL_TEMPLATE: &str = include_str!("skill_template.md");
 
 /// The config-entry key vibevm writes under each agent's MCP section.
 const SERVER_NAME: &str = "vibevm";
@@ -99,26 +94,6 @@ fn run_serve(args: McpServeArgs) -> Result<()> {
 // ---------------------------------------------------------------------------
 // Reporting
 // ---------------------------------------------------------------------------
-
-#[derive(Debug, Clone, Serialize)]
-pub struct AgentInstallReport {
-    pub agent: String,
-    pub scope: &'static str,
-    pub config_path: String,
-    /// `created` / `updated` / `unchanged` / `would-create` /
-    /// `would-update` / `skipped`.
-    pub status: &'static str,
-    pub note: Option<String>,
-}
-
-#[derive(Debug, Clone, Serialize)]
-pub struct SkillInstallReport {
-    pub agent: String,
-    pub scope: &'static str,
-    pub path: Option<String>,
-    pub status: &'static str,
-    pub note: Option<String>,
-}
 
 #[derive(Debug, Serialize)]
 struct InstallReport {
@@ -1499,70 +1474,6 @@ fn resolve_project_root_required(path: &Path) -> Result<PathBuf> {
 // Skill artefact — per-agent SKILL.md writer
 // ---------------------------------------------------------------------------
 
-pub fn install_skill(
-    agent: Agent,
-    scope: Scope,
-    project_root: Option<&Path>,
-    dry_run: bool,
-) -> Result<SkillInstallReport> {
-    let agent_str = agent.as_str().to_string();
-    let scope_str = scope.as_str();
-
-    let Some(path) = agent.skill_path(scope, project_root)? else {
-        return Ok(SkillInstallReport {
-            agent: agent_str,
-            scope: scope_str,
-            path: None,
-            status: "skipped",
-            note: Some(format!(
-                "agent `{}` has no {}-scope skill loader",
-                agent.as_str(),
-                scope.as_str()
-            )),
-        });
-    };
-
-    let body = SKILL_TEMPLATE;
-    let path_str = path.display().to_string().replace('\\', "/");
-    let status = decide_skill_action(&path, body)?;
-
-    let final_status: &'static str = match (status, dry_run) {
-        ("unchanged", _) => "unchanged",
-        ("created", true) => "would-create",
-        ("updated", true) => "would-update",
-        (s, _) => s,
-    };
-
-    if !dry_run && final_status != "unchanged" {
-        if let Some(parent) = path.parent() {
-            fs::create_dir_all(parent)
-                .with_context(|| format!("creating skill dir `{}`", parent.display()))?;
-        }
-        fs::write(&path, body).with_context(|| format!("writing skill `{}`", path.display()))?;
-    }
-
-    Ok(SkillInstallReport {
-        agent: agent_str,
-        scope: scope_str,
-        path: Some(path_str),
-        status: final_status,
-        note: None,
-    })
-}
-
-fn decide_skill_action(path: &Path, body: &str) -> Result<&'static str> {
-    if !path.exists() {
-        return Ok("created");
-    }
-    let existing =
-        fs::read_to_string(path).with_context(|| format!("reading skill `{}`", path.display()))?;
-    if existing == body {
-        Ok("unchanged")
-    } else {
-        Ok("updated")
-    }
-}
-
 // ---------------------------------------------------------------------------
 // Tests
 // ---------------------------------------------------------------------------
@@ -1866,224 +1777,5 @@ mod tests {
             .unwrap();
         let s = p.display().to_string().replace('\\', "/");
         assert!(s.ends_with("/.opencode/skills/vibevm/SKILL.md"), "got {s}");
-    }
-
-    // ---- install_skill ----
-
-    #[test]
-    fn install_skill_creates_under_project() {
-        let dir = tempfile::tempdir().unwrap();
-        let r = install_skill(Agent::ClaudeCode, Scope::Project, Some(dir.path()), false).unwrap();
-        assert_eq!(r.status, "created");
-        let p = dir.path().join(".claude/skills/vibevm/SKILL.md");
-        assert!(p.exists());
-    }
-
-    #[test]
-    fn install_skill_dry_run_no_write() {
-        let dir = tempfile::tempdir().unwrap();
-        let r = install_skill(Agent::OpenCode, Scope::Project, Some(dir.path()), true).unwrap();
-        assert_eq!(r.status, "would-create");
-        assert!(!dir.path().join(".opencode/skills/vibevm/SKILL.md").exists());
-    }
-
-    #[test]
-    fn install_skill_skipped_for_unsupported_agents() {
-        let dir = tempfile::tempdir().unwrap();
-        let r = install_skill(Agent::Cursor, Scope::Project, Some(dir.path()), false).unwrap();
-        assert_eq!(r.status, "skipped");
-        assert!(r.path.is_none());
-    }
-
-    // ---- has_vibe_toml gate ----
-
-    #[test]
-    fn has_vibe_toml_returns_true_when_present() {
-        let dir = tempfile::tempdir().unwrap();
-        std::fs::write(dir.path().join(Manifest::FILENAME), "").unwrap();
-        assert!(has_vibe_toml(dir.path()));
-    }
-
-    #[test]
-    fn has_vibe_toml_returns_false_when_absent() {
-        let dir = tempfile::tempdir().unwrap();
-        assert!(!has_vibe_toml(dir.path()));
-    }
-
-    // ---- SKILL.md template content contract ----
-
-    #[test]
-    fn skill_template_has_required_frontmatter() {
-        assert!(SKILL_TEMPLATE.starts_with("---"));
-        assert!(SKILL_TEMPLATE.contains("name: vibevm"));
-        assert!(SKILL_TEMPLATE.contains("description: "));
-    }
-
-    #[test]
-    fn skill_template_documents_mcp_tools_and_invoked_by() {
-        assert!(SKILL_TEMPLATE.contains("query_package"));
-        assert!(SKILL_TEMPLATE.contains("read_subskill"));
-        assert!(SKILL_TEMPLATE.contains("materialise_subskill"));
-        assert!(SKILL_TEMPLATE.contains("--invoked-by"));
-        assert!(SKILL_TEMPLATE.contains("VIBE_INVOKED_BY"));
-    }
-
-    #[test]
-    fn skill_template_covers_both_bootstrap_and_inside_project_modes() {
-        // Two-state contract: the skill must explain BOTH the
-        // bootstrap path (no vibe.toml present, run `vibe init`) AND
-        // the inside-project path (vibe.toml present, query MCP).
-        // Without both sections, an agent in an empty directory has
-        // no actionable guidance for "create a vibevm project".
-        let body = SKILL_TEMPLATE.to_lowercase();
-        assert!(
-            body.contains("vibe init"),
-            "expected mention of `vibe init` for bootstrap"
-        );
-        assert!(
-            body.contains("section a"),
-            "expected explicit Section A header for bootstrap"
-        );
-        assert!(
-            body.contains("section b"),
-            "expected explicit Section B header for inside-project"
-        );
-        assert!(
-            body.contains("vibe.toml"),
-            "expected the detect-step to mention vibe.toml as the discriminator"
-        );
-        assert!(body.contains("vibe install"));
-    }
-
-    #[test]
-    fn skill_template_mentions_new_mcp_subcommands() {
-        // Slice 5 added upgrade / uninstall / status subcommands and
-        // the --scope / --what axes — they must appear in the help
-        // section so the agent knows to consider them.
-        assert!(SKILL_TEMPLATE.contains("upgrade"));
-        assert!(SKILL_TEMPLATE.contains("uninstall"));
-        assert!(SKILL_TEMPLATE.contains("--scope"));
-        assert!(SKILL_TEMPLATE.contains("--what"));
-    }
-
-    #[test]
-    fn skill_template_pins_non_tty_install_discipline() {
-        // Regression guard surfaced by a real-world walk against
-        // glm-flash via opencode: the model invoked `vibe install`
-        // without `--assume-yes`, mistook the printed plan for
-        // success, and only realised many steps later that the
-        // package had not actually installed. The skill must
-        // explicitly tell agents to pass `--assume-yes` on every
-        // install / uninstall, that the printed plan is not a
-        // status indicator, and that the harness has no TTY.
-        let body = SKILL_TEMPLATE.to_lowercase();
-        assert!(
-            body.contains("--assume-yes"),
-            "skill must mention --assume-yes for install/uninstall"
-        );
-        assert!(
-            body.contains("no tty") || body.contains("not a tty") || body.contains("non-tty"),
-            "skill must call out the non-TTY constraint explicitly"
-        );
-        assert!(
-            body.contains("exit code"),
-            "skill must direct agents to read the exit code, not the printed plan"
-        );
-    }
-
-    #[test]
-    fn skill_template_blocks_search_panic_loop() {
-        // Same opencode walk: when `vibe search` returned empty
-        // (no `VIBEVM_INDEX_URL_<R>` configured), the model
-        // diagnosed it as a registry misconfiguration and started
-        // adding new registries with fictional URLs and
-        // hallucinated index URLs. The skill must say:
-        //   - empty search is expected when no index is configured,
-        //   - install resolves directly through `[[registry]]`
-        //     without an index,
-        //   - do NOT add registries / set index URLs in response
-        //     to an empty search.
-        let body = SKILL_TEMPLATE.to_lowercase();
-        assert!(
-            body.contains("vibe_index_url") || body.contains("vibevm_index_url"),
-            "skill must name the index env-var so agents recognise the empty-search message"
-        );
-        assert!(
-            body.contains("does not consult the index")
-                || body.contains("does not need search")
-                || body.contains("does not need an index")
-                || body.contains("not a runtime dependency"),
-            "skill must state install does not require the index"
-        );
-        assert!(
-            body.contains("registry add") && body.contains("do not"),
-            "skill must explicitly forbid `vibe registry add` as a panic response"
-        );
-    }
-
-    #[test]
-    fn skill_template_carries_happy_path_recipe() {
-        // The cheapest cure for a small model is a copy-paste
-        // recipe. The skill must carry the two-command bootstrap
-        // happy path so the model does not have to reason its
-        // way to the right shape from first principles.
-        let body = SKILL_TEMPLATE;
-        assert!(
-            body.contains("vibe init") && body.contains("vibe install"),
-            "skill must spell out the two-command bootstrap recipe"
-        );
-        assert!(
-            body.to_lowercase().contains("happy path"),
-            "skill must label the recipe as a happy-path block so agents recognise it"
-        );
-    }
-
-    #[test]
-    fn skill_template_does_not_impose_project_conventions() {
-        // Regression guard. Past versions of the skill (slice 4 +
-        // slice 5 first pass) treated "read CLAUDE.md → spec/boot/*
-        // → spec/WAL.md → relevant PROP/FEAT" as a binding bootstrap
-        // protocol for ALL vibevm projects. That conflated this
-        // repo's conventions with the package manager's contract —
-        // vibevm commands work identically whether the project
-        // adopts WAL discipline, PROP-style design docs, or the four
-        // commit rules. None of those are part of the package
-        // manager.
-        //
-        // The replacement skill explicitly notes that conventions
-        // are out of scope and live in the project's own
-        // CLAUDE.md / additional skills / installed packages
-        // (e.g. flow:wal as one possible WAL protocol — not
-        // mandatory). This test locks the new posture so a future
-        // edit doesn't regress it back to "you MUST read X".
-        let body = SKILL_TEMPLATE.to_lowercase();
-        // Reading WAL must not be presented as required.
-        assert!(
-            !body.contains("you must read spec/wal")
-                && !body.contains("required to read spec/wal")
-                && !body.contains("must read `spec/wal"),
-            "skill must not mandate reading spec/WAL.md as universal requirement"
-        );
-        // PROP/FEAT must not be required reading either.
-        assert!(
-            !body.contains("must consult prop")
-                && !body.contains("required prop")
-                && !body.contains("you must read prop"),
-            "skill must not mandate reading PROP-* / FEAT-* docs"
-        );
-        // No "non-negotiable rules" framing — those are this repo's,
-        // not the package manager's.
-        assert!(
-            !body.contains("non-negotiable"),
-            "skill must not import this repo's non-negotiable-rules framing"
-        );
-        // Positive: the skill must explicitly disclaim project-
-        // convention scope.
-        assert!(
-            body.contains("project conventions")
-                || body.contains("project-specific")
-                || body.contains("conventions"),
-            "skill must name 'conventions' explicitly to disclaim them"
-        );
     }
 }

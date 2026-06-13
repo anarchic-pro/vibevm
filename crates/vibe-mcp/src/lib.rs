@@ -42,6 +42,7 @@ use vibe_core::manifest::Lockfile;
 
 pub mod agent_config;
 pub mod agents;
+pub mod install;
 pub mod jsonrpc;
 pub mod tools;
 pub mod transport;

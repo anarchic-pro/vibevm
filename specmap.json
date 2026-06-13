@@ -1845,14 +1845,14 @@
       "crate_name": "vibe-mcp",
       "file": "crates/vibe-mcp/src/lib.rs",
       "item_kind": "enum",
-      "line": 308,
+      "line": 309,
       "symbol": "vibe_mcp::ServerError"
     },
     {
       "crate_name": "vibe-mcp",
       "file": "crates/vibe-mcp/src/lib.rs",
       "item_kind": "enum",
-      "line": 106,
+      "line": 107,
       "symbol": "vibe_mcp::ToolError"
     },
     {
@@ -1875,6 +1875,34 @@
       "item_kind": "fn",
       "line": 437,
       "symbol": "vibe_mcp::agents::detect_agents"
+    },
+    {
+      "crate_name": "vibe-mcp",
+      "file": "crates/vibe-mcp/src/install.rs",
+      "item_kind": "mod",
+      "line": 8,
+      "symbol": "vibe_mcp::install"
+    },
+    {
+      "crate_name": "vibe-mcp",
+      "file": "crates/vibe-mcp/src/install.rs",
+      "item_kind": "struct",
+      "line": 22,
+      "symbol": "vibe_mcp::install::AgentInstallReport"
+    },
+    {
+      "crate_name": "vibe-mcp",
+      "file": "crates/vibe-mcp/src/install.rs",
+      "item_kind": "struct",
+      "line": 36,
+      "symbol": "vibe_mcp::install::SkillInstallReport"
+    },
+    {
+      "crate_name": "vibe-mcp",
+      "file": "crates/vibe-mcp/src/install.rs",
+      "item_kind": "fn",
+      "line": 47,
+      "symbol": "vibe_mcp::install::install_skill"
     },
     {
       "crate_name": "vibe-mcp",
@@ -5287,7 +5315,7 @@
     {
       "file": "crates/vibe-mcp/src/lib.rs",
       "from_symbol": "vibe_mcp::ServerError",
-      "line": 309,
+      "line": 310,
       "provenance": "authored",
       "uri": "spec://vibevm/modules/vibe-mcp/PROP-015#errors",
       "verb": "implements"
@@ -5295,7 +5323,7 @@
     {
       "file": "crates/vibe-mcp/src/lib.rs",
       "from_symbol": "vibe_mcp::ToolError",
-      "line": 111,
+      "line": 112,
       "provenance": "authored",
       "uri": "spec://vibevm/modules/vibe-mcp/PROP-015#errors",
       "verb": "implements"
@@ -5322,6 +5350,38 @@
       "line": 440,
       "provenance": "authored",
       "uri": "spec://vibevm/modules/vibe-mcp/PROP-015#agent-detection",
+      "verb": "implements"
+    },
+    {
+      "file": "crates/vibe-mcp/src/install.rs",
+      "from_symbol": "vibe_mcp::install",
+      "line": 8,
+      "provenance": "authored",
+      "uri": "spec://vibevm/modules/vibe-mcp/PROP-015#lifecycle",
+      "verb": "implements"
+    },
+    {
+      "file": "crates/vibe-mcp/src/install.rs",
+      "from_symbol": "vibe_mcp::install::AgentInstallReport",
+      "line": 25,
+      "provenance": "authored",
+      "uri": "spec://vibevm/modules/vibe-mcp/PROP-015#lifecycle",
+      "verb": "implements"
+    },
+    {
+      "file": "crates/vibe-mcp/src/install.rs",
+      "from_symbol": "vibe_mcp::install::SkillInstallReport",
+      "line": 38,
+      "provenance": "authored",
+      "uri": "spec://vibevm/modules/vibe-mcp/PROP-015#lifecycle",
+      "verb": "implements"
+    },
+    {
+      "file": "crates/vibe-mcp/src/install.rs",
+      "from_symbol": "vibe_mcp::install::install_skill",
+      "line": 52,
+      "provenance": "authored",
+      "uri": "spec://vibevm/modules/vibe-mcp/PROP-015#skill",
       "verb": "implements"
     },
     {
