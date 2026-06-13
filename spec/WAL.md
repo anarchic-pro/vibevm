@@ -52,27 +52,41 @@ _Updated: 2026-06-13 — **CONVERT-PLAN v0.1: Phases 0-6 COMPLETE, Phase 7 in pr
 pub-doctest); `specmap --check` — clean (454 units / 455 edges / 0
 suspects / 0 warnings); **`CONFORM_GATED` = 15**; **DBT-0020 dispositioned
 10 → 1** (only `vibe_cli::commands::mcp::run`, the dispatch fn, remains).
-mcp.rs is **1781 lines** (was 2639).
+mcp.rs is now **1471 lines** (was 2639); §7.3d-i (`9da4e24`) relocated the
+~300-line agent-profile test module to `vibe-mcp/tests/agents.rs`.
 
 **REMAINING — Phase 7 tail (resume here, in order):**
 
-1. **7.3d — get `vibe-cli/src/commands/mcp.rs` ≤600.** Two moves:
-   (a) **Relocate the moved-code tests.** mcp.rs still carries ~500 lines
-   of tests, most testing relocated code — the agent-profile tests
-   (Scope/What/Agent parse, config_path/skill_path resolution,
-   build_mcp_entry via the `json_payload`/`toml_payload` helpers,
-   detect_agents) belong in `vibe_mcp::agents`; the has_vibe_toml /
-   resolve-root / driver tests stay.
-   (b) **Either move the residual domain** (the walkers
-   `walk_install`/`walk_upgrade`/`walk_uninstall` + the MCP-entry ops
-   `decide_action`/`preview_install_mcp`/`apply_install_mcp`/
-   `upgrade_mcp_entry`/`uninstall_mcp_entry`/`uninstall_skill`) into
-   `vibe_mcp::install` (pure orchestration over the moved primitives — no
-   dialoguer/output dep), **and/or split** the remaining CLI driver
-   surface (run/run_serve/run_install/run_status/run_upgrade/run_uninstall
-   + the 3 interactive_* + the 4 print_* + the report envelopes) into a
-   `commands/mcp/` module family (mod = dispatch + resolve-root; install;
-   lifecycle = status/upgrade/uninstall; render = print_*), each ≤600.
+1. **7.3d-ii — split the 1471-line `vibe-cli/src/commands/mcp.rs` into a
+   `commands/mcp/` module family, each ≤600.** The file-length gate just
+   needs the FILE ≤600; the residual fns are CLI orchestration over the
+   already-moved primitives, fine to keep in the CLI. The fns are
+   contiguous by command. **Verified split (run_status is NOT
+   cross-cutting — it runs its OWN preview loop over the shared
+   `preview_install_mcp` + `install_skill`, so it sits with the shared
+   ops, not with upgrade/uninstall):**
+   - **mod.rs** (~320): imports + `const SERVER_NAME` + stdin_is_tty +
+     `run` dispatch + run_serve + run_status + StatusReport + the shared
+     MCP-entry write ops `decide_action`/`preview_install_mcp`/
+     `apply_install_mcp` + `has_vibe_toml` + `resolve_project_root_required`
+     + `mod install; mod upgrade; mod uninstall;`. Mark the shared ops +
+     resolvers `pub(super)`; the submodule `run_*` are `pub(super)` and
+     `run` dispatches to them.
+   - **install.rs** (~447): InstallReport + InstallMode + run_install +
+     walk_install + print_install_results + the 3 interactive_*
+     (install-only). `use super::{decide_action, preview_install_mcp,
+     apply_install_mcp, has_vibe_toml, resolve_project_root_required}` +
+     the vibe-mcp/vibe-core imports it needs.
+   - **upgrade.rs** (~320): UpgradeReport + run_upgrade + walk_upgrade +
+     upgrade_mcp_entry + upgrade_skill + print_upgrade_results.
+   - **uninstall.rs** (~335): UninstallReport + run_uninstall +
+     walk_uninstall + uninstall_mcp_entry + uninstall_skill +
+     print_uninstall_results.
+   Let the compiler drive each submodule's `use super::{…}` set. Mechanics:
+   `git mv mcp.rs mcp/mod.rs`, then carve the contiguous command sections
+   out to the submodules. (Optionally move the walkers/ops into
+   `vibe_mcp::install` instead — they're pure orchestration — but the gate
+   only needs the FILE ≤600, so the CLI split is the minimal path.)
 2. **7.4 — close the ledgers.** Add a `scope!("…PROP-015#lifecycle")` to
    the CLI mcp module (resolves the last DBT-0020 orphan `run`); remove
    `vibe-mcp` from `specmap-ratchet.json`'s exempt list AND its DBT-0020
