@@ -1870,6 +1870,20 @@
       "symbol": "vibe_publish::token"
     },
     {
+      "crate_name": "vibe-publish",
+      "file": "crates/vibe-publish/src/token.rs",
+      "item_kind": "fn",
+      "line": 273,
+      "symbol": "vibe_publish::token::tests::debug_redacts_value"
+    },
+    {
+      "crate_name": "vibe-publish",
+      "file": "crates/vibe-publish/src/token.rs",
+      "item_kind": "fn",
+      "line": 282,
+      "symbol": "vibe_publish::token::tests::display_redacts_value"
+    },
+    {
       "crate_name": "vibe-registry",
       "file": "crates/vibe-registry/src/lib.rs",
       "item_kind": "mod",
@@ -5108,6 +5122,22 @@
       "provenance": "authored",
       "uri": "spec://vibevm/common/PROP-000#token-secrecy",
       "verb": "implements"
+    },
+    {
+      "file": "crates/vibe-publish/src/token.rs",
+      "from_symbol": "vibe_publish::token::tests::debug_redacts_value",
+      "line": 274,
+      "provenance": "authored",
+      "uri": "spec://vibevm/common/PROP-000#token-secrecy",
+      "verb": "verifies"
+    },
+    {
+      "file": "crates/vibe-publish/src/token.rs",
+      "from_symbol": "vibe_publish::token::tests::display_redacts_value",
+      "line": 283,
+      "provenance": "authored",
+      "uri": "spec://vibevm/common/PROP-000#token-secrecy",
+      "verb": "verifies"
     },
     {
       "file": "crates/vibe-registry/src/lib.rs",
