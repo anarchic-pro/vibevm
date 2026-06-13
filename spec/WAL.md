@@ -1,13 +1,15 @@
 # WAL — Project Continuation State
-_Updated: 2026-06-13 — **CONVERT-PLAN v0.1: Phases 0-6 COMPLETE, Phase 7 in progress.** Owner goal: execute the full-depth conversion plan to the end, Phase 7 owner-un-gated. The entire main plan (Phases 0-6) landed this run; Phase 7 (the MCP endgame) is partway. Git log is the authoritative per-item record; every commit cites its CONVERT-PLAN item._
+_Updated: 2026-06-13 — **CONVERT-PLAN v0.1 COMPLETE — Phases 0 through 7 all landed this run.** Owner goal met: the full-depth conversion plan executed to the end, Phase 7 (the owner-un-gated MCP endgame) included. Git log is the authoritative per-item record; every commit cites its CONVERT-PLAN item._
 
 ## Current phase
 
-**CONVERT-PLAN v0.1 — Phase 7 (MCP endgame), mid-flight.** The plan is
-[`spec/terraforms/CONVERT-PLAN-v0.1.md`](terraforms/CONVERT-PLAN-v0.1.md).
+**CONVERT-PLAN v0.1 — COMPLETE (Phases 0-7).** The plan is
+[`spec/terraforms/CONVERT-PLAN-v0.1.md`](terraforms/CONVERT-PLAN-v0.1.md);
+its full-depth conversion of strata B/C is done. No CONVERT-PLAN work
+remains; the next session picks the owner's next goal.
 
-**Done this run (Phases 0-6 + Phase 7.1-7.3c), newest last — all on
-`origin/main`, panel green at every commit:**
+**Done this run, newest last — all on `origin/main`, panel green at
+every commit:**
 
 - **Phases 0-3** (`173bb15`…`73b43ca`): hygiene + `CONFORM_GATED` 12;
   vibe-core armor (7 newtypes, `pub-doctest` froze 55); declare surfaces
@@ -46,56 +48,31 @@ _Updated: 2026-06-13 — **CONVERT-PLAN v0.1: Phases 0-6 COMPLETE, Phase 7 in pr
   (read/merge/strip JSON+TOML, foreign-key preservation).
 - **7.3c** `02bb65b` skill writer + install reports → `vibe_mcp::install`
   (install_skill, AgentInstallReport, SkillInstallReport, skill_template.md).
+- **7.3d-i** `9da4e24` the ~300-line agent-profile test module relocates to
+  `vibe-mcp/tests/agents.rs` (tests sit with the code they pin).
+- **7.3d-ii** `34c3517` the residual 1471-line mcp.rs splits into a
+  `commands/mcp/` module family (mod 339 / install 472 / upgrade 331 /
+  uninstall 345, each ≤600); `mcp.rs` no longer exists, so the last MCP
+  `file-length` baseline entry drains — baseline → 55 (vibe-core
+  pub-doctest only).
+- **7.4** `581d39f` **vibe-mcp joins both gates — DBT-0020 closed.**
+  `CONFORM_GATED` += vibe-mcp → **16** (16 findings drained: ParseError
+  Class-F + edge, 2 MemoryTransport poison-recoveries, dead test-helper
+  deleted, 7 seam doctests); vibe-mcp leaves `specmap-ratchet.json`'s
+  exempt list (→ 6 exempt), every module `scope!`-tagged → **0 orphans, 0
+  dispositioned.**
 
-**Gate panel (last verified, at 7.3c):** `conform check` — **56 frozen /
-0 new** (1 file-length = `vibe-cli/src/commands/mcp.rs`; 55 vibe-core
-pub-doctest); `specmap --check` — clean (454 units / 455 edges / 0
-suspects / 0 warnings); **`CONFORM_GATED` = 15**; **DBT-0020 dispositioned
-10 → 1** (only `vibe_cli::commands::mcp::run`, the dispatch fn, remains).
-mcp.rs is now **1471 lines** (was 2639); §7.3d-i (`9da4e24`) relocated the
-~300-line agent-profile test module to `vibe-mcp/tests/agents.rs`.
+**FINAL gate panel (CONVERT-PLAN complete):** `conform check` — **55
+frozen / 0 new** (the residual 55 = vibe-core's pub-doctest ratchet debt,
+a continuous shrink outside this plan; the MCP file-length pair drained);
+`specmap --check` — clean (454 units / 459 edges / 0 suspects / 0 warnings
+/ **0 orphans / 0 dispositioned**); **`CONFORM_GATED` = 16**; `vibe check`
+**0/0/0**; full `self-check.sh` (fmt + workspace tests + doctests + clippy
+-D + vibe check) all green.
 
-**REMAINING — Phase 7 tail (resume here, in order):**
-
-1. **7.3d-ii — split the 1471-line `vibe-cli/src/commands/mcp.rs` into a
-   `commands/mcp/` module family, each ≤600.** The file-length gate just
-   needs the FILE ≤600; the residual fns are CLI orchestration over the
-   already-moved primitives, fine to keep in the CLI. The fns are
-   contiguous by command. **Verified split (run_status is NOT
-   cross-cutting — it runs its OWN preview loop over the shared
-   `preview_install_mcp` + `install_skill`, so it sits with the shared
-   ops, not with upgrade/uninstall):**
-   - **mod.rs** (~320): imports + `const SERVER_NAME` + stdin_is_tty +
-     `run` dispatch + run_serve + run_status + StatusReport + the shared
-     MCP-entry write ops `decide_action`/`preview_install_mcp`/
-     `apply_install_mcp` + `has_vibe_toml` + `resolve_project_root_required`
-     + `mod install; mod upgrade; mod uninstall;`. Mark the shared ops +
-     resolvers `pub(super)`; the submodule `run_*` are `pub(super)` and
-     `run` dispatches to them.
-   - **install.rs** (~447): InstallReport + InstallMode + run_install +
-     walk_install + print_install_results + the 3 interactive_*
-     (install-only). `use super::{decide_action, preview_install_mcp,
-     apply_install_mcp, has_vibe_toml, resolve_project_root_required}` +
-     the vibe-mcp/vibe-core imports it needs.
-   - **upgrade.rs** (~320): UpgradeReport + run_upgrade + walk_upgrade +
-     upgrade_mcp_entry + upgrade_skill + print_upgrade_results.
-   - **uninstall.rs** (~335): UninstallReport + run_uninstall +
-     walk_uninstall + uninstall_mcp_entry + uninstall_skill +
-     print_uninstall_results.
-   Let the compiler drive each submodule's `use super::{…}` set. Mechanics:
-   `git mv mcp.rs mcp/mod.rs`, then carve the contiguous command sections
-   out to the submodules. (Optionally move the walkers/ops into
-   `vibe_mcp::install` instead — they're pure orchestration — but the gate
-   only needs the FILE ≤600, so the CLI split is the minimal path.)
-2. **7.4 — close the ledgers.** Add a `scope!("…PROP-015#lifecycle")` to
-   the CLI mcp module (resolves the last DBT-0020 orphan `run`); remove
-   `vibe-mcp` from `specmap-ratchet.json`'s exempt list AND its DBT-0020
-   dispositions; flip **`vibe-mcp` into `CONFORM_GATED` → 16** (remove its
-   `CONFORM_EXEMPT` line; drain-then-flip — verify 0 new); the
-   `vibe-cli/.../mcp.rs` file-length baseline entry drains once mcp.rs is
-   ≤600 → **file-length baseline 0** (re-freeze: baseline → 55, the
-   vibe-core pub-doctest ratchet only). Then full `self-check.sh`
-   (Git Bash, check `$?`).
+**No CONVERT-PLAN work remains.** The only standing ratchet is vibe-core's
+55-entry `pub-doctest` debt (documented since Phase 1.4; drain-as-you-go,
+not a plan blocker).
 
 **Cadence (every batch):** per-crate gated batch → topic commit citing the
 CONVERT-PLAN item → build + crate tests + `cargo fmt --all` + `conform
