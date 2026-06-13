@@ -20,6 +20,10 @@ fn git_available() -> bool {
         .unwrap_or(false)
 }
 
+// Non-`#[test]` helpers carry `#[cfg(test)]` so the file-grain conform
+// frontend scopes their `unwrap`s as test code (the idiom documented on
+// conform-frontend-rust's own lib/tests.rs).
+#[cfg(test)]
 fn write(dir: &Path, rel: &str, body: &str) {
     let path = dir.join(rel);
     fs::create_dir_all(path.parent().unwrap()).unwrap();
@@ -101,8 +105,12 @@ impl RepoCreator for MockCreator {
         }
         // Provision a real bare repo so the subsequent push lands.
         let bare = self.bare_path(name);
+        // Pass the path as an `OsStr` arg rather than `to_str().unwrap()` —
+        // avoids the lossy round-trip and the unwrap.
         let init = Command::new("git")
-            .args(["init", "--bare", bare.to_str().unwrap()])
+            .arg("init")
+            .arg("--bare")
+            .arg(&bare)
             .env("LC_ALL", "C")
             .status()
             .map_err(|e| PublishError::Git(format!("git init --bare: {e}")))?;
@@ -112,13 +120,9 @@ impl RepoCreator for MockCreator {
         // The created bare repo defaults HEAD to whatever git's
         // `init.defaultBranch` is; force `main` so the push matches.
         let _ = Command::new("git")
-            .args([
-                "-C",
-                bare.to_str().unwrap(),
-                "symbolic-ref",
-                "HEAD",
-                "refs/heads/main",
-            ])
+            .arg("-C")
+            .arg(&bare)
+            .args(["symbolic-ref", "HEAD", "refs/heads/main"])
             .env("LC_ALL", "C")
             .status();
         let url = format!("file://{}", bare.to_string_lossy().replace('\\', "/"));
@@ -147,6 +151,7 @@ fn plan(bare_root: &Path, dry_run: bool) -> PublishPlan {
     }
 }
 
+#[cfg(test)]
 fn input(src_root: &Path, rel: &str, kind: &str, name: &str) -> PublishInput {
     PublishInput {
         node: PublishNode {

@@ -227,8 +227,19 @@ fn exact_pkgref(
     name: &str,
     version: &semver::Version,
 ) -> Result<PackageRef> {
-    let req = semver::VersionReq::parse(&format!("={version}"))
-        .expect("`=<version>` always parses as a VersionReq");
+    // Build `=<version>` structurally rather than parsing a string —
+    // `VersionReq::parse` panics on a version carrying build metadata
+    // (`1.0.0+build`), the latent panic SHRINK-v0.1 killed at the other
+    // `={v}` sites.
+    let req = semver::VersionReq {
+        comparators: vec![semver::Comparator {
+            op: semver::Op::Exact,
+            major: version.major,
+            minor: Some(version.minor),
+            patch: Some(version.patch),
+            pre: version.pre.clone(),
+        }],
+    };
     Ok(PackageRef::new(
         Some(kind),
         Some(group.clone()),

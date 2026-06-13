@@ -131,7 +131,12 @@ pub(super) fn apply_git_source_flag(
     let pr_group = pr.group.clone().ok_or_else(|| {
         anyhow!("package reference `{pr}` is not group-qualified — write `<group>/<name>`")
     })?;
-    let url = args.git.clone().expect("caller checked args.git.is_some()");
+    // The caller dispatches here only when `--git` is present; treat a
+    // missing value as the internal invariant break it is, rather than
+    // panic on it.
+    let Some(url) = args.git.clone() else {
+        bail!("--git is required for a git-source install (internal: dispatched without it)");
+    };
     let ref_kind = match (
         args.tag.as_deref(),
         args.branch.as_deref(),

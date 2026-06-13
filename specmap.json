@@ -639,6 +639,13 @@
     },
     {
       "crate_name": "vibe-cli",
+      "file": "crates/vibe-cli/src/commands/workspace/publish.rs",
+      "item_kind": "fn",
+      "line": 491,
+      "symbol": "vibe_cli::commands::workspace::publish::node_abs_dir"
+    },
+    {
+      "crate_name": "vibe-cli",
       "file": "crates/vibe-cli/src/commands/workspace/tests.rs",
       "item_kind": "mod",
       "line": 4,
@@ -650,6 +657,13 @@
       "item_kind": "mod",
       "line": 5,
       "symbol": "vibe_cli::exit_code"
+    },
+    {
+      "crate_name": "vibe-cli",
+      "file": "crates/vibe-cli/src/exit_code.rs",
+      "item_kind": "enum",
+      "line": 35,
+      "symbol": "vibe_cli::exit_code::InstallError"
     },
     {
       "crate_name": "vibe-cli",
@@ -3723,6 +3737,15 @@
       "verb": "implements"
     },
     {
+      "file": "crates/vibe-cli/src/commands/workspace/publish.rs",
+      "from_symbol": "vibe_cli::commands::workspace::publish::node_abs_dir",
+      "line": 492,
+      "provenance": "authored",
+      "uri": "spec://vibevm/discipline/ENGINE-CONFORM-v0.1#rules",
+      "verb": "deviates",
+      "reason": "no-unwrap-in-domain: a PublishNode is built from the workspace's own membership, so its rel_path always names a member; member_by_rel_path cannot miss here, and threading a Result would carry a None the plan construction excludes through every node_abs_dir caller"
+    },
+    {
       "file": "crates/vibe-cli/src/commands/workspace/tests.rs",
       "from_symbol": "vibe_cli::commands::workspace::tests",
       "line": 4,
@@ -3734,6 +3757,14 @@
       "file": "crates/vibe-cli/src/exit_code.rs",
       "from_symbol": "vibe_cli::exit_code",
       "line": 5,
+      "provenance": "authored",
+      "uri": "spec://vibevm/VIBEVM-SPEC#exit-codes",
+      "verb": "implements"
+    },
+    {
+      "file": "crates/vibe-cli/src/exit_code.rs",
+      "from_symbol": "vibe_cli::exit_code::InstallError",
+      "line": 38,
       "provenance": "authored",
       "uri": "spec://vibevm/VIBEVM-SPEC#exit-codes",
       "verb": "implements"

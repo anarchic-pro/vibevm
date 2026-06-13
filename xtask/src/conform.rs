@@ -31,6 +31,7 @@ const CONFORM_GATED: &[&str] = &[
     "vibe-check",
     "vibe-publish",
     "env-audit",
+    "vibe-cli",
 ];
 
 /// Crates deliberately *outside* `CONFORM_GATED`, each paired with the
@@ -42,11 +43,6 @@ const CONFORM_GATED: &[&str] = &[
 /// `every_crate_is_gated_or_exempt` keeps it honest against the
 /// workspace so a new crate cannot slip in unclassified.
 const CONFORM_EXEMPT: &[(&str, &str)] = &[
-    (
-        "vibe-cli",
-        "pure binary, no [lib] target — rustdoc doctests cannot run there; its domain \
-         moves to gated lib crates and it flips in CONVERT-PLAN Phase 4 (4.6)",
-    ),
     (
         "vibe-mcp",
         "parked behind DBT-0020 (the MCP spec home); flips in the owner-gated \

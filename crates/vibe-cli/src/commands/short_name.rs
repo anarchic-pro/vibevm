@@ -103,13 +103,15 @@ fn render_collision(name: &str, candidates: &[Group]) -> String {
     for (i, group) in candidates.iter().enumerate() {
         let _ = writeln!(msg, "  {}. {group}/{name}", i + 1);
     }
-    let first = candidates
-        .first()
-        .expect("a collision carries at least two candidates");
-    let _ = write!(
-        msg,
-        "Re-run with the qualified form, e.g. `vibe install {first}/{name}`.",
-    );
+    // A collision carries at least two candidates, so `first()` is
+    // always `Some` here; render the re-run hint when present and skip
+    // it (rather than panic) on the unreachable empty case.
+    if let Some(first) = candidates.first() {
+        let _ = write!(
+            msg,
+            "Re-run with the qualified form, e.g. `vibe install {first}/{name}`.",
+        );
+    }
     msg
 }
 

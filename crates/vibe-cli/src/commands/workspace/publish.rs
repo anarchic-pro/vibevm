@@ -489,6 +489,13 @@ fn finish_failure(
 }
 
 /// The absolute on-disk directory of a publish node.
+#[specmark::spec(
+    deviates = "spec://vibevm/discipline/ENGINE-CONFORM-v0.1#rules",
+    reason = "no-unwrap-in-domain: a PublishNode is built from the workspace's own \
+              membership, so its rel_path always names a member; member_by_rel_path \
+              cannot miss here, and threading a Result would carry a None the plan \
+              construction excludes through every node_abs_dir caller"
+)]
 fn node_abs_dir(workspace: &Workspace, node: &PublishNode) -> std::path::PathBuf {
     if node.rel_path == "." {
         workspace.root.clone()

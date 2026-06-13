@@ -72,7 +72,13 @@ pub(super) fn run_effective(ctx: &output::Context, args: ShowEffectiveArgs) -> R
             .collect();
         entries.sort();
         for path in entries {
-            let filename = path.file_name().unwrap().to_string_lossy().into_owned();
+            // Every entry came from `read_dir` filtered to files, so it
+            // always has a final component; skip the unreachable `..`-shaped
+            // path rather than unwrap.
+            let Some(filename) = path.file_name() else {
+                continue;
+            };
+            let filename = filename.to_string_lossy().into_owned();
             let rel = format!("spec/boot/{filename}");
             let origin = boot_origin(&filename, lockfile.as_ref());
             let spec_uri = format!("spec://project/boot/{filename}");

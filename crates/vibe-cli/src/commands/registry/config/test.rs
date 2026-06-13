@@ -89,7 +89,8 @@ pub(in crate::commands::registry) fn run_test(
     // real package — every host should respond
     // `UnknownPackage` for it. Underscores are not valid in
     // package names (kebab-case only), so we use `flow:vibe-probe-XXXX`.
-    let probe_pkgref = PackageRef::parse("flow:vibe-probe-99zzqq").unwrap();
+    let probe_pkgref = PackageRef::parse("flow:vibe-probe-99zzqq")
+        .context("internal: the hermetic probe pkgref literal must parse")?;
 
     let mut rows: Vec<TestReportRegistry> = Vec::with_capacity(manifest.registries.len());
 
