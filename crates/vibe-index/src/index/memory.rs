@@ -29,6 +29,24 @@ const SCHEMA_VERSION: u32 = 1;
 
 /// In-RAM index. Single-source-of-truth when the server is running;
 /// loaded from disk on CLI invocation.
+///
+/// The index is keyed on the `(group, name)` identity (PROP-008 §2.2);
+/// `kind` is metadata and keys nothing. A fresh index is empty, and
+/// lookups by identity miss until something is `upsert`ed:
+///
+/// ```
+/// use vibe_index::index::Index;
+/// use vibe_index::types::NamingConvention;
+///
+/// let idx = Index::new(
+///     "vibespecs",
+///     "https://github.com/vibespecs",
+///     NamingConvention::Fqdn,
+/// );
+/// assert_eq!(idx.package_count(), 0);
+/// let group = "org.vibevm".parse().unwrap();
+/// assert!(idx.get(&group, "wal").is_none());
+/// ```
 #[derive(Debug, Clone)]
 pub struct Index {
     pub schema_version: u32,
