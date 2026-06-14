@@ -1,18 +1,19 @@
 # WAL — Project Continuation State
-_Updated: 2026-06-14 — **RESOLVO RESOLVER (PROP-017) — ENGINE + FULL EXISTING VOCABULARY COMPLETE; production-wiring next.** resolvo (pure-Rust, BSD-3-Clause, CDCL SAT) replaces PROP-003 §2.2's libsolv as the production solver. The engine + the entire existing dependency vocabulary are encoded and oracle-proven to dominate naive: `ResolvoDepSolver` + `VibevmResolvoProvider` (resolvo `Interner` + async `DependencyProvider`, `NowOrNeverRuntime` → no async runtime), a shared output builder, `SolveError::Unsatisfiable`, the `differential_naive_vs_resolvo_dominance` oracle, `[[requires_any]]`→`Union` disjunctions with backtracking, `[conflicts]`/`[obsoletes]`, and capabilities via a closure pre-scan. 9 resolvo commits on both mirrors. Remaining to FINISH THE PORT: S1 (production version enumeration — `MultiRegistryResolver::list_versions`, gated `vibe-registry`) then S6 (wire resolvo into `vibe-cli` + flip the default). Weak-deps are a SEPARATE feature — the package `[recommends]`/`[supplements]`/etc. manifest schema does not exist yet. Prior: SOURCE-MIRROR (PROP-016) in force; PUBDOC-DRAIN + CONVERT-PLAN complete. Git log is the authoritative per-item record._
+_Updated: 2026-06-14 — **RESOLVO RESOLVER (PROP-017) — PORT COMPLETE; resolvo is the default production solver.** resolvo (pure-Rust, BSD-3-Clause, CDCL SAT) replaces PROP-003 §2.2's libsolv. The engine + the entire existing dependency vocabulary are encoded and oracle-proven to dominate naive (requires, `[[requires_any]]`→Union with backtracking, `[conflicts]`, `[obsoletes]`, capabilities via a closure pre-scan); production version enumeration (`MultiRegistryResolver::list_versions` + `VersionEnumerator` on the real providers) feeds it; and `vibe install/update/reinstall` now resolve with `ResolvoDepSolver` by default, with `--solver <naive|sat|resolvo>` as the fallback. ~15 resolvo commits on both mirrors; full `self-check.sh` green. Deferred (separate schema work, PROP-017 §8): weak-deps and the `[meta].solver` lockfile field. Prior: SOURCE-MIRROR (PROP-016) in force; PUBDOC-DRAIN + CONVERT-PLAN complete. Git log is the authoritative per-item record._
 
 ## Current phase
 
-**RESOLVO RESOLVER (PROP-017) — IN PROGRESS (2026-06-14).** The owner
-chose resolvo (pure-Rust, BSD-3-Clause, CDCL SAT) as the production
-dependency solver, superseding PROP-003 §2.2's libsolv pick — its three
+**RESOLVO RESOLVER (PROP-017) — IN FORCE; resolvo is the default solver
+(2026-06-14).** The owner chose resolvo (pure-Rust, BSD-3-Clause, CDCL
+SAT) as the production dependency solver, superseding PROP-003 §2.2's
+libsolv pick — its three
 deferral reasons for resolvo (younger, less battle-tested, no conflict
 introspection) decayed by 2026, while libsolv's C-FFI / `unsafe` /
 eager-pool / Windows costs are structural. Spec:
 [`PROP-017`](modules/vibe-resolver/PROP-017-resolvo-resolver.md); engine
 `crates/vibe-resolver/src/resolvo_engine/`.
 
-**Landed and proven — engine + full existing vocabulary, 9 commits, all gate-green, on both mirrors:**
+**Landed and proven — engine + full vocabulary + wired as the default, ~15 commits, all gate-green, on both mirrors:**
 
 - **`ResolvoDepSolver<P: VersionEnumerator>`** — a `#[cell]` `DepSolver`
   behind the unchanged seam, over a `VibevmResolvoProvider` adapter
@@ -43,33 +44,31 @@ eager-pool / Windows costs are structural. Spec:
   (order-independent; pulls a provider in). The fuller registry
   reverse-index is recorded as PROP-017 §8 future work.
 
-**Remaining to finish the port — the production-wiring phase:**
+**Production wiring — DONE (the port is complete):**
 
-- **S1 — production version enumeration.** `ResolvoDepSolver` takes
-  `P: VersionEnumerator`; the real providers must implement it. Add
-  `MultiRegistryResolver::list_versions` (a priority-ordered registry
-  walk that honours overrides / redirects / path+git sources — subtle,
-  in the gated `vibe-registry` crate) and delegate from
-  `MultiRegistryProvider` / `LocalRegistryProvider`. Test providers
-  already implement it.
-- **S6 — wire resolvo as the default.** `vibe-cli/src/registry.rs::build_solver`
-  is the selection point (today always `NaiveDepSolver`). Add the
-  `resolvo` cell + a `--solver <naive|sat|resolvo>` override + the
-  `[meta].solver` key, then **flip the default to resolvo** — a
-  production behavioural change (naive's first-pick-wins and
-  order-dependent capability bugs are what it fixes), done with the full
-  suite green and naive/sat retained as fallback. Depends on S1.
-- **S7 — close.** Full gates + WAL/CONTINUE rewrite + mirror.
+- **Production version enumeration.** `MultiRegistryResolver::list_versions`
+  (priority-ordered walk honouring overrides / path / git sources, with a
+  `resolve` fallback for redirect-only packages) + `VersionEnumerator` on
+  `MultiRegistryProvider` / `LocalRegistryProvider`. The differential
+  oracle now drives resolvo over real `file://` git repos and local disk.
+- **resolvo is the default.** `vibe-cli/src/registry.rs` (the R-001
+  selection seam) gained the resolvo / sat arms and **flipped the
+  built-in solver from naive to resolvo**; `vibe install --solver
+  <naive|sat|resolvo>` is the fallback override. The full self-check —
+  including the install / update / reinstall suites, which now drive
+  resolvo — is green.
 
-**Deferred — weak-deps are a SEPARATE feature, not part of the port.**
-The package-level `[recommends]` / `[suggests]` / `[supplements]` /
-`[enhances]` manifest sections (PROP-003 §2.3.3) **do not exist in the
-`Manifest` schema** — only subskills carry `[recommends]` today. Adding
-them is a vibe-core schema change plus solver + tests; resolvo is ready
-to encode them (recommends→soft, supplements→a reverse-index like
-capabilities) once the schema lands. `[features.exclusive]` likewise
-lives in the `features.rs` layer above the solver. Track as a future
-PROP, not a resolvo slice.
+**Deferred — schema work, separate from the engine port (PROP-017 §8).**
+Two items need a schema change before resolvo can honour them: the
+package-level weak-deps (`[recommends]` / `[suggests]` / `[supplements]`
+/ `[enhances]`) are absent from the `Manifest` schema (only subskills
+carry a `[recommends]`), and the lockfile `[meta]` block has no `solver`
+field (despite PROP-003 §2.1's note). resolvo is already shaped for both
+(recommends→`soft_requirements`, supplements→a reverse-index like
+capabilities, `[meta].solver`→record the selected cell for a
+reproducible re-resolve) once the `vibe-core` schema + lockfile
+schema-version bump land. `[features.exclusive]` lives in `features.rs`
+above the solver. Plus the capability reverse-index backlog (§8).
 
 Full `self-check.sh` green (whole workspace: fmt, tests, doctests, clippy
 -D, `vibe check` 0/0/0); conform 0/0/0; specmap clean (0 suspects /
