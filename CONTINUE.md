@@ -1,18 +1,18 @@
 # CONTINUE.md — cold-resume checkpoint
 
 > **LATEST (2026-06-14, after this snapshot): the resolvo resolver
-> (PROP-017) — the engine + the FULL existing dependency vocabulary are
-> built, oracle-proven to dominate naive, and gate-green on both mirrors
-> (9 resolvo commits): `ResolvoDepSolver` + `VibevmResolvoProvider`, the
-> `differential_naive_vs_resolvo_dominance` oracle, `[[requires_any]]`
-> disjunctions with backtracking, `[conflicts]`/`[obsoletes]`, and
-> capabilities via a closure pre-scan. Everything below describes the
-> PRIOR source-mirror session; `spec/WAL.md` has the current state and
-> supersedes it. Full `self-check.sh` green. Remaining to finish the
-> port: S1 (production version enumeration — `MultiRegistryResolver::list_versions`,
-> gated `vibe-registry`) then S6 (wire resolvo into `vibe-cli` + flip the
-> default). Weak-deps are a separate feature — the package
-> `[recommends]`/`[supplements]`/etc. manifest schema does not exist yet.
+> (PROP-017) is COMPLETE — resolvo (pure-Rust CDCL SAT) is now the
+> default production solver. The engine + the full existing dependency
+> vocabulary (requires, `[[requires_any]]` disjunctions with
+> backtracking, `[conflicts]`, `[obsoletes]`, capabilities via a closure
+> pre-scan) are oracle-proven to dominate naive; production version
+> enumeration (`MultiRegistryResolver::list_versions`) feeds the real
+> providers; and `vibe install/update/reinstall` resolve with
+> `ResolvoDepSolver` by default, `--solver <naive|sat|resolvo>` the
+> fallback. ~15 resolvo commits on both mirrors; full `self-check.sh`
+> green. Everything below describes the PRIOR source-mirror session;
+> `spec/WAL.md` is current and supersedes it. Deferred (separate schema
+> work, PROP-017 §8): weak-deps and the `[meta].solver` lockfile field.
 > See [`PROP-017`](spec/modules/vibe-resolver/PROP-017-resolvo-resolver.md).**
 
 _Written 2026-06-14 at the close of a **source-mirror hardening** session.
