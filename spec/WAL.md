@@ -1,12 +1,21 @@
 # WAL — Project Continuation State
-_Updated: 2026-06-13 — **CONVERT-PLAN v0.1 COMPLETE — Phases 0 through 7 all landed this run.** Owner goal met: the full-depth conversion plan executed to the end, Phase 7 (the owner-un-gated MCP endgame) included. Git log is the authoritative per-item record; every commit cites its CONVERT-PLAN item._
+_Updated: 2026-06-14 — **PUBDOC-DRAIN v0.1 COMPLETE — vibe-core's 55-entry `pub-doctest` ratchet drained to ZERO; the conform baseline is now empty for the first time.** Eight file-cohesive batches (B1–B8) on `origin/main` (`f0067cc`…`53021b6`), panel green at every commit, full `self-check.sh` green at close. Prior: CONVERT-PLAN v0.1 complete (Phases 0–7). Git log is the authoritative per-item record; every commit cites its plan item._
 
 ## Current phase
 
-**CONVERT-PLAN v0.1 — COMPLETE (Phases 0-7).** The plan is
+**PUBDOC-DRAIN v0.1 — COMPLETE (2026-06-14).** The plan is
+[`spec/terraforms/PUBDOC-DRAIN-v0.1.md`](terraforms/PUBDOC-DRAIN-v0.1.md)
+(it carries its own execution record). vibe-core's 55-entry `pub-doctest`
+ratchet — the whole residual conform baseline — drained to zero across
+eight commits (`f0067cc` B1 … `53021b6` B8); every public `struct` / `enum`
+under `crates/vibe-core/src/` now teaches by one compiled doctest, and
+`conform-baseline.json` carries an empty `findings` array. vibe-core stays
+in `GATED_PUB_DOCTEST` (gate armed against new undocumented types).
+
+**Prior — CONVERT-PLAN v0.1 — COMPLETE (Phases 0-7).** The plan is
 [`spec/terraforms/CONVERT-PLAN-v0.1.md`](terraforms/CONVERT-PLAN-v0.1.md);
-its full-depth conversion of strata B/C is done. No CONVERT-PLAN work
-remains; the next session picks the owner's next goal.
+its full-depth conversion of strata B/C is done. No CONVERT-PLAN or
+PUBDOC-DRAIN work remains; the next session picks the owner's next goal.
 
 **Done this run, newest last — all on `origin/main`, panel green at
 every commit:**
@@ -62,17 +71,18 @@ every commit:**
   exempt list (→ 6 exempt), every module `scope!`-tagged → **0 orphans, 0
   dispositioned.**
 
-**FINAL gate panel (CONVERT-PLAN complete):** `conform check` — **55
-frozen / 0 new** (the residual 55 = vibe-core's pub-doctest ratchet debt,
-a continuous shrink outside this plan; the MCP file-length pair drained);
-`specmap --check` — clean (454 units / 459 edges / 0 suspects / 0 warnings
-/ **0 orphans / 0 dispositioned**); **`CONFORM_GATED` = 16**; `vibe check`
-**0/0/0**; full `self-check.sh` (fmt + workspace tests + doctests + clippy
--D + vibe check) all green.
+**FINAL gate panel (PUBDOC-DRAIN complete, 2026-06-14):** `conform check`
+— **0 frozen / 0 new** (the conform baseline is EMPTY — vibe-core's
+55-entry pub-doctest debt fully drained across B1–B8); `specmap --check`
+— clean (454 units / 448 items / 459 edges / 0 suspects / 0 warnings /
+**0 orphans / 0 dispositioned**); **`CONFORM_GATED` = 16**, vibe-core still
+in `GATED_PUB_DOCTEST`; `vibe check` **0/0/0**; full `self-check.sh` (fmt +
+workspace tests + doctests + clippy -D + vibe check) all green.
 
-**No CONVERT-PLAN work remains.** The only standing ratchet is vibe-core's
-55-entry `pub-doctest` debt (documented since Phase 1.4; drain-as-you-go,
-not a plan blocker).
+**No CONVERT-PLAN or PUBDOC-DRAIN work remains.** The vibe-core
+`pub-doctest` ratchet that stood at 55 is now ZERO — the conform baseline
+is empty. The `pub-doctest` gate stays armed (vibe-core in
+`GATED_PUB_DOCTEST`) so a new undocumented public type fails CI as `new`.
 
 **Cadence (every batch):** per-crate gated batch → topic commit citing the
 CONVERT-PLAN item → build + crate tests + `cargo fmt --all` + `conform
