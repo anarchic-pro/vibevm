@@ -72,6 +72,14 @@ trait DepSolver {
 
 ### 2.2 SAT solver backend: libsolv (BSD-3-Clause), via thin Rust FFI {#solver-backend}
 
+> **SUPERSEDED (2026-06-14) by [PROP-017](PROP-017-resolvo-resolver.md).**
+> The production solver is **resolvo** (pure-Rust, BSD-3-Clause), **not
+> libsolv**. The decision below is retained as history; PROP-017 §1 records
+> why the libsolv-first call was reversed — its three deferral reasons for
+> resolvo decayed by 2026, while libsolv's C-FFI / `unsafe` / eager-pool /
+> Windows costs are structural. PROP-003's dependency *vocabulary*
+> (§2.4–2.10) is unaffected; only the engine changed.
+
 **Decision.** The SAT engine of `SatDepSolver` is **libsolv** ([`https://github.com/openSUSE/libsolv`](https://github.com/openSUSE/libsolv)). Wrap it through a *thin* in-tree FFI layer (a new `vibe-resolver-libsolv` crate or feature-gated module under `vibe-resolver`); do not pull in `libdnf5` or any LGPL-licensed shim.
 
 **License audit (load-bearing).** libsolv is dual-licensed BSD-3-Clause / FreeBSD ([`LICENSE.BSD`](https://github.com/openSUSE/libsolv/blob/master/LICENSE.BSD)). Permissive, satisfies PROP-000 §3 (third-party deps: permissive only — MIT / Apache-2.0 / BSD / Unlicense; MPL-2.0 case-by-case; **GPL/AGPL/LGPL forbidden**). Linking against libsolv as a C library or a static archive is fine. We MUST NOT link against `libdnf5` (LGPL-2.1-or-later) — its API is the most ergonomic layer over libsolv but its license places a copyleft obligation on every consumer.

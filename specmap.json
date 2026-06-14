@@ -10052,7 +10052,7 @@
     },
     {
       "anchor": "decisions",
-      "content_hash": "sha256:bff49ed2f5f28370b7d393ccf0bb7256621ad7f81715d49284a53d655bdea652",
+      "content_hash": "sha256:ee31b062afc896a0cae93059577c37b8f7a1c5c4c9ce3e091b87fe5af05c1766",
       "doc_path": "modules/vibe-resolver/PROP-003",
       "file": "spec/modules/vibe-resolver/PROP-003-dep-evolution.md",
       "heading": "2. Decisions",
@@ -10070,7 +10070,7 @@
     },
     {
       "anchor": "solver-backend",
-      "content_hash": "sha256:af3e157adb7789ab60c008bef9d9b309a60f4f19e597876aa60f5ddadaeaa08d",
+      "content_hash": "sha256:f3423841206d1182c9bfc8bd20207afd205f50f50dcac35227f72d20f67f87b5",
       "doc_path": "modules/vibe-resolver/PROP-003",
       "file": "spec/modules/vibe-resolver/PROP-003-dep-evolution.md",
       "heading": "2.2 SAT solver backend: libsolv (BSD-3-Clause), via thin Rust FFI",
@@ -10083,7 +10083,7 @@
       "doc_path": "modules/vibe-resolver/PROP-003",
       "file": "spec/modules/vibe-resolver/PROP-003-dep-evolution.md",
       "heading": "2.3 SAT solver capabilities we rely on",
-      "line": 105,
+      "line": 113,
       "uri": "spec://vibevm/modules/vibe-resolver/PROP-003#solver-features"
     },
     {
@@ -10092,7 +10092,7 @@
       "doc_path": "modules/vibe-resolver/PROP-003",
       "file": "spec/modules/vibe-resolver/PROP-003-dep-evolution.md",
       "heading": "2.4 Optional components (features) — cargo-tradition with vibevm twists",
-      "line": 127,
+      "line": 135,
       "uri": "spec://vibevm/modules/vibe-resolver/PROP-003#features"
     },
     {
@@ -10101,7 +10101,7 @@
       "doc_path": "modules/vibe-resolver/PROP-003",
       "file": "spec/modules/vibe-resolver/PROP-003-dep-evolution.md",
       "heading": "2.5 Subskills — vibevm-native optional content units with three delivery modes",
-      "line": 170,
+      "line": 178,
       "uri": "spec://vibevm/modules/vibe-resolver/PROP-003#subskills"
     },
     {
@@ -10110,7 +10110,7 @@
       "doc_path": "modules/vibe-resolver/PROP-003",
       "file": "spec/modules/vibe-resolver/PROP-003-dep-evolution.md",
       "heading": "2.5.0 Three delivery modes — eager, lazy-push, lazy-pull",
-      "line": 200,
+      "line": 208,
       "uri": "spec://vibevm/modules/vibe-resolver/PROP-003#delivery-modes"
     },
     {
@@ -10119,7 +10119,7 @@
       "doc_path": "modules/vibe-resolver/PROP-003",
       "file": "spec/modules/vibe-resolver/PROP-003-dep-evolution.md",
       "heading": "2.5.1 Subskill manifest (`vibe-subskill.toml`)",
-      "line": 214,
+      "line": 222,
       "uri": "spec://vibevm/modules/vibe-resolver/PROP-003#subskill-manifest"
     },
     {
@@ -10128,7 +10128,7 @@
       "doc_path": "modules/vibe-resolver/PROP-003",
       "file": "spec/modules/vibe-resolver/PROP-003-dep-evolution.md",
       "heading": "2.5.2 Subskill activation channels — broader probe surface",
-      "line": 305,
+      "line": 313,
       "uri": "spec://vibevm/modules/vibe-resolver/PROP-003#subskill-activation"
     },
     {
@@ -10137,7 +10137,7 @@
       "doc_path": "modules/vibe-resolver/PROP-003",
       "file": "spec/modules/vibe-resolver/PROP-003-dep-evolution.md",
       "heading": "2.5.3 LLM-emitted virtual capabilities (post-M1.5) — refactor of \"LLM-inferred activation\"",
-      "line": 322,
+      "line": 330,
       "uri": "spec://vibevm/modules/vibe-resolver/PROP-003#llm-virtual-caps"
     },
     {
@@ -10146,7 +10146,7 @@
       "doc_path": "modules/vibe-resolver/PROP-003",
       "file": "spec/modules/vibe-resolver/PROP-003-dep-evolution.md",
       "heading": "2.5.4 Why subskills, not just more packages",
-      "line": 341,
+      "line": 349,
       "uri": "spec://vibevm/modules/vibe-resolver/PROP-003#subskill-rationale"
     },
     {
@@ -10155,7 +10155,7 @@
       "doc_path": "modules/vibe-resolver/PROP-003",
       "file": "spec/modules/vibe-resolver/PROP-003-dep-evolution.md",
       "heading": "2.5.5 Recursive subskills",
-      "line": 350,
+      "line": 358,
       "uri": "spec://vibevm/modules/vibe-resolver/PROP-003#subskill-recursion"
     },
     {
@@ -10164,7 +10164,7 @@
       "doc_path": "modules/vibe-resolver/PROP-003",
       "file": "spec/modules/vibe-resolver/PROP-003-dep-evolution.md",
       "heading": "2.5.6 `describes` PURL on subskills",
-      "line": 354,
+      "line": 362,
       "uri": "spec://vibevm/modules/vibe-resolver/PROP-003#subskill-describes"
     },
     {
@@ -10173,7 +10173,7 @@
       "doc_path": "modules/vibe-resolver/PROP-003",
       "file": "spec/modules/vibe-resolver/PROP-003-dep-evolution.md",
       "heading": "2.6 Capability-based interface tags — the abstract layer",
-      "line": 362,
+      "line": 370,
       "uri": "spec://vibevm/modules/vibe-resolver/PROP-003#interface-tags"
     },
     {
@@ -10182,7 +10182,7 @@
       "doc_path": "modules/vibe-resolver/PROP-003",
       "file": "spec/modules/vibe-resolver/PROP-003-dep-evolution.md",
       "heading": "2.6.1 Conditional dependencies — `[target.\"context(...)\".dependencies]`",
-      "line": 394,
+      "line": 402,
       "uri": "spec://vibevm/modules/vibe-resolver/PROP-003#conditional-deps"
     },
     {
@@ -10191,7 +10191,7 @@
       "doc_path": "modules/vibe-resolver/PROP-003",
       "file": "spec/modules/vibe-resolver/PROP-003-dep-evolution.md",
       "heading": "The predicate grammar",
-      "line": 410,
+      "line": 418,
       "uri": "spec://vibevm/modules/vibe-resolver/PROP-003#req-conditional-grammar",
       "kind": "req",
       "revision": 1
@@ -10202,7 +10202,7 @@
       "doc_path": "modules/vibe-resolver/PROP-003",
       "file": "spec/modules/vibe-resolver/PROP-003-dep-evolution.md",
       "heading": "When to use which",
-      "line": 416,
+      "line": 424,
       "uri": "spec://vibevm/modules/vibe-resolver/PROP-003#design-conditional-when-to-use",
       "kind": "design",
       "revision": 1
@@ -10213,7 +10213,7 @@
       "doc_path": "modules/vibe-resolver/PROP-003",
       "file": "spec/modules/vibe-resolver/PROP-003-dep-evolution.md",
       "heading": "Conditional dependencies resolve to a fixed point",
-      "line": 422,
+      "line": 430,
       "uri": "spec://vibevm/modules/vibe-resolver/PROP-003#req-conditional-fixpoint",
       "kind": "req",
       "revision": 1
@@ -10224,7 +10224,7 @@
       "doc_path": "modules/vibe-resolver/PROP-003",
       "file": "spec/modules/vibe-resolver/PROP-003-dep-evolution.md",
       "heading": "Predicate evaluation is host-invariant",
-      "line": 428,
+      "line": 436,
       "uri": "spec://vibevm/modules/vibe-resolver/PROP-003#req-conditional-host-invariance",
       "kind": "req",
       "revision": 1
@@ -10235,7 +10235,7 @@
       "doc_path": "modules/vibe-resolver/PROP-003",
       "file": "spec/modules/vibe-resolver/PROP-003-dep-evolution.md",
       "heading": "Boolean composition over predicates",
-      "line": 434,
+      "line": 442,
       "uri": "spec://vibevm/modules/vibe-resolver/PROP-003#req-conditional-composition",
       "kind": "req",
       "revision": 2
@@ -10246,7 +10246,7 @@
       "doc_path": "modules/vibe-resolver/PROP-003",
       "file": "spec/modules/vibe-resolver/PROP-003-dep-evolution.md",
       "heading": "2.7 Internationalization (i18n) — multi-language package content",
-      "line": 440,
+      "line": 448,
       "uri": "spec://vibevm/modules/vibe-resolver/PROP-003#i18n"
     },
     {
@@ -10255,7 +10255,7 @@
       "doc_path": "modules/vibe-resolver/PROP-003",
       "file": "spec/modules/vibe-resolver/PROP-003-dep-evolution.md",
       "heading": "2.7.1 File naming — the chosen pattern",
-      "line": 444,
+      "line": 452,
       "uri": "spec://vibevm/modules/vibe-resolver/PROP-003#i18n-naming"
     },
     {
@@ -10264,7 +10264,7 @@
       "doc_path": "modules/vibe-resolver/PROP-003",
       "file": "spec/modules/vibe-resolver/PROP-003-dep-evolution.md",
       "heading": "2.7.2 Language preference resolution — fallback chain",
-      "line": 473,
+      "line": 481,
       "uri": "spec://vibevm/modules/vibe-resolver/PROP-003#i18n-fallback"
     },
     {
@@ -10273,7 +10273,7 @@
       "doc_path": "modules/vibe-resolver/PROP-003",
       "file": "spec/modules/vibe-resolver/PROP-003-dep-evolution.md",
       "heading": "2.7.3 Language preference declarations — three layers",
-      "line": 484,
+      "line": 492,
       "uri": "spec://vibevm/modules/vibe-resolver/PROP-003#i18n-prefs"
     },
     {
@@ -10282,7 +10282,7 @@
       "doc_path": "modules/vibe-resolver/PROP-003",
       "file": "spec/modules/vibe-resolver/PROP-003-dep-evolution.md",
       "heading": "2.7.4 Manifest-field translation (short strings)",
-      "line": 506,
+      "line": 514,
       "uri": "spec://vibevm/modules/vibe-resolver/PROP-003#i18n-fields"
     },
     {
@@ -10291,7 +10291,7 @@
       "doc_path": "modules/vibe-resolver/PROP-003",
       "file": "spec/modules/vibe-resolver/PROP-003-dep-evolution.md",
       "heading": "2.7.5 Lockfile impact",
-      "line": 541,
+      "line": 549,
       "uri": "spec://vibevm/modules/vibe-resolver/PROP-003#i18n-lockfile"
     },
     {
@@ -10300,7 +10300,7 @@
       "doc_path": "modules/vibe-resolver/PROP-003",
       "file": "spec/modules/vibe-resolver/PROP-003-dep-evolution.md",
       "heading": "2.8 Manifest schema additions — the consolidated picture",
-      "line": 554,
+      "line": 562,
       "uri": "spec://vibevm/modules/vibe-resolver/PROP-003#manifest"
     },
     {
@@ -10309,7 +10309,7 @@
       "doc_path": "modules/vibe-resolver/PROP-003",
       "file": "spec/modules/vibe-resolver/PROP-003-dep-evolution.md",
       "heading": "2.9 Lockfile schema impact (v3)",
-      "line": 623,
+      "line": 631,
       "uri": "spec://vibevm/modules/vibe-resolver/PROP-003#lockfile-v3"
     },
     {
@@ -10318,7 +10318,7 @@
       "doc_path": "modules/vibe-resolver/PROP-003",
       "file": "spec/modules/vibe-resolver/PROP-003-dep-evolution.md",
       "heading": "2.10 CLI surface — additions and adjustments",
-      "line": 666,
+      "line": 674,
       "uri": "spec://vibevm/modules/vibe-resolver/PROP-003#cli"
     },
     {
@@ -10327,7 +10327,7 @@
       "doc_path": "modules/vibe-resolver/PROP-003",
       "file": "spec/modules/vibe-resolver/PROP-003-dep-evolution.md",
       "heading": "2.11 Migration path from `NaiveDepSolver`",
-      "line": 686,
+      "line": 694,
       "uri": "spec://vibevm/modules/vibe-resolver/PROP-003#migration"
     },
     {
@@ -10336,7 +10336,7 @@
       "doc_path": "modules/vibe-resolver/PROP-003",
       "file": "spec/modules/vibe-resolver/PROP-003-dep-evolution.md",
       "heading": "3. SAT solver algorithm details",
-      "line": 700,
+      "line": 708,
       "uri": "spec://vibevm/modules/vibe-resolver/PROP-003#algorithm"
     },
     {
@@ -10345,7 +10345,7 @@
       "doc_path": "modules/vibe-resolver/PROP-003",
       "file": "spec/modules/vibe-resolver/PROP-003-dep-evolution.md",
       "heading": "3.1 Rule encoding — vibevm concepts → libsolv rules",
-      "line": 702,
+      "line": 710,
       "uri": "spec://vibevm/modules/vibe-resolver/PROP-003#rule-encoding"
     },
     {
@@ -10354,7 +10354,7 @@
       "doc_path": "modules/vibe-resolver/PROP-003",
       "file": "spec/modules/vibe-resolver/PROP-003-dep-evolution.md",
       "heading": "3.2 Solver phases",
-      "line": 725,
+      "line": 733,
       "uri": "spec://vibevm/modules/vibe-resolver/PROP-003#solver-phases"
     },
     {
@@ -10363,7 +10363,7 @@
       "doc_path": "modules/vibe-resolver/PROP-003",
       "file": "spec/modules/vibe-resolver/PROP-003-dep-evolution.md",
       "heading": "3.3 Determinism",
-      "line": 737,
+      "line": 745,
       "uri": "spec://vibevm/modules/vibe-resolver/PROP-003#determinism"
     },
     {
@@ -10372,7 +10372,7 @@
       "doc_path": "modules/vibe-resolver/PROP-003",
       "file": "spec/modules/vibe-resolver/PROP-003-dep-evolution.md",
       "heading": "3.4 Performance envelope",
-      "line": 741,
+      "line": 749,
       "uri": "spec://vibevm/modules/vibe-resolver/PROP-003#perf"
     },
     {
@@ -10381,7 +10381,7 @@
       "doc_path": "modules/vibe-resolver/PROP-003",
       "file": "spec/modules/vibe-resolver/PROP-003-dep-evolution.md",
       "heading": "4. Rejected alternatives",
-      "line": 747,
+      "line": 755,
       "uri": "spec://vibevm/modules/vibe-resolver/PROP-003#rejected"
     },
     {
@@ -10390,7 +10390,7 @@
       "doc_path": "modules/vibe-resolver/PROP-003",
       "file": "spec/modules/vibe-resolver/PROP-003-dep-evolution.md",
       "heading": "5. Out of scope for this PROP",
-      "line": 783,
+      "line": 791,
       "uri": "spec://vibevm/modules/vibe-resolver/PROP-003#out-of-scope"
     },
     {
@@ -10399,7 +10399,7 @@
       "doc_path": "modules/vibe-resolver/PROP-003",
       "file": "spec/modules/vibe-resolver/PROP-003-dep-evolution.md",
       "heading": "6. Phases / staging plan",
-      "line": 791,
+      "line": 799,
       "uri": "spec://vibevm/modules/vibe-resolver/PROP-003#phases"
     },
     {
@@ -10408,7 +10408,7 @@
       "doc_path": "modules/vibe-resolver/PROP-003",
       "file": "spec/modules/vibe-resolver/PROP-003-dep-evolution.md",
       "heading": "7. Open questions",
-      "line": 842,
+      "line": 850,
       "uri": "spec://vibevm/modules/vibe-resolver/PROP-003#open"
     },
     {
@@ -10417,8 +10417,125 @@
       "doc_path": "modules/vibe-resolver/PROP-003",
       "file": "spec/modules/vibe-resolver/PROP-003-dep-evolution.md",
       "heading": "8. References",
-      "line": 855,
+      "line": 863,
       "uri": "spec://vibevm/modules/vibe-resolver/PROP-003#references"
+    },
+    {
+      "anchor": "prop-017",
+      "content_hash": "sha256:37a54f781097e03306861a40388689f7d60270384208beddbde27ba6d7867802",
+      "doc_path": "modules/vibe-resolver/PROP-017",
+      "file": "spec/modules/vibe-resolver/PROP-017-resolvo-resolver.md",
+      "heading": "PROP-017 — Resolvo as the production resolver",
+      "line": 1,
+      "uri": "spec://vibevm/modules/vibe-resolver/PROP-017#prop-017"
+    },
+    {
+      "anchor": "why",
+      "content_hash": "sha256:a62442cf54a1d30818f5c15961c3e38a8c83f69e4b7e42ab0a1841e716857c62",
+      "doc_path": "modules/vibe-resolver/PROP-017",
+      "file": "spec/modules/vibe-resolver/PROP-017-resolvo-resolver.md",
+      "heading": "1. Why resolvo now — reversing the libsolv-first call",
+      "line": 21,
+      "uri": "spec://vibevm/modules/vibe-resolver/PROP-017#why"
+    },
+    {
+      "anchor": "architecture",
+      "content_hash": "sha256:68187bf5b7e81576976b26118791f2e03c43e8fb5453efdd0559bca25d01cfc6",
+      "doc_path": "modules/vibe-resolver/PROP-017",
+      "file": "spec/modules/vibe-resolver/PROP-017-resolvo-resolver.md",
+      "heading": "2. Architecture — adapter behind the stable `DepSolver` seam",
+      "line": 76,
+      "uri": "spec://vibevm/modules/vibe-resolver/PROP-017#architecture"
+    },
+    {
+      "anchor": "runtime",
+      "content_hash": "sha256:a60cbf2b0cfa096dbbefd2a0aca14584ee1560ec113766075b6ef409e969566b",
+      "doc_path": "modules/vibe-resolver/PROP-017",
+      "file": "spec/modules/vibe-resolver/PROP-017-resolvo-resolver.md",
+      "heading": "2.1 Sync CLI, no async runtime",
+      "line": 104,
+      "uri": "spec://vibevm/modules/vibe-resolver/PROP-017#runtime"
+    },
+    {
+      "anchor": "provider-enrichment",
+      "content_hash": "sha256:1fc2adb0485376e78f2de43558c2d93fe5c169ffcf01c182021eb49b6e26753b",
+      "doc_path": "modules/vibe-resolver/PROP-017",
+      "file": "spec/modules/vibe-resolver/PROP-017-resolvo-resolver.md",
+      "heading": "2.2 Provider enrichment — candidate enumeration",
+      "line": 116,
+      "uri": "spec://vibevm/modules/vibe-resolver/PROP-017#provider-enrichment"
+    },
+    {
+      "anchor": "output",
+      "content_hash": "sha256:f3a8e11c91bcd2096a35901c1b0535c241337fe8e34cb4a03319ee20f9ed11f4",
+      "doc_path": "modules/vibe-resolver/PROP-017",
+      "file": "spec/modules/vibe-resolver/PROP-017-resolvo-resolver.md",
+      "heading": "2.3 Shared output contract",
+      "line": 133,
+      "uri": "spec://vibevm/modules/vibe-resolver/PROP-017#output"
+    },
+    {
+      "anchor": "unsatisfiable",
+      "content_hash": "sha256:94962f2065850d1f5f393b3f9f6a54a949c704ecd8621004053c9e3945ad6052",
+      "doc_path": "modules/vibe-resolver/PROP-017",
+      "file": "spec/modules/vibe-resolver/PROP-017-resolvo-resolver.md",
+      "heading": "2.4 Rich conflict explanation",
+      "line": 143,
+      "uri": "spec://vibevm/modules/vibe-resolver/PROP-017#unsatisfiable"
+    },
+    {
+      "anchor": "encoding",
+      "content_hash": "sha256:1d51c92f22919d7cb84927065178e05eb2922072f23fca1e1f81724a0caebe94",
+      "doc_path": "modules/vibe-resolver/PROP-017",
+      "file": "spec/modules/vibe-resolver/PROP-017-resolvo-resolver.md",
+      "heading": "3. Vocabulary → resolvo encoding",
+      "line": 161,
+      "uri": "spec://vibevm/modules/vibe-resolver/PROP-017#encoding"
+    },
+    {
+      "anchor": "dominance",
+      "content_hash": "sha256:289c4962d1f36f0cf9c11ef6bffd6c30b5afa48fa0f75b17600d56dc857b87c6",
+      "doc_path": "modules/vibe-resolver/PROP-017",
+      "file": "spec/modules/vibe-resolver/PROP-017-resolvo-resolver.md",
+      "heading": "4. Correctness — the differential dominance contract",
+      "line": 195,
+      "uri": "spec://vibevm/modules/vibe-resolver/PROP-017#dominance"
+    },
+    {
+      "anchor": "swap",
+      "content_hash": "sha256:4cc8991ec6e073b6aeaed2c4fb327a2973b03b68cb4f0fc4ea0b7d59e543d909",
+      "doc_path": "modules/vibe-resolver/PROP-017",
+      "file": "spec/modules/vibe-resolver/PROP-017-resolvo-resolver.md",
+      "heading": "5. Abstraction & the swap requirement",
+      "line": 229,
+      "uri": "spec://vibevm/modules/vibe-resolver/PROP-017#swap"
+    },
+    {
+      "anchor": "phases",
+      "content_hash": "sha256:069cc98b5fa36ca1cdf79f48aa7c7dcaf8b4bb5ada03d91bb668538cc10b098a",
+      "doc_path": "modules/vibe-resolver/PROP-017",
+      "file": "spec/modules/vibe-resolver/PROP-017-resolvo-resolver.md",
+      "heading": "6. Phases / staging",
+      "line": 247,
+      "uri": "spec://vibevm/modules/vibe-resolver/PROP-017#phases"
+    },
+    {
+      "anchor": "determinism",
+      "content_hash": "sha256:eb9e4a7248956d92c2d9b7ee370c2de169d4052df05c45966c329031a846b456",
+      "doc_path": "modules/vibe-resolver/PROP-017",
+      "file": "spec/modules/vibe-resolver/PROP-017-resolvo-resolver.md",
+      "heading": "7. Determinism & performance",
+      "line": 269,
+      "uri": "spec://vibevm/modules/vibe-resolver/PROP-017#determinism"
+    },
+    {
+      "anchor": "references",
+      "content_hash": "sha256:723e27177a455f72aa07aa345a33b3b93f67d6469e0049a3a3e97bfd3079f765",
+      "doc_path": "modules/vibe-resolver/PROP-017",
+      "file": "spec/modules/vibe-resolver/PROP-017-resolvo-resolver.md",
+      "heading": "8. References",
+      "line": 285,
+      "uri": "spec://vibevm/modules/vibe-resolver/PROP-017#references"
     },
     {
       "anchor": "root",
