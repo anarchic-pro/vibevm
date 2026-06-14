@@ -8,12 +8,14 @@ use vibe_core::VersionSpec;
 
 /// A set of `semver::Version`s — the unit resolvo interns and asks about
 /// through `filter_candidates`. `Any` is the match-all set (the encoding
-/// of `VersionSpec::Latest`); `Req` wraps a semver range. A match-nothing
-/// variant for `[conflicts]` / `[obsoletes]` arrives with that slice.
+/// of `VersionSpec::Latest`); `Req` wraps a semver range; `None` is the
+/// match-nothing set — the encoding of `[conflicts]` ("if present, the
+/// version must be in ∅", so the rival package cannot be selected).
 #[derive(Clone, Eq, PartialEq, Hash, Debug)]
 pub(crate) enum SemverVersionSet {
     Any,
     Req(semver::VersionReq),
+    None,
 }
 
 impl SemverVersionSet {
@@ -30,6 +32,7 @@ impl SemverVersionSet {
         match self {
             SemverVersionSet::Any => true,
             SemverVersionSet::Req(req) => req.matches(version),
+            SemverVersionSet::None => false,
         }
     }
 }
@@ -43,6 +46,7 @@ impl fmt::Display for SemverVersionSet {
         match self {
             SemverVersionSet::Any => f.write_str("*"),
             SemverVersionSet::Req(req) => write!(f, "{req}"),
+            SemverVersionSet::None => f.write_str("(none)"),
         }
     }
 }

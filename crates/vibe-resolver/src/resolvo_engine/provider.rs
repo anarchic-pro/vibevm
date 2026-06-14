@@ -67,6 +67,14 @@ impl<'p, P: VersionEnumerator> VibevmResolvoProvider<'p, P> {
             .intern_version_set(name_id, SemverVersionSet::from_spec(spec))
     }
 
+    /// Intern the match-nothing version set for a package — the encoding
+    /// of "this package must not be present", used by `[conflicts]`.
+    fn intern_excluded(&self, group: &Group, name: &str) -> VersionSetId {
+        let name_id = self.intern_name(group, name);
+        self.pool
+            .intern_version_set(name_id, SemverVersionSet::None)
+    }
+
     /// Parse a `NameId` back into `(group, name)`.
     fn name_parts(&self, name_id: NameId) -> Option<(Group, String)> {
         let qualified = self.pool.resolve_package_name(name_id);
@@ -85,20 +93,21 @@ impl<'p, P: VersionEnumerator> VibevmResolvoProvider<'p, P> {
         Some((group, name, solvable.record.clone()))
     }
 
-    /// The direct `[requires.packages]` of a chosen solvable — from the
-    /// solve-time manifest cache, falling back to a fresh fetch.
-    pub(crate) fn direct_deps(
+    /// The chosen solvable's manifest — from the solve-time cache,
+    /// falling back to a fresh fetch. Output building reads its
+    /// `[requires.packages]` (for the graph edges) and `[obsoletes]`
+    /// (to drop superseded nodes).
+    pub(crate) fn manifest_of(
         &self,
         id: SolvableId,
         group: &Group,
         name: &str,
         version: &semver::Version,
-    ) -> Result<Vec<vibe_core::PackageRef>, DepProviderError> {
+    ) -> Result<Manifest, DepProviderError> {
         if let Some(m) = self.manifests.borrow().get(&id) {
-            return Ok(m.requires.packages.clone());
+            return Ok(m.clone());
         }
-        let m = self.provider.fetch_manifest(group, name, version)?;
-        Ok(m.requires.packages.clone())
+        self.provider.fetch_manifest(group, name, version)
     }
 
     /// Take the stashed provider error, if any.
@@ -285,10 +294,25 @@ impl<'p, P: VersionEnumerator> DependencyProvider for VibevmResolvoProvider<'p, 
             }
         }
 
+        // `[conflicts]` → resolvo `constrains` to the match-nothing set:
+        // whole-package exclusion (the entry's version is ignored, as in
+        // the naive cell). Selecting this package forbids the rival.
+        let mut constrains = Vec::new();
+        for c in &manifest.conflicts.packages {
+            let Some(cg) = c.group.clone() else {
+                self.record_error(DepProviderError::Other(format!(
+                    "`[conflicts]` entry `{}` of `{group}/{name}` is not group-qualified",
+                    c.name
+                )));
+                continue;
+            };
+            constrains.push(self.intern_excluded(&cg, c.name.as_str()));
+        }
+
         self.manifests.borrow_mut().insert(solvable, manifest);
         Dependencies::Known(KnownDependencies {
             requirements,
-            constrains: Vec::new(),
+            constrains,
         })
     }
 }

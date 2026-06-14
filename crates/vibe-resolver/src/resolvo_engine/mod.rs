@@ -126,6 +126,7 @@ impl<P: VersionEnumerator> DepSolver for ResolvoDepSolver<P> {
             Ok(solvables) => {
                 let rp = solver.provider();
                 let mut chosen: HashMap<(Group, String), Chosen> = HashMap::new();
+                let mut obsolete: HashSet<(Group, String)> = HashSet::new();
                 for id in solvables {
                     let Some((group, name, version)) = rp.solvable_parts(id) else {
                         return Err(SolveError::Provider(DepProviderError::Other(
@@ -133,9 +134,17 @@ impl<P: VersionEnumerator> DepSolver for ResolvoDepSolver<P> {
                         )));
                     };
                     let is_root = root_order.iter().any(|(g, n)| g == &group && n == &name);
-                    let direct_deps = rp
-                        .direct_deps(id, &group, &name, &version)
+                    let manifest = rp
+                        .manifest_of(id, &group, &name, &version)
                         .map_err(SolveError::Provider)?;
+                    let direct_deps = manifest.requires.packages.clone();
+                    // `[obsoletes]` → drop the superseded node from the
+                    // output, mirroring the naive cell (PROP-017 §3).
+                    for ob in &manifest.obsoletes.packages {
+                        if let Some(g) = ob.group.clone() {
+                            obsolete.insert((g, ob.name.to_string()));
+                        }
+                    }
                     chosen.insert(
                         (group, name),
                         Chosen {
@@ -145,9 +154,7 @@ impl<P: VersionEnumerator> DepSolver for ResolvoDepSolver<P> {
                         },
                     );
                 }
-                // Obsoletes are not yet encoded (a later slice); the set
-                // is empty until then.
-                Ok(build_resolved_graph(&root_order, chosen, &HashSet::new()))
+                Ok(build_resolved_graph(&root_order, chosen, &obsolete))
             }
             Err(UnsolvableOrCancelled::Unsolvable(conflict)) => Err(SolveError::Unsatisfiable {
                 explanation: conflict.display_user_friendly(&solver).to_string(),
@@ -436,6 +443,42 @@ mod tests {
         assert_eq!(
             graph.find(&org(), "c").unwrap().version,
             semver::Version::new(1, 0, 0)
+        );
+    }
+
+    /// `[conflicts]`: `a` requires both `x` and `y`, but `x` declares a
+    /// conflict against `y` (a constraint to the match-nothing set) — so
+    /// the two cannot coexist and the graph is unsatisfiable.
+    #[test]
+    fn resolvo_rejects_conflicting_packages() {
+        let a = "[package]\ngroup = \"org.vibevm\"\nname = \"a\"\nkind = \"flow\"\nversion = \"1.0.0\"\n\n[requires.packages]\n\"org.vibevm/x\" = \"^1\"\n\"org.vibevm/y\" = \"^1\"\n";
+        let x = "[package]\ngroup = \"org.vibevm\"\nname = \"x\"\nkind = \"flow\"\nversion = \"1.0.0\"\n\n[conflicts]\npackages = [\"org.vibevm/y\"]\n";
+        let seeds = [a.to_string(), x.to_string(), pkg("y", "1.0.0", &[])];
+        let seeds: Vec<&str> = seeds.iter().map(String::as_str).collect();
+        let resolvo = ResolvoDepSolver::new(MapProvider::new(&seeds));
+        match resolvo.solve(&roots(&["a"])).unwrap_err() {
+            SolveError::Unsatisfiable { .. } => {}
+            other => panic!("expected Unsatisfiable from the conflict, got {other:?}"),
+        }
+    }
+
+    /// `[obsoletes]`: `new` supersedes `old`; `a` requires both, and the
+    /// output drops `old` (mirroring the naive cell's obsolete handling).
+    #[test]
+    fn resolvo_drops_obsoleted_packages() {
+        let a = "[package]\ngroup = \"org.vibevm\"\nname = \"a\"\nkind = \"flow\"\nversion = \"1.0.0\"\n\n[requires.packages]\n\"org.vibevm/old\" = \"^1\"\n\"org.vibevm/new\" = \"^1\"\n";
+        let new = "[package]\ngroup = \"org.vibevm\"\nname = \"new\"\nkind = \"flow\"\nversion = \"1.0.0\"\n\n[obsoletes]\npackages = [\"org.vibevm/old\"]\n";
+        let seeds = [a.to_string(), new.to_string(), pkg("old", "1.0.0", &[])];
+        let seeds: Vec<&str> = seeds.iter().map(String::as_str).collect();
+        let resolvo = ResolvoDepSolver::new(MapProvider::new(&seeds));
+        let graph = resolvo.solve(&roots(&["a"])).unwrap();
+        assert!(
+            graph.find(&org(), "new").is_some(),
+            "the superseding package stays"
+        );
+        assert!(
+            graph.find(&org(), "old").is_none(),
+            "the obsoleted package is dropped from the output"
         );
     }
 }
