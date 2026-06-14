@@ -23,6 +23,14 @@ use super::TargetOs;
 /// carried verbatim into the generated `INDEX.md`. The richer `[activation]`
 /// probe vocabulary (PROP-003 §2.5) folds in when that engine is built;
 /// `os:` is its first probe.
+///
+/// ```
+/// use vibe_core::manifest::WhenCondition;
+///
+/// let cond: WhenCondition = "os:linux".parse().unwrap();
+/// assert_eq!(cond.to_string(), "os:linux");
+/// assert!("os:beos".parse::<WhenCondition>().is_err()); // unknown OS
+/// ```
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(try_from = "String", into = "String")]
 pub enum WhenCondition {

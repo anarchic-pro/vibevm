@@ -16,6 +16,19 @@ use super::wire::{InlinePackageDepWire, VersionFieldWire};
 /// sourced from an arbitrary git repository instead of a registry.
 ///
 /// Spec: PROP-002 §2.4.1.
+///
+/// ```
+/// use vibe_core::manifest::{Requires, GitRefKind};
+///
+/// let r: Requires = toml::from_str(r#"
+///     [packages]
+///     "org.vibevm/internal" = { git = "https://github.com/me/internal", tag = "v0.1.0" }
+/// "#).unwrap();
+/// let g = &r.git_packages[0];
+/// assert_eq!(g.name, "internal");
+/// assert_eq!(g.url, "https://github.com/me/internal");
+/// assert!(matches!(&g.ref_kind, GitRefKind::Tag(t) if t == "v0.1.0"));
+/// ```
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct GitPackageDep {
     /// Optional `kind` prefix carried by the pkgref key (PROP-008 §2.4).
@@ -39,6 +52,14 @@ pub struct GitPackageDep {
 
 /// Which kind of git ref the operator declared on a `[requires.packages.*]`
 /// git-source entry. Exactly one of the three is required at parse time.
+///
+/// ```
+/// use vibe_core::manifest::GitRefKind;
+///
+/// let r = GitRefKind::Tag("v0.3.0".into());
+/// assert_eq!(r.label(), "tag");
+/// assert_eq!(r.as_str(), "v0.3.0");
+/// ```
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum GitRefKind {
     Tag(String),
@@ -64,6 +85,18 @@ impl GitRefKind {
 
 /// A `[requires.packages.<pkgref>]` inline-table value pointing at a package
 /// in a local directory — typically a sibling workspace member. PROP-007 §2.5.
+///
+/// ```
+/// use vibe_core::manifest::Requires;
+///
+/// let r: Requires = toml::from_str(r#"
+///     [packages]
+///     "org.vibevm/wal" = { path = "../flow-wal" }
+/// "#).unwrap();
+/// let p = &r.path_packages[0];
+/// assert_eq!(p.name, "wal");
+/// assert_eq!(p.path, "../flow-wal");
+/// ```
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct PathPackageDep {
     /// Optional `kind` prefix carried by the pkgref key (PROP-008 §2.4).
@@ -86,6 +119,18 @@ pub struct PathPackageDep {
 /// A `[requires.packages.<pkgref>]` registry-resolved entry whose version is
 /// a `[workspace.versions]` placeholder — `{ version.var = "core" }`. Carries
 /// the unresolved placeholder name; `vibe-workspace` resolves it. PROP-007 §2.6.
+///
+/// ```
+/// use vibe_core::manifest::Requires;
+///
+/// let r: Requires = toml::from_str(r#"
+///     [packages]
+///     "org.vibevm/wal" = { version.var = "core" }
+/// "#).unwrap();
+/// let v = &r.var_packages[0];
+/// assert_eq!(v.name, "wal");
+/// assert_eq!(v.var, "core");
+/// ```
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct VarRegistryDep {
     /// Optional `kind` prefix carried by the pkgref key (PROP-008 §2.4).
