@@ -264,6 +264,7 @@ fn resolver_args() -> InstallArgs {
         all_features: false,
         exact: false,
         auth_required: false,
+        solver: None,
         git: None,
         tag: None,
         branch: None,

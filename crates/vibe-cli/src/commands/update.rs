@@ -209,6 +209,7 @@ fn install_args_from(args: &UpdateArgs) -> InstallArgs {
         all_features: false,
         exact: args.exact,
         auth_required: args.auth_required,
+        solver: None,
         git: None,
         tag: None,
         branch: None,

@@ -21,12 +21,14 @@ use crate::cli::InstallArgs;
 /// [`InstallSource`] seam; construction stays here at the CLI's
 /// composition root (R-001).
 pub(crate) enum InstallResolver {
-    Local(LocalRegistry),
+    /// The local-directory registry plus the optional `--solver` cell
+    /// name threaded through to the R-001 selection seam.
+    Local(LocalRegistry, Option<&'static str>),
     // Boxed: `MultiRegistryResolver` is by far the larger variant
     // (it carries the registry list plus the override / git-source /
     // path-source maps), so an unboxed enum would bloat every
     // `InstallResolver` value to the size of the multi-registry path.
-    Multi(Box<MultiRegistryResolver>),
+    Multi(Box<MultiRegistryResolver>, Option<&'static str>),
 }
 
 impl InstallSource for InstallResolver {
@@ -45,11 +47,11 @@ impl InstallSource for InstallResolver {
         expected_hash: Option<&str>,
     ) -> Result<CachedPackage, RegistryError> {
         match self {
-            InstallResolver::Local(r) => {
+            InstallResolver::Local(r, _) => {
                 let resolved = r.resolve(pkgref)?;
                 r.fetch(&resolved, cache_root)
             }
-            InstallResolver::Multi(m) => {
+            InstallResolver::Multi(m, _) => {
                 let resolution = m.resolve(pkgref)?;
                 m.fetch_with_expected_hash(&resolution, cache_root, expected_hash)
             }
@@ -62,12 +64,18 @@ impl InstallSource for InstallResolver {
     ) -> Result<vibe_resolver::ResolvedGraph, vibe_resolver::SolveError> {
         // Cell selection lives in the registry module (R-001); this
         // match only routes the resource the caller already owns.
-        let flags = crate::registry::selection_flags(matches!(self, InstallResolver::Local(_)));
+        let solver_override = match self {
+            InstallResolver::Local(_, s) | InstallResolver::Multi(_, s) => *s,
+        };
+        let flags = crate::registry::selection_flags(
+            matches!(self, InstallResolver::Local(..)),
+            solver_override,
+        );
         let solver = match self {
-            InstallResolver::Local(r) => {
+            InstallResolver::Local(r, _) => {
                 crate::registry::dep_solver(&flags, crate::registry::ProviderResource::Local(r))
             }
-            InstallResolver::Multi(m) => {
+            InstallResolver::Multi(m, _) => {
                 crate::registry::dep_solver(&flags, crate::registry::ProviderResource::Multi(m))
             }
         };
@@ -85,8 +93,8 @@ impl InstallResolver {
     /// boundary, not the orchestrator's.
     pub(crate) fn candidate_groups(&self, name: &str) -> Result<Vec<Group>> {
         match self {
-            InstallResolver::Local(r) => Ok(r.candidate_groups(name)?),
-            InstallResolver::Multi(m) => Ok(m.resolve_name_candidates(name)),
+            InstallResolver::Local(r, _) => Ok(r.candidate_groups(name)?),
+            InstallResolver::Multi(m, _) => Ok(m.resolve_name_candidates(name)),
         }
     }
 }
@@ -192,10 +200,25 @@ pub(super) fn apply_git_source_flag(
 /// 2. `[[registry]]` array in `vibe.toml` → [`MultiRegistryResolver`]
 ///    covering priority order, mirrors, and overrides per
 ///    [PROP-002](../../../../spec/modules/vibe-registry/PROP-002-decentralized-registry.md).
+/// Validate the `--solver` flag into the static cell name the R-001
+/// selection seam accepts. `None` keeps the built-in default (resolvo).
+fn validate_solver(flag: Option<&str>) -> Result<Option<&'static str>> {
+    match flag {
+        None => Ok(None),
+        Some("resolvo") => Ok(Some("resolvo")),
+        Some("naive") => Ok(Some("naive")),
+        Some("sat") => Ok(Some("sat")),
+        Some(other) => {
+            bail!("unknown --solver `{other}` — must be `resolvo` (default), `naive`, or `sat`")
+        }
+    }
+}
+
 pub(crate) fn build_install_resolver(
     args: &InstallArgs,
     manifest: &Manifest,
 ) -> Result<InstallResolver> {
+    let solver = validate_solver(args.solver.as_deref())?;
     if let Some(explicit) = &args.registry {
         let p = explicit
             .canonicalize()
@@ -203,7 +226,7 @@ pub(crate) fn build_install_resolver(
         let p = crate::commands::init::strip_unc_public(p);
         let local = crate::registry::local_registry(p.clone())
             .map_err(|e| anyhow!("failed to open registry at `{}`: {e}", p.display()))?;
-        return Ok(InstallResolver::Local(local));
+        return Ok(InstallResolver::Local(local, solver));
     }
 
     if manifest.registries.is_empty() {
@@ -217,5 +240,5 @@ pub(crate) fn build_install_resolver(
             .context("opening multi-registry resolver")?
             .with_strict_auth(args.auth_required)
             .with_git_packages(manifest.requires.git_packages.clone());
-    Ok(InstallResolver::Multi(Box::new(mrr)))
+    Ok(InstallResolver::Multi(Box::new(mrr), solver))
 }

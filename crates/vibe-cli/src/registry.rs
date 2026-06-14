@@ -89,11 +89,18 @@ pub const FLAGS: &[FlagInfo] = &[
 
 /// Interpret the parsed CLI state into selection flags. The only
 /// place flag values are decided.
-pub fn selection_flags(registry_path_given: bool) -> SelectionFlags {
+pub fn selection_flags(
+    registry_path_given: bool,
+    solver_override: Option<&'static str>,
+) -> SelectionFlags {
     SelectionFlags {
         solver: Selected {
-            value: "resolvo",
-            provenance: Provenance::BuiltIn,
+            value: solver_override.unwrap_or("resolvo"),
+            provenance: if solver_override.is_some() {
+                Provenance::Cli
+            } else {
+                Provenance::BuiltIn
+            },
         },
         provider: if registry_path_given {
             Selected {
@@ -178,15 +185,26 @@ mod tests {
 
     #[test]
     fn provider_flag_follows_registry_path() {
-        let local = selection_flags(true);
+        let local = selection_flags(true, None);
         assert_eq!(local.provider.value, "local-registry");
         assert_eq!(local.provider.provenance, Provenance::Cli);
 
-        let multi = selection_flags(false);
+        let multi = selection_flags(false, None);
         assert_eq!(multi.provider.value, "multi-registry");
         assert_eq!(multi.provider.provenance, Provenance::BuiltIn);
         assert_eq!(multi.solver.value, "resolvo");
         assert_eq!(multi.solver.provenance, Provenance::BuiltIn);
+    }
+
+    #[test]
+    fn solver_override_carries_cli_provenance() {
+        let overridden = selection_flags(false, Some("naive"));
+        assert_eq!(overridden.solver.value, "naive");
+        assert_eq!(overridden.solver.provenance, Provenance::Cli);
+
+        let default = selection_flags(false, None);
+        assert_eq!(default.solver.value, "resolvo");
+        assert_eq!(default.solver.provenance, Provenance::BuiltIn);
     }
 
     #[test]

@@ -137,6 +137,12 @@ pub struct InstallArgs {
     #[arg(long)]
     pub auth_required: bool,
 
+    /// Select the dependency solver cell (PROP-017). Defaults to
+    /// `resolvo` (CDCL SAT); `naive` (DFS fast path) and `sat`
+    /// (backtracking) are selectable fallbacks.
+    #[arg(long, value_name = "naive|sat|resolvo")]
+    pub solver: Option<String>,
+
     /// Add a git-source declaration for the single positional pkgref
     /// — fetches the package directly from this git URL rather than
     /// resolving it through `[[registry]]`. PROP-002 §2.4.1.
