@@ -1,5 +1,16 @@
 # CONTINUE.md — cold-resume checkpoint
 
+> **LATEST (2026-06-14, after this snapshot): the resolvo resolver
+> (PROP-017) is IN PROGRESS — the production CDCL solver `ResolvoDepSolver`
+> + its `VibevmResolvoProvider` adapter + the `differential_naive_vs_resolvo_dominance`
+> oracle + `[[requires_any]]` disjunctions are built and gate-green on
+> local `main` (5 commits). Everything below describes the PRIOR
+> source-mirror session and is superseded by `spec/WAL.md` (current
+> resolvo state) and [`PROP-017`](spec/modules/vibe-resolver/PROP-017-resolvo-resolver.md).
+> Full `self-check.sh` green. Next: `[conflicts]`/`[obsoletes]`, the
+> capabilities design fork (registry has no capability→provider index),
+> weak-deps, then wiring resolvo as the default solver.**
+
 _Written 2026-06-14 at the close of a **source-mirror hardening** session.
 No campaign is in flight: CONVERT-PLAN v0.1 (Phases 0–7) and PUBDOC-DRAIN
 v0.1 are both COMPLETE; the PROP-016 source-mirror system is in force and
