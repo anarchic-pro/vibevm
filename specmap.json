@@ -10528,7 +10528,7 @@
     },
     {
       "anchor": "prop-017",
-      "content_hash": "sha256:f928bdd5fe101ff1d8b55c3bdc490fe4f2ce996757e75727f7278eb6999edfa5",
+      "content_hash": "sha256:0d5a4b3298c2cacf5ee369f3225979654dc313780cd74adaabb74f889e113646",
       "doc_path": "modules/vibe-resolver/PROP-017",
       "file": "spec/modules/vibe-resolver/PROP-017-resolvo-resolver.md",
       "heading": "PROP-017 — Resolvo as the production resolver",
@@ -10618,7 +10618,7 @@
     },
     {
       "anchor": "phases",
-      "content_hash": "sha256:069cc98b5fa36ca1cdf79f48aa7c7dcaf8b4bb5ada03d91bb668538cc10b098a",
+      "content_hash": "sha256:0b8b037202b35aa3a1e6bba6c6c88abdace0ee397a20de73c892cbbb34fe56f6",
       "doc_path": "modules/vibe-resolver/PROP-017",
       "file": "spec/modules/vibe-resolver/PROP-017-resolvo-resolver.md",
       "heading": "6. Phases / staging",
@@ -10631,16 +10631,16 @@
       "doc_path": "modules/vibe-resolver/PROP-017",
       "file": "spec/modules/vibe-resolver/PROP-017-resolvo-resolver.md",
       "heading": "7. Determinism & performance",
-      "line": 269,
+      "line": 279,
       "uri": "spec://vibevm/modules/vibe-resolver/PROP-017#determinism"
     },
     {
       "anchor": "future-work",
-      "content_hash": "sha256:f0df846558294448cf997206e442ee91d47fc739e97bbe4d874aa79b91d9839e",
+      "content_hash": "sha256:fb127d85f3eb188529c935c236fc5893492c7910f3bada6741a41e0d6d0a274a",
       "doc_path": "modules/vibe-resolver/PROP-017",
       "file": "spec/modules/vibe-resolver/PROP-017-resolvo-resolver.md",
       "heading": "8. Future work",
-      "line": 285,
+      "line": 295,
       "uri": "spec://vibevm/modules/vibe-resolver/PROP-017#future-work"
     },
     {
@@ -10649,7 +10649,7 @@
       "doc_path": "modules/vibe-resolver/PROP-017",
       "file": "spec/modules/vibe-resolver/PROP-017-resolvo-resolver.md",
       "heading": "9. References",
-      "line": 302,
+      "line": 323,
       "uri": "spec://vibevm/modules/vibe-resolver/PROP-017#references"
     },
     {

@@ -246,23 +246,33 @@ keep the git backend swappable, applied to the solver.
 
 ## 6. Phases / staging {#phases}
 
-Each slice is one topic commit with green gates; any slice is a safe stop.
+**Status (2026-06-14): the port is COMPLETE — resolvo is the default
+production solver.** Each slice landed as a topic commit with green gates.
 
-- **S0** — this document + the PROP-003 §2.2 supersede note.
-- **S1** — `DepProvider::list_versions` across all impls + doctests.
-- **S2** — `resolvo` dep; `ResolvoDepSolver` + `VibevmResolvoProvider` +
-  `SemverVersionSet` + shared output builder + `SolveError::Unsatisfiable`;
-  `[requires.packages]` + newest + narrowing + single-version; unit tests.
-- **S3** — `differential_naive_vs_resolvo_dominance` in the oracle.
-- **S4** — capabilities, `[[requires_any]]`, `[conflicts]`, `[obsoletes]`.
-- **S5** — weak-deps + `[features.exclusive]`.
-- **S6** — `[meta].solver` + `--solver resolvo` + default flip to resolvo.
-- **S7** — gates (conform / specmap / file-length / self-check), WAL +
-  CONTINUE, mirror rollout.
+- **DONE** — this document + the PROP-003 §2.2 supersede note.
+- **DONE** — the shared output builder + the `VersionEnumerator` seam +
+  `SolveError::Unsatisfiable`.
+- **DONE** — `resolvo` dep; `ResolvoDepSolver` + `VibevmResolvoProvider` +
+  `SemverVersionSet`; `[requires.packages]` + newest + narrowing.
+- **DONE** — `differential_naive_vs_resolvo_dominance` (the oracle).
+- **DONE** — `[[requires_any]]`→`Union`, `[conflicts]`, `[obsoletes]`, and
+  capabilities via the closure pre-scan.
+- **DONE** — production version enumeration
+  (`MultiRegistryResolver::list_versions` + the `VersionEnumerator`
+  provider impls).
+- **DONE** — `--solver <naive|sat|resolvo>` override + **the default
+  flipped to resolvo** in the R-001 selection seam (`vibe-cli`).
+- **DEFERRED** (separate schema work — see §8) — weak-deps
+  (`[recommends]` / `[suggests]` / `[supplements]` / `[enhances]`) and
+  the `[meta].solver` lockfile recording; both need a schema change (the
+  package weak-dep manifest sections and the lockfile `[meta]` solver
+  field do not exist yet). resolvo is ready to honour them once the
+  schema lands. `[features.exclusive]` lives in the `features.rs` layer
+  above the solver.
 
 naive and sat stay in tree: naive as the small-graph fast path and the
-oracle's reference cell; sat as a recorded pure-Rust backtracker. The
-default solver becomes `resolvo` at S6.
+oracle's reference cell; sat as a recorded pure-Rust backtracker — both
+still selectable via `--solver`.
 
 ---
 
@@ -298,6 +308,17 @@ default solver becomes `resolvo` at S6.
   emitter, and a query path — recorded here as the capability layer's
   natural evolution. Not scheduled; the trigger is capability routing
   across packages-not-yet-seen becoming load-bearing.
+- **Weak dependencies + the `[meta].solver` lockfile field.** Both are
+  schema work, not part of the engine port: the package-level
+  `[recommends]` / `[suggests]` / `[supplements]` / `[enhances]` sections
+  (PROP-003 §2.3.3) are absent from the `Manifest` schema (only subskills
+  carry a `[recommends]`), and the lockfile `[meta]` block has no `solver`
+  field (despite PROP-003 §2.1's note). resolvo is already shaped to
+  honour them — `[recommends]` → resolvo `soft_requirements`,
+  `[supplements]` → a reverse-index like capabilities, `[meta].solver` →
+  record the selected cell so a re-resolve off the lockfile is
+  reproducible — once the schema (a `vibe-core` change plus a lockfile
+  schema-version bump) lands.
 
 ## 9. References {#references}
 
