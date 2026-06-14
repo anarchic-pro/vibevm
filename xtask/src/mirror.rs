@@ -19,6 +19,15 @@
 //!   merge (`git fetch` + `git merge --ff-only`) before fanning out: the bridge
 //!   for "I accepted/merged a PR via that host's web UI".
 //!
+//! After a successful branch push, fan-out refreshes the local
+//! remote-tracking ref of every configured remote that points at the same URL
+//! (e.g. `origin` → the GitVerse target). Pushing by raw URL — the manifest's
+//! form — leaves `refs/remotes/<remote>/<branch>` untouched, so without this
+//! the maintainer's `git status` reads "ahead of origin/main" right after a
+//! green fan-out even though the host is level. The push was fast-forward-only
+//! and succeeded, so the host now equals local `branch`; recording that needs
+//! no extra network round-trip (a `git fetch` would do the same, redundantly).
+//!
 //! Auth is the maintainer's per-host SSH keys in the agent; `mirrors.toml`
 //! carries only URLs, no secrets.
 
@@ -129,15 +138,19 @@ fn short(sha: &str) -> &str {
     &sha[..7.min(sha.len())]
 }
 
-fn local_main(root: &Path) -> Result<String> {
-    let out = git(root, &["rev-parse", MAINLINE])?;
+fn rev_parse(root: &Path, rev: &str) -> Result<String> {
+    let out = git(root, &["rev-parse", rev])?;
     if !out.status.success() {
         bail!(
-            "git rev-parse {MAINLINE}: {}",
+            "git rev-parse {rev}: {}",
             String::from_utf8_lossy(&out.stderr).trim()
         );
     }
     Ok(String::from_utf8_lossy(&out.stdout).trim().to_string())
+}
+
+fn local_main(root: &Path) -> Result<String> {
+    rev_parse(root, MAINLINE)
 }
 
 fn remote_main(root: &Path, url: &str) -> Result<Option<String>> {
@@ -154,8 +167,112 @@ fn remote_main(root: &Path, url: &str) -> Result<Option<String>> {
         .map(String::from))
 }
 
+/// The configured `(name, fetch-url)` remotes, parsed from `git remote -v`.
+/// Tracking refs follow the *fetch* URL/refspec, so only fetch lines are
+/// kept. A repo with no remotes yields an empty list (the maintainer who
+/// pushes purely by URL); only a genuine git failure is an error.
+fn named_remotes(root: &Path) -> Result<Vec<(String, String)>> {
+    let out = git(root, &["remote", "-v"])?;
+    if !out.status.success() {
+        bail!(
+            "git remote -v: {}",
+            String::from_utf8_lossy(&out.stderr).trim()
+        );
+    }
+    let text = String::from_utf8_lossy(&out.stdout);
+    let mut remotes = Vec::new();
+    for line in text.lines() {
+        // "<name>\t<url> (fetch)" — the push lines are irrelevant here.
+        if !line.ends_with("(fetch)") {
+            continue;
+        }
+        let mut parts = line.split_whitespace();
+        let (Some(name), Some(url)) = (parts.next(), parts.next()) else {
+            continue;
+        };
+        remotes.push((name.to_string(), url.to_string()));
+    }
+    Ok(remotes)
+}
+
+/// Strip the gratuitous tail differences (`.git`, trailing `/`) so a
+/// `mirrors.toml` URL and a configured remote URL for the same repo compare
+/// equal. Scheme/host normalisation (ssh vs https) is deliberately out of
+/// scope — those are genuinely different access paths, not the same string
+/// dressed up.
+fn normalize_url(u: &str) -> &str {
+    u.trim_end_matches('/')
+        .trim_end_matches(".git")
+        .trim_end_matches('/')
+}
+
+/// The names of every configured remote whose URL points at `target_url`.
+fn remotes_matching<'a>(remotes: &'a [(String, String)], target_url: &str) -> Vec<&'a str> {
+    let want = normalize_url(target_url);
+    remotes
+        .iter()
+        .filter(|(_, url)| normalize_url(url) == want)
+        .map(|(name, _)| name.as_str())
+        .collect()
+}
+
+/// After a successful fan-out push of `branch` to `target_url`, move the
+/// local remote-tracking ref of every matching remote up to the just-pushed
+/// commit (see the module header for why `git push <url>` leaves it stale).
+/// Best-effort: the load-bearing act — the push — has already succeeded, so a
+/// local `update-ref` hiccup warns but never fails the rollout, and
+/// `git fetch <remote>` stays as the manual fallback.
+fn refresh_tracking(root: &Path, remotes: &[(String, String)], target_url: &str, branch: &str) {
+    let names = remotes_matching(remotes, target_url);
+    if names.is_empty() {
+        return;
+    }
+    // The push was fast-forward-only and succeeded, so every matching host's
+    // `branch` now equals the local `branch` — record exactly that.
+    let sha = match rev_parse(root, branch) {
+        Ok(s) => s,
+        Err(e) => {
+            eprintln!("  warn   cannot resolve {branch} to refresh tracking refs: {e}");
+            return;
+        }
+    };
+    for name in names {
+        let refname = format!("refs/remotes/{name}/{branch}");
+        match git(root, &["update-ref", &refname, &sha]) {
+            Ok(out) if out.status.success() => {
+                println!("  track  {name}/{branch} -> {}", short(&sha))
+            }
+            Ok(out) => eprintln!(
+                "  warn   could not refresh {name}/{branch}: {}",
+                String::from_utf8_lossy(&out.stderr).trim()
+            ),
+            Err(e) => eprintln!("  warn   could not refresh {name}/{branch}: {e}"),
+        }
+    }
+}
+
+/// The argv for pushing one ref to a target URL — the single place the
+/// fan-out's push command is built, so the load-bearing **never `--force`**,
+/// fast-forward-only invariant (PROP-016 §6, the `CLAUDE.md` Rule 4 red
+/// line) lives in one checkable spot. `tags` fans every tag (`--tags`); any
+/// other ref pushes that branch with a bare `git push` — no `--force`, no
+/// `+`-prefixed (force) refspec — so a non-fast-forward fails loud rather
+/// than overwriting a diverged target. The `push_args_never_force` test
+/// turns that guarantee from prose into runnable capital.
+fn push_args<'a>(url: &'a str, git_ref: &'a str) -> Vec<&'a str> {
+    if git_ref == "tags" {
+        vec!["push", url, "--tags"]
+    } else {
+        vec!["push", url, git_ref]
+    }
+}
+
 fn fan_out(root: &Path, targets: &[Target]) -> Result<()> {
     let head = local_main(root)?;
+    let remotes = named_remotes(root).unwrap_or_else(|e| {
+        eprintln!("mirror: could not read git remotes ({e}); tracking refs left as-is");
+        Vec::new()
+    });
     println!(
         "mirror: fanning {MAINLINE} @ {} out to {} target(s)",
         short(&head),
@@ -166,14 +283,16 @@ fn fan_out(root: &Path, targets: &[Target]) -> Result<()> {
         match t.mode {
             Mode::Push => {
                 for r in &t.refs {
-                    let args: Vec<&str> = if r == "tags" {
-                        vec!["push", t.url.as_str(), "--tags"]
-                    } else {
-                        vec!["push", t.url.as_str(), r.as_str()]
-                    };
+                    let args = push_args(&t.url, r);
                     let out = git(root, &args)?;
                     if out.status.success() {
                         println!("  ok     {} {r}", t.name);
+                        // Tags land in refs/tags/* directly and carry no
+                        // per-remote tracking ref; only a branch push leaves
+                        // refs/remotes/<remote>/<branch> stale.
+                        if r != "tags" {
+                            refresh_tracking(root, &remotes, &t.url, r);
+                        }
                     } else {
                         eprintln!(
                             "  FAIL   {} {r} -- {}",
@@ -293,4 +412,95 @@ fn pull_from(root: &Path, targets: &[Target], name: &str) -> Result<()> {
     }
     println!("mirror --from {name}: local {MAINLINE} fast-forwarded; fanning out...");
     Ok(())
+}
+
+#[cfg(test)]
+mod tests {
+    use super::{normalize_url, push_args, remotes_matching};
+
+    fn remote(name: &str, url: &str) -> (String, String) {
+        (name.to_string(), url.to_string())
+    }
+
+    #[test]
+    fn push_args_never_force() {
+        // The marquee invariant of the whole mirror system (PROP-016 §6,
+        // CLAUDE.md Rule 4): the fan-out NEVER force-pushes. Guarding every
+        // ref shape keeps a future edit from quietly slipping `--force` in.
+        for git_ref in ["main", "tags", "release", "v1.0"] {
+            let args = push_args("git@host:org/repo.git", git_ref);
+            assert!(
+                !args
+                    .iter()
+                    .any(|a| *a == "--force" || *a == "-f" || a.starts_with('+')),
+                "fan-out push for `{git_ref}` must never force: {args:?}"
+            );
+            assert_eq!(args[0], "push", "first arg is always the push verb");
+        }
+    }
+
+    #[test]
+    fn push_args_shape_per_ref_kind() {
+        // A branch ref pushes that branch by name; `tags` fans every tag.
+        assert_eq!(push_args("URL", "main"), vec!["push", "URL", "main"]);
+        assert_eq!(push_args("URL", "tags"), vec!["push", "URL", "--tags"]);
+    }
+
+    #[test]
+    fn normalize_url_strips_git_suffix_and_trailing_slash() {
+        assert_eq!(
+            normalize_url("git@github.com:anarchic-pro/vibevm.git"),
+            "git@github.com:anarchic-pro/vibevm"
+        );
+        assert_eq!(
+            normalize_url("https://gitverse.ru/anarchic/vibevm.git/"),
+            "https://gitverse.ru/anarchic/vibevm"
+        );
+        // Already bare — unchanged, and the leading `git@` is never touched
+        // (only the tail is trimmed).
+        assert_eq!(
+            normalize_url("git@gitverse.ru:anarchic/vibevm"),
+            "git@gitverse.ru:anarchic/vibevm"
+        );
+    }
+
+    #[test]
+    fn matching_remote_found_despite_git_suffix_difference() {
+        // mirrors.toml carries the `.git` form; a remote may not, or vice
+        // versa — normalisation makes the two compare equal.
+        let remotes = vec![
+            remote("origin", "git@gitverse.ru:anarchic/vibevm.git"),
+            remote("github", "git@github.com:anarchic-pro/vibevm"),
+        ];
+        assert_eq!(
+            remotes_matching(&remotes, "git@gitverse.ru:anarchic/vibevm"),
+            vec!["origin"]
+        );
+        assert_eq!(
+            remotes_matching(&remotes, "git@github.com:anarchic-pro/vibevm.git"),
+            vec!["github"]
+        );
+    }
+
+    #[test]
+    fn no_matching_remote_when_url_is_unknown() {
+        // A target with no configured remote (the push-by-URL-only case):
+        // nothing to refresh, no spurious match.
+        let remotes = vec![remote("origin", "git@gitverse.ru:anarchic/vibevm.git")];
+        assert!(remotes_matching(&remotes, "git@example.com:someone/other.git").is_empty());
+    }
+
+    #[test]
+    fn both_remotes_at_same_url_match_in_order() {
+        // Two remotes pointing at one host: both tracking refs must move,
+        // and the input order is preserved.
+        let remotes = vec![
+            remote("origin", "git@gitverse.ru:anarchic/vibevm.git"),
+            remote("alias", "git@gitverse.ru:anarchic/vibevm.git"),
+        ];
+        assert_eq!(
+            remotes_matching(&remotes, "git@gitverse.ru:anarchic/vibevm.git"),
+            vec!["origin", "alias"]
+        );
+    }
 }
