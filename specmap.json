@@ -8165,6 +8165,186 @@
       "uri": "spec://vibevm/common/PROP-013#history"
     },
     {
+      "anchor": "root",
+      "content_hash": "sha256:cfa6c15a41628377609854b3146d5b7bd29ea237b7cf43630afde6b0ec373b58",
+      "doc_path": "common/PROP-016",
+      "file": "spec/common/PROP-016-source-mirrors.md",
+      "heading": "PROP-016: Decentralized source mirrors — the integration model",
+      "line": 1,
+      "uri": "spec://vibevm/common/PROP-016#root"
+    },
+    {
+      "anchor": "motivation",
+      "content_hash": "sha256:d92b5684a2256809a8d0daabae61cec2674d8cb5103f72dea355472160913615",
+      "doc_path": "common/PROP-016",
+      "file": "spec/common/PROP-016-source-mirrors.md",
+      "heading": "1. Motivation",
+      "line": 8,
+      "uri": "spec://vibevm/common/PROP-016#motivation"
+    },
+    {
+      "anchor": "model",
+      "content_hash": "sha256:968282f0266334ace52c18019bffcf812ad32ac699be31a9b621b41d39abb75c",
+      "doc_path": "common/PROP-016",
+      "file": "spec/common/PROP-016-source-mirrors.md",
+      "heading": "2. The model",
+      "line": 14,
+      "uri": "spec://vibevm/common/PROP-016#model"
+    },
+    {
+      "anchor": "mainline",
+      "content_hash": "sha256:cf78729fbc61965e60c2b2ba4a90f70034bf5448f12deb20efcc6ebcaed019b6",
+      "doc_path": "common/PROP-016",
+      "file": "spec/common/PROP-016-source-mirrors.md",
+      "heading": "2.1 Mainline is the maintainer's local tree; there is no primary",
+      "line": 16,
+      "uri": "spec://vibevm/common/PROP-016#mainline"
+    },
+    {
+      "anchor": "targets",
+      "content_hash": "sha256:72c514f8f773d06dc6fef0d5310e94d86311efc40ceff40dabf9bbfaf75ef055",
+      "doc_path": "common/PROP-016",
+      "file": "spec/common/PROP-016-source-mirrors.md",
+      "heading": "2.2 Targets are downstream read-replicas",
+      "line": 20,
+      "uri": "spec://vibevm/common/PROP-016#targets"
+    },
+    {
+      "anchor": "contributions",
+      "content_hash": "sha256:f77c91f58caf6f4eeae97d6f8bd624bc2ca0c023d17c282e57195a01df68321d",
+      "doc_path": "common/PROP-016",
+      "file": "spec/common/PROP-016-source-mirrors.md",
+      "heading": "2.3 Contributions arrive anywhere; the maintainer integrates",
+      "line": 24,
+      "uri": "spec://vibevm/common/PROP-016#contributions"
+    },
+    {
+      "anchor": "components",
+      "content_hash": "sha256:e5dbc4ded04c90e1c87a24f58dce7ac10556474788c9808d2dcc59e20ae3d7ec",
+      "doc_path": "common/PROP-016",
+      "file": "spec/common/PROP-016-source-mirrors.md",
+      "heading": "3. Components",
+      "line": 28,
+      "uri": "spec://vibevm/common/PROP-016#components"
+    },
+    {
+      "anchor": "manifest",
+      "content_hash": "sha256:0d55417b480b5793f758a2cb526e3b7d16e31d8a8e45ddb8cfdc10890d2f798c",
+      "doc_path": "common/PROP-016",
+      "file": "spec/common/PROP-016-source-mirrors.md",
+      "heading": "3.1 `mirrors.toml` — the shared target registry",
+      "line": 30,
+      "uri": "spec://vibevm/common/PROP-016#manifest"
+    },
+    {
+      "anchor": "engine",
+      "content_hash": "sha256:99235ae0339e43e73852c4bd0feffe1b5bc582beb7c3d4576e5b94ff111f6683",
+      "doc_path": "common/PROP-016",
+      "file": "spec/common/PROP-016-source-mirrors.md",
+      "heading": "3.2 `cargo xtask mirror` — the fan-out engine",
+      "line": 54,
+      "uri": "spec://vibevm/common/PROP-016#engine"
+    },
+    {
+      "anchor": "health",
+      "content_hash": "sha256:2bdb5fa6c6d814fdc6d22307d89533708b284d33a8559627e2578654998aae3e",
+      "doc_path": "common/PROP-016",
+      "file": "spec/common/PROP-016-source-mirrors.md",
+      "heading": "3.3 The optional health probe",
+      "line": 62,
+      "uri": "spec://vibevm/common/PROP-016#health"
+    },
+    {
+      "anchor": "usage",
+      "content_hash": "sha256:c4e1ed5715100f6d168d7f4bf6b4b62625fa339925f6ba6cd66eeb00a4b1a702",
+      "doc_path": "common/PROP-016",
+      "file": "spec/common/PROP-016-source-mirrors.md",
+      "heading": "4. Usage — the maintainer's guide",
+      "line": 66,
+      "uri": "spec://vibevm/common/PROP-016#usage"
+    },
+    {
+      "anchor": "loop",
+      "content_hash": "sha256:ed955fd86726c0d3ed855ee9f95766e78d5d3ad5f7c236e21ddd0955dfadf0c1",
+      "doc_path": "common/PROP-016",
+      "file": "spec/common/PROP-016-source-mirrors.md",
+      "heading": "4.1 The loop in one line",
+      "line": 70,
+      "uri": "spec://vibevm/common/PROP-016#loop"
+    },
+    {
+      "anchor": "integrate",
+      "content_hash": "sha256:280b758d75348601b7e7143de8380004a126b4f9839c9672ac9e3c59fed65576",
+      "doc_path": "common/PROP-016",
+      "file": "spec/common/PROP-016-source-mirrors.md",
+      "heading": "4.2 Bringing an accepted change into mainline",
+      "line": 74,
+      "uri": "spec://vibevm/common/PROP-016#integrate"
+    },
+    {
+      "anchor": "rollout",
+      "content_hash": "sha256:50e55f5959c7e73d60e76a98fa921ca6615ba7faf1592abd45d15fd4fc617c14",
+      "doc_path": "common/PROP-016",
+      "file": "spec/common/PROP-016-source-mirrors.md",
+      "heading": "4.3 Rolling out everywhere",
+      "line": 90,
+      "uri": "spec://vibevm/common/PROP-016#rollout"
+    },
+    {
+      "anchor": "drift",
+      "content_hash": "sha256:5cacdbd1b9cb2e4f8824666efc95ff9a89006f2d7062666a3c36330dab696e91",
+      "doc_path": "common/PROP-016",
+      "file": "spec/common/PROP-016-source-mirrors.md",
+      "heading": "4.4 Checking sync and handling drift",
+      "line": 97,
+      "uri": "spec://vibevm/common/PROP-016#drift"
+    },
+    {
+      "anchor": "adding",
+      "content_hash": "sha256:4db9bc2892f36775737a90c8b9a48d56932ee0586fe6339cb11341ef1841cf1c",
+      "doc_path": "common/PROP-016",
+      "file": "spec/common/PROP-016-source-mirrors.md",
+      "heading": "4.5 Adding a host",
+      "line": 104,
+      "uri": "spec://vibevm/common/PROP-016#adding"
+    },
+    {
+      "anchor": "registry",
+      "content_hash": "sha256:ff36af1d5b48651f54714d716c5a2f15e9deaed9ceb5a022d0712203db29e421",
+      "doc_path": "common/PROP-016",
+      "file": "spec/common/PROP-016-source-mirrors.md",
+      "heading": "5. Relationship to the package-registry split-host",
+      "line": 108,
+      "uri": "spec://vibevm/common/PROP-016#registry"
+    },
+    {
+      "anchor": "safety",
+      "content_hash": "sha256:16a6f93d2559f02867e655f39b036d39864554144dc911c2dc5b42ecee879946",
+      "doc_path": "common/PROP-016",
+      "file": "spec/common/PROP-016-source-mirrors.md",
+      "heading": "6. Safety and limits",
+      "line": 117,
+      "uri": "spec://vibevm/common/PROP-016#safety"
+    },
+    {
+      "anchor": "open",
+      "content_hash": "sha256:bb0369595d8e7a990f2de1892f73712158c3e3ad4463cb932be313fc25589c7a",
+      "doc_path": "common/PROP-016",
+      "file": "spec/common/PROP-016-source-mirrors.md",
+      "heading": "7. Open questions",
+      "line": 123,
+      "uri": "spec://vibevm/common/PROP-016#open"
+    },
+    {
+      "anchor": "history",
+      "content_hash": "sha256:a6aa6e1c147dcdab658cadc81818b62ac4777f4f1558d39c16bde8fb6b7c91e9",
+      "doc_path": "common/PROP-016",
+      "file": "spec/common/PROP-016-source-mirrors.md",
+      "heading": "8. Version history",
+      "line": 129,
+      "uri": "spec://vibevm/common/PROP-016#history"
+    },
+    {
       "anchor": "problem",
       "content_hash": "sha256:51d81e2d52166e993280136ba6134889a6db3eb8f11d440c266bacf187e60158",
       "doc_path": "discipline/BROWNFIELD-PROTOCOL-v0.1",
