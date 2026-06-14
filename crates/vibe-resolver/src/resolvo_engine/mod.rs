@@ -101,6 +101,16 @@ impl<P: VersionEnumerator> DepSolver for ResolvoDepSolver<P> {
             }
         }
 
+        // Validate user-named roots up front: a typo'd or absent root
+        // gives a clean "not found" rather than a SAT-conflict
+        // derivation. (Absent transitive deps and disjunction
+        // alternatives are not fatal — they simply have no candidates.)
+        for (group, name) in &root_order {
+            if let Err(e) = self.provider.list_versions(group, name) {
+                return Err(SolveError::Provider(e));
+            }
+        }
+
         let problem = Problem::new().requirements(requirements);
         let mut solver = Solver::new(rp);
         let outcome = solver.solve(problem);
@@ -239,6 +249,12 @@ mod tests {
     }
 
     fn pkg(name: &str, version: &str, requires: &[(&str, &str)]) -> String {
+        pkg_with(name, version, requires, &[])
+    }
+
+    /// Manifest with optional `[requires.packages]` and a single
+    /// `[[requires_any]]` over `org.vibevm/<name>` alternatives.
+    fn pkg_with(name: &str, version: &str, requires: &[(&str, &str)], any: &[&str]) -> String {
         let mut s = format!(
             "[package]\ngroup = \"org.vibevm\"\nname = \"{name}\"\nkind = \"flow\"\nversion = \"{version}\"\n"
         );
@@ -247,6 +263,13 @@ mod tests {
             for (dep, req) in requires {
                 s.push_str(&format!("\"org.vibevm/{dep}\" = \"{req}\"\n"));
             }
+        }
+        if !any.is_empty() {
+            let entries: Vec<String> = any.iter().map(|a| format!("\"org.vibevm/{a}\"")).collect();
+            s.push_str(&format!(
+                "\n[[requires_any]]\none_of = [{}]\n",
+                entries.join(", ")
+            ));
         }
         s
     }
@@ -361,5 +384,58 @@ mod tests {
             .find(|d| d.name.as_str() == "b")
             .unwrap();
         assert!(matches!(&dep_b.version, VersionSpec::Req(r) if r.to_string() == "=1.2.0"));
+    }
+
+    /// A `[[requires_any]]` is satisfied by whichever alternative is
+    /// available: naive takes the first (`x`) and would fail; resolvo
+    /// uses the present one (`y`).
+    #[test]
+    fn resolvo_solves_disjunction_via_available_alternative() {
+        let seeds = [
+            pkg_with("a", "1.0.0", &[], &["x", "y"]),
+            pkg("y", "1.0.0", &[]),
+        ];
+        let seeds: Vec<&str> = seeds.iter().map(String::as_str).collect();
+        let resolvo = ResolvoDepSolver::new(MapProvider::new(&seeds));
+        let graph = resolvo.solve(&roots(&["a"])).unwrap();
+        assert!(
+            graph.find(&org(), "y").is_some(),
+            "the available alternative is selected"
+        );
+        assert!(
+            graph.find(&org(), "x").is_none(),
+            "the absent alternative is not"
+        );
+    }
+
+    /// The marquee win over naive: a disjunction whose first alternative
+    /// is satisfiable in isolation but conflicts downstream. `a` needs
+    /// `c ^1` and requires_any [x, y]; `x` forces `c ^2` (a conflict),
+    /// `y` needs `c ^1`. naive picks `x` and dies; resolvo backtracks to
+    /// `y` — the first-pick-wins trap, now across a disjunction.
+    #[test]
+    fn resolvo_disjunction_backtracks_past_conflicting_alternative() {
+        let seeds = [
+            pkg_with("a", "1.0.0", &[("c", "^1")], &["x", "y"]),
+            pkg_with("x", "1.0.0", &[("c", "^2")], &[]),
+            pkg_with("y", "1.0.0", &[("c", "^1")], &[]),
+            pkg("c", "1.0.0", &[]),
+            pkg("c", "2.0.0", &[]),
+        ];
+        let seeds: Vec<&str> = seeds.iter().map(String::as_str).collect();
+        let resolvo = ResolvoDepSolver::new(MapProvider::new(&seeds));
+        let graph = resolvo.solve(&roots(&["a"])).unwrap();
+        assert!(
+            graph.find(&org(), "y").is_some(),
+            "backtracks to the satisfiable alternative"
+        );
+        assert!(
+            graph.find(&org(), "x").is_none(),
+            "drops the conflicting alternative"
+        );
+        assert_eq!(
+            graph.find(&org(), "c").unwrap().version,
+            semver::Version::new(1, 0, 0)
+        );
     }
 }

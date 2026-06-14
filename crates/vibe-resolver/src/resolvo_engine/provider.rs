@@ -196,6 +196,15 @@ impl<'p, P: VersionEnumerator> DependencyProvider for VibevmResolvoProvider<'p, 
         };
         let versions = match self.provider.list_versions(&group, &pkg) {
             Ok(v) => v,
+            // An absent package simply has no candidates: a hard
+            // requirement on it becomes unsatisfiable, while a
+            // `[[requires_any]]` disjunction falls back to its other
+            // alternatives. Only a genuine provider failure is fatal.
+            Err(
+                DepProviderError::UnknownPackage { .. }
+                | DepProviderError::NoMatchingVersion { .. }
+                | DepProviderError::AggregateNotFound { .. },
+            ) => Vec::new(),
             Err(e) => {
                 self.record_error(e);
                 return None;
@@ -245,6 +254,35 @@ impl<'p, P: VersionEnumerator> DependencyProvider for VibevmResolvoProvider<'p, 
             };
             let vs = self.intern_version_set(&dep_group, dep.name.as_str(), &dep.version);
             requirements.push(vs.into());
+        }
+
+        // `[[requires_any]]` → a resolvo Union requirement: native OR
+        // with backtracking (PROP-017 §3). naive takes the first option
+        // and cannot reconsider; resolvo explores the alternatives.
+        for disj in &manifest.requires_any {
+            let mut alts = Vec::with_capacity(disj.one_of.len());
+            for alt in &disj.one_of {
+                let Some(alt_group) = alt.group.clone() else {
+                    self.record_error(DepProviderError::Other(format!(
+                        "`[[requires_any]]` alternative `{}` of `{group}/{name}` \
+                         is not group-qualified",
+                        alt.name
+                    )));
+                    continue;
+                };
+                alts.push(self.intern_version_set(&alt_group, alt.name.as_str(), &alt.version));
+            }
+            let mut it = alts.into_iter();
+            match it.next() {
+                Some(first) => {
+                    let union = self.pool.intern_version_set_union(first, it);
+                    requirements.push(union.into());
+                }
+                None => self.record_error(DepProviderError::Other(format!(
+                    "`[[requires_any]]` declared by `{group}/{name}` has no \
+                     group-qualified alternative"
+                ))),
+            }
         }
 
         self.manifests.borrow_mut().insert(solvable, manifest);
