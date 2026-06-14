@@ -50,6 +50,7 @@ pub mod fixpoint_model;
 pub mod local_registry_provider;
 pub mod multi_registry_provider;
 pub mod naive;
+pub mod resolvo_engine;
 pub mod sat;
 
 pub use activation::{ActivationContext, ActivationOutcome, CapabilityTag, TagError};
@@ -60,6 +61,7 @@ pub use features::{
 pub use local_registry_provider::LocalRegistryProvider;
 pub use multi_registry_provider::MultiRegistryProvider;
 pub use naive::NaiveDepSolver;
+pub use resolvo_engine::ResolvoDepSolver;
 
 // ---------------------------------------------------------------------------
 // Public types

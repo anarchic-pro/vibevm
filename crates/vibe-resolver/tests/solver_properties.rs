@@ -24,7 +24,10 @@ use specmark::verifies;
 use vibe_core::manifest::Manifest;
 use vibe_core::{Group, PackageRef, VersionSpec};
 use vibe_resolver::sat::Sat;
-use vibe_resolver::{DepProvider, DepProviderError, DepSolver, NaiveDepSolver, ResolvedGraph};
+use vibe_resolver::{
+    DepProvider, DepProviderError, DepSolver, NaiveDepSolver, ResolvedGraph, ResolvoDepSolver,
+    VersionEnumerator,
+};
 
 fn org() -> Group {
     Group::parse("org.vibevm").unwrap()
@@ -122,6 +125,23 @@ impl DepProvider for WorldProvider {
             .and_then(|c| c.iter().find(|(v, _)| v == version))
             .map(|(_, m)| m.clone())
             .ok_or_else(|| DepProviderError::Other(format!("no manifest for {name}@{version}")))
+    }
+}
+
+impl VersionEnumerator for WorldProvider {
+    fn list_versions(
+        &self,
+        _group: &Group,
+        name: &str,
+    ) -> Result<Vec<semver::Version>, DepProviderError> {
+        let cands = self
+            .entries
+            .get(name)
+            .ok_or_else(|| DepProviderError::UnknownPackage {
+                group: org(),
+                name: name.to_string(),
+            })?;
+        Ok(cands.iter().map(|(v, _)| v.clone()).collect())
     }
 }
 
@@ -375,6 +395,42 @@ proptest! {
             (Ok(_), Err(e)) => {
                 return Err(TestCaseError::fail(format!(
                     "sat failed a world naive solves: {e}"
+                )));
+            }
+        }
+    }
+
+    /// THE resolvo dominance contract (PROP-017 §4): resolvo plugs into
+    /// the same differential socket as sat and must DOMINATE naive over
+    /// every generated world —
+    ///
+    /// - naive solves  → resolvo solves IDENTICALLY (the shared output
+    ///   builder plus the highest-feasible argument make the graphs
+    ///   equal: when naive's greedy first-pick succeeds it equals the
+    ///   highest version satisfying *all* constraints, resolvo's optimum);
+    /// - naive fails   → resolvo may solve (its CDCL search clears the
+    ///   first-pick-wins trap naive cannot);
+    /// - resolvo fails where naive solves → always a bug.
+    ///
+    /// Unlike the sat pairing, a both-fail outcome is deliberately NOT
+    /// discriminant-checked: resolvo emits its own richer `Unsatisfiable`
+    /// derivation rather than re-emitting naive's `SolveError`, so
+    /// demanding equal error classes would punish the better diagnostics.
+    #[test]
+    #[verifies("spec://vibevm/modules/vibe-resolver/PROP-017#dominance")]
+    fn differential_naive_vs_resolvo_dominance(world in world_strategy(), picks in prop::collection::vec(0usize..6, 1..=3)) {
+        let naive = NaiveDepSolver::new(WorldProvider::new(&world));
+        let resolvo = ResolvoDepSolver::new(WorldProvider::new(&world));
+        let roots = root_refs(&world, &picks);
+        match (naive.solve(&roots), resolvo.solve(&roots)) {
+            (Ok(gn), Ok(gr)) => {
+                prop_assert_eq!(normalize(&gn), normalize(&gr), "resolvo drifted on a naive-solvable world");
+            }
+            (Err(_), Ok(_)) => { /* resolvo's documented superiority over first-pick-wins */ }
+            (Err(_), Err(_)) => { /* both fail — resolvo's richer error need not match naive's class */ }
+            (Ok(_), Err(e)) => {
+                return Err(TestCaseError::fail(format!(
+                    "resolvo failed a world naive solves: {e}"
                 )));
             }
         }
