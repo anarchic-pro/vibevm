@@ -27,7 +27,8 @@ pub use lockfile::{
 pub use package::{
     BootCategory, BootSnippet, Compatibility, ConditionalTarget, ConflictsList, FeaturesTable,
     GitPackageDep, GitRefKind, LinkType, Obsoletes, PackageMeta, PathPackageDep, Provides,
-    PublishPosture, Requires, RequiresAny, TargetOs, VarRegistryDep, WhenCondition,
+    PublishPosture, Recommends, Requires, RequiresAny, Suggests, TargetOs, VarRegistryDep,
+    WhenCondition,
 };
 pub use project::{
     ActiveSection, AuthKind, DEFAULT_REGISTRY_GITVERSE_NAME, DEFAULT_REGISTRY_GITVERSE_URL,

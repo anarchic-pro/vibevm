@@ -39,7 +39,7 @@ use crate::package_ref::PackageRef;
 use super::i18n::I18nDecl;
 use super::package::{
     BootSnippet, Compatibility, ConditionalTarget, ConflictsList, FeaturesTable, LinkType,
-    Obsoletes, PackageMeta, Provides, Requires, RequiresAny,
+    Obsoletes, PackageMeta, Provides, Recommends, Requires, RequiresAny, Suggests,
 };
 use super::project::{
     ActiveSection, LlmSection, MirrorSection, OverrideSection, ProjectSection, RegistrySection,
@@ -101,6 +101,14 @@ pub struct Manifest {
     /// `[conflicts]` — packages that cannot coexist with this one (package-role).
     #[serde(default, skip_serializing_if = "ConflictsList::is_empty")]
     pub conflicts: ConflictsList,
+
+    /// `[recommends]` — soft forward deps, installed best-effort (package-role).
+    #[serde(default, skip_serializing_if = "Recommends::is_empty")]
+    pub recommends: Recommends,
+
+    /// `[suggests]` — forward hints, never auto-installed (package-role).
+    #[serde(default, skip_serializing_if = "Suggests::is_empty")]
+    pub suggests: Suggests,
 
     /// `[compatibility]` — minimum vibe version, required kinds (package-role).
     #[serde(default, skip_serializing_if = "Compatibility::is_empty")]
@@ -332,6 +340,12 @@ impl Manifest {
             }
             if !self.conflicts.is_empty() {
                 offenders.push("[conflicts]");
+            }
+            if !self.recommends.is_empty() {
+                offenders.push("[recommends]");
+            }
+            if !self.suggests.is_empty() {
+                offenders.push("[suggests]");
             }
             if !self.compatibility.is_empty() {
                 offenders.push("[compatibility]");

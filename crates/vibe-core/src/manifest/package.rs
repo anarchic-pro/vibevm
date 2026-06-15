@@ -34,11 +34,13 @@ use super::purl::Purl;
 
 mod deps;
 mod features;
+mod weak_deps;
 mod when;
 mod wire;
 
 pub use deps::{GitPackageDep, GitRefKind, PathPackageDep, VarRegistryDep};
 pub use features::FeaturesTable;
+pub use weak_deps::{Recommends, Suggests};
 pub use when::WhenCondition;
 
 use wire::RequiresWire;
