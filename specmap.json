@@ -676,21 +676,28 @@
       "crate_name": "vibe-cli",
       "file": "crates/vibe-cli/src/commands/man/source.rs",
       "item_kind": "fn",
-      "line": 213,
+      "line": 240,
       "symbol": "vibe_cli::commands::man::source::tests::find_source_root_walks_up_to_the_workspace"
     },
     {
       "crate_name": "vibe-cli",
       "file": "crates/vibe-cli/src/commands/man/source.rs",
       "item_kind": "fn",
-      "line": 250,
+      "line": 277,
       "symbol": "vibe_cli::commands::man::source::tests::mirror_url_maps_names"
     },
     {
       "crate_name": "vibe-cli",
       "file": "crates/vibe-cli/src/commands/man/source.rs",
       "item_kind": "fn",
-      "line": 228,
+      "line": 285,
+      "symbol": "vibe_cli::commands::man::source::tests::prepare_from_mirror_clones_then_fetches"
+    },
+    {
+      "crate_name": "vibe-cli",
+      "file": "crates/vibe-cli/src/commands/man/source.rs",
+      "item_kind": "fn",
+      "line": 255,
       "symbol": "vibe_cli::commands::man::source::tests::resolve_in_clone_against_a_local_clone"
     },
     {
@@ -711,28 +718,28 @@
       "crate_name": "vibe-cli",
       "file": "crates/vibe-cli/src/commands/man/store.rs",
       "item_kind": "fn",
-      "line": 255,
+      "line": 261,
       "symbol": "vibe_cli::commands::man::store::tests::active_follows_the_current_pointer"
     },
     {
       "crate_name": "vibe-cli",
       "file": "crates/vibe-cli/src/commands/man/store.rs",
       "item_kind": "fn",
-      "line": 245,
+      "line": 251,
       "symbol": "vibe_cli::commands::man::store::tests::alloc_instance_is_monotonic_from_one"
     },
     {
       "crate_name": "vibe-cli",
       "file": "crates/vibe-cli/src/commands/man/store.rs",
       "item_kind": "fn",
-      "line": 230,
+      "line": 236,
       "symbol": "vibe_cli::commands::man::store::tests::instance_paths_nest_under_kind_id_instance"
     },
     {
       "crate_name": "vibe-cli",
       "file": "crates/vibe-cli/src/commands/man/mod.rs",
       "item_kind": "fn",
-      "line": 537,
+      "line": 543,
       "symbol": "vibe_cli::commands::man::tests::resolve_installed_picks_the_newest_instance_per_selector"
     },
     {
@@ -4506,7 +4513,7 @@
     {
       "file": "crates/vibe-cli/src/commands/man/source.rs",
       "from_symbol": "vibe_cli::commands::man::source::tests::find_source_root_walks_up_to_the_workspace",
-      "line": 214,
+      "line": 241,
       "provenance": "authored",
       "uri": "spec://vibevm/common/PROP-019#build",
       "verb": "verifies",
@@ -4515,7 +4522,7 @@
     {
       "file": "crates/vibe-cli/src/commands/man/source.rs",
       "from_symbol": "vibe_cli::commands::man::source::tests::mirror_url_maps_names",
-      "line": 251,
+      "line": 278,
       "provenance": "authored",
       "uri": "spec://vibevm/common/PROP-019#build",
       "verb": "verifies",
@@ -4523,8 +4530,17 @@
     },
     {
       "file": "crates/vibe-cli/src/commands/man/source.rs",
+      "from_symbol": "vibe_cli::commands::man::source::tests::prepare_from_mirror_clones_then_fetches",
+      "line": 286,
+      "provenance": "authored",
+      "uri": "spec://vibevm/common/PROP-019#provenance",
+      "verb": "verifies",
+      "pinned_r": 1
+    },
+    {
+      "file": "crates/vibe-cli/src/commands/man/source.rs",
       "from_symbol": "vibe_cli::commands::man::source::tests::resolve_in_clone_against_a_local_clone",
-      "line": 229,
+      "line": 256,
       "provenance": "authored",
       "uri": "spec://vibevm/common/PROP-019#selectors",
       "verb": "verifies",
@@ -4549,7 +4565,7 @@
     {
       "file": "crates/vibe-cli/src/commands/man/store.rs",
       "from_symbol": "vibe_cli::commands::man::store::tests::active_follows_the_current_pointer",
-      "line": 256,
+      "line": 262,
       "provenance": "authored",
       "uri": "spec://vibevm/common/PROP-019#activation",
       "verb": "verifies",
@@ -4558,7 +4574,7 @@
     {
       "file": "crates/vibe-cli/src/commands/man/store.rs",
       "from_symbol": "vibe_cli::commands::man::store::tests::alloc_instance_is_monotonic_from_one",
-      "line": 246,
+      "line": 252,
       "provenance": "authored",
       "uri": "spec://vibevm/common/PROP-019#layout",
       "verb": "verifies",
@@ -4567,7 +4583,7 @@
     {
       "file": "crates/vibe-cli/src/commands/man/store.rs",
       "from_symbol": "vibe_cli::commands::man::store::tests::instance_paths_nest_under_kind_id_instance",
-      "line": 231,
+      "line": 237,
       "provenance": "authored",
       "uri": "spec://vibevm/common/PROP-019#layout",
       "verb": "verifies",
@@ -4576,7 +4592,7 @@
     {
       "file": "crates/vibe-cli/src/commands/man/mod.rs",
       "from_symbol": "vibe_cli::commands::man::tests::resolve_installed_picks_the_newest_instance_per_selector",
-      "line": 538,
+      "line": 544,
       "provenance": "authored",
       "uri": "spec://vibevm/common/PROP-019#selectors",
       "verb": "verifies",

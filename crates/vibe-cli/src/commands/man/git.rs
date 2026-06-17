@@ -61,6 +61,13 @@ pub fn checkout(dir: &Path, rev: &str) -> Result<()> {
     Ok(())
 }
 
+/// Fetch all refs and tags from the default remote (incremental update of a
+/// managed clone — no re-clone, PROP-019 §2.16).
+pub fn fetch(dir: &Path) -> Result<()> {
+    run(dir, &["fetch", "--all", "--tags", "--quiet"])?;
+    Ok(())
+}
+
 /// Every tag in the repo.
 pub fn list_tags(dir: &Path) -> Result<Vec<String>> {
     Ok(run(dir, &["tag", "--list"])?

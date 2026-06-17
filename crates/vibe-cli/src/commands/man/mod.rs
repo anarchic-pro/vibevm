@@ -199,26 +199,33 @@ fn run_install_cmd(ctx: &output::Context, env: &ManEnv, args: ManInstallArgs) ->
     )?;
     let now = chrono::Utc::now().to_rfc3339();
 
-    // In-tree fast path: build the current checkout in place (origin
-    // external; never touched), but only for the default `latest` with no
-    // explicit mirror. Any specific ref, or an out-of-tree run, goes through
-    // the managed clone path (PROP-019 §2.7).
+    // Three source origins (PROP-019 §2.7, §2.16):
+    //   (a) in-tree   — the committer's own checkout, built in place;
+    //   (b) linked    — rebuild an external version from its remembered path,
+    //                   without being in the checkout;
+    //   (c) managed   — fetch/clone the mirror and build from it.
     let in_tree = env.cwd.as_deref().and_then(source::find_source_root);
     let prefer_in_tree = matches!(selector, model::Selector::Latest) && args.mirror.is_none();
 
-    let (source_dir, resolved, origin, source_path) = match (in_tree, prefer_in_tree) {
-        (Some(root), true) => {
+    let (source_dir, resolved, origin, source_path) =
+        if let (Some(root), true) = (in_tree.as_ref(), prefer_in_tree) {
+            let resolved = source::label_in_tree(root)?;
+            (
+                root.clone(),
+                resolved,
+                model::Origin::External,
+                Some(source::external_path(root)),
+            )
+        } else if args.mirror.is_none()
+            && let Some(root) = source::linked_source(&store, &selector, &args.selector)?
+        {
+            ctx.step(&format!("rebuilding from linked source {}", root.display()));
             let resolved = source::label_in_tree(&root)?;
-            let path = root
-                .canonicalize()
-                .unwrap_or(root.clone())
-                .display()
-                .to_string();
+            let path = source::external_path(&root);
             (root, resolved, model::Origin::External, Some(path))
-        }
-        _ => {
+        } else {
             let mirror = source::choose_mirror(ctx, args.mirror.as_deref())?;
-            ctx.step(&format!("cloning {mirror}"));
+            ctx.step(&format!("updating managed clone from {mirror}"));
             let outcome = source::prepare_from_mirror(&store, mirror, &selector)?;
             (
                 outcome.src_dir,
@@ -226,8 +233,7 @@ fn run_install_cmd(ctx: &output::Context, env: &ManEnv, args: ManInstallArgs) ->
                 model::Origin::Managed,
                 None,
             )
-        }
-    };
+        };
 
     let req = install::InstallRequest {
         resolved: &resolved,

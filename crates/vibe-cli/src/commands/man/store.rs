@@ -71,6 +71,12 @@ impl VersionStore {
         self.data_dir().join("src").join(id.path_segment())
     }
 
+    /// `<root>/vibevm/src/.mirror` — the shared managed clone, fetched and
+    /// checked out per build (PROP-019 §2.16).
+    pub fn mirror_dir(&self) -> PathBuf {
+        self.data_dir().join("src").join(".mirror")
+    }
+
     /// `<root>/vibevm/state.toml`.
     pub fn state_path(&self) -> PathBuf {
         self.data_dir().join("state.toml")

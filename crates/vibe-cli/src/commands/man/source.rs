@@ -154,39 +154,66 @@ pub(crate) struct CloneOutcome {
     pub resolved: ResolvedVersion,
 }
 
-/// Clone the mirror, resolve the selector against it, check out the commit,
-/// and place the tree at `src/<kind>/<id>` (PROP-019 §2.7, §2.16). A managed
-/// source.
+/// Ensure the shared managed clone is present and up to date, resolve the
+/// selector against it, check out the commit, and return it as the build
+/// source (PROP-019 §2.7, §2.16). The clone is updated incrementally
+/// (`git fetch`), never re-cloned — a full rebuild can take hours.
 pub(crate) fn prepare_from_mirror(
     store: &VersionStore,
     mirror: &str,
     selector: &model::Selector,
 ) -> Result<CloneOutcome> {
-    let staging = store.data_dir().join("src").join(".staging");
-    if staging.exists() {
-        fs::remove_dir_all(&staging)
-            .with_context(|| format!("clearing `{}`", staging.display()))?;
+    let dir = store.mirror_dir();
+    if dir.join(".git").is_dir() {
+        super::git::fetch(&dir)?;
+    } else {
+        if dir.exists() {
+            fs::remove_dir_all(&dir).with_context(|| format!("clearing `{}`", dir.display()))?;
+        }
+        if let Some(parent) = dir.parent() {
+            fs::create_dir_all(parent)
+                .with_context(|| format!("creating `{}`", parent.display()))?;
+        }
+        super::git::clone(mirror, &dir)?;
     }
-    if let Some(parent) = staging.parent() {
-        fs::create_dir_all(parent).with_context(|| format!("creating `{}`", parent.display()))?;
-    }
-    super::git::clone(mirror, &staging)?;
-    let resolved = resolve_in_clone(&staging, selector)?;
-    super::git::checkout(&staging, &resolved.commit)?;
-
-    let dest = store.src_dir(&resolved.id);
-    if dest.exists() {
-        fs::remove_dir_all(&dest).with_context(|| format!("clearing `{}`", dest.display()))?;
-    }
-    if let Some(parent) = dest.parent() {
-        fs::create_dir_all(parent).with_context(|| format!("creating `{}`", parent.display()))?;
-    }
-    fs::rename(&staging, &dest)
-        .with_context(|| format!("placing source at `{}`", dest.display()))?;
+    let resolved = resolve_in_clone(&dir, selector)?;
+    super::git::checkout(&dir, &resolved.commit)?;
     Ok(CloneOutcome {
-        src_dir: dest,
+        src_dir: dir,
         resolved,
     })
+}
+
+/// The friendly absolute path of an external source for provenance — strips
+/// the Windows verbatim `\\?\` prefix (PROP-019 §2.16).
+pub(crate) fn external_path(root: &Path) -> String {
+    let canon = root.canonicalize().unwrap_or_else(|_| root.to_path_buf());
+    let s = canon.to_string_lossy();
+    s.strip_prefix(r"\\?\").unwrap_or(&s).to_string()
+}
+
+/// If the selector matches an installed *external* version whose recorded
+/// source path is still a vibevm checkout, return that path for a linked
+/// rebuild — so `man install <id>` rebuilds from the remembered location
+/// without being in the checkout (PROP-019 §2.16).
+pub(crate) fn linked_source(
+    store: &VersionStore,
+    selector: &model::Selector,
+    raw: &str,
+) -> Result<Option<PathBuf>> {
+    let state = store.load_state()?;
+    let Ok(rec) = super::resolve_installed(&state, selector, raw) else {
+        return Ok(None);
+    };
+    if rec.origin == model::Origin::External
+        && let Some(p) = rec.source_path
+    {
+        let path = PathBuf::from(p);
+        if find_source_root(&path).is_some() {
+            return Ok(Some(path));
+        }
+    }
+    Ok(None)
 }
 
 #[cfg(test)]
@@ -253,5 +280,25 @@ mod tests {
         assert!(mirror_url("gitverse").is_ok());
         assert!(mirror_url("github").is_ok());
         assert!(mirror_url("nope").is_err());
+    }
+
+    #[test]
+    #[verifies("spec://vibevm/common/PROP-019#provenance", r = 1)]
+    fn prepare_from_mirror_clones_then_fetches() {
+        let upstream = tempfile::tempdir().unwrap();
+        make_source_repo(upstream.path());
+        let root = tempfile::tempdir().unwrap();
+        let store = VersionStore::new(root.path());
+        let url = upstream.path().display().to_string();
+
+        // First call clones into the shared mirror.
+        let out = prepare_from_mirror(&store, &url, &Selector::Stable).unwrap();
+        assert_eq!(out.resolved.id, VersionId::new(Kind::Tag, "1.10.0"));
+        assert_eq!(out.src_dir, store.mirror_dir());
+        assert!(store.mirror_dir().join(".git").is_dir());
+
+        // Second call reuses + fetches (no re-clone) and still resolves.
+        let out2 = prepare_from_mirror(&store, &url, &Selector::Latest).unwrap();
+        assert_eq!(out2.resolved.id, VersionId::new(Kind::Branch, "main"));
     }
 }
