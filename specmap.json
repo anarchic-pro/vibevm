@@ -2370,21 +2370,49 @@
       "crate_name": "vibe-mcp",
       "file": "crates/vibe-mcp/src/agentic.rs",
       "item_kind": "enum",
+      "line": 57,
+      "symbol": "vibe_mcp::agentic::ActiveBackend"
+    },
+    {
+      "crate_name": "vibe-mcp",
+      "file": "crates/vibe-mcp/src/agentic.rs",
+      "item_kind": "enum",
       "line": 44,
       "symbol": "vibe_mcp::agentic::Affinity"
     },
     {
       "crate_name": "vibe-mcp",
       "file": "crates/vibe-mcp/src/agentic.rs",
-      "item_kind": "struct",
-      "line": 57,
-      "symbol": "vibe_mcp::agentic::Intent"
+      "item_kind": "enum",
+      "line": 72,
+      "symbol": "vibe_mcp::agentic::AffinityError"
     },
     {
       "crate_name": "vibe-mcp",
       "file": "crates/vibe-mcp/src/agentic.rs",
       "item_kind": "struct",
-      "line": 119,
+      "line": 252,
+      "symbol": "vibe_mcp::agentic::InlineBackend"
+    },
+    {
+      "crate_name": "vibe-mcp",
+      "file": "crates/vibe-mcp/src/agentic.rs",
+      "item_kind": "struct",
+      "line": 126,
+      "symbol": "vibe_mcp::agentic::Intent"
+    },
+    {
+      "crate_name": "vibe-mcp",
+      "file": "crates/vibe-mcp/src/agentic.rs",
+      "item_kind": "enum",
+      "line": 154,
+      "symbol": "vibe_mcp::agentic::IntentStatus"
+    },
+    {
+      "crate_name": "vibe-mcp",
+      "file": "crates/vibe-mcp/src/agentic.rs",
+      "item_kind": "struct",
+      "line": 223,
       "symbol": "vibe_mcp::agentic::RelayBackend"
     },
     {
@@ -2398,42 +2426,56 @@
       "crate_name": "vibe-mcp",
       "file": "crates/vibe-mcp/src/agentic.rs",
       "item_kind": "fn",
-      "line": 180,
+      "line": 302,
       "symbol": "vibe_mcp::agentic::drain_intent"
     },
     {
       "crate_name": "vibe-mcp",
       "file": "crates/vibe-mcp/src/agentic.rs",
       "item_kind": "fn",
-      "line": 210,
+      "line": 336,
       "symbol": "vibe_mcp::agentic::explain_intent"
     },
     {
       "crate_name": "vibe-mcp",
       "file": "crates/vibe-mcp/src/agentic.rs",
       "item_kind": "fn",
-      "line": 157,
+      "line": 279,
       "symbol": "vibe_mcp::agentic::park_intent"
     },
     {
       "crate_name": "vibe-mcp",
       "file": "crates/vibe-mcp/src/agentic.rs",
       "item_kind": "fn",
-      "line": 317,
+      "line": 458,
+      "symbol": "vibe_mcp::agentic::tests::affinity_dispatcher_refuses_mismatched_backend"
+    },
+    {
+      "crate_name": "vibe-mcp",
+      "file": "crates/vibe-mcp/src/agentic.rs",
+      "item_kind": "fn",
+      "line": 477,
       "symbol": "vibe_mcp::agentic::tests::explain_intent_tailors_to_detected_sources"
     },
     {
       "crate_name": "vibe-mcp",
       "file": "crates/vibe-mcp/src/agentic.rs",
       "item_kind": "fn",
-      "line": 276,
+      "line": 444,
+      "symbol": "vibe_mcp::agentic::tests::inline_backend_returns_the_intent_for_inline_delivery"
+    },
+    {
+      "crate_name": "vibe-mcp",
+      "file": "crates/vibe-mcp/src/agentic.rs",
+      "item_kind": "fn",
+      "line": 402,
       "symbol": "vibe_mcp::agentic::tests::park_then_drain_is_a_one_shot_mailbox"
     },
     {
       "crate_name": "vibe-mcp",
       "file": "crates/vibe-mcp/src/agentic.rs",
       "item_kind": "fn",
-      "line": 304,
+      "line": 430,
       "symbol": "vibe_mcp::agentic::tests::relay_backend_delegates"
     },
     {
@@ -2524,14 +2566,14 @@
       "crate_name": "vibe-mcp",
       "file": "crates/vibe-mcp/src/pkgskill.rs",
       "item_kind": "fn",
-      "line": 318,
+      "line": 313,
       "symbol": "vibe_mcp::pkgskill::tests::projects_dir_skill_and_is_idempotent"
     },
     {
       "crate_name": "vibe-mcp",
       "file": "crates/vibe-mcp/src/pkgskill.rs",
       "item_kind": "fn",
-      "line": 159,
+      "line": 154,
       "symbol": "vibe_mcp::pkgskill::uninstall_package_skill"
     },
     {
@@ -6631,6 +6673,14 @@
     },
     {
       "file": "crates/vibe-mcp/src/agentic.rs",
+      "from_symbol": "vibe_mcp::agentic::ActiveBackend",
+      "line": 61,
+      "provenance": "authored",
+      "uri": "spec://vibevm/common/PROP-018#mode-is-backend",
+      "verb": "implements"
+    },
+    {
+      "file": "crates/vibe-mcp/src/agentic.rs",
       "from_symbol": "vibe_mcp::agentic::Affinity",
       "line": 47,
       "provenance": "authored",
@@ -6639,8 +6689,32 @@
     },
     {
       "file": "crates/vibe-mcp/src/agentic.rs",
+      "from_symbol": "vibe_mcp::agentic::AffinityError",
+      "line": 76,
+      "provenance": "authored",
+      "uri": "spec://vibevm/common/PROP-018#affinity",
+      "verb": "implements"
+    },
+    {
+      "file": "crates/vibe-mcp/src/agentic.rs",
+      "from_symbol": "vibe_mcp::agentic::InlineBackend",
+      "line": 259,
+      "provenance": "authored",
+      "uri": "spec://vibevm/common/PROP-018#transports",
+      "verb": "implements"
+    },
+    {
+      "file": "crates/vibe-mcp/src/agentic.rs",
       "from_symbol": "vibe_mcp::agentic::Intent",
-      "line": 61,
+      "line": 130,
+      "provenance": "authored",
+      "uri": "spec://vibevm/common/PROP-018#relay",
+      "verb": "implements"
+    },
+    {
+      "file": "crates/vibe-mcp/src/agentic.rs",
+      "from_symbol": "vibe_mcp::agentic::IntentStatus",
+      "line": 160,
       "provenance": "authored",
       "uri": "spec://vibevm/common/PROP-018#relay",
       "verb": "implements"
@@ -6648,7 +6722,7 @@
     {
       "file": "crates/vibe-mcp/src/agentic.rs",
       "from_symbol": "vibe_mcp::agentic::RelayBackend",
-      "line": 123,
+      "line": 227,
       "provenance": "authored",
       "uri": "spec://vibevm/common/PROP-018#pluggable-backend",
       "verb": "implements"
@@ -6664,7 +6738,7 @@
     {
       "file": "crates/vibe-mcp/src/agentic.rs",
       "from_symbol": "vibe_mcp::agentic::drain_intent",
-      "line": 183,
+      "line": 305,
       "provenance": "authored",
       "uri": "spec://vibevm/common/PROP-018#relay",
       "verb": "implements"
@@ -6672,7 +6746,7 @@
     {
       "file": "crates/vibe-mcp/src/agentic.rs",
       "from_symbol": "vibe_mcp::agentic::explain_intent",
-      "line": 214,
+      "line": 340,
       "provenance": "authored",
       "uri": "spec://vibevm/common/PROP-018#explain",
       "verb": "implements"
@@ -6680,15 +6754,24 @@
     {
       "file": "crates/vibe-mcp/src/agentic.rs",
       "from_symbol": "vibe_mcp::agentic::park_intent",
-      "line": 161,
+      "line": 283,
       "provenance": "authored",
       "uri": "spec://vibevm/common/PROP-018#relay",
       "verb": "implements"
     },
     {
       "file": "crates/vibe-mcp/src/agentic.rs",
+      "from_symbol": "vibe_mcp::agentic::tests::affinity_dispatcher_refuses_mismatched_backend",
+      "line": 459,
+      "provenance": "authored",
+      "uri": "spec://vibevm/common/PROP-018#affinity",
+      "verb": "verifies",
+      "pinned_r": 2
+    },
+    {
+      "file": "crates/vibe-mcp/src/agentic.rs",
       "from_symbol": "vibe_mcp::agentic::tests::explain_intent_tailors_to_detected_sources",
-      "line": 318,
+      "line": 478,
       "provenance": "authored",
       "uri": "spec://vibevm/common/PROP-018#explain",
       "verb": "verifies",
@@ -6696,8 +6779,17 @@
     },
     {
       "file": "crates/vibe-mcp/src/agentic.rs",
+      "from_symbol": "vibe_mcp::agentic::tests::inline_backend_returns_the_intent_for_inline_delivery",
+      "line": 445,
+      "provenance": "authored",
+      "uri": "spec://vibevm/common/PROP-018#transports",
+      "verb": "verifies",
+      "pinned_r": 5
+    },
+    {
+      "file": "crates/vibe-mcp/src/agentic.rs",
       "from_symbol": "vibe_mcp::agentic::tests::park_then_drain_is_a_one_shot_mailbox",
-      "line": 277,
+      "line": 403,
       "provenance": "authored",
       "uri": "spec://vibevm/common/PROP-018#relay",
       "verb": "verifies",
@@ -6706,7 +6798,7 @@
     {
       "file": "crates/vibe-mcp/src/agentic.rs",
       "from_symbol": "vibe_mcp::agentic::tests::relay_backend_delegates",
-      "line": 305,
+      "line": 431,
       "provenance": "authored",
       "uri": "spec://vibevm/common/PROP-018#pluggable-backend",
       "verb": "verifies",
@@ -6811,7 +6903,7 @@
     {
       "file": "crates/vibe-mcp/src/pkgskill.rs",
       "from_symbol": "vibe_mcp::pkgskill::tests::projects_dir_skill_and_is_idempotent",
-      "line": 319,
+      "line": 314,
       "provenance": "authored",
       "uri": "spec://vibevm/common/PROP-018#vibe-skill",
       "verb": "verifies",
@@ -6820,7 +6912,7 @@
     {
       "file": "crates/vibe-mcp/src/pkgskill.rs",
       "from_symbol": "vibe_mcp::pkgskill::uninstall_package_skill",
-      "line": 163,
+      "line": 158,
       "provenance": "authored",
       "uri": "spec://vibevm/common/PROP-018#vibe-skill",
       "verb": "implements"
