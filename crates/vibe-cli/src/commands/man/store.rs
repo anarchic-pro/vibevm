@@ -6,12 +6,55 @@
 specmark::scope!("spec://vibevm/common/PROP-019#layout");
 
 use std::fs;
+use std::io;
 use std::path::{Path, PathBuf};
 
-use anyhow::{Context, Result};
 use specmark::spec;
+use thiserror::Error;
 
 use super::model::{InstallRecord, State, VersionId};
+
+/// The version-store layer's failure surface (PROP-019 §2.4, §2.5): reading,
+/// parsing, or writing the on-disk inventory and the `current` pointer.
+#[derive(Debug, Error)]
+#[spec(implements = "spec://vibevm/common/PROP-019#layout")]
+pub enum StoreError {
+    #[error(
+        "reading the VVM inventory `{path}` failed: {source} \
+         (violates spec://vibevm/common/PROP-019#layout; \
+          fix: ensure the install root is readable)"
+    )]
+    ReadState {
+        path: PathBuf,
+        #[source]
+        source: io::Error,
+    },
+
+    #[error(
+        "the VVM inventory `{path}` is malformed: {detail} \
+         (violates spec://vibevm/common/PROP-019#layout; \
+          fix: repair or delete the corrupt state.toml)"
+    )]
+    ParseState { path: PathBuf, detail: String },
+
+    #[error(
+        "writing the VVM layout at `{path}` failed: {source} \
+         (violates spec://vibevm/common/PROP-019#layout; \
+          fix: ensure the install root is writable)"
+    )]
+    WriteLayout {
+        path: PathBuf,
+        #[source]
+        source: io::Error,
+    },
+
+    #[error(
+        "serialising the VVM inventory failed: {detail} \
+         (violates spec://vibevm/common/PROP-019#layout; \
+          fix: report this — the in-memory state is malformed)"
+    )]
+    Serialise { detail: String },
+}
 
 /// The `vibe` binary's file name on this platform.
 pub const BINARY_NAME: &str = if cfg!(windows) { "vibe.exe" } else { "vibe" };
@@ -89,30 +132,45 @@ impl VersionStore {
     }
 
     /// Load the inventory, defaulting to empty on a fresh machine.
-    pub fn load_state(&self) -> Result<State> {
+    pub fn load_state(&self) -> Result<State, StoreError> {
         let path = self.state_path();
         if !path.exists() {
             return Ok(State::default());
         }
-        let text =
-            fs::read_to_string(&path).with_context(|| format!("reading `{}`", path.display()))?;
-        toml::from_str(&text).with_context(|| format!("parsing `{}`", path.display()))
+        let text = fs::read_to_string(&path).map_err(|source| StoreError::ReadState {
+            path: path.clone(),
+            source,
+        })?;
+        toml::from_str(&text).map_err(|e| StoreError::ParseState {
+            path,
+            detail: e.to_string(),
+        })
     }
 
     /// Write the inventory atomically (tmp + rename).
-    pub fn save_state(&self, state: &State) -> Result<()> {
+    pub fn save_state(&self, state: &State) -> Result<(), StoreError> {
         let dir = self.data_dir();
-        fs::create_dir_all(&dir).with_context(|| format!("creating `{}`", dir.display()))?;
-        let text = toml::to_string(state).context("serialising VVM state")?;
+        fs::create_dir_all(&dir).map_err(|source| StoreError::WriteLayout {
+            path: dir.clone(),
+            source,
+        })?;
+        let text = toml::to_string(state).map_err(|e| StoreError::Serialise {
+            detail: e.to_string(),
+        })?;
         let tmp = dir.join("state.toml.tmp");
-        fs::write(&tmp, text).with_context(|| format!("writing `{}`", tmp.display()))?;
-        fs::rename(&tmp, self.state_path())
-            .with_context(|| format!("renaming into `{}`", self.state_path().display()))?;
+        fs::write(&tmp, text).map_err(|source| StoreError::WriteLayout {
+            path: tmp.clone(),
+            source,
+        })?;
+        fs::rename(&tmp, self.state_path()).map_err(|source| StoreError::WriteLayout {
+            path: self.state_path(),
+            source,
+        })?;
         Ok(())
     }
 
     /// Allocate the next monotonic instance number (PROP-019 §9.4).
-    pub fn alloc_instance(&self) -> Result<u64> {
+    pub fn alloc_instance(&self) -> Result<u64, StoreError> {
         let mut state = self.load_state()?;
         let n = state.next_instance.max(1);
         state.next_instance = n + 1;
@@ -121,7 +179,7 @@ impl VersionStore {
     }
 
     /// Upsert an instance record (replacing any with the same id+instance).
-    pub fn record_install(&self, record: InstallRecord) -> Result<()> {
+    pub fn record_install(&self, record: InstallRecord) -> Result<(), StoreError> {
         let mut state = self.load_state()?;
         state
             .installs
@@ -131,7 +189,7 @@ impl VersionStore {
     }
 
     /// All recorded instances of a version id.
-    pub fn instances_of(&self, id: &VersionId) -> Result<Vec<InstallRecord>> {
+    pub fn instances_of(&self, id: &VersionId) -> Result<Vec<InstallRecord>, StoreError> {
         Ok(self
             .load_state()?
             .installs
@@ -142,7 +200,7 @@ impl VersionStore {
 
     /// Drop every instance record of a version id from the inventory (no-op
     /// if absent). Does not touch files.
-    pub fn forget_id(&self, id: &VersionId) -> Result<()> {
+    pub fn forget_id(&self, id: &VersionId) -> Result<(), StoreError> {
         let mut state = self.load_state()?;
         let before = state.installs.len();
         state.installs.retain(|r| &r.version_id() != id);
@@ -153,7 +211,7 @@ impl VersionStore {
     }
 
     /// Drop a single instance record from the inventory (no-op if absent).
-    pub fn forget_instance(&self, id: &VersionId, instance: u64) -> Result<()> {
+    pub fn forget_instance(&self, id: &VersionId, instance: u64) -> Result<(), StoreError> {
         let mut state = self.load_state()?;
         let before = state.installs.len();
         state
@@ -177,19 +235,28 @@ impl VersionStore {
     }
 
     /// Repoint `current` at an instance dir, atomically (PROP-019 §2.5).
-    pub fn write_current(&self, instance_dir: &Path) -> Result<()> {
+    pub fn write_current(&self, instance_dir: &Path) -> Result<(), StoreError> {
         let dir = self.data_dir();
-        fs::create_dir_all(&dir).with_context(|| format!("creating `{}`", dir.display()))?;
+        fs::create_dir_all(&dir).map_err(|source| StoreError::WriteLayout {
+            path: dir.clone(),
+            source,
+        })?;
         let tmp = dir.join("current.tmp");
-        fs::write(&tmp, format!("{}\n", instance_dir.display()))
-            .with_context(|| format!("writing `{}`", tmp.display()))?;
-        fs::rename(&tmp, self.current_path())
-            .with_context(|| format!("renaming into `{}`", self.current_path().display()))?;
+        fs::write(&tmp, format!("{}\n", instance_dir.display())).map_err(|source| {
+            StoreError::WriteLayout {
+                path: tmp.clone(),
+                source,
+            }
+        })?;
+        fs::rename(&tmp, self.current_path()).map_err(|source| StoreError::WriteLayout {
+            path: self.current_path(),
+            source,
+        })?;
         Ok(())
     }
 
     /// The installed instance the `current` file points at, if any.
-    pub fn active(&self) -> Result<Option<InstallRecord>> {
+    pub fn active(&self) -> Result<Option<InstallRecord>, StoreError> {
         let Some(home) = self.read_current() else {
             return Ok(None);
         };
