@@ -1,7 +1,63 @@
 # WAL — Project Continuation State
-_Updated: 2026-06-15 — **RESOLVO RESOLVER (PROP-017) — PORT COMPLETE; resolvo is the default + forward weak-deps done.** resolvo (pure-Rust, BSD-3-Clause, CDCL SAT) replaces PROP-003 §2.2's libsolv. The engine + the entire existing dependency vocabulary are encoded and oracle-proven to dominate naive (requires, `[[requires_any]]`→Union with backtracking, `[conflicts]`, `[obsoletes]`, capabilities via a closure pre-scan); production version enumeration (`MultiRegistryResolver::list_versions` + `VersionEnumerator` on the real providers) feeds it; and `vibe install/update/reinstall` now resolve with `ResolvoDepSolver` by default, with `--solver <naive|sat|resolvo>` as the fallback. ~18 resolvo commits on both mirrors; full `self-check.sh` green. The forward weak-deps are now done too — `[recommends]` (post-solve greedy best-effort) + `[suggests]` (never auto-installed); `[features.exclusive]` was already in `features.rs`. Far backlog (PROP-017 §8): the reverse weak-deps `[supplements]`/`[enhances]`, the capability reverse-index, and the `[meta].solver` lockfile field. Prior: SOURCE-MIRROR (PROP-016) in force; PUBDOC-DRAIN + CONVERT-PLAN complete. Git log is the authoritative per-item record._
+_Updated: 2026-06-16 — **AGENTIC + STANDALONE MODES (PROP-018) — MVP COMPLETE (local; rollout pending).** vibevm gains two product modes on one axis — where an operation's reasoning happens. **Standalone:** `vibe skill {list,install,uninstall}` projects package-declared `[[skill]]` files into coding agents' skill dirs (Claude Code / OpenCode / Codex), reusing the PROP-015 agent machinery — no LLM, works agent-present or not. **Agentic:** vibevm composes a domain-grounded `Intent` and the calling agent executes it — `vibe agentic explain` parks the instruction in `.vibe/agentic/command.md`, `vibe command` drains it; the same op is also the `agentic_explain` MCP tool (inline return, no mailbox), so one operation serves both the one-shot CLI and the persistent MCP server. The narrative is division-of-labour by strength (vibevm authors the trustworthy, domain-grounded instruction; the agent is the better in-session executor), NOT vibevm offloading because it lacks an engine. New manifest section `[[skill]]` in vibe-core; `InferenceBackend`/`RelayBackend`/`Affinity` seam in vibe-mcp leaves room for the far-backlog built-in `vibe-llm` backend (§6: standalone reasoning, full conversations, OpenCode-style resumable console, `[[mcp]]` bundled-server install). Spec: [PROP-018](common/PROP-018-agentic-standalone-modes.md). Full `self-check.sh` green; conform 0/0/0; specmap clean. Prior: RESOLVO RESOLVER (PROP-017) complete; resolvo is the default solver. Git log is the authoritative per-item record._
 
 ## Current phase
+
+**AGENTIC + STANDALONE MODES (PROP-018) — MVP IN FORCE (2026-06-16).**
+The owner chose two product modes turning on one axis — *where does an
+operation's reasoning happen* (PROP-018 §1.2). Distinct from PROP-006
+*session* postures (§1.3). Spec:
+[`PROP-018`](common/PROP-018-agentic-standalone-modes.md).
+
+**Shipped — six gate-green slices, on local `main` (mirror rollout pending):**
+
+- **`[[skill]]` manifest section** (`vibe-core`, `27f511f`) — a package of
+  any kind declares which of its files are agent skills (name, path,
+  optional description + target agents), declared separately from the four
+  package kinds. Package-role; round-trips; `deny_unknown_fields`.
+- **Standalone — `vibe skill {list,install,uninstall}`** (`ae6585e`) —
+  projects declared skills (from the project's own nodes + every installed
+  package's `vibedeps/` slot manifest) into agents' skill dirs, over the
+  PROP-015 `Agent` machinery (`vibe-mcp::pkgskill`, `Agent::skills_root`).
+  Idempotent; `--dry-run` / `--agent` / `--scope` / `--skill`. No LLM.
+  Cursor / Claude Desktop (no skill loader) → `skipped`.
+- **Agentic relay** (`37a67b7`) — `vibe-mcp::agentic`: `Intent` +
+  `InferenceBackend` + `RelayBackend` + `Affinity`. `vibe agentic explain`
+  composes a domain-grounded "explain this project in ≤3 paragraphs from
+  README.md + vibe.toml" instruction and parks it in
+  `.vibe/agentic/command.md`; `vibe command` drains it (prints, archives to
+  `command.done.md`, empties the single slot; empty → clean no-op). The
+  relay dir self-ignores via its own `*` `.gitignore`.
+- **Dual transport** (`4cbac6c`) — the same explain op is also the
+  `agentic_explain` MCP tool, returning the instruction inline (no
+  mailbox) for zero-latency in-project use. One core, two thin adapters
+  (PROP-018 §2.8); the agent picks the transport by situation.
+- **The skill teaches the protocol** (`aa8b66f`) — `skill_template.md`
+  (what `vibe mcp install` projects into agents) now teaches the transport
+  heuristic, the relay two-step, no-auto-write-back, and `vibe skill`.
+- **Narrative reframe** (`050b150`, after owner review) — every surface
+  frames the relay as division-of-labour by strength (vibevm authors the
+  trustworthy, domain-grounded instruction; the agent is the better
+  in-session executor), NOT vibevm offloading because it lacks an engine.
+  (Plus `911409e`: clippy `enum-variant-names` fix — `Drain` variant.)
+
+**Gate panel — all green.** Full `self-check.sh` exit 0 (fmt, all tests,
+doctests, clippy `-D warnings`, `vibe check`); conform 0/0/0; specmap clean
+(509 units / 491 edges / 0 suspects / 0 warnings / 0 orphans). The eight
+PROP-018 commits (2 spec + 1 spec-refine + 5 code/docs) are each
+individually gate-green.
+
+**Far backlog (PROP-018 §6).** The built-in `vibe-llm` `BuiltinBackend`
+(standalone reasoning, no agent present); full vibevm↔agent conversations
+(an OpenAI-Responses-shaped protocol with write-back, multi-agency, and a
+fast context cache); an OpenCode-style resumable console (`--resume <id>`,
+reachable from an agent and interactively); `[[mcp]]` bundled-server
+projection (the schema is reserved in §2.4).
+
+**Next.** Roll the PROP-018 commits out to both mirrors (`cargo xtask
+mirror`); then the owner's next goal. No campaign in flight.
+
+## Prior phase — resolvo resolver (PROP-017)
 
 **RESOLVO RESOLVER (PROP-017) — IN FORCE; resolvo is the default solver
 (2026-06-14).** The owner chose resolvo (pure-Rust, BSD-3-Clause, CDCL
