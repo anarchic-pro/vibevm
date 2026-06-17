@@ -216,7 +216,7 @@ fn same_path(a: &Path, b: &Path) -> bool {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::commands::man::model::{InstallRecord, Kind, Origin};
+    use crate::commands::man::model::{InstallRecord, Kind, Origin, Profile};
     use specmark::verifies;
 
     fn rec(kind: Kind, id: &str, instance: u64) -> InstallRecord {
@@ -226,7 +226,7 @@ mod tests {
             instance,
             commit: "c".into(),
             toolchain: "t".into(),
-            profile: "debug".into(),
+            profile: Profile::Debug,
             installed_at: "now".into(),
             origin: Origin::Managed,
             source_path: None,

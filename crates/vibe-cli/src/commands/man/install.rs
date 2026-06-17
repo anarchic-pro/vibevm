@@ -105,7 +105,7 @@ pub(crate) fn perform_install(
         instance,
         commit: req.resolved.commit.clone(),
         toolchain: out.toolchain,
-        profile: req.profile.as_str().to_string(),
+        profile: req.profile,
         installed_at: req.now.to_string(),
         origin: req.origin,
         source_path: req.source_path.clone(),

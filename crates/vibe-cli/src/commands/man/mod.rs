@@ -117,7 +117,7 @@ fn run_ls(ctx: &output::Context, env: &ManEnv) -> Result<()> {
                     "instance": r.instance,
                     "commit": r.commit,
                     "toolchain": r.toolchain,
-                    "profile": r.profile,
+                    "profile": r.profile.as_str(),
                     "origin": r.origin.as_str(),
                     "source_path": r.source_path,
                     "installed_at": r.installed_at,
@@ -149,7 +149,7 @@ fn run_ls(ctx: &output::Context, env: &ManEnv) -> Result<()> {
             r.version_id(),
             r.instance,
             short_commit(&r.commit),
-            r.profile,
+            r.profile.as_str(),
             r.origin.as_str()
         ));
     }

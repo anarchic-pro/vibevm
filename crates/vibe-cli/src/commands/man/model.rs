@@ -74,7 +74,8 @@ impl fmt::Display for VersionId {
 }
 
 /// The build profile (PROP-019 §2.2).
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "lowercase")]
 #[spec(implements = "spec://vibevm/common/PROP-019#build")]
 pub enum Profile {
     Debug,
@@ -193,7 +194,7 @@ pub struct InstallRecord {
     /// The toolchain that built it (e.g. `rustc 1.93.0`).
     pub toolchain: String,
     /// `debug` or `release`.
-    pub profile: String,
+    pub profile: Profile,
     /// RFC3339 install timestamp.
     pub installed_at: String,
     /// Where the source came from (PROP-019 §2.16).
@@ -253,7 +254,7 @@ mod tests {
                 instance: 3,
                 commit: "abc1234def".into(),
                 toolchain: "rustc 1.93.0".into(),
-                profile: "debug".into(),
+                profile: Profile::Debug,
                 installed_at: "2026-06-17T00:00:00Z".into(),
                 origin: Origin::External,
                 source_path: Some("C:/src/vibevm".into()),
