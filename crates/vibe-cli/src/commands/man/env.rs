@@ -247,17 +247,13 @@ impl EnvPersister for WindowsEnvPersister {
 
     fn ensure_on_path(&self, dir: &Path) -> Result<Persisted> {
         let current = ps_get_user_var("Path")?.unwrap_or_default();
-        let target = dir.display().to_string();
-        if current.split(';').any(|p| p.eq_ignore_ascii_case(&target)) {
-            return Ok(Persisted::Unchanged);
+        match path_with_prefix(&current, &dir.display().to_string()) {
+            None => Ok(Persisted::Unchanged),
+            Some(next) => {
+                ps_set_user_var("Path", &next)?;
+                Ok(Persisted::Changed)
+            }
         }
-        let next = if current.is_empty() {
-            target
-        } else {
-            format!("{};{}", current.trim_end_matches(';'), target)
-        };
-        ps_set_user_var("Path", &next)?;
-        Ok(Persisted::Changed)
     }
 
     fn activation_hint(&self) -> String {
@@ -299,6 +295,26 @@ fn ps_get_user_var(name: &str) -> Result<Option<String>> {
         ps_quote(name)
     ))?;
     Ok(if out.is_empty() { None } else { Some(out) })
+}
+
+/// Put `target` at the FRONT of a `;`-separated PATH, deduping any existing
+/// occurrence; `None` when it is already first. A version manager's shim dir
+/// must take precedence over any other `vibe` already on PATH (e.g. a stale
+/// `~/.cargo/bin/vibe`), so it is prepended, not appended (PROP-019 §2.6).
+fn path_with_prefix(current: &str, target: &str) -> Option<String> {
+    let mut parts: Vec<&str> = current.split(';').filter(|p| !p.is_empty()).collect();
+    if parts
+        .first()
+        .is_some_and(|p| p.eq_ignore_ascii_case(target))
+    {
+        return None;
+    }
+    parts.retain(|p| !p.eq_ignore_ascii_case(target));
+    Some(if parts.is_empty() {
+        target.to_string()
+    } else {
+        format!("{target};{}", parts.join(";"))
+    })
 }
 
 // --- rc block helpers ------------------------------------------------------
@@ -443,5 +459,28 @@ mod tests {
         assert!(!text.contains("tag/1.0.0"));
         // The user's own lines survive.
         assert!(text.contains("export EDITOR=vim"));
+    }
+
+    #[test]
+    #[verifies("spec://vibevm/common/PROP-019#path", r = 1)]
+    fn path_with_prefix_moves_shim_dir_to_front() {
+        // Present but not first → moved to front (wins over an earlier
+        // ~/.cargo/bin/vibe).
+        assert_eq!(
+            path_with_prefix(r"C:\u\.cargo\bin;C:\u\opt\bin", r"C:\u\opt\bin").as_deref(),
+            Some(r"C:\u\opt\bin;C:\u\.cargo\bin")
+        );
+        // Absent → prepended.
+        assert_eq!(
+            path_with_prefix(r"C:\u\.cargo\bin", r"C:\u\opt\bin").as_deref(),
+            Some(r"C:\u\opt\bin;C:\u\.cargo\bin")
+        );
+        // Already first → no change.
+        assert!(path_with_prefix(r"C:\u\opt\bin;C:\u\.cargo\bin", r"C:\u\opt\bin").is_none());
+        // Empty → just the target.
+        assert_eq!(
+            path_with_prefix("", r"C:\u\opt\bin").as_deref(),
+            Some(r"C:\u\opt\bin")
+        );
     }
 }
