@@ -404,6 +404,44 @@
     "touch:crates/vibe-cli/src/commands/mcp.rs"
    ],
    "sunset": "closes when an MCP FEAT/PROP (or a VIBEVM-SPEC amendment) gives the surface scannable units"
+  },
+  {
+   "id": "DBT-0021",
+   "kind": "coverage-gap",
+   "severity": "P3",
+   "title": "vibe-cli public types cannot be doctested — bin crate, no lib target",
+   "detail": "vibe-cli is a [[bin]]-only crate with no [lib] target, so `cargo test --doc` reports 'no library targets found' and never compiles its doctests. Its 86 public types therefore cannot be drained into GATED_PUB_DOCTEST the way vibe-mcp was (Discipline Sweep P4): gating it would enforce presence of uncompiled examples — prose-shaped-as-code CI can never verify, a Law-2 violation. The health collector's pub-doctest backlog lists vibe-cli (86) but the gap is structural, not a drain task. Resolution: give vibe-cli a [lib] target (so doctests run), or tighten its internal types to pub(crate) (a bin's pub is not an API), shrinking the gap legitimately — both owner-level structural calls.",
+   "evidence": [
+    "cargo test -p vibe-cli --doc -> 'error: no library targets found in package `vibe-cli`'",
+    "crates/vibe-cli/Cargo.toml ([[bin]] only, no [lib])",
+    "xtask/src/conform.rs GATED_PUB_DOCTEST (inline comment records the exclusion)",
+    "terraform/discipline-sweep/REPORT-2026-06-17-grammar-refactor.md"
+   ],
+   "source": "Discipline Sweep P4 (2026-06-17) — empirical bin-crate doctest finding",
+   "disposition": "open",
+   "tripwires": [
+    "touch:crates/vibe-cli/Cargo.toml"
+   ],
+   "sunset": "closes when vibe-cli gains a lib target (or tightens internal types to pub(crate)) and enters GATED_PUB_DOCTEST"
+  },
+  {
+   "id": "DBT-0022",
+   "kind": "stale-doc",
+   "severity": "P3",
+   "title": "agent-mcp-quickstart-opencode.md was rewritten by a stray test/xtask run (dormant)",
+   "detail": "A prior session observed a `cargo test`/xtask run rewrite this tracked file (a flow-wal -> fqdn org.vibevm.wal edit) with no commit — recorded as task #13. During the 2026-06-17 grammar-refactor run the file was committed with the correct fqdn content (8065afb, owner, parallel terminal), and the rewrite did NOT recur across this run's many self-check / cargo test passes. So it is not a deterministic cargo-test write; the underlying cause (a non-deterministic test, or a one-off `cargo xtask health` write) was never root-caused but is non-reproducing. Filed dormant for traceability.",
+   "evidence": [
+    "8065afb docs(guides): point the flow:wal probe at the fqdn repo",
+    "docs/guides/agent-mcp-quickstart-opencode.md",
+    "CONTINUE.md task #13 (prior checkpoint)"
+   ],
+   "source": "Discipline Sweep P6 (2026-06-17)",
+   "disposition": "accepted",
+   "accepted_reason": "non-reproducing across this run; file now carries correct content via a deliberate commit",
+   "tripwires": [
+    "touch:docs/guides/agent-mcp-quickstart-opencode.md"
+   ],
+   "sunset": "re-open if the stray rewrite recurs in a future run"
   }
  ]
 }
