@@ -126,12 +126,7 @@ pub fn install_package_skill(
         "updated"
     };
 
-    let status: &'static str = match (action, dry_run) {
-        ("unchanged", _) => "unchanged",
-        ("created", true) => "would-create",
-        ("updated", true) => "would-update",
-        (s, _) => s,
-    };
+    let status = crate::install::preview_status(action, dry_run);
 
     if !dry_run && status != "unchanged" {
         // Replace the projection wholesale so the agent dir mirrors the

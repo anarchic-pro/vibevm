@@ -75,14 +75,8 @@ pub fn install_skill(
 
     let body = SKILL_TEMPLATE;
     let path_str = path.display().to_string().replace('\\', "/");
-    let status = decide_skill_action(&path, body)?;
-
-    let final_status: &'static str = match (status, dry_run) {
-        ("unchanged", _) => "unchanged",
-        ("created", true) => "would-create",
-        ("updated", true) => "would-update",
-        (s, _) => s,
-    };
+    let base = decide_skill_action(&path, body)?;
+    let final_status = preview_status(base, dry_run);
 
     if !dry_run && final_status != "unchanged" {
         if let Some(parent) = path.parent() {
@@ -113,6 +107,19 @@ pub fn decide_skill_action(path: &Path, body: &str) -> Result<&'static str> {
         Ok("unchanged")
     } else {
         Ok("updated")
+    }
+}
+
+/// Project a diff outcome (`created` / `updated` / `unchanged`) onto its
+/// dry-run preview: a create or update becomes its `would-*` form; anything
+/// else is reported as-is. The SKILL.md writer and the package-skill
+/// projector (PROP-018 §2.6) share this so the dry-run lifecycle vocabulary
+/// lives in one place rather than being re-spelled per writer.
+pub(crate) fn preview_status(base: &'static str, dry_run: bool) -> &'static str {
+    match (base, dry_run) {
+        ("created", true) => "would-create",
+        ("updated", true) => "would-update",
+        (s, _) => s,
     }
 }
 
