@@ -13,10 +13,7 @@
 
 specmark::scope!("spec://vibevm/common/PROP-018#relay");
 
-use std::path::{Path, PathBuf};
-
-use anyhow::{Context, Result, bail};
-use vibe_core::manifest::Manifest;
+use anyhow::Result;
 use vibe_mcp::agentic::{
     BackendOutcome, InferenceBackend, RelayBackend, drain_intent, explain_intent, relay_dir,
 };
@@ -31,7 +28,7 @@ pub fn run(ctx: &output::Context, args: AgenticArgs) -> Result<()> {
 }
 
 fn run_explain(ctx: &output::Context, args: AgenticExplainArgs) -> Result<()> {
-    let project_root = resolve_project_root(&args.path)?;
+    let project_root = super::resolve_project_root(&args.path)?;
     let intent = explain_intent(&project_root);
     let backend = RelayBackend::for_project(&project_root);
     let outcome = backend.submit(&intent)?;
@@ -77,7 +74,7 @@ fn run_explain(ctx: &output::Context, args: AgenticExplainArgs) -> Result<()> {
 /// instruction goes to stdout verbatim so the agent can act on it; an empty
 /// mailbox is a clean, exit-0 "no pending command".
 pub fn run_command(ctx: &output::Context, args: CommandArgs) -> Result<()> {
-    let project_root = resolve_project_root(&args.path)?;
+    let project_root = super::resolve_project_root(&args.path)?;
     let dir = relay_dir(&project_root);
     match drain_intent(&dir)? {
         Some(content) => {
@@ -108,16 +105,3 @@ pub fn run_command(ctx: &output::Context, args: CommandArgs) -> Result<()> {
     Ok(())
 }
 
-fn resolve_project_root(path: &Path) -> Result<PathBuf> {
-    let canonical = path
-        .canonicalize()
-        .with_context(|| format!("canonicalizing `{}`", path.display()))?;
-    let stripped = super::init::strip_unc_public(canonical);
-    if !stripped.join(Manifest::FILENAME).exists() {
-        bail!(
-            "no `vibe.toml` in `{}`; run `vibe init` first",
-            stripped.display()
-        );
-    }
-    Ok(stripped)
-}

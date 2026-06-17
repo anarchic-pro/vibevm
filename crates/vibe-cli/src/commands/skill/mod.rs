@@ -97,22 +97,6 @@ fn collect_skills(project_root: &Path) -> Result<Vec<DeclaredSkill>> {
     Ok(out)
 }
 
-/// Resolve the project root, requiring a `vibe.toml` (skills are always
-/// enumerated from the project, even for a user-scope projection).
-fn resolve_project_root(path: &Path) -> Result<PathBuf> {
-    let canonical = path
-        .canonicalize()
-        .with_context(|| format!("canonicalizing `{}`", path.display()))?;
-    let stripped = super::init::strip_unc_public(canonical);
-    if !stripped.join(Manifest::FILENAME).exists() {
-        bail!(
-            "no `vibe.toml` in `{}`; run `vibe init` first",
-            stripped.display()
-        );
-    }
-    Ok(stripped)
-}
-
 /// The skill-supporting agents named by `--agent` (default: all). A
 /// skill-unsupported agent passed explicitly stays in the list and is
 /// reported `skipped` by the writer, so the operator sees why.
@@ -216,7 +200,7 @@ fn emit_reports(
 // ---------------------------------------------------------------------------
 
 fn run_list(ctx: &output::Context, args: SkillListArgs) -> Result<()> {
-    let project_root = resolve_project_root(&args.path)?;
+    let project_root = super::resolve_project_root(&args.path)?;
     let skills = collect_skills(&project_root)?;
 
     if ctx.is_json() {
@@ -272,7 +256,7 @@ fn run_list(ctx: &output::Context, args: SkillListArgs) -> Result<()> {
 // ---------------------------------------------------------------------------
 
 fn run_install(ctx: &output::Context, args: SkillInstallArgs) -> Result<()> {
-    let project_root = resolve_project_root(&args.path)?;
+    let project_root = super::resolve_project_root(&args.path)?;
     let scope = resolve_scope(&args.scope)?;
     let cli_targets = target_agents(&args.agent)?;
     let all = collect_skills(&project_root)?;
@@ -328,7 +312,7 @@ fn run_install(ctx: &output::Context, args: SkillInstallArgs) -> Result<()> {
 // ---------------------------------------------------------------------------
 
 fn run_uninstall(ctx: &output::Context, args: SkillUninstallArgs) -> Result<()> {
-    let project_root = resolve_project_root(&args.path)?;
+    let project_root = super::resolve_project_root(&args.path)?;
     let scope = resolve_scope(&args.scope)?;
     let cli_targets = target_agents(&args.agent)?;
     let all = collect_skills(&project_root)?;
