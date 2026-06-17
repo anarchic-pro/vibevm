@@ -1,6 +1,62 @@
 # WAL — Project Continuation State
 _Updated: 2026-06-17 — **VVM v2 — VERSION MANAGER REBUILT; on both mirrors.** vibevm distributes itself via `vibe man` (the VibeVM Version Manager, PROP-019), which builds, installs, and switches vibevm's own versions on a machine. v2 reworks v1 after two design flaws surfaced — console-reload friction and self-replace locks. The install/switch unit is now a whole immutable **instance** (`versions/<kind>/<id>/<instance>/`); the active version is a live **`current`** pointer file, so `man install`/`man use` flip it and the next `vibe` in the same shell uses it with NO console reload, and nothing in use is ever overwritten (no locks, dll-safe). Distributions are placed by **diff-copy** (per-instance `.vvm-manifest.toml`: size/mtime + hash-for-small-files; hardlink unchanged, copy changed; byte-identical rebuild → no new instance). A managed `vibe` derives root/HOME from `current_exe` (env demoted to advisory; stale-`$VIBEVM_HOME` warning). Sources are referenced, never copied: managed = shared `src/.mirror` (git-fetch, no re-clone), external = the committer's checkout built in place + remembered path → **linked rebuild** from anywhere. New `vibe vars` reconciles actual-vs-environment; `tools/first-run.{sh,ps1}` + README bootstrap the first install. **Two real-machine shim fixes (`7550cde`) followed:** the shim dir is now *prepended* to PATH so the managed `vibe` beats a stale `~/.cargo/bin/vibe` (`b22edd9`), and `derive_self` strips the Windows `\\?\` verbatim prefix that `canonicalize()` adds and the cmd shim cannot exec (`7550cde`). Spec: [PROP-019](common/PROP-019-version-manager.md). Tip `7550cde`, level with both mirrors; full floor green — `self-check.sh`, conform 0/0/0, specmap clean (545 units / 545 edges / 0 orphans), test-gate xfail-strict, fast-loop in-budget. Prior: PROP-018 agentic + standalone modes MVP. Git log is the authoritative per-item record._
 
+## Active campaign — Discipline Sweep: grammar refactor of the new features (IN FLIGHT, 2026-06-17)
+
+Running the standing [`DISCIPLINE-SWEEP-v0.1`](terraforms/DISCIPLINE-SWEEP-v0.1.md)
+as a RAID over the new features (VVM v2 / PROP-019, PROP-018). Owner goal:
+"class F grammar etc — to the end." Maximal scope (owner-chosen): implement
+the PROP-018 affinity dispatcher (req r2); full pub-doctest drain + gate flip
+of vibe-mcp **and** vibe-cli. Phase-gated (full Tier-0 floor between phases);
+every commit cites `spec://vibevm/terraforms/DISCIPLINE-SWEEP-v0.1#tierN`.
+
+**Landed (each gate-green), tip `e02a0d3`** — eight commits on top of the
+checkpoint `38eef21`:
+
+- **P0** (`498ec15`) — corrected stale module docs (vibe-cli man args; vibe-mcp
+  server doc claimed 2 tools/`Fn` registry, really 4 tools behind `McpTool`).
+- **P1 (Tier-1 mechanical)** — tests-out split of `man/mod.rs` (583→525, out of
+  the `[540,600]` danger band) (`5e2cae4`); a single `ForcedKind`
+  `#[command(flatten)]` replacing the 4 copied `--tag/--branch/--commit`
+  triplets (`28e854c`); pub-doctest gate widened to 4 zero-gap crates
+  (conform-core, conform-frontend-rust, env-audit, specmark-grammar)
+  (`1a1013d`); a `require_tty` helper for the remove/gc pickers (`8b21cf7`).
+- **P2 (Class-B newtypes)** — a closed `Mirror` enum for the source-mirror
+  vocabulary (`cb4abd4`); `InstallRecord.profile: Profile` not `String`,
+  closing the validate-then-discard (`acfaed8`); one `short_commit` not two
+  (`e02a0d3`). *`CommitHash` was deliberately declined: a recorded commit only
+  ever arrives from trusted git output / state.toml, so the newtype would have
+  no untrusted parse boundary — ceremony without an invariant, which the
+  Discipline flags against.*
+
+**Remaining.** **P3 — Class-F error enums (the spine; owner's headline):** one
+`thiserror` enum per fallible domain layer — `ModelError`/`StoreError`/
+`PlaceError`/`GitError`/source/`ManError` (PROP-019) + `RelayError`/
+`PackageSkillError` (PROP-018), each `#[spec(implements=…)]` with the
+`(violates spec://…; fix: …)` tail; `anyhow` stays only at the binary edge.
+The whole new-feature surface is `anyhow`-only today, so `err-req`/`err-msg`
+pass vacuously — this is the change that makes them bite. **P5 — PROP-018
+grammar:** the affinity dispatcher (req r2) + typed `AffinityError`, route the
+MCP path through `BackendOutcome`, a skill_template↔`default_tools` cross-check
+test, dedup the byte-duplicated `resolve_project_root`. **P4 (last) — Class-G:**
+drain the public-type doctest gap and flip vibe-mcp (22) and vibe-cli (83) into
+`GATED_PUB_DOCTEST`. **P6 —** REPORT + `health` refresh + checkpoint.
+
+**Spec anchors for the F-enums are confirmed present and `req`-marked**
+(PROP-019 `#selectors/#layout/#instances/#provenance/#build/#surface`;
+PROP-018 `#affinity/#vibe-skill/#relay`) — no `pin-into-unmarked-unit` risk.
+
+**Open finding (tracked):** a `cargo test`/xtask run once rewrote the tracked
+file `docs/guides/agent-mcp-quickstart-opencode.md` (a flow-wal → FQDN
+`org.vibevm.wal` edit); restored in P0, did **not** recur during the P1 floor —
+so not a deterministic `cargo test` write; likely `cargo xtask health` or a
+non-deterministic test. Bisect at P6, file to `terraform/registry/debt.json`.
+
+**Gate state:** P2's tip is fmt/clippy/test-gate/fast-loop/conform 0-0-0/specmap
+clean (545 units / 546 edges); the full Tier-0 floor was last fully green at the
+P1 boundary, and each P2 commit was verified (clippy + the affected tests +
+conform + specmap) — the next full floor runs at the P3 boundary.
+
 ## Current phase
 
 **VVM v2 — VERSION MANAGER REBUILT (PROP-019), MVP IN FORCE (2026-06-17).**

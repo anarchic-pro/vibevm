@@ -1,9 +1,14 @@
 # CONTINUE.md — cold-resume checkpoint
 
-_Written 2026-06-17 (checkpoint refresh). Branch `main` @ `7550cde`, level
-with both mirrors (`gitverse` = `anarchic/vibevm`, `github` =
-`anarchic-pro/vibevm`) — this refresh's own WAL/CONTINUE commits roll out as
-the final step. Working tree clean. Full Tier-0 floor green._
+_Written 2026-06-17. Branch `main` @ `e02a0d3` — a **Discipline-Sweep grammar
+refactor of the new features is IN FLIGHT** (owner goal: "class F grammar —
+to the end"). P0–P2 have landed (eight gate-green commits on top of checkpoint
+`38eef21`); P3 (Class-F error enums — the headline), P5 (PROP-018 dispatcher +
+transport-unify), P4 (doctest drain + vibe-mcp/vibe-cli gate flips), and P6
+(REPORT) remain. **The WAL's "Active campaign" section is the authoritative
+status** — every landed commit, the remaining phases, the CommitHash-declined
+rationale, and the open docs-anomaly finding live there. This checkpoint is on
+both mirrors; working tree clean._
 
 > **`spec/WAL.md` is the canonical living state and its header is current.**
 > If this snapshot and the WAL disagree, the WAL wins. Boot first
