@@ -41,6 +41,51 @@ For the live registry path (against `git@gitverse.ru:anarchic/vibespecs.git`, th
 
 Full command reference: [`docs/commands/`](docs/commands/). Authoring guides for new packages: [`docs/authoring-{flow,feat,stack}.md`](docs/).
 
+## First run — install vibevm with VVM
+
+vibevm distributes itself: the `vibe` binary manages its own versions through the **VibeVM Version Manager** (VVM — `vibe man`, [PROP-019](spec/common/PROP-019-version-manager.md)). You're in the source tree, so nothing needs cloning.
+
+**Fastest path** — a bootstrap script that does everything below (build, install the first version, write the shims, put `vibe` on PATH):
+
+```bash
+bash tools/first-run.sh           # bash · Git Bash · macOS · Linux
+```
+```powershell
+.\tools\first-run.ps1             # Windows PowerShell
+```
+
+Then open a **new terminal** and run `vibe man ls`. The script edits your durable PATH; to try VVM *without* touching `~/opt`, use the isolated one-liner at the end of this section instead.
+
+Prefer to run the steps yourself? Here they are:
+
+```bash
+# Build the current checkout and install it as your first version.
+cargo run -p vibe-cli -- man install
+
+# See it — the active version is marked with `*`.
+cargo run -q -p vibe-cli -- man ls
+```
+
+`man install` compiles the checkout and publishes it as **instance 1** under `~/opt/vibevm/versions/branch/<current-branch>/1/`, then flips the live `current` pointer to it. That instance is now the active version.
+
+To run plain `vibe` from any shell, set up the shims and PATH once:
+
+```bash
+# Write the shims into ~/opt/bin and put ~/opt/bin on PATH (asks for consent).
+cargo run -p vibe-cli -- man doctor --fix
+```
+
+Open a **new terminal** and `vibe man ls` works. From then on the loop is fast: `vibe man install` rebuilds, flips `current`, and the next `vibe` in the same shell picks it up — no console reload, and the running version is never locked while you reinstall.
+
+Good to know on the first run:
+
+- **No selector means `latest`, which in-tree means *this checkout*.** VVM records it as an *external* source and remembers this tree's path, so a later `vibe man install` from anywhere rebuilds from here (a *linked rebuild*) — your sources are never copied into the install root.
+- **The first build is a full build.** It compiles into a managed `~/opt/vibevm/build` target dir, kept separate from this repo's own `target/` (so it never relinks a `vibe` that is running); later builds are incremental, and a byte-identical rebuild makes no new instance.
+- **Switch and inspect:** `vibe man use <selector>` switches the active version live, `vibe man current` / `vibe man which` show it, and `vibe vars` prints the variables vibevm actually uses versus your environment.
+- **Try it without touching `~/opt`:** prefix the install with an isolated root — `VIBEVM_INSTALL_ROOT="$(mktemp -d)" cargo run -p vibe-cli -- man install`.
+
+Already built the binary (`cargo build --release --workspace`)? Use it directly instead of `cargo run` — e.g. `target/release/vibe man install`.
+
 ## Documentation map
 
 | File | Audience | Purpose |
