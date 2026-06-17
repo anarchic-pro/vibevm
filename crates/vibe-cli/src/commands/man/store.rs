@@ -37,6 +37,13 @@ impl VersionStore {
         self.data_dir().join("versions")
     }
 
+    /// `<root>/vibevm/build` — the shared cargo `--target-dir` for builds,
+    /// kept out of both the source tree's `target/` and the running binary's
+    /// path so a build never relinks a live `vibe.exe` (PROP-019 §2.7).
+    pub fn build_dir(&self) -> PathBuf {
+        self.data_dir().join("build")
+    }
+
     /// `<root>/vibevm/versions/<kind>/<id>` — the prefix `VIBEVM_HOME`
     /// points at when this version is active (PROP-019 §2.5).
     pub fn version_prefix(&self, id: &VersionId) -> PathBuf {
@@ -63,6 +70,29 @@ impl VersionStore {
         let text =
             fs::read_to_string(&path).with_context(|| format!("reading `{}`", path.display()))?;
         toml::from_str(&text).with_context(|| format!("parsing `{}`", path.display()))
+    }
+
+    /// Write the inventory atomically (tmp + rename) so a crash mid-write
+    /// never truncates `state.toml`.
+    pub fn save_state(&self, state: &State) -> Result<()> {
+        let dir = self.data_dir();
+        fs::create_dir_all(&dir).with_context(|| format!("creating `{}`", dir.display()))?;
+        let text = toml::to_string(state).context("serialising VVM state")?;
+        let path = self.state_path();
+        let tmp = dir.join("state.toml.tmp");
+        fs::write(&tmp, text).with_context(|| format!("writing `{}`", tmp.display()))?;
+        fs::rename(&tmp, &path).with_context(|| format!("renaming into `{}`", path.display()))?;
+        Ok(())
+    }
+
+    /// Upsert an install record, replacing any existing entry with the same
+    /// canonical id (PROP-019 §2.7).
+    pub fn record_install(&self, record: InstallRecord) -> Result<()> {
+        let mut state = self.load_state()?;
+        let id = record.version_id();
+        state.installs.retain(|r| r.version_id() != id);
+        state.installs.push(record);
+        self.save_state(&state)
     }
 
     /// The installed version whose prefix matches `active_home` (the

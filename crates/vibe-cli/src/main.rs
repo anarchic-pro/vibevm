@@ -89,10 +89,12 @@ fn main() -> ExitCode {
             // threaded into the domain (PROP-019 §2.1; the ambient-env
             // discipline). Default root is `~/opt`.
             let man_env = commands::man::ManEnv {
-                root: read_env_opt(commands::man::VIBEVM_ROOT_ENV)
+                root: read_env_opt(commands::man::VIBEVM_INSTALL_ROOT_ENV)
                     .map(PathBuf::from)
-                    .or_else(|| dirs::home_dir().map(|h| h.join("opt"))),
+                    .or_else(dirs::home_dir)
+                    .map(|base| base.join("opt")),
                 active_home: read_env_opt(commands::man::VIBEVM_HOME_ENV).map(PathBuf::from),
+                cwd: std::env::current_dir().ok(),
             };
             commands::man::run(&ctx, args, man_env)
         }

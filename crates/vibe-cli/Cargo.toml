@@ -28,6 +28,7 @@ vibe-mcp.workspace = true
 vibe-wire.workspace = true
 semver.workspace = true
 anyhow.workspace = true
+chrono.workspace = true
 clap.workspace = true
 console.workspace = true
 dialoguer.workspace = true

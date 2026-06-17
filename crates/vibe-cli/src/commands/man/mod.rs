@@ -8,6 +8,8 @@
 
 specmark::scope!("spec://vibevm/common/PROP-019#surface");
 
+mod git;
+mod install;
 mod model;
 mod store;
 
@@ -15,14 +17,15 @@ use std::path::PathBuf;
 
 use anyhow::{Result, bail};
 
-use crate::cli::{ManArgs, ManSubcommand};
+use crate::cli::{ManArgs, ManInstallArgs, ManSubcommand};
 use crate::output;
 
 use store::VersionStore;
 
-/// Env var naming the VVM root (defaults to `~/opt`); read at the
-/// composition root (PROP-019 §2.4).
-pub const VIBEVM_ROOT_ENV: &str = "VIBEVM_ROOT";
+/// Env var naming the install base (defaults to the user's home dir); the
+/// VVM root is `$VIBEVM_INSTALL_ROOT/opt`. Read at the composition root and
+/// overridden in tests to isolate installs under a temp dir (PROP-019 §2.4).
+pub const VIBEVM_INSTALL_ROOT_ENV: &str = "VIBEVM_INSTALL_ROOT";
 /// Env var naming the active version's prefix — the single source of truth
 /// for "which version is active" (PROP-019 §2.5).
 pub const VIBEVM_HOME_ENV: &str = "VIBEVM_HOME";
@@ -32,11 +35,15 @@ pub const VIBEVM_HOME_ENV: &str = "VIBEVM_HOME";
 /// itself (PROP-019 §2.1).
 #[derive(Debug, Clone, Default)]
 pub struct ManEnv {
-    /// Resolved `$VIBEVM_ROOT`, or the `~/opt` default. `None` only when
-    /// neither an override nor a home directory is available.
+    /// The resolved VVM root — `$VIBEVM_INSTALL_ROOT/opt`, defaulting to
+    /// `~/opt`. `None` only when neither an override nor a home directory is
+    /// available.
     pub root: Option<PathBuf>,
     /// `$VIBEVM_HOME` — the active version's prefix (PROP-019 §2.5).
     pub active_home: Option<PathBuf>,
+    /// The current working directory — for in-tree source detection on
+    /// `man install` (PROP-019 §2.7).
+    pub cwd: Option<PathBuf>,
 }
 
 impl ManEnv {
@@ -52,6 +59,7 @@ impl ManEnv {
 
 pub fn run(ctx: &output::Context, args: ManArgs, env: ManEnv) -> Result<()> {
     match args.command {
+        ManSubcommand::Install(a) => run_install_cmd(ctx, &env, a),
         ManSubcommand::Ls => run_ls(ctx, &env),
         ManSubcommand::Current => run_current(ctx, &env),
         ManSubcommand::Which => run_which(ctx, &env),
@@ -148,4 +156,59 @@ fn run_which(ctx: &output::Context, env: &ManEnv) -> Result<()> {
     }
     ctx.summary(&path.display().to_string());
     Ok(())
+}
+
+fn run_install_cmd(ctx: &output::Context, env: &ManEnv, args: ManInstallArgs) -> Result<()> {
+    let store = env.store()?;
+    let profile = resolve_profile(&args)?;
+    let selector = model::Selector::parse(&args.selector, forced_kind(&args))?;
+    if selector != model::Selector::Latest {
+        bail!(
+            "selecting a specific ref (`{}`) needs the clone path, which lands in a later \
+             slice; in-tree `vibe man install` builds the current checkout (selector `latest`)",
+            args.selector
+        );
+    }
+    let cwd = env
+        .cwd
+        .clone()
+        .ok_or_else(|| anyhow::anyhow!("cannot determine the current directory"))?;
+    let Some(root) = install::find_source_root(&cwd) else {
+        bail!(
+            "not inside a vibevm source tree.\nThe clone-based install lands in a later slice; \
+             for now, from a checkout:\n  git clone <mirror> && cd vibevm && \
+             cargo run -p vibe-cli -- man install"
+        );
+    };
+    let resolved = install::label_in_tree(&root)?;
+    let now = chrono::Utc::now().to_rfc3339();
+    let req = install::InstallRequest {
+        resolved: &resolved,
+        profile,
+        force: args.force,
+        now: &now,
+    };
+    install::perform_install(ctx, &store, &root, &req, &install::CargoBuilder)
+}
+
+fn resolve_profile(args: &ManInstallArgs) -> Result<model::Profile> {
+    if args.release {
+        return Ok(model::Profile::Release);
+    }
+    match &args.profile {
+        Some(p) => model::Profile::parse(p),
+        None => Ok(model::DEFAULT_PROFILE),
+    }
+}
+
+fn forced_kind(args: &ManInstallArgs) -> Option<model::Kind> {
+    if args.tag {
+        Some(model::Kind::Tag)
+    } else if args.branch {
+        Some(model::Kind::Branch)
+    } else if args.commit {
+        Some(model::Kind::Commit)
+    } else {
+        None
+    }
 }

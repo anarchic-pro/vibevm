@@ -135,24 +135,32 @@ directory. The id namespaces them, and the same `<kind>/<id>` path segment
 is used for both binaries and sources so the two always agree.
 
 ```
-$VIBEVM_ROOT/                 default ~/opt  (Windows: %USERPROFILE%\opt)
-├─ bin/                       ← on PATH; stable shims, content never changes
-│   ├─ vibe                   POSIX shim (Git Bash / macOS / Linux)
-│   └─ vibe.cmd               cmd / PowerShell shim
-└─ vibevm/
-    ├─ state.toml             inventory: every install + its metadata
-    ├─ versions/<kind>/<id>/vibe[.exe]    the built binaries (immutable)
-    └─ src/<kind>/<id>/...                source tree + Cargo target/ (gc-able)
+$VIBEVM_INSTALL_ROOT/         install base — default: the user's home dir
+                              (Windows: %USERPROFILE%); tests pin it to a temp dir
+└─ opt/                       the VVM root ($VIBEVM_INSTALL_ROOT/opt)
+   ├─ bin/                    ← on PATH; stable shims, content never changes
+   │   ├─ vibe                POSIX shim (Git Bash / macOS / Linux)
+   │   └─ vibe.cmd            cmd / PowerShell shim
+   └─ vibevm/
+       ├─ state.toml          inventory: every install + its metadata
+       ├─ versions/<kind>/<id>/vibe[.exe]   the built binaries (immutable)
+       ├─ build/              shared cargo --target-dir for builds (gc-able)
+       └─ src/<kind>/<id>/…   cloned source trees (clone path; gc-able)
 ```
 
-`$VIBEVM_ROOT` defaults to `~/opt` and is overridable by the `VIBEVM_ROOT`
-environment variable. (Note: this deliberately differs from the existing
-`~/.vibevm/` token home and the project-local `.vibe/` cache; VVM is a
-machine-global tool, and the owner specified the `~/opt` layout.) The
-binaries directory is named `versions/` rather than the originally sketched
-`bin/$version` to (a) namespace by kind and (b) not clash with the `~/opt/bin`
-shim directory. Keeping the slim built binary while gc-ing the heavy
-`src/.../target/` is an explicit feature (§2.10).
+The install base is **`$VIBEVM_INSTALL_ROOT`**, defaulting to the user's
+home directory, so the VVM root is `$VIBEVM_INSTALL_ROOT/opt` — i.e. `~/opt`
+in normal use (the owner-specified layout). That single env var relocates
+everything: tests set it to a temp directory so an install never touches the
+real `~/opt`. (This deliberately differs from the existing `~/.vibevm/`
+token home and the project-local `.vibe/` cache; VVM is a machine-global
+tool.) The binaries live under `versions/` — not the originally sketched
+flat `bin/$version` — to namespace by kind and to not clash with the
+`opt/bin` shim dir. Builds use a **separate managed `build/` target dir**,
+never the source tree's own `target/`: this keeps the dev tree clean and,
+load-bearing on Windows, stops cargo from relinking a `vibe.exe` that is the
+currently-running binary (§2.7). Keeping the slim built binary while gc-ing
+the heavy `build/` and `src/.../target/` is an explicit feature (§2.10).
 
 ### 2.5 Activation — the shim plus the `VIBEVM_HOME` env var {#activation}
 
@@ -163,7 +171,7 @@ Switching the active version must not move or replace a running binary
 symlink privileges (not granted by default on Windows). Both constraints
 are met by a **shim plus an environment variable**, the "`JAVA_HOME` model":
 
-- The PATH entry is a **stable shim** (`$VIBEVM_ROOT/bin/{vibe,vibe.cmd}`)
+- The PATH entry is a **stable shim** (`$VIBEVM_INSTALL_ROOT/opt/bin/{vibe,vibe.cmd}`)
   whose content never changes. The POSIX shim is a `sh` script; the
   Windows shim is a `.cmd` — both are needed because Git Bash does not
   resolve `.cmd` on a bare `vibe` while cmd/PowerShell do not run an
