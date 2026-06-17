@@ -1,12 +1,17 @@
-//! The agentic relay — vibevm borrowing the calling agent's LLM
-//! (PROP-018 §2.2, §2.7, §2.10).
+//! The agentic relay — vibevm composes a domain-grounded instruction and
+//! the calling agent executes it (PROP-018 §2.2, §2.7, §2.10).
 //!
-//! A reasoning operation that runs under the relay backend does not act: it
-//! composes an [`Intent`] (a prompt) and parks it in the project's
-//! `.vibe/agentic/` mailbox for the calling agent to drain with `vibe
-//! command` and execute on its own LLM. This is the MVP realisation of the
-//! pluggable inference backend (PROP-018 §2.2) — the only backend today;
-//! a built-in `vibe-llm` backend is far-backlog (§6).
+//! A reasoning operation that runs under the relay backend composes an
+//! [`Intent`] — a prompt grounded in vibevm's stable, algorithmic
+//! knowledge of its domain — and parks it in the project's `.vibe/agentic/`
+//! mailbox for the calling agent to drain with `vibe command` and carry
+//! out. This is a deliberate division of labour, not a fallback: in agent
+//! mode the agent is the right executor (it holds the live context and
+//! tools), while vibevm is the right author of the instruction (its domain
+//! knowledge makes the prompt more informative and more trustworthy than an
+//! improvised one). The relay is the agentic-mode realisation of the
+//! pluggable inference backend (PROP-018 §2.2); a built-in `vibe-llm`
+//! backend (§6) serves *standalone* mode, when no agent is present.
 
 specmark::scope!("spec://vibevm/common/PROP-018#relay");
 
@@ -65,15 +70,17 @@ pub enum BackendOutcome {
     Completed(String),
 }
 
-/// Where an operation's reasoning runs (PROP-018 §2.2). One impl today,
-/// [`RelayBackend`]; a built-in `vibe-llm` backend is far-backlog (§6).
+/// Where an operation's reasoning runs (PROP-018 §2.2). [`RelayBackend`]
+/// serves agent mode — vibevm composes the instruction, the agent executes
+/// it; a built-in `vibe-llm` backend (§6) serves standalone mode, when no
+/// agent is present.
 ///
 /// ```
 /// use vibe_mcp::agentic::{BackendOutcome, InferenceBackend, Intent, RelayBackend};
 ///
 /// let project = tempfile::tempdir().unwrap();
-/// // The relay backend parks an intent for the calling agent instead of
-/// // reasoning in-process — vibevm has no engine of its own yet.
+/// // In agent mode the relay backend parks vibevm's domain-grounded
+/// // instruction for the agent — the better executor in-session — to run.
 /// let backend = RelayBackend::for_project(project.path());
 /// let intent = Intent {
 ///     source: "agentic explain".into(),

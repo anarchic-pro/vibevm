@@ -406,7 +406,7 @@ impl McpTool for AgenticExplain {
         ToolDescriptor {
             name: "agentic_explain".to_string(),
             description:
-                "Return an instruction asking YOU to explain this vibevm project in at most three short paragraphs — summarising README.md and folding in what vibe.toml reveals. vibevm has no inference engine of its own, so it does not write the explanation; it hands the task back to you. Carry out the returned `instruction` field yourself, on your own model. This is the zero-latency MCP face of the CLI `vibe agentic explain` + `vibe command` relay: here the instruction is returned inline and nothing is written to disk."
+                "Return a domain-grounded instruction for explaining this vibevm project (at most three short paragraphs, summarising README.md and folding in what vibe.toml reveals). vibevm composes the instruction from its algorithmic knowledge of the project model, so it is more informative and more reliable than a prompt improvised from scratch; you carry it out, because in agent mode you hold the live context and tools. Treat the returned `instruction` field as the authoritative description of the task and follow it. This is the zero-latency MCP face of the CLI `vibe agentic explain` + `vibe command` relay: the instruction is returned inline and nothing is written to disk."
                     .to_string(),
             input_schema: json!({
                 "type": "object",

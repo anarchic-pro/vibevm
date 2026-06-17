@@ -117,12 +117,24 @@ you don't recognise, references to a protocol in CLAUDE.md, etc.),
 follow what's documented there. This skill doesn't impose any
 particular workflow on the project.
 
-## Agentic commands — when vibevm hands a task back to you
+## Agentic commands — vibevm composes the instruction, you execute it
 
-vibevm has no LLM of its own yet. A few operations need reasoning, so
-instead of doing them, vibevm **delegates them back to you**: it writes an
-instruction, and you carry it out on your own model. These are the
-`vibe agentic …` commands. The protocol is two steps:
+vibevm carries stable, algorithmic knowledge of its own domain — the
+spec-driven model, the package and dependency rules, the discipline. For a
+task that needs reasoning, it puts that knowledge to work: it composes a
+precise, domain-grounded **instruction** and hands it to you to carry out.
+Two things make this the right division of labour, not a hand-off of
+drudgery:
+
+- **In agent mode you are the better executor.** You hold the live
+  context, the tools, and the conversation with the user, so you are best
+  placed to act on a complex instruction.
+- **vibevm's instruction is worth trusting.** It is grounded in vibevm's
+  algorithmic domain knowledge rather than improvised, so it is more
+  informative and more reliable than a prompt written from scratch. Treat
+  it as the authoritative description of the task and follow it.
+
+These are the `vibe agentic …` commands. The protocol is two steps:
 
 1. Run a producer, e.g. **`vibe agentic explain`**. It does NOT produce
    the answer — it parks an instruction and tells you to fetch it. (It

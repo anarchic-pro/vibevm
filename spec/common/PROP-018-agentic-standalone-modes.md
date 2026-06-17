@@ -28,26 +28,34 @@ provider layer — the standalone built-in inference backend §2.2 names),
 vibevm has commands that are pure algorithm (`install`, `check`, `list`)
 and commands that genuinely need reasoning (explain, build, review). The
 algorithmic ones already run from a bare terminal with no LLM
-(`VIBEVM-SPEC.md` §3.2). The reasoning ones have **no engine to run on**:
-`vibe-llm` is an M0 stub (`VIBEVM-SPEC.md` §10.4), so vibevm cannot, today,
-do its own inference.
+(`VIBEVM-SPEC.md` §3.2). The reasoning ones raise a question of *who does
+the reasoning, and how*.
 
-But vibevm is almost always invoked *by* a coding agent (Claude Code,
-OpenCode, Codex) that **already holds a capable LLM**. The waste is
-structural: the reasoning vibevm needs is sitting one process up. This PROP
-makes that LLM reachable — vibevm *borrows the caller's brain* — and names
-the two resulting operating contexts so the rest of the codebase can branch
-on them cleanly.
+vibevm is almost always invoked *by* a coding agent (Claude Code,
+OpenCode, Codex) that already holds a capable LLM, the live context, and
+the tools. For reasoning work in that setting the agent is the right
+**executor** — but vibevm is the right **author** of the task. vibevm
+carries stable, algorithmic knowledge of its own domain (the spec-driven
+model, the dependency and package rules, the discipline), so an
+instruction it composes is more informative and more trustworthy than one
+the agent would improvise from scratch. This PROP gives the two their
+natural roles — vibevm composes the domain-grounded instruction, the agent
+carries it out — and names the operating contexts so the codebase branches
+on them cleanly. (vibevm can also reason with *no* agent present, via a
+built-in `vibe-llm` engine — `VIBEVM-SPEC.md` §10.4, far-backlog §6 — but
+that is standalone mode; it is not what makes agentic mode worthwhile.)
 
 ### 1.2 The two modes — one axis {#axis}
 
 The modes are not two codebases. They are one question: **where does an
-operation's inference come from?**
+operation's reasoning happen?**
 
 - **agentic** — vibevm is driven by a host agent during that agent's own
-  work. An operation that needs reasoning does **not** execute it; it
-  *delegates the intent back* to the calling agent as a prompt, and the
-  agent runs it on its LLM. (Operations that are pure algorithm still run
+  work. For a step that needs reasoning, vibevm composes a domain-grounded
+  instruction and *delegates it back* to the agent, which executes it on
+  its LLM with the live context vibevm lacks. The split is by strength, not
+  a workaround: the agent is the better executor in-session, vibevm the
+  better author of the instruction. (Pure-algorithm operations still run
   directly — agentic is about the *reasoning* steps.)
 - **standalone** — vibevm stands on its own. Reasoning runs on vibevm's
   *own* backend: algorithmic where the work allows, and — when `vibe-llm`
@@ -100,10 +108,11 @@ operation never names a provider. An operation that needs reasoning
 constructs an `Intent` (a structured prompt + the inputs it needs) and
 hands it to the active backend. Two backends are foreseen:
 
-- **`RelayBackend`** (this PROP, MVP) — does not reason; it *parks* the
-  `Intent` for the calling agent and returns "delegated" (§2.7).
-- **`BuiltinBackend`** (far backlog, §6) — runs the `Intent` on `vibe-llm`
-  and returns the result.
+- **`RelayBackend`** (agent mode) — vibevm authors the `Intent` and
+  *parks* it for the calling agent to execute, returning "delegated"
+  (§2.7). Not a stopgap: in agent mode the agent is the right executor.
+- **`BuiltinBackend`** (standalone mode; far backlog §6) — runs the
+  `Intent` on `vibe-llm` in-process, for when no agent is present.
 
 This is deliberately **not** over-built: the trait exists so reasoning
 operations are written once against an abstract backend, and the standalone

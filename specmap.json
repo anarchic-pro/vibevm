@@ -1929,70 +1929,70 @@
       "crate_name": "vibe-mcp",
       "file": "crates/vibe-mcp/src/agentic.rs",
       "item_kind": "mod",
-      "line": 11,
+      "line": 16,
       "symbol": "vibe_mcp::agentic"
     },
     {
       "crate_name": "vibe-mcp",
       "file": "crates/vibe-mcp/src/agentic.rs",
       "item_kind": "enum",
-      "line": 20,
+      "line": 25,
       "symbol": "vibe_mcp::agentic::Affinity"
     },
     {
       "crate_name": "vibe-mcp",
       "file": "crates/vibe-mcp/src/agentic.rs",
       "item_kind": "struct",
-      "line": 33,
+      "line": 38,
       "symbol": "vibe_mcp::agentic::Intent"
     },
     {
       "crate_name": "vibe-mcp",
       "file": "crates/vibe-mcp/src/agentic.rs",
       "item_kind": "struct",
-      "line": 93,
+      "line": 100,
       "symbol": "vibe_mcp::agentic::RelayBackend"
     },
     {
       "crate_name": "vibe-mcp",
       "file": "crates/vibe-mcp/src/agentic.rs",
       "item_kind": "fn",
-      "line": 149,
+      "line": 156,
       "symbol": "vibe_mcp::agentic::drain_intent"
     },
     {
       "crate_name": "vibe-mcp",
       "file": "crates/vibe-mcp/src/agentic.rs",
       "item_kind": "fn",
-      "line": 172,
+      "line": 179,
       "symbol": "vibe_mcp::agentic::explain_intent"
     },
     {
       "crate_name": "vibe-mcp",
       "file": "crates/vibe-mcp/src/agentic.rs",
       "item_kind": "fn",
-      "line": 131,
+      "line": 138,
       "symbol": "vibe_mcp::agentic::park_intent"
     },
     {
       "crate_name": "vibe-mcp",
       "file": "crates/vibe-mcp/src/agentic.rs",
       "item_kind": "fn",
-      "line": 279,
+      "line": 286,
       "symbol": "vibe_mcp::agentic::tests::explain_intent_tailors_to_detected_sources"
     },
     {
       "crate_name": "vibe-mcp",
       "file": "crates/vibe-mcp/src/agentic.rs",
       "item_kind": "fn",
-      "line": 238,
+      "line": 245,
       "symbol": "vibe_mcp::agentic::tests::park_then_drain_is_a_one_shot_mailbox"
     },
     {
       "crate_name": "vibe-mcp",
       "file": "crates/vibe-mcp/src/agentic.rs",
       "item_kind": "fn",
-      "line": 266,
+      "line": 273,
       "symbol": "vibe_mcp::agentic::tests::relay_backend_delegates"
     },
     {
@@ -5651,7 +5651,7 @@
     {
       "file": "crates/vibe-mcp/src/agentic.rs",
       "from_symbol": "vibe_mcp::agentic",
-      "line": 11,
+      "line": 16,
       "provenance": "authored",
       "uri": "spec://vibevm/common/PROP-018#relay",
       "verb": "implements"
@@ -5659,7 +5659,7 @@
     {
       "file": "crates/vibe-mcp/src/agentic.rs",
       "from_symbol": "vibe_mcp::agentic::Affinity",
-      "line": 23,
+      "line": 28,
       "provenance": "authored",
       "uri": "spec://vibevm/common/PROP-018#affinity",
       "verb": "implements"
@@ -5667,7 +5667,7 @@
     {
       "file": "crates/vibe-mcp/src/agentic.rs",
       "from_symbol": "vibe_mcp::agentic::Intent",
-      "line": 37,
+      "line": 42,
       "provenance": "authored",
       "uri": "spec://vibevm/common/PROP-018#relay",
       "verb": "implements"
@@ -5675,7 +5675,7 @@
     {
       "file": "crates/vibe-mcp/src/agentic.rs",
       "from_symbol": "vibe_mcp::agentic::RelayBackend",
-      "line": 97,
+      "line": 104,
       "provenance": "authored",
       "uri": "spec://vibevm/common/PROP-018#pluggable-backend",
       "verb": "implements"
@@ -5683,7 +5683,7 @@
     {
       "file": "crates/vibe-mcp/src/agentic.rs",
       "from_symbol": "vibe_mcp::agentic::drain_intent",
-      "line": 152,
+      "line": 159,
       "provenance": "authored",
       "uri": "spec://vibevm/common/PROP-018#relay",
       "verb": "implements"
@@ -5691,7 +5691,7 @@
     {
       "file": "crates/vibe-mcp/src/agentic.rs",
       "from_symbol": "vibe_mcp::agentic::explain_intent",
-      "line": 176,
+      "line": 183,
       "provenance": "authored",
       "uri": "spec://vibevm/common/PROP-018#explain",
       "verb": "implements"
@@ -5699,7 +5699,7 @@
     {
       "file": "crates/vibe-mcp/src/agentic.rs",
       "from_symbol": "vibe_mcp::agentic::park_intent",
-      "line": 135,
+      "line": 142,
       "provenance": "authored",
       "uri": "spec://vibevm/common/PROP-018#relay",
       "verb": "implements"
@@ -5707,7 +5707,7 @@
     {
       "file": "crates/vibe-mcp/src/agentic.rs",
       "from_symbol": "vibe_mcp::agentic::tests::explain_intent_tailors_to_detected_sources",
-      "line": 280,
+      "line": 287,
       "provenance": "authored",
       "uri": "spec://vibevm/common/PROP-018#explain",
       "verb": "verifies",
@@ -5716,7 +5716,7 @@
     {
       "file": "crates/vibe-mcp/src/agentic.rs",
       "from_symbol": "vibe_mcp::agentic::tests::park_then_drain_is_a_one_shot_mailbox",
-      "line": 239,
+      "line": 246,
       "provenance": "authored",
       "uri": "spec://vibevm/common/PROP-018#relay",
       "verb": "verifies",
@@ -5725,7 +5725,7 @@
     {
       "file": "crates/vibe-mcp/src/agentic.rs",
       "from_symbol": "vibe_mcp::agentic::tests::relay_backend_delegates",
-      "line": 267,
+      "line": 274,
       "provenance": "authored",
       "uri": "spec://vibevm/common/PROP-018#pluggable-backend",
       "verb": "verifies",
@@ -8818,7 +8818,7 @@
     },
     {
       "anchor": "root",
-      "content_hash": "sha256:26842cfa2505a92b8a0e4c77d520e18e9984a1dd6cf162dea726a304a3659301",
+      "content_hash": "sha256:70d4fb0d64e420fb70fb91a1418ada4094f36bece3fa8a8d0fad51cacf753449",
       "doc_path": "common/PROP-018",
       "file": "spec/common/PROP-018-agentic-standalone-modes.md",
       "heading": "PROP-018 — Agentic and standalone modes",
@@ -8827,7 +8827,7 @@
     },
     {
       "anchor": "motivation",
-      "content_hash": "sha256:ccba72cef868d8143f9992ac461cf2594d80a157b6612009cdefc113217da8bf",
+      "content_hash": "sha256:055f5bdf0be259cbbc9bf747670b0f1f881790498e32bdb0586e349dea69c7f8",
       "doc_path": "common/PROP-018",
       "file": "spec/common/PROP-018-agentic-standalone-modes.md",
       "heading": "1. Motivation",
@@ -8836,7 +8836,7 @@
     },
     {
       "anchor": "problem",
-      "content_hash": "sha256:48b7595a330e723ca06f028d85b781287af0b7c0209f0213996f1cf591fd9fb7",
+      "content_hash": "sha256:b23cde9a8de55a4a69a29b368fe823304bb34b315ec281a32b51c58b60406958",
       "doc_path": "common/PROP-018",
       "file": "spec/common/PROP-018-agentic-standalone-modes.md",
       "heading": "1.1 The problem",
@@ -8845,11 +8845,11 @@
     },
     {
       "anchor": "axis",
-      "content_hash": "sha256:3b86118c0d3aff63c2e56bf42908170d00bca413e79873a1645883bb8ee0e4c6",
+      "content_hash": "sha256:1eb523dd352988bb4d91237e69344fd7f5ee0b852ca0ac99b150f103d529b324",
       "doc_path": "common/PROP-018",
       "file": "spec/common/PROP-018-agentic-standalone-modes.md",
       "heading": "1.2 The two modes — one axis",
-      "line": 42,
+      "line": 48,
       "uri": "spec://vibevm/common/PROP-018#axis"
     },
     {
@@ -8858,16 +8858,16 @@
       "doc_path": "common/PROP-018",
       "file": "spec/common/PROP-018-agentic-standalone-modes.md",
       "heading": "1.3 What this is NOT — PROP-006",
-      "line": 63,
+      "line": 71,
       "uri": "spec://vibevm/common/PROP-018#not-prop-006"
     },
     {
       "anchor": "decisions",
-      "content_hash": "sha256:0cc2796c8eb05f6a94000733ffb82dce70651d7ea137f237f9de7160ebbb0bdc",
+      "content_hash": "sha256:8fd1c9d39d0f67a4827039713af79245072af0d900f4390ef5b049ff2287f6e5",
       "doc_path": "common/PROP-018",
       "file": "spec/common/PROP-018-agentic-standalone-modes.md",
       "heading": "2. Decisions",
-      "line": 74,
+      "line": 82,
       "uri": "spec://vibevm/common/PROP-018#decisions"
     },
     {
@@ -8876,18 +8876,18 @@
       "doc_path": "common/PROP-018",
       "file": "spec/common/PROP-018-agentic-standalone-modes.md",
       "heading": "2.1 A mode is a choice of inference backend",
-      "line": 76,
+      "line": 84,
       "uri": "spec://vibevm/common/PROP-018#mode-is-backend",
       "kind": "req",
       "revision": 1
     },
     {
       "anchor": "pluggable-backend",
-      "content_hash": "sha256:36f330848e254f4ad1d5d097d04b653a1dddd05a3acdc799220aefb7d6ef1e28",
+      "content_hash": "sha256:937ce303a27e49e84d8e23025e005ce0e89557a8efa6355c8b2496030b2f43c4",
       "doc_path": "common/PROP-018",
       "file": "spec/common/PROP-018-agentic-standalone-modes.md",
       "heading": "2.2 The pluggable inference backend",
-      "line": 94,
+      "line": 102,
       "uri": "spec://vibevm/common/PROP-018#pluggable-backend",
       "kind": "req",
       "revision": 2
@@ -8898,7 +8898,7 @@
       "doc_path": "common/PROP-018",
       "file": "spec/common/PROP-018-agentic-standalone-modes.md",
       "heading": "2.3 Per-operation backend affinity",
-      "line": 115,
+      "line": 124,
       "uri": "spec://vibevm/common/PROP-018#affinity",
       "kind": "req",
       "revision": 2
@@ -8909,7 +8909,7 @@
       "doc_path": "common/PROP-018",
       "file": "spec/common/PROP-018-agentic-standalone-modes.md",
       "heading": "2.4 Agent-installable artifacts are declared separately from the package kind",
-      "line": 128,
+      "line": 137,
       "uri": "spec://vibevm/common/PROP-018#skill-decl",
       "kind": "req",
       "revision": 3
@@ -8920,7 +8920,7 @@
       "doc_path": "common/PROP-018",
       "file": "spec/common/PROP-018-agentic-standalone-modes.md",
       "heading": "2.5 Skills are an orthogonal projection, not a delivery mode",
-      "line": 157,
+      "line": 166,
       "uri": "spec://vibevm/common/PROP-018#projection",
       "kind": "req",
       "revision": 3
@@ -8931,7 +8931,7 @@
       "doc_path": "common/PROP-018",
       "file": "spec/common/PROP-018-agentic-standalone-modes.md",
       "heading": "2.6 Standalone MVP — `vibe skill install`",
-      "line": 171,
+      "line": 180,
       "uri": "spec://vibevm/common/PROP-018#vibe-skill",
       "kind": "req",
       "revision": 3
@@ -8942,7 +8942,7 @@
       "doc_path": "common/PROP-018",
       "file": "spec/common/PROP-018-agentic-standalone-modes.md",
       "heading": "2.7 The agentic relay — delegate intent back to the caller",
-      "line": 191,
+      "line": 200,
       "uri": "spec://vibevm/common/PROP-018#relay",
       "kind": "req",
       "revision": 4
@@ -8953,7 +8953,7 @@
       "doc_path": "common/PROP-018",
       "file": "spec/common/PROP-018-agentic-standalone-modes.md",
       "heading": "2.8 One operation, two transports",
-      "line": 222,
+      "line": 231,
       "uri": "spec://vibevm/common/PROP-018#transports",
       "kind": "req",
       "revision": 5
@@ -8964,7 +8964,7 @@
       "doc_path": "common/PROP-018",
       "file": "spec/common/PROP-018-agentic-standalone-modes.md",
       "heading": "2.9 The vibevm-usage skill teaches the protocol",
-      "line": 244,
+      "line": 253,
       "uri": "spec://vibevm/common/PROP-018#usage-skill",
       "kind": "req",
       "revision": 5
@@ -8975,7 +8975,7 @@
       "doc_path": "common/PROP-018",
       "file": "spec/common/PROP-018-agentic-standalone-modes.md",
       "heading": "2.10 `vibe agentic explain` — the MVP demonstrator",
-      "line": 258,
+      "line": 267,
       "uri": "spec://vibevm/common/PROP-018#explain",
       "kind": "req",
       "revision": 4
@@ -8986,7 +8986,7 @@
       "doc_path": "common/PROP-018",
       "file": "spec/common/PROP-018-agentic-standalone-modes.md",
       "heading": "3. The `.vibe/agentic/` relay directory",
-      "line": 280,
+      "line": 289,
       "uri": "spec://vibevm/common/PROP-018#vibevm-dir",
       "kind": "req",
       "revision": 4
@@ -8997,7 +8997,7 @@
       "doc_path": "common/PROP-018",
       "file": "spec/common/PROP-018-agentic-standalone-modes.md",
       "heading": "4. MVP scope — what this PROP authorises now",
-      "line": 304,
+      "line": 313,
       "uri": "spec://vibevm/common/PROP-018#mvp"
     },
     {
@@ -9006,7 +9006,7 @@
       "doc_path": "common/PROP-018",
       "file": "spec/common/PROP-018-agentic-standalone-modes.md",
       "heading": "5. Out of scope (now)",
-      "line": 323,
+      "line": 332,
       "uri": "spec://vibevm/common/PROP-018#out-of-scope"
     },
     {
@@ -9015,7 +9015,7 @@
       "doc_path": "common/PROP-018",
       "file": "spec/common/PROP-018-agentic-standalone-modes.md",
       "heading": "6. Far backlog",
-      "line": 333,
+      "line": 342,
       "uri": "spec://vibevm/common/PROP-018#far-backlog"
     },
     {
@@ -9024,7 +9024,7 @@
       "doc_path": "common/PROP-018",
       "file": "spec/common/PROP-018-agentic-standalone-modes.md",
       "heading": "7. Acceptance",
-      "line": 354,
+      "line": 363,
       "uri": "spec://vibevm/common/PROP-018#acceptance"
     },
     {
