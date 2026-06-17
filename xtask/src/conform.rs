@@ -74,7 +74,16 @@ pub(crate) const CONFORM_EXEMPT: &[(&str, &str)] = &[
 /// frozen and shrunk from there. This is a strictly wider lens than
 /// `seam-has-doctest` (which sees lib.rs items + traits), so it gets its
 /// own list and grows crate-by-crate as later phases convert each.
-pub(crate) const GATED_PUB_DOCTEST: &[&str] = &["vibe-core"];
+pub(crate) const GATED_PUB_DOCTEST: &[&str] = &[
+    "vibe-core",
+    // Widened by the Discipline Sweep §1b: these four are already at zero
+    // type-coverage gap (the `health` collector's promotion candidates), so
+    // gating them locks the coverage in with no drain.
+    "conform-core",
+    "conform-frontend-rust",
+    "env-audit",
+    "specmark-grammar",
+];
 
 /// Files where reading the ambient environment is sanctioned (the
 /// `ambient-env` rule, R-001 projection — CONVERT-PLAN v0.1 §5.2): the
