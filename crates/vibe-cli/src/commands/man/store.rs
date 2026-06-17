@@ -44,6 +44,11 @@ impl VersionStore {
         self.data_dir().join("build")
     }
 
+    /// `<root>/bin` — the shim directory that goes on PATH (PROP-019 §2.5).
+    pub fn shim_dir(&self) -> PathBuf {
+        self.root.join("bin")
+    }
+
     /// `<root>/vibevm/versions/<kind>/<id>` — the prefix `VIBEVM_HOME`
     /// points at when this version is active (PROP-019 §2.5).
     pub fn version_prefix(&self, id: &VersionId) -> PathBuf {

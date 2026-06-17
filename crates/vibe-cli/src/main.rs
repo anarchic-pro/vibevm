@@ -95,6 +95,8 @@ fn main() -> ExitCode {
                     .map(|base| base.join("opt")),
                 active_home: read_env_opt(commands::man::VIBEVM_HOME_ENV).map(PathBuf::from),
                 cwd: std::env::current_dir().ok(),
+                home: dirs::home_dir(),
+                shell: read_env_opt("SHELL"),
             };
             commands::man::run(&ctx, args, man_env)
         }

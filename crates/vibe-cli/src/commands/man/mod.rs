@@ -8,6 +8,7 @@
 
 specmark::scope!("spec://vibevm/common/PROP-019#surface");
 
+mod env;
 mod git;
 mod install;
 mod model;
@@ -17,7 +18,7 @@ use std::path::PathBuf;
 
 use anyhow::{Result, bail};
 
-use crate::cli::{ManArgs, ManInstallArgs, ManSubcommand};
+use crate::cli::{ManArgs, ManEnvArgs, ManInstallArgs, ManSubcommand, ManUseArgs};
 use crate::output;
 
 use store::VersionStore;
@@ -44,6 +45,11 @@ pub struct ManEnv {
     /// The current working directory — for in-tree source detection on
     /// `man install` (PROP-019 §2.7).
     pub cwd: Option<PathBuf>,
+    /// The user's real home directory — for locating the shell rc to edit on
+    /// POSIX activation (PROP-019 §2.6).
+    pub home: Option<PathBuf>,
+    /// `$SHELL` — for shell detection (PROP-019 §2.6).
+    pub shell: Option<String>,
 }
 
 impl ManEnv {
@@ -60,9 +66,11 @@ impl ManEnv {
 pub fn run(ctx: &output::Context, args: ManArgs, env: ManEnv) -> Result<()> {
     match args.command {
         ManSubcommand::Install(a) => run_install_cmd(ctx, &env, a),
+        ManSubcommand::Use(a) => run_use_cmd(ctx, &env, a),
         ManSubcommand::Ls => run_ls(ctx, &env),
         ManSubcommand::Current => run_current(ctx, &env),
         ManSubcommand::Which => run_which(ctx, &env),
+        ManSubcommand::Env(a) => run_env_cmd(&env, a),
     }
 }
 
@@ -161,7 +169,10 @@ fn run_which(ctx: &output::Context, env: &ManEnv) -> Result<()> {
 fn run_install_cmd(ctx: &output::Context, env: &ManEnv, args: ManInstallArgs) -> Result<()> {
     let store = env.store()?;
     let profile = resolve_profile(&args)?;
-    let selector = model::Selector::parse(&args.selector, forced_kind(&args))?;
+    let selector = model::Selector::parse(
+        &args.selector,
+        forced_kind(args.tag, args.branch, args.commit),
+    )?;
     if selector != model::Selector::Latest {
         bail!(
             "selecting a specific ref (`{}`) needs the clone path, which lands in a later \
@@ -201,14 +212,149 @@ fn resolve_profile(args: &ManInstallArgs) -> Result<model::Profile> {
     }
 }
 
-fn forced_kind(args: &ManInstallArgs) -> Option<model::Kind> {
-    if args.tag {
+fn forced_kind(tag: bool, branch: bool, commit: bool) -> Option<model::Kind> {
+    if tag {
         Some(model::Kind::Tag)
-    } else if args.branch {
+    } else if branch {
         Some(model::Kind::Branch)
-    } else if args.commit {
+    } else if commit {
         Some(model::Kind::Commit)
     } else {
         None
+    }
+}
+
+fn run_use_cmd(ctx: &output::Context, env: &ManEnv, args: ManUseArgs) -> Result<()> {
+    let store = env.store()?;
+    let state = store.load_state()?;
+    let selector = model::Selector::parse(
+        &args.selector,
+        forced_kind(args.tag, args.branch, args.commit),
+    )?;
+    let id = resolve_installed(&state, &selector, &args.selector)?;
+    let home = store.version_prefix(&id);
+    let shell = env::Shell::detect(env.shell.as_deref());
+
+    if args.eval {
+        // Print only the line to eval in the current shell; persist nothing.
+        println!("{}", shell.export_line(&home));
+        return Ok(());
+    }
+
+    env::write_shims(&store.shim_dir())?;
+    let persister = make_persister(env, shell)?;
+    persister.set_vibevm_home(&home)?;
+    persister.ensure_on_path(&store.shim_dir())?;
+
+    if ctx.is_json() {
+        return ctx.emit_json(&serde_json::json!({
+            "ok": true,
+            "command": "man:use",
+            "active": id.to_string(),
+            "home": home.display().to_string(),
+        }));
+    }
+    ctx.summary(&format!("active version → {id}"));
+    ctx.summary(&format!("  {}", persister.activation_hint()));
+    ctx.summary(&format!("  this shell now: {}", shell.export_line(&home)));
+    Ok(())
+}
+
+fn run_env_cmd(env: &ManEnv, args: ManEnvArgs) -> Result<()> {
+    let shell = match args.shell.as_deref() {
+        Some(s) => env::Shell::parse(s)?,
+        None => env::Shell::detect(env.shell.as_deref()),
+    };
+    let home = match args.selector.as_deref() {
+        Some(raw) => {
+            let store = env.store()?;
+            let state = store.load_state()?;
+            let selector =
+                model::Selector::parse(raw, forced_kind(args.tag, args.branch, args.commit))?;
+            let id = resolve_installed(&state, &selector, raw)?;
+            store.version_prefix(&id)
+        }
+        None => env.active_home.clone().ok_or_else(|| {
+            anyhow::anyhow!("no active version; pass a selector, e.g. `vibe man env latest`")
+        })?,
+    };
+    // Raw line, for `eval "$(vibe man env …)"`.
+    println!("{}", shell.export_line(&home));
+    Ok(())
+}
+
+/// Map a selector onto an *installed* version (PROP-019 §2.3, §2.11).
+fn resolve_installed(
+    state: &model::State,
+    selector: &model::Selector,
+    raw: &str,
+) -> Result<model::VersionId> {
+    use model::{Kind, Selector, VersionId};
+    let is_installed = |id: &VersionId| state.installs.iter().any(|r| &r.version_id() == id);
+    match selector {
+        Selector::Latest => {
+            let id = VersionId::new(Kind::Branch, "main");
+            if is_installed(&id) {
+                Ok(id)
+            } else {
+                bail!("`{id}` is not installed — run `vibe man install latest` first")
+            }
+        }
+        Selector::Explicit(id) => {
+            if is_installed(id) {
+                Ok(id.clone())
+            } else {
+                bail!("`{id}` is not installed — run `vibe man install {raw}` first")
+            }
+        }
+        Selector::Stable => best_semver_tag(state)
+            .ok_or_else(|| anyhow::anyhow!("no installed release tag to satisfy `stable`")),
+        Selector::Ambiguous(name) => pick_by_precedence(state, name)
+            .ok_or_else(|| anyhow::anyhow!("no installed version named `{name}`")),
+    }
+}
+
+/// The installed tag with the highest semantic version (PROP-019 §2.3).
+fn best_semver_tag(state: &model::State) -> Option<model::VersionId> {
+    state
+        .installs
+        .iter()
+        .filter(|r| r.kind == model::Kind::Tag)
+        .filter_map(|r| {
+            let v = semver::Version::parse(r.id.strip_prefix('v').unwrap_or(&r.id)).ok()?;
+            Some((v, r.version_id()))
+        })
+        .max_by(|a, b| a.0.cmp(&b.0))
+        .map(|(_, id)| id)
+}
+
+/// The installed version named `name`, by precedence commit > branch > tag
+/// (PROP-019 §2.3).
+fn pick_by_precedence(state: &model::State, name: &str) -> Option<model::VersionId> {
+    for kind in [model::Kind::Commit, model::Kind::Branch, model::Kind::Tag] {
+        if let Some(r) = state
+            .installs
+            .iter()
+            .find(|r| r.kind == kind && r.id == name)
+        {
+            return Some(r.version_id());
+        }
+    }
+    None
+}
+
+/// The durable-env persister for this OS (PROP-019 §2.6): the registry on
+/// Windows, the shell rc on POSIX.
+fn make_persister(env: &ManEnv, shell: env::Shell) -> Result<Box<dyn env::EnvPersister>> {
+    if cfg!(windows) {
+        Ok(Box::new(env::WindowsEnvPersister))
+    } else {
+        let home = env.home.clone().ok_or_else(|| {
+            anyhow::anyhow!("cannot locate your home directory to edit a shell rc")
+        })?;
+        Ok(Box::new(env::RcFilePersister::new(
+            shell.rc_path(&home),
+            shell,
+        )))
     }
 }

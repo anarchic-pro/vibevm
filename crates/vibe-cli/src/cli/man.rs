@@ -17,6 +17,9 @@ pub enum ManSubcommand {
     /// Build and install a version of vibevm from source.
     Install(ManInstallArgs),
 
+    /// Switch the active version (repoints `VIBEVM_HOME`).
+    Use(ManUseArgs),
+
     /// List installed versions, marking the active one (`*`).
     #[command(visible_alias = "list")]
     Ls,
@@ -26,6 +29,9 @@ pub enum ManSubcommand {
 
     /// Print the absolute path of the active `vibe` binary.
     Which,
+
+    /// Print the shell line that activates a version in the current shell.
+    Env(ManEnvArgs),
 }
 
 #[derive(Debug, clap::Args)]
@@ -58,4 +64,50 @@ pub struct ManInstallArgs {
     /// Rebuild even if this version is already installed.
     #[arg(long)]
     pub force: bool,
+}
+
+#[derive(Debug, clap::Args)]
+pub struct ManUseArgs {
+    /// Version selector: latest | stable | <X.Y.Z> | <commit> | <branch>.
+    pub selector: String,
+
+    /// Interpret the selector as a git tag.
+    #[arg(long, conflicts_with_all = ["branch", "commit"])]
+    pub tag: bool,
+
+    /// Interpret the selector as a git branch.
+    #[arg(long, conflicts_with_all = ["tag", "commit"])]
+    pub branch: bool,
+
+    /// Interpret the selector as a git commit.
+    #[arg(long, conflicts_with_all = ["tag", "branch"])]
+    pub commit: bool,
+
+    /// Print the shell line to `eval` in the current shell instead of
+    /// writing the durable environment.
+    #[arg(long)]
+    pub eval: bool,
+}
+
+#[derive(Debug, clap::Args)]
+pub struct ManEnvArgs {
+    /// Version to emit the activation line for. Defaults to the active one.
+    pub selector: Option<String>,
+
+    /// Interpret the selector as a git tag.
+    #[arg(long, conflicts_with_all = ["branch", "commit"])]
+    pub tag: bool,
+
+    /// Interpret the selector as a git branch.
+    #[arg(long, conflicts_with_all = ["tag", "commit"])]
+    pub branch: bool,
+
+    /// Interpret the selector as a git commit.
+    #[arg(long, conflicts_with_all = ["tag", "branch"])]
+    pub commit: bool,
+
+    /// Target shell syntax (bash|zsh|fish|powershell|posix). Defaults to the
+    /// detected shell.
+    #[arg(long)]
+    pub shell: Option<String>,
 }
