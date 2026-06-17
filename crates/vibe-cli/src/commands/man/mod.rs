@@ -91,10 +91,6 @@ pub fn run(ctx: &output::Context, args: ManArgs, env: ManEnv) -> Result<()> {
     }
 }
 
-fn short_commit(c: &str) -> &str {
-    &c[..c.len().min(10)]
-}
-
 fn same_record(a: &InstallRecord, b: &InstallRecord) -> bool {
     a.version_id() == b.version_id() && a.instance == b.instance
 }
@@ -148,7 +144,7 @@ fn run_ls(ctx: &output::Context, env: &ManEnv) -> Result<()> {
             "{marker} {} #{}  {}  {}  {}",
             r.version_id(),
             r.instance,
-            short_commit(&r.commit),
+            builder::short_commit(&r.commit),
             r.profile.as_str(),
             r.origin.as_str()
         ));
