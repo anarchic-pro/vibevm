@@ -25,7 +25,9 @@ use std::path::{Path, PathBuf};
 use anyhow::{Result, bail};
 use dialoguer::Confirm;
 
-use crate::cli::{ManArgs, ManDoctorArgs, ManEnvArgs, ManInstallArgs, ManSubcommand, ManUseArgs};
+use crate::cli::{
+    ForcedKind, ManArgs, ManDoctorArgs, ManEnvArgs, ManInstallArgs, ManSubcommand, ManUseArgs,
+};
 use crate::output;
 
 use model::{InstallRecord, State, VersionId};
@@ -195,7 +197,7 @@ fn run_install_cmd(ctx: &output::Context, env: &ManEnv, args: ManInstallArgs) ->
     let profile = resolve_profile(&args)?;
     let selector = model::Selector::parse(
         &args.selector,
-        forced_kind(args.tag, args.branch, args.commit),
+        forced_kind(&args.kind),
     )?;
     let now = chrono::Utc::now().to_rfc3339();
 
@@ -256,12 +258,12 @@ fn resolve_profile(args: &ManInstallArgs) -> Result<model::Profile> {
     }
 }
 
-fn forced_kind(tag: bool, branch: bool, commit: bool) -> Option<model::Kind> {
-    if tag {
+fn forced_kind(k: &ForcedKind) -> Option<model::Kind> {
+    if k.tag {
         Some(model::Kind::Tag)
-    } else if branch {
+    } else if k.branch {
         Some(model::Kind::Branch)
-    } else if commit {
+    } else if k.commit {
         Some(model::Kind::Commit)
     } else {
         None
@@ -273,7 +275,7 @@ fn run_use_cmd(ctx: &output::Context, env: &ManEnv, args: ManUseArgs) -> Result<
     let state = store.load_state()?;
     let selector = model::Selector::parse(
         &args.selector,
-        forced_kind(args.tag, args.branch, args.commit),
+        forced_kind(&args.kind),
     )?;
     let rec = resolve_installed(&state, &selector, &args.selector)?;
     let id = rec.version_id();
@@ -322,7 +324,7 @@ fn run_env_cmd(env: &ManEnv, args: ManEnvArgs) -> Result<()> {
         Some(raw) => {
             let state = store.load_state()?;
             let selector =
-                model::Selector::parse(raw, forced_kind(args.tag, args.branch, args.commit))?;
+                model::Selector::parse(raw, forced_kind(&args.kind))?;
             let rec = resolve_installed(&state, &selector, raw)?;
             store.instance_dir(&rec.version_id(), rec.instance)
         }

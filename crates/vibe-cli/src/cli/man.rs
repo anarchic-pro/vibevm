@@ -45,13 +45,12 @@ pub enum ManSubcommand {
     Env(ManEnvArgs),
 }
 
+/// The `--tag`/`--branch`/`--commit` triplet shared by the selector-taking
+/// verbs (install / use / env / remove): force how the selector is read.
+/// Mutually exclusive; absent means "infer by shape" (PROP-019 §2.3).
+/// Flattened into each verb's args so the four call sites stay identical.
 #[derive(Debug, clap::Args)]
-pub struct ManInstallArgs {
-    /// Version selector: latest | stable | <X.Y.Z> | <commit> | <branch>.
-    /// Defaults to `latest` (in-tree: the current checkout).
-    #[arg(default_value = "latest")]
-    pub selector: String,
-
+pub struct ForcedKind {
     /// Interpret the selector as a git tag.
     #[arg(long, conflicts_with_all = ["branch", "commit"])]
     pub tag: bool,
@@ -63,6 +62,17 @@ pub struct ManInstallArgs {
     /// Interpret the selector as a git commit.
     #[arg(long, conflicts_with_all = ["tag", "branch"])]
     pub commit: bool,
+}
+
+#[derive(Debug, clap::Args)]
+pub struct ManInstallArgs {
+    /// Version selector: latest | stable | <X.Y.Z> | <commit> | <branch>.
+    /// Defaults to `latest` (in-tree: the current checkout).
+    #[arg(default_value = "latest")]
+    pub selector: String,
+
+    #[command(flatten)]
+    pub kind: ForcedKind,
 
     /// Build profile (`debug` | `release`). Defaults to `debug`.
     #[arg(long, value_name = "PROFILE")]
@@ -87,17 +97,8 @@ pub struct ManUseArgs {
     /// Version selector: latest | stable | <X.Y.Z> | <commit> | <branch>.
     pub selector: String,
 
-    /// Interpret the selector as a git tag.
-    #[arg(long, conflicts_with_all = ["branch", "commit"])]
-    pub tag: bool,
-
-    /// Interpret the selector as a git branch.
-    #[arg(long, conflicts_with_all = ["tag", "commit"])]
-    pub branch: bool,
-
-    /// Interpret the selector as a git commit.
-    #[arg(long, conflicts_with_all = ["tag", "branch"])]
-    pub commit: bool,
+    #[command(flatten)]
+    pub kind: ForcedKind,
 
     /// Print the shell line to `eval` in the current shell instead of
     /// writing the durable environment.
@@ -110,17 +111,8 @@ pub struct ManEnvArgs {
     /// Version to emit the activation line for. Defaults to the active one.
     pub selector: Option<String>,
 
-    /// Interpret the selector as a git tag.
-    #[arg(long, conflicts_with_all = ["branch", "commit"])]
-    pub tag: bool,
-
-    /// Interpret the selector as a git branch.
-    #[arg(long, conflicts_with_all = ["tag", "commit"])]
-    pub branch: bool,
-
-    /// Interpret the selector as a git commit.
-    #[arg(long, conflicts_with_all = ["tag", "branch"])]
-    pub commit: bool,
+    #[command(flatten)]
+    pub kind: ForcedKind,
 
     /// Target shell syntax (bash|zsh|fish|powershell|posix). Defaults to the
     /// detected shell.
@@ -146,17 +138,8 @@ pub struct ManRemoveArgs {
     /// without `--all`.
     pub selector: Option<String>,
 
-    /// Interpret the selector as a git tag.
-    #[arg(long, conflicts_with_all = ["branch", "commit"])]
-    pub tag: bool,
-
-    /// Interpret the selector as a git branch.
-    #[arg(long, conflicts_with_all = ["tag", "commit"])]
-    pub branch: bool,
-
-    /// Interpret the selector as a git commit.
-    #[arg(long, conflicts_with_all = ["tag", "branch"])]
-    pub commit: bool,
+    #[command(flatten)]
+    pub kind: ForcedKind,
 
     /// Remove every installed version (asks for confirmation).
     #[arg(long)]

@@ -110,8 +110,7 @@ pub(super) fn run_remove_cmd(
         }
         ids
     } else if let Some(raw) = args.selector.as_deref() {
-        let selector =
-            model::Selector::parse(raw, forced_kind(args.tag, args.branch, args.commit))?;
+        let selector = model::Selector::parse(raw, forced_kind(&args.kind))?;
         vec![resolve_installed(&state, &selector, raw)?.version_id()]
     } else {
         pick_ids(ctx, &state)?
