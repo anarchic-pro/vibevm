@@ -690,28 +690,28 @@
       "crate_name": "vibe-cli",
       "file": "crates/vibe-cli/src/commands/man/source.rs",
       "item_kind": "fn",
-      "line": 240,
+      "line": 265,
       "symbol": "vibe_cli::commands::man::source::tests::find_source_root_walks_up_to_the_workspace"
     },
     {
       "crate_name": "vibe-cli",
       "file": "crates/vibe-cli/src/commands/man/source.rs",
       "item_kind": "fn",
-      "line": 277,
-      "symbol": "vibe_cli::commands::man::source::tests::mirror_url_maps_names"
+      "line": 302,
+      "symbol": "vibe_cli::commands::man::source::tests::mirror_parses_names_and_maps_urls"
     },
     {
       "crate_name": "vibe-cli",
       "file": "crates/vibe-cli/src/commands/man/source.rs",
       "item_kind": "fn",
-      "line": 285,
+      "line": 312,
       "symbol": "vibe_cli::commands::man::source::tests::prepare_from_mirror_clones_then_fetches"
     },
     {
       "crate_name": "vibe-cli",
       "file": "crates/vibe-cli/src/commands/man/source.rs",
       "item_kind": "fn",
-      "line": 255,
+      "line": 280,
       "symbol": "vibe_cli::commands::man::source::tests::resolve_in_clone_against_a_local_clone"
     },
     {
@@ -4552,7 +4552,7 @@
     {
       "file": "crates/vibe-cli/src/commands/man/source.rs",
       "from_symbol": "vibe_cli::commands::man::source::tests::find_source_root_walks_up_to_the_workspace",
-      "line": 241,
+      "line": 266,
       "provenance": "authored",
       "uri": "spec://vibevm/common/PROP-019#build",
       "verb": "verifies",
@@ -4560,8 +4560,8 @@
     },
     {
       "file": "crates/vibe-cli/src/commands/man/source.rs",
-      "from_symbol": "vibe_cli::commands::man::source::tests::mirror_url_maps_names",
-      "line": 278,
+      "from_symbol": "vibe_cli::commands::man::source::tests::mirror_parses_names_and_maps_urls",
+      "line": 303,
       "provenance": "authored",
       "uri": "spec://vibevm/common/PROP-019#build",
       "verb": "verifies",
@@ -4570,7 +4570,7 @@
     {
       "file": "crates/vibe-cli/src/commands/man/source.rs",
       "from_symbol": "vibe_cli::commands::man::source::tests::prepare_from_mirror_clones_then_fetches",
-      "line": 286,
+      "line": 313,
       "provenance": "authored",
       "uri": "spec://vibevm/common/PROP-019#provenance",
       "verb": "verifies",
@@ -4579,7 +4579,7 @@
     {
       "file": "crates/vibe-cli/src/commands/man/source.rs",
       "from_symbol": "vibe_cli::commands::man::source::tests::resolve_in_clone_against_a_local_clone",
-      "line": 256,
+      "line": 281,
       "provenance": "authored",
       "uri": "spec://vibevm/common/PROP-019#selectors",
       "verb": "verifies",

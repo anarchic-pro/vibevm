@@ -224,8 +224,8 @@ fn run_install_cmd(ctx: &output::Context, env: &ManEnv, args: ManInstallArgs) ->
             (root, resolved, model::Origin::External, Some(path))
         } else {
             let mirror = source::choose_mirror(ctx, args.mirror.as_deref())?;
-            ctx.step(&format!("updating managed clone from {mirror}"));
-            let outcome = source::prepare_from_mirror(&store, mirror, &selector)?;
+            ctx.step(&format!("updating managed clone from {}", mirror.url()));
+            let outcome = source::prepare_from_mirror(&store, mirror.url(), &selector)?;
             (
                 outcome.src_dir,
                 outcome.resolved,

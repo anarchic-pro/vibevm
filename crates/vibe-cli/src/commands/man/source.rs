@@ -40,35 +40,60 @@ pub(crate) fn label_in_tree(root: &Path) -> Result<ResolvedVersion> {
     Ok(ResolvedVersion { id, commit })
 }
 
-const MIRROR_GITVERSE: &str = "https://gitverse.ru/anarchic/vibevm.git";
-const MIRROR_GITHUB: &str = "https://github.com/anarchic-pro/vibevm.git";
+/// A source mirror VVM clones from (PROP-016, PROP-019 §2.7). A closed set;
+/// each variant maps to its public clone URL. The first is the default.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub(crate) enum Mirror {
+    GitVerse,
+    Github,
+}
 
-/// Map a mirror name to its public clone URL (PROP-019 §2.7, PROP-016).
-pub(crate) fn mirror_url(choice: &str) -> Result<&'static str> {
-    match choice {
-        "gitverse" => Ok(MIRROR_GITVERSE),
-        "github" => Ok(MIRROR_GITHUB),
-        other => bail!("unknown mirror `{other}` (want gitverse|github)"),
+impl Mirror {
+    /// Every mirror, in preference order (the default is the first).
+    pub(crate) const ALL: [Mirror; 2] = [Mirror::GitVerse, Mirror::Github];
+
+    /// The lowercase selector token (`gitverse` / `github`).
+    pub(crate) fn as_str(self) -> &'static str {
+        match self {
+            Mirror::GitVerse => "gitverse",
+            Mirror::Github => "github",
+        }
+    }
+
+    /// The public clone URL (PROP-016).
+    pub(crate) fn url(self) -> &'static str {
+        match self {
+            Mirror::GitVerse => "https://gitverse.ru/anarchic/vibevm.git",
+            Mirror::Github => "https://github.com/anarchic-pro/vibevm.git",
+        }
+    }
+
+    /// Parse a `--mirror` selector token (PROP-019 §2.7).
+    pub(crate) fn parse(s: &str) -> Result<Mirror> {
+        Mirror::ALL
+            .into_iter()
+            .find(|m| m.as_str() == s)
+            .ok_or_else(|| anyhow!("unknown mirror `{s}` (want gitverse|github)"))
     }
 }
 
 /// Pick the source mirror: an explicit `--mirror`, an interactive choice on
 /// a TTY, else the GitVerse default (PROP-019 §2.7).
-pub(crate) fn choose_mirror(ctx: &output::Context, flag: Option<&str>) -> Result<&'static str> {
+pub(crate) fn choose_mirror(ctx: &output::Context, flag: Option<&str>) -> Result<Mirror> {
     if let Some(f) = flag {
-        return mirror_url(f);
+        return Mirror::parse(f);
     }
     if !ctx.is_unattended() && std::io::stdin().is_terminal() {
-        let items = ["gitverse", "github"];
+        let items = Mirror::ALL.map(|m| m.as_str());
         let pick = Select::new()
             .with_prompt("Source mirror")
             .items(items)
             .default(0)
             .interact()
             .unwrap_or(0);
-        return mirror_url(items[pick]);
+        return Ok(Mirror::ALL[pick]);
     }
-    Ok(MIRROR_GITVERSE)
+    Ok(Mirror::GitVerse)
 }
 
 /// Resolve a selector against a local clone to a concrete version id +
@@ -276,10 +301,12 @@ mod tests {
 
     #[test]
     #[verifies("spec://vibevm/common/PROP-019#build", r = 1)]
-    fn mirror_url_maps_names() {
-        assert!(mirror_url("gitverse").is_ok());
-        assert!(mirror_url("github").is_ok());
-        assert!(mirror_url("nope").is_err());
+    fn mirror_parses_names_and_maps_urls() {
+        assert_eq!(Mirror::parse("gitverse").unwrap(), Mirror::GitVerse);
+        assert_eq!(Mirror::parse("github").unwrap(), Mirror::Github);
+        assert!(Mirror::parse("nope").is_err());
+        assert!(Mirror::GitVerse.url().starts_with("https://"));
+        assert_eq!(Mirror::ALL[0], Mirror::GitVerse);
     }
 
     #[test]
