@@ -195,11 +195,11 @@ needs no LLM, so it works today, agent-present or not.
 **Decision.** When a reasoning operation runs under the relay backend, it
 does not act. It writes an `Intent` — a markdown prompt with light
 frontmatter (id, source command, created-at, status) — to a **single-slot
-mailbox**, the project-local `.vibevm/command.md` (§3), and returns a
+mailbox**, the project-local `.vibe/agentic/command.md` (§3), and returns a
 pointer telling the caller to drain it. The **consumer seam is one
 command**, `vibe command`: it prints the pending `Intent` to stdout and
 clears the slot (consume-on-read; the spent intent is archived to
-`.vibevm/command.done.md`). Re-running with an empty slot prints "no
+`.vibe/agentic/command.done.md`). Re-running with an empty slot prints "no
 pending command" and exits `0`.
 
 Two properties make the two-step (produce → `vibe command`) worth its
@@ -261,7 +261,7 @@ code* (PROP-015 §2.6).
 
 **Decision.** The first `vibe agentic` operation, `explain`, exercises the
 whole relay with zero real risk. Run under an agent, it parks an `Intent`
-to `.vibevm/command.md` of roughly:
+to `.vibe/agentic/command.md` of roughly:
 
 > **Task — explain this project.** In ≤3 short paragraphs, tell the reader
 > what this project is and does. Sources, in priority order: (1) `README.md`
@@ -277,23 +277,29 @@ exist to tailor the prompt). The agent then runs `vibe command`, gets this
 instruction, and produces the explanation on its own LLM. Affinity:
 `agentic-only` until the built-in backend exists (§2.3).
 
-## 3. The `.vibevm/` relay directory {#vibevm-dir}
+## 3. The `.vibe/agentic/` relay directory {#vibevm-dir}
 
 `req r4`
 
-**Decision.** Agentic relay state lives in a project-local **`.vibevm/`**
-directory (created on demand, git-ignored — transient inter-process
-state, not source). It is distinct from the existing `.vibe/` cache
-(`init.rs`): `.vibe/` is vibevm's *own* package cache; `.vibevm/` is the
-*agent↔vibevm relay* channel. MVP contents:
+**Decision.** Agentic relay state lives under the existing project-local
+`.vibe/` scratch root, in a dedicated **`.vibe/agentic/`** subdirectory
+(created on demand) — one dot-dir, not two. `.vibe/` is already vibevm's
+project-local scratch space (`init.rs` scaffolds `.vibe/cache/` for the
+package cache) and is already git-ignored by its own `.vibe/.gitignore`
+(`*`), so the relay inherits that ignore for free: no `vibe init` change,
+and no second near-homonym dot-dir sitting beside `.vibe/`. Subdirectories
+disambiguate the two concerns — `.vibe/cache/` is the package cache,
+`.vibe/agentic/` is the agent↔vibevm relay channel (and the future home of
+the §6 conversation state). MVP contents:
 
-- `.vibevm/command.md` — the single pending intent (absent when none).
-- `.vibevm/command.done.md` — the last consumed intent (archive/debug aid).
+- `.vibe/agentic/command.md` — the single pending intent (absent when none).
+- `.vibe/agentic/command.done.md` — the last consumed intent (archive aid).
 
-`vibe init` adds `.vibevm/` to the project `.gitignore`. (Open micro-choice
-flagged to the owner: collapse this into `.vibe/agentic/` to avoid a second
-dot-dir; the owner named `.vibevm/command.md` explicitly, so that is the
-default here.)
+The relay path is an internal detail: the installed skill (§2.9) teaches
+the agent the `vibe command` verb, never the path, so the location carries
+no external contract and can move freely. A future `vibe cache clean` must
+scope to `.vibe/cache/` — never the whole `.vibe/` — so cache eviction
+cannot nuke an in-flight relay intent.
 
 ## 4. MVP scope — what this PROP authorises now {#mvp}
 
@@ -303,7 +309,7 @@ default here.)
    over the existing agent machinery.
 3. **Agentic core** — `InferenceBackend` + `Intent` + `RelayBackend`
    (§2.2, §2.7); affinity (§2.3).
-4. **Agentic relay** — `.vibevm/command.md` mailbox (§3); `vibe command`
+4. **Agentic relay** — `.vibe/agentic/command.md` mailbox (§3); `vibe command`
    consumer (§2.7); `vibe agentic explain` producer (§2.10).
 5. **Dual transport** — the explain op exposed as both `vibe agentic
    explain` (CLI) and an MCP tool (§2.8).
@@ -355,7 +361,7 @@ consolidated backlog doc may be warranted — not today.)
   is idempotent, and reports per-(agent, scope); `uninstall` is its inverse;
   `list` writes nothing.
 - `vibe agentic explain`, run with a fixture project, writes a well-formed
-  `.vibevm/command.md` (frontmatter + the §2.10 prompt) and writes no other
+  `.vibe/agentic/command.md` (frontmatter + the §2.10 prompt) and writes no other
   state; `vibe command` prints it, archives it to `command.done.md`, and
   empties the slot; a second `vibe command` reports "no pending command"
   and exits `0`.
