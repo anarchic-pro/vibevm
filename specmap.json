@@ -646,6 +646,20 @@
     },
     {
       "crate_name": "vibe-cli",
+      "file": "crates/vibe-cli/src/commands/man/selfloc.rs",
+      "item_kind": "mod",
+      "line": 6,
+      "symbol": "vibe_cli::commands::man::selfloc"
+    },
+    {
+      "crate_name": "vibe-cli",
+      "file": "crates/vibe-cli/src/commands/man/selfloc.rs",
+      "item_kind": "fn",
+      "line": 53,
+      "symbol": "vibe_cli::commands::man::selfloc::tests::derive_self_parses_a_managed_layout"
+    },
+    {
+      "crate_name": "vibe-cli",
       "file": "crates/vibe-cli/src/commands/man/source.rs",
       "item_kind": "mod",
       "line": 5,
@@ -711,7 +725,7 @@
       "crate_name": "vibe-cli",
       "file": "crates/vibe-cli/src/commands/man/mod.rs",
       "item_kind": "fn",
-      "line": 530,
+      "line": 537,
       "symbol": "vibe_cli::commands::man::tests::resolve_installed_picks_the_newest_instance_per_selector"
     },
     {
@@ -1026,7 +1040,7 @@
       "crate_name": "vibe-cli",
       "file": "crates/vibe-cli/src/main.rs",
       "item_kind": "fn",
-      "line": 118,
+      "line": 134,
       "symbol": "vibe_cli::promote_user_config_env"
     },
     {
@@ -4422,6 +4436,23 @@
       "pinned_r": 1
     },
     {
+      "file": "crates/vibe-cli/src/commands/man/selfloc.rs",
+      "from_symbol": "vibe_cli::commands::man::selfloc",
+      "line": 6,
+      "provenance": "authored",
+      "uri": "spec://vibevm/common/PROP-019#activation",
+      "verb": "implements"
+    },
+    {
+      "file": "crates/vibe-cli/src/commands/man/selfloc.rs",
+      "from_symbol": "vibe_cli::commands::man::selfloc::tests::derive_self_parses_a_managed_layout",
+      "line": 54,
+      "provenance": "authored",
+      "uri": "spec://vibevm/common/PROP-019#activation",
+      "verb": "verifies",
+      "pinned_r": 1
+    },
+    {
       "file": "crates/vibe-cli/src/commands/man/source.rs",
       "from_symbol": "vibe_cli::commands::man::source",
       "line": 5,
@@ -4502,7 +4533,7 @@
     {
       "file": "crates/vibe-cli/src/commands/man/mod.rs",
       "from_symbol": "vibe_cli::commands::man::tests::resolve_installed_picks_the_newest_instance_per_selector",
-      "line": 531,
+      "line": 538,
       "provenance": "authored",
       "uri": "spec://vibevm/common/PROP-019#selectors",
       "verb": "verifies",
@@ -4867,7 +4898,7 @@
     {
       "file": "crates/vibe-cli/src/main.rs",
       "from_symbol": "vibe_cli::promote_user_config_env",
-      "line": 137,
+      "line": 153,
       "provenance": "authored",
       "uri": "spec://vibevm/discipline/ENGINE-CONFORM-v0.1#rules",
       "verb": "deviates",

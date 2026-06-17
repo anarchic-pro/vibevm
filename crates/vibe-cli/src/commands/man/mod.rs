@@ -14,6 +14,7 @@ mod install;
 mod model;
 mod placer;
 mod remove;
+mod selfloc;
 mod source;
 mod store;
 mod tools;
@@ -30,10 +31,16 @@ use crate::output;
 use model::{InstallRecord, State, VersionId};
 use store::VersionStore;
 
+pub use selfloc::{derive_self, same_location};
+
 /// Env var naming the install base (defaults to the user's home dir); the
 /// VVM root is `$VIBEVM_INSTALL_ROOT/opt`. Read at the composition root and
 /// overridden in tests to isolate installs under a temp dir (PROP-019 §2.4).
 pub const VIBEVM_INSTALL_ROOT_ENV: &str = "VIBEVM_INSTALL_ROOT";
+/// Env var advertising the active version's prefix — advisory only; the
+/// truth is the `current` file + `current_exe` (PROP-019 §2.5). Read for the
+/// divergence warning and `vibe vars`.
+pub const VIBEVM_HOME_ENV: &str = "VIBEVM_HOME";
 
 /// Ambient environment VVM needs, resolved at the composition root
 /// (`main.rs`) and threaded in — the domain never reads the process env

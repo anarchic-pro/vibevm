@@ -51,6 +51,20 @@ fn main() -> ExitCode {
     promote_user_config_env();
     init_tracing();
 
+    // VVM: derive the running version from the binary's own path, and warn
+    // when the inherited $VIBEVM_HOME is stale (PROP-019 §2.5).
+    let self_loc = commands::man::derive_self(std::env::current_exe().ok().as_deref());
+    if let Some(loc) = &self_loc
+        && let Some(env_home) = read_env_opt(commands::man::VIBEVM_HOME_ENV)
+        && !commands::man::same_location(&env_home, &loc.home)
+    {
+        eprintln!(
+            "vibe: note: $VIBEVM_HOME is stale (env={env_home}); the running version is {} \
+             — open a new shell or `eval \"$(vibe man env)\"`",
+            loc.home.display()
+        );
+    }
+
     let ctx = output::Context::from_flags(
         cli.quiet,
         cli.json,
@@ -85,14 +99,16 @@ fn main() -> ExitCode {
         Command::Registry(args) => commands::registry::run(&ctx, args),
         Command::Workspace(args) => commands::workspace::run(&ctx, args),
         Command::Man(args) => {
-            // Ambient env reads live at the composition root and are
-            // threaded into the domain (PROP-019 §2.1; the ambient-env
-            // discipline). Default root is `~/opt`.
+            // The root is the running version's own (current_exe-derived)
+            // when managed, else $VIBEVM_INSTALL_ROOT/opt, else ~/opt
+            // (PROP-019 §2.5). Ambient reads live at the composition root.
             let man_env = commands::man::ManEnv {
-                root: read_env_opt(commands::man::VIBEVM_INSTALL_ROOT_ENV)
-                    .map(PathBuf::from)
-                    .or_else(dirs::home_dir)
-                    .map(|base| base.join("opt")),
+                root: self_loc.as_ref().map(|l| l.root.clone()).or_else(|| {
+                    read_env_opt(commands::man::VIBEVM_INSTALL_ROOT_ENV)
+                        .map(PathBuf::from)
+                        .or_else(dirs::home_dir)
+                        .map(|base| base.join("opt"))
+                }),
                 cwd: std::env::current_dir().ok(),
                 home: dirs::home_dir(),
                 shell: read_env_opt("SHELL"),
