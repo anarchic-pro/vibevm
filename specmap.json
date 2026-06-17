@@ -345,6 +345,13 @@
     },
     {
       "crate_name": "vibe-cli",
+      "file": "crates/vibe-cli/src/cli/man.rs",
+      "item_kind": "mod",
+      "line": 5,
+      "symbol": "vibe_cli::cli::man"
+    },
+    {
+      "crate_name": "vibe-cli",
       "file": "crates/vibe-cli/src/cli/mcp.rs",
       "item_kind": "mod",
       "line": 6,
@@ -433,6 +440,104 @@
       "item_kind": "mod",
       "line": 5,
       "symbol": "vibe_cli::commands::list"
+    },
+    {
+      "crate_name": "vibe-cli",
+      "file": "crates/vibe-cli/src/commands/man/mod.rs",
+      "item_kind": "mod",
+      "line": 9,
+      "symbol": "vibe_cli::commands::man"
+    },
+    {
+      "crate_name": "vibe-cli",
+      "file": "crates/vibe-cli/src/commands/man/model.rs",
+      "item_kind": "mod",
+      "line": 4,
+      "symbol": "vibe_cli::commands::man::model"
+    },
+    {
+      "crate_name": "vibe-cli",
+      "file": "crates/vibe-cli/src/commands/man/model.rs",
+      "item_kind": "struct",
+      "line": 65,
+      "symbol": "vibe_cli::commands::man::model::InstallRecord"
+    },
+    {
+      "crate_name": "vibe-cli",
+      "file": "crates/vibe-cli/src/commands/man/model.rs",
+      "item_kind": "enum",
+      "line": 12,
+      "symbol": "vibe_cli::commands::man::model::Kind"
+    },
+    {
+      "crate_name": "vibe-cli",
+      "file": "crates/vibe-cli/src/commands/man/model.rs",
+      "item_kind": "struct",
+      "line": 89,
+      "symbol": "vibe_cli::commands::man::model::State"
+    },
+    {
+      "crate_name": "vibe-cli",
+      "file": "crates/vibe-cli/src/commands/man/model.rs",
+      "item_kind": "struct",
+      "line": 34,
+      "symbol": "vibe_cli::commands::man::model::VersionId"
+    },
+    {
+      "crate_name": "vibe-cli",
+      "file": "crates/vibe-cli/src/commands/man/model.rs",
+      "item_kind": "fn",
+      "line": 140,
+      "symbol": "vibe_cli::commands::man::model::tests::empty_state_is_the_default"
+    },
+    {
+      "crate_name": "vibe-cli",
+      "file": "crates/vibe-cli/src/commands/man/model.rs",
+      "item_kind": "fn",
+      "line": 121,
+      "symbol": "vibe_cli::commands::man::model::tests::state_round_trips_through_toml"
+    },
+    {
+      "crate_name": "vibe-cli",
+      "file": "crates/vibe-cli/src/commands/man/model.rs",
+      "item_kind": "fn",
+      "line": 106,
+      "symbol": "vibe_cli::commands::man::model::tests::version_id_renders_and_splits_by_kind"
+    },
+    {
+      "crate_name": "vibe-cli",
+      "file": "crates/vibe-cli/src/commands/man/store.rs",
+      "item_kind": "mod",
+      "line": 5,
+      "symbol": "vibe_cli::commands::man::store"
+    },
+    {
+      "crate_name": "vibe-cli",
+      "file": "crates/vibe-cli/src/commands/man/store.rs",
+      "item_kind": "struct",
+      "line": 18,
+      "symbol": "vibe_cli::commands::man::store::VersionStore"
+    },
+    {
+      "crate_name": "vibe-cli",
+      "file": "crates/vibe-cli/src/commands/man/store.rs",
+      "item_kind": "fn",
+      "line": 129,
+      "symbol": "vibe_cli::commands::man::store::tests::active_matches_the_prefix_named_by_vibevm_home"
+    },
+    {
+      "crate_name": "vibe-cli",
+      "file": "crates/vibe-cli/src/commands/man/store.rs",
+      "item_kind": "fn",
+      "line": 103,
+      "symbol": "vibe_cli::commands::man::store::tests::layout_paths_are_namespaced_by_kind"
+    },
+    {
+      "crate_name": "vibe-cli",
+      "file": "crates/vibe-cli/src/commands/man/store.rs",
+      "item_kind": "fn",
+      "line": 121,
+      "symbol": "vibe_cli::commands::man::store::tests::load_state_defaults_when_absent"
     },
     {
       "crate_name": "vibe-cli",
@@ -718,7 +823,7 @@
       "crate_name": "vibe-cli",
       "file": "crates/vibe-cli/src/main.rs",
       "item_kind": "fn",
-      "line": 101,
+      "line": 114,
       "symbol": "vibe_cli::promote_user_config_env"
     },
     {
@@ -3758,6 +3863,14 @@
       "verb": "implements"
     },
     {
+      "file": "crates/vibe-cli/src/cli/man.rs",
+      "from_symbol": "vibe_cli::cli::man",
+      "line": 5,
+      "provenance": "authored",
+      "uri": "spec://vibevm/common/PROP-019#surface",
+      "verb": "implements"
+    },
+    {
       "file": "crates/vibe-cli/src/cli/mcp.rs",
       "from_symbol": "vibe_cli::cli::mcp",
       "line": 6,
@@ -3860,6 +3973,124 @@
       "provenance": "authored",
       "uri": "spec://vibevm/VIBEVM-SPEC#command-summary",
       "verb": "implements"
+    },
+    {
+      "file": "crates/vibe-cli/src/commands/man/mod.rs",
+      "from_symbol": "vibe_cli::commands::man",
+      "line": 9,
+      "provenance": "authored",
+      "uri": "spec://vibevm/common/PROP-019#surface",
+      "verb": "implements"
+    },
+    {
+      "file": "crates/vibe-cli/src/commands/man/model.rs",
+      "from_symbol": "vibe_cli::commands::man::model",
+      "line": 4,
+      "provenance": "authored",
+      "uri": "spec://vibevm/common/PROP-019#layout",
+      "verb": "implements"
+    },
+    {
+      "file": "crates/vibe-cli/src/commands/man/model.rs",
+      "from_symbol": "vibe_cli::commands::man::model::InstallRecord",
+      "line": 68,
+      "provenance": "authored",
+      "uri": "spec://vibevm/common/PROP-019#layout",
+      "verb": "implements"
+    },
+    {
+      "file": "crates/vibe-cli/src/commands/man/model.rs",
+      "from_symbol": "vibe_cli::commands::man::model::Kind",
+      "line": 16,
+      "provenance": "authored",
+      "uri": "spec://vibevm/common/PROP-019#layout",
+      "verb": "implements"
+    },
+    {
+      "file": "crates/vibe-cli/src/commands/man/model.rs",
+      "from_symbol": "vibe_cli::commands::man::model::State",
+      "line": 95,
+      "provenance": "authored",
+      "uri": "spec://vibevm/common/PROP-019#layout",
+      "verb": "implements"
+    },
+    {
+      "file": "crates/vibe-cli/src/commands/man/model.rs",
+      "from_symbol": "vibe_cli::commands::man::model::VersionId",
+      "line": 38,
+      "provenance": "authored",
+      "uri": "spec://vibevm/common/PROP-019#layout",
+      "verb": "implements"
+    },
+    {
+      "file": "crates/vibe-cli/src/commands/man/model.rs",
+      "from_symbol": "vibe_cli::commands::man::model::tests::empty_state_is_the_default",
+      "line": 141,
+      "provenance": "authored",
+      "uri": "spec://vibevm/common/PROP-019#layout",
+      "verb": "verifies",
+      "pinned_r": 1
+    },
+    {
+      "file": "crates/vibe-cli/src/commands/man/model.rs",
+      "from_symbol": "vibe_cli::commands::man::model::tests::state_round_trips_through_toml",
+      "line": 122,
+      "provenance": "authored",
+      "uri": "spec://vibevm/common/PROP-019#layout",
+      "verb": "verifies",
+      "pinned_r": 1
+    },
+    {
+      "file": "crates/vibe-cli/src/commands/man/model.rs",
+      "from_symbol": "vibe_cli::commands::man::model::tests::version_id_renders_and_splits_by_kind",
+      "line": 107,
+      "provenance": "authored",
+      "uri": "spec://vibevm/common/PROP-019#layout",
+      "verb": "verifies",
+      "pinned_r": 1
+    },
+    {
+      "file": "crates/vibe-cli/src/commands/man/store.rs",
+      "from_symbol": "vibe_cli::commands::man::store",
+      "line": 5,
+      "provenance": "authored",
+      "uri": "spec://vibevm/common/PROP-019#layout",
+      "verb": "implements"
+    },
+    {
+      "file": "crates/vibe-cli/src/commands/man/store.rs",
+      "from_symbol": "vibe_cli::commands::man::store::VersionStore",
+      "line": 20,
+      "provenance": "authored",
+      "uri": "spec://vibevm/common/PROP-019#layout",
+      "verb": "implements"
+    },
+    {
+      "file": "crates/vibe-cli/src/commands/man/store.rs",
+      "from_symbol": "vibe_cli::commands::man::store::tests::active_matches_the_prefix_named_by_vibevm_home",
+      "line": 130,
+      "provenance": "authored",
+      "uri": "spec://vibevm/common/PROP-019#introspection",
+      "verb": "verifies",
+      "pinned_r": 1
+    },
+    {
+      "file": "crates/vibe-cli/src/commands/man/store.rs",
+      "from_symbol": "vibe_cli::commands::man::store::tests::layout_paths_are_namespaced_by_kind",
+      "line": 104,
+      "provenance": "authored",
+      "uri": "spec://vibevm/common/PROP-019#layout",
+      "verb": "verifies",
+      "pinned_r": 1
+    },
+    {
+      "file": "crates/vibe-cli/src/commands/man/store.rs",
+      "from_symbol": "vibe_cli::commands::man::store::tests::load_state_defaults_when_absent",
+      "line": 122,
+      "provenance": "authored",
+      "uri": "spec://vibevm/common/PROP-019#layout",
+      "verb": "verifies",
+      "pinned_r": 1
     },
     {
       "file": "crates/vibe-cli/src/commands/mcp/mod.rs",
@@ -4185,7 +4416,7 @@
     {
       "file": "crates/vibe-cli/src/main.rs",
       "from_symbol": "vibe_cli::promote_user_config_env",
-      "line": 120,
+      "line": 133,
       "provenance": "authored",
       "uri": "spec://vibevm/discipline/ENGINE-CONFORM-v0.1#rules",
       "verb": "deviates",

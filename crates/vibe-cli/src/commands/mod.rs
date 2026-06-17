@@ -7,6 +7,7 @@ pub mod check;
 pub mod init;
 pub mod install;
 pub mod list;
+pub mod man;
 pub mod mcp;
 pub mod outdated;
 pub mod registry;

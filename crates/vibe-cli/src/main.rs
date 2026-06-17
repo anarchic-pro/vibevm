@@ -7,6 +7,7 @@
 specmark::scope!("spec://vibevm/VIBEVM-SPEC#cli-surface");
 
 use std::collections::BTreeSet;
+use std::path::PathBuf;
 use std::process::ExitCode;
 use std::sync::OnceLock;
 
@@ -83,6 +84,18 @@ fn main() -> ExitCode {
         Command::Show(args) => commands::show::run(&ctx, args),
         Command::Registry(args) => commands::registry::run(&ctx, args),
         Command::Workspace(args) => commands::workspace::run(&ctx, args),
+        Command::Man(args) => {
+            // Ambient env reads live at the composition root and are
+            // threaded into the domain (PROP-019 §2.1; the ambient-env
+            // discipline). Default root is `~/opt`.
+            let man_env = commands::man::ManEnv {
+                root: read_env_opt(commands::man::VIBEVM_ROOT_ENV)
+                    .map(PathBuf::from)
+                    .or_else(|| dirs::home_dir().map(|h| h.join("opt"))),
+                active_home: read_env_opt(commands::man::VIBEVM_HOME_ENV).map(PathBuf::from),
+            };
+            commands::man::run(&ctx, args, man_env)
+        }
         Command::Version => {
             println!("vibe {}", env!("CARGO_PKG_VERSION"));
             return ExitCode::SUCCESS;
