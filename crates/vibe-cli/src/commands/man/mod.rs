@@ -9,6 +9,7 @@ specmark::scope!("spec://vibevm/common/PROP-019#surface");
 
 mod builder;
 mod env;
+mod error;
 mod git;
 mod install;
 mod model;
@@ -22,7 +23,7 @@ mod tools;
 use std::io::IsTerminal;
 use std::path::{Path, PathBuf};
 
-use anyhow::{Result, bail};
+use anyhow::Result;
 use dialoguer::Confirm;
 
 use crate::cli::{
@@ -30,6 +31,7 @@ use crate::cli::{
 };
 use crate::output;
 
+use error::ManError;
 use model::{InstallRecord, State, VersionId};
 use store::VersionStore;
 
@@ -66,13 +68,8 @@ pub struct ManEnv {
 }
 
 impl ManEnv {
-    fn store(&self) -> Result<VersionStore> {
-        let root = self.root.clone().ok_or_else(|| {
-            anyhow::anyhow!(
-                "cannot determine the VVM root: set $VIBEVM_INSTALL_ROOT, or ensure a home \
-                 directory exists"
-            )
-        })?;
+    fn store(&self) -> Result<VersionStore, ManError> {
+        let root = self.root.clone().ok_or(ManError::NoRoot)?;
         Ok(VersionStore::new(root))
     }
 }
@@ -174,7 +171,7 @@ fn run_current(ctx: &output::Context, env: &ManEnv) -> Result<()> {
 fn run_which(ctx: &output::Context, env: &ManEnv) -> Result<()> {
     let store = env.store()?;
     let Some(record) = store.active()? else {
-        bail!("no active version (run `vibe man use <selector>`)");
+        return Err(ManError::NoActiveVersion.into());
     };
     let path = store.binary_path(&record.version_id(), record.instance);
     if ctx.is_json() {
@@ -318,9 +315,7 @@ fn run_env_cmd(env: &ManEnv, args: ManEnvArgs) -> Result<()> {
             store.instance_dir(&rec.version_id(), rec.instance)
         }
         None => {
-            let rec = store.active()?.ok_or_else(|| {
-                anyhow::anyhow!("no active version; pass a selector, e.g. `vibe man env latest`")
-            })?;
+            let rec = store.active()?.ok_or(ManError::NoActiveVersion)?;
             store.instance_dir(&rec.version_id(), rec.instance)
         }
     };
@@ -334,18 +329,27 @@ fn resolve_installed(
     state: &State,
     selector: &model::Selector,
     raw: &str,
-) -> Result<InstallRecord> {
+) -> Result<InstallRecord, ManError> {
     use model::{Kind, Selector, VersionId};
     match selector {
-        Selector::Latest => latest_of(state, &VersionId::new(Kind::Branch, "main"))
-            .ok_or_else(|| anyhow::anyhow!("`latest` is not installed — run `vibe man install`")),
-        Selector::Explicit(id) => latest_of(state, id).ok_or_else(|| {
-            anyhow::anyhow!("`{id}` is not installed — run `vibe man install {raw}`")
+        Selector::Latest => {
+            latest_of(state, &VersionId::new(Kind::Branch, "main")).ok_or_else(|| {
+                ManError::NotInstalled {
+                    detail: "`latest` is not installed".to_string(),
+                }
+            })
+        }
+        Selector::Explicit(id) => latest_of(state, id).ok_or_else(|| ManError::NotInstalled {
+            detail: format!("`{id}` is not installed (try `vibe man install {raw}`)"),
         }),
-        Selector::Stable => highest_tag_record(state)
-            .ok_or_else(|| anyhow::anyhow!("no installed release tag to satisfy `stable`")),
-        Selector::Ambiguous(name) => by_precedence_record(state, name)
-            .ok_or_else(|| anyhow::anyhow!("no installed version named `{name}`")),
+        Selector::Stable => highest_tag_record(state).ok_or_else(|| ManError::NotInstalled {
+            detail: "no installed release tag satisfies `stable`".to_string(),
+        }),
+        Selector::Ambiguous(name) => {
+            by_precedence_record(state, name).ok_or_else(|| ManError::NotInstalled {
+                detail: format!("no installed version named `{name}`"),
+            })
+        }
     }
 }
 
@@ -392,13 +396,14 @@ fn by_precedence_record(state: &State, name: &str) -> Option<InstallRecord> {
 
 /// The durable-env persister for this OS (PROP-019 §2.6): the registry on
 /// Windows, the shell rc on POSIX.
-fn make_persister(env: &ManEnv, shell: env::Shell) -> Result<Box<dyn env::EnvPersister>> {
+fn make_persister(
+    env: &ManEnv,
+    shell: env::Shell,
+) -> Result<Box<dyn env::EnvPersister>, ManError> {
     if cfg!(windows) {
         Ok(Box::new(env::WindowsEnvPersister))
     } else {
-        let home = env.home.clone().ok_or_else(|| {
-            anyhow::anyhow!("cannot locate your home directory to edit a shell rc")
-        })?;
+        let home = env.home.clone().ok_or(ManError::NoHome)?;
         Ok(Box::new(env::RcFilePersister::new(
             shell.rc_path(&home),
             shell,
@@ -487,12 +492,14 @@ fn run_doctor_cmd(ctx: &output::Context, env: &ManEnv, args: ManDoctorArgs) -> R
 
 /// Confirm a mutating action: `--yes`/unattended skip the prompt; a non-TTY
 /// without `--yes` is an error rather than a silent apply.
-fn confirm(ctx: &output::Context, yes: bool, prompt: &str) -> Result<bool> {
+fn confirm(ctx: &output::Context, yes: bool, prompt: &str) -> Result<bool, ManError> {
     if yes || ctx.is_unattended() {
         return Ok(true);
     }
     if !std::io::stdin().is_terminal() {
-        bail!("no TTY for confirmation; re-run with `--yes`");
+        return Err(ManError::NoTty {
+            detail: "no TTY for confirmation; pass `--yes` to proceed unattended".to_string(),
+        });
     }
     Ok(Confirm::new()
         .with_prompt(prompt)
@@ -505,9 +512,11 @@ fn confirm(ctx: &output::Context, yes: bool, prompt: &str) -> Result<bool> {
 /// remove / gc pickers): an unattended or non-TTY run errors with `msg` —
 /// which names the explicit flags to pass — rather than silently doing
 /// nothing (PROP-019 §2.9).
-fn require_tty(ctx: &output::Context, msg: &str) -> Result<()> {
+fn require_tty(ctx: &output::Context, msg: &str) -> Result<(), ManError> {
     if ctx.is_unattended() || !std::io::stdin().is_terminal() {
-        bail!("{msg}");
+        return Err(ManError::NoTty {
+            detail: msg.to_string(),
+        });
     }
     Ok(())
 }
