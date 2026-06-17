@@ -170,4 +170,24 @@ mod tests {
         assert!(SKILL_TEMPLATE.contains("no automatic write-back"));
         assert!(SKILL_TEMPLATE.contains("vibe skill"));
     }
+
+    /// PROP-018 §2.8/§2.9: the usage skill teaches agents which MCP tools to
+    /// call, so every tool the server actually registers must be named in the
+    /// template — otherwise the skill either omits a real tool or, worse, the
+    /// server drops one the skill still tells agents to call. Cross-check the
+    /// served set (`default_tools`) against the template so the two cannot
+    /// drift apart silently.
+    #[test]
+    fn every_served_tool_is_named_in_the_skill_template() {
+        use crate::default_tools;
+        for tool in default_tools() {
+            let name = tool.descriptor().name;
+            assert!(
+                SKILL_TEMPLATE.contains(&name),
+                "MCP tool `{name}` is served by default_tools() but the vibevm \
+                 skill template names no such tool — teach it in \
+                 skill_template.md, or an agent will never learn to call it"
+            );
+        }
+    }
 }
