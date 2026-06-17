@@ -142,9 +142,39 @@ impl Intent {
     /// the pending marker and the source, then the title and body.
     pub fn to_markdown(&self) -> String {
         format!(
-            "---\nvibevm-intent: pending\nsource: {}\n---\n\n# {}\n\n{}\n",
-            self.source, self.title, self.body
+            "---\n{}\nsource: {}\n---\n\n# {}\n\n{}\n",
+            IntentStatus::Pending.marker(),
+            self.source,
+            self.title,
+            self.body
         )
+    }
+}
+
+/// The status of a parked intent in the mailbox frontmatter (PROP-018 §2.7):
+/// `pending` when written, flipped to `done` when drained. A closed two-state
+/// vocabulary so the marker line is rendered in one place, not duplicated as
+/// a bare literal between the writer ([`Intent::to_markdown`]) and the
+/// drainer ([`drain_intent`]).
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+#[spec(implements = "spec://vibevm/common/PROP-018#relay")]
+pub(crate) enum IntentStatus {
+    Pending,
+    Done,
+}
+
+impl IntentStatus {
+    /// The lowercase frontmatter token (`pending` / `done`).
+    pub(crate) fn as_str(self) -> &'static str {
+        match self {
+            IntentStatus::Pending => "pending",
+            IntentStatus::Done => "done",
+        }
+    }
+
+    /// The full `vibevm-intent: <status>` frontmatter marker line.
+    fn marker(self) -> String {
+        format!("vibevm-intent: {}", self.as_str())
     }
 }
 
@@ -282,7 +312,11 @@ pub fn drain_intent(dir: &Path) -> Result<Option<String>, RelayError> {
         path: path.clone(),
         source,
     })?;
-    let archived = content.replacen("vibevm-intent: pending", "vibevm-intent: done", 1);
+    let archived = content.replacen(
+        &IntentStatus::Pending.marker(),
+        &IntentStatus::Done.marker(),
+        1,
+    );
     let archive_path = dir.join(ARCHIVE);
     fs::write(&archive_path, archived).map_err(|source| RelayError::Mailbox {
         path: archive_path,
