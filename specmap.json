@@ -844,7 +844,7 @@
       "crate_name": "vibe-cli",
       "file": "crates/vibe-cli/src/commands/mcp/mod.rs",
       "item_kind": "mod",
-      "line": 41,
+      "line": 50,
       "symbol": "vibe_cli::commands::mcp"
     },
     {
@@ -2489,7 +2489,7 @@
       "crate_name": "vibe-mcp",
       "file": "crates/vibe-mcp/src/agents.rs",
       "item_kind": "fn",
-      "line": 497,
+      "line": 546,
       "symbol": "vibe_mcp::agents::detect_agents"
     },
     {
@@ -4844,7 +4844,7 @@
     {
       "file": "crates/vibe-cli/src/commands/mcp/mod.rs",
       "from_symbol": "vibe_cli::commands::mcp",
-      "line": 41,
+      "line": 50,
       "provenance": "authored",
       "uri": "spec://vibevm/modules/vibe-mcp/PROP-015#lifecycle",
       "verb": "implements"
@@ -6815,7 +6815,7 @@
     {
       "file": "crates/vibe-mcp/src/agents.rs",
       "from_symbol": "vibe_mcp::agents::detect_agents",
-      "line": 500,
+      "line": 549,
       "provenance": "authored",
       "uri": "spec://vibevm/modules/vibe-mcp/PROP-015#agent-detection",
       "verb": "implements"
@@ -11340,7 +11340,7 @@
     },
     {
       "anchor": "root",
-      "content_hash": "sha256:d475c5cea4d31dad9be1cb728a22fdb1f524f348cb0f0317c795a4eee28eb8a2",
+      "content_hash": "sha256:7c9b3f6e477e0f0ea78e177e7c8e90e94579f7bb14d0f7f7f2ec65d0cfd804bf",
       "doc_path": "modules/vibe-mcp/PROP-015",
       "file": "spec/modules/vibe-mcp/PROP-015-mcp-integration.md",
       "heading": "PROP-015 — MCP server and agent integration",
@@ -11358,7 +11358,7 @@
     },
     {
       "anchor": "decisions",
-      "content_hash": "sha256:5f64ff1c1b4df67f5192a8dbd218ed8e97bdb60cd124a330a42acf167a04e433",
+      "content_hash": "sha256:2aec5fff4ee3d317812be683b1a3c2dac4ac3931eb5f0b8cd44aac98e0628838",
       "doc_path": "modules/vibe-mcp/PROP-015",
       "file": "spec/modules/vibe-mcp/PROP-015-mcp-integration.md",
       "heading": "2. Decisions",
@@ -11411,14 +11411,14 @@
     },
     {
       "anchor": "agent-config",
-      "content_hash": "sha256:18bfdef9166fd01e245d24a87bc80d8a25d76fea91d437e5731fcbf104848052",
+      "content_hash": "sha256:2d27d816a3c4dea94dbc1354db38e0497e880b256a3c733dc38dd8ecbde83c46",
       "doc_path": "modules/vibe-mcp/PROP-015",
       "file": "spec/modules/vibe-mcp/PROP-015-mcp-integration.md",
       "heading": "2.5 Per-agent configuration",
       "line": 108,
       "uri": "spec://vibevm/modules/vibe-mcp/PROP-015#agent-config",
       "kind": "req",
-      "revision": 1
+      "revision": 2
     },
     {
       "anchor": "skill",
@@ -11426,7 +11426,7 @@
       "doc_path": "modules/vibe-mcp/PROP-015",
       "file": "spec/modules/vibe-mcp/PROP-015-mcp-integration.md",
       "heading": "2.6 Skill materialisation",
-      "line": 129,
+      "line": 143,
       "uri": "spec://vibevm/modules/vibe-mcp/PROP-015#skill",
       "kind": "req",
       "revision": 1
@@ -11437,7 +11437,7 @@
       "doc_path": "modules/vibe-mcp/PROP-015",
       "file": "spec/modules/vibe-mcp/PROP-015-mcp-integration.md",
       "heading": "2.7 The integration lifecycle",
-      "line": 141,
+      "line": 155,
       "uri": "spec://vibevm/modules/vibe-mcp/PROP-015#lifecycle",
       "kind": "req",
       "revision": 1
@@ -11448,7 +11448,7 @@
       "doc_path": "modules/vibe-mcp/PROP-015",
       "file": "spec/modules/vibe-mcp/PROP-015-mcp-integration.md",
       "heading": "3. Out of scope",
-      "line": 160,
+      "line": 174,
       "uri": "spec://vibevm/modules/vibe-mcp/PROP-015#out-of-scope"
     },
     {
@@ -11457,7 +11457,7 @@
       "doc_path": "modules/vibe-mcp/PROP-015",
       "file": "spec/modules/vibe-mcp/PROP-015-mcp-integration.md",
       "heading": "4. Acceptance",
-      "line": 171,
+      "line": 185,
       "uri": "spec://vibevm/modules/vibe-mcp/PROP-015#acceptance"
     },
     {
