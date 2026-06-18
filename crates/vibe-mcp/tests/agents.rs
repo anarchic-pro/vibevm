@@ -4,19 +4,17 @@
 //! scope-aware MCP entry shape. These relocated from vibe-cli's
 //! commands/mcp.rs when the domain moved here (CONVERT-PLAN v0.1 §7.3).
 
-use std::path::Path;
-
 use vibe_mcp::agents::{Agent, ConfigPayload, Scope, What, detect_agents};
 
-fn json_payload(agent: Agent, scope: Scope, project: Option<&Path>) -> serde_json::Value {
-    match agent.build_mcp_entry(scope, project) {
+fn json_payload(agent: Agent, windows: bool) -> serde_json::Value {
+    match agent.build_mcp_entry_for(windows) {
         ConfigPayload::Json(v) => v,
         ConfigPayload::Toml(_) => panic!("expected JSON for {}", agent.as_str()),
     }
 }
 
-fn toml_payload(agent: Agent, scope: Scope, project: Option<&Path>) -> toml::Value {
-    match agent.build_mcp_entry(scope, project) {
+fn toml_payload(agent: Agent, windows: bool) -> toml::Value {
+    match agent.build_mcp_entry_for(windows) {
         ConfigPayload::Toml(v) => v,
         ConfigPayload::Json(_) => panic!("expected TOML for {}", agent.as_str()),
     }
@@ -142,7 +140,7 @@ fn config_path_project_lands_under_project_root() {
         .unwrap()
         .unwrap();
     let s = p.display().to_string().replace('\\', "/");
-    assert!(s.ends_with("/.claude/settings.json"), "got {s}");
+    assert!(s.ends_with("/.mcp.json"), "got {s}");
 
     let p = Agent::OpenCode
         .config_path(Scope::Project, Some(dir.path()))
@@ -185,6 +183,22 @@ fn config_path_user_resolves_for_all_agents() {
 }
 
 #[test]
+fn claude_user_config_is_dot_claude_json_not_settings() {
+    // Regression: Claude Code reads user-scope MCP from `~/.claude.json`,
+    // never `~/.claude/settings.json` (settings.json only gates servers).
+    let p = Agent::ClaudeCode
+        .config_path(Scope::User, None)
+        .unwrap()
+        .unwrap();
+    let s = p.display().to_string().replace('\\', "/");
+    assert!(s.ends_with("/.claude.json"), "got {s}");
+    assert!(
+        !s.contains("/.claude/settings.json"),
+        "must not target settings.json: {s}"
+    );
+}
+
+#[test]
 fn opencode_user_paths_use_xdg_style_on_every_os() {
     // OpenCode is documented to read `~/.config/opencode/` on every
     // platform — XDG-style, NOT %APPDATA% on Windows.
@@ -218,39 +232,86 @@ fn config_path_both_is_internal_error() {
     );
 }
 
-// ---- build_mcp_entry scope-awareness ----
+// ---- build_mcp_entry (OS-aware launcher shape) ----
 
 #[test]
-fn project_scope_mcp_entry_carries_path_arg() {
-    let dir = tempfile::tempdir().unwrap();
-    let v = json_payload(Agent::ClaudeCode, Scope::Project, Some(dir.path()));
-    let args: Vec<&str> = v["args"]
-        .as_array()
-        .unwrap()
-        .iter()
-        .map(|a| a.as_str().unwrap())
-        .collect();
-    assert_eq!(args[0], "mcp");
-    assert_eq!(args[1], "serve");
-    assert_eq!(args[2], "--path");
-    assert!(args.len() == 4, "expected 4 args, got {args:?}");
+fn json_agents_entry_is_plain_vibe_off_windows() {
+    // Off Windows `vibe` is a real executable: command=vibe, no cmd /c,
+    // no --path (CWD-resolved). The same shape for every JSON agent.
+    for agent in [Agent::ClaudeCode, Agent::ClaudeCodeDesktop, Agent::Cursor] {
+        let v = json_payload(agent, false);
+        assert_eq!(v["command"], "vibe", "{}", agent.as_str());
+        let args: Vec<&str> = v["args"]
+            .as_array()
+            .unwrap()
+            .iter()
+            .map(|a| a.as_str().unwrap())
+            .collect();
+        assert_eq!(args, vec!["mcp", "serve"], "{}", agent.as_str());
+    }
 }
 
 #[test]
-fn user_scope_mcp_entry_omits_path_arg() {
-    let v = json_payload(Agent::ClaudeCode, Scope::User, None);
-    let args: Vec<&str> = v["args"]
-        .as_array()
-        .unwrap()
-        .iter()
-        .map(|a| a.as_str().unwrap())
-        .collect();
-    assert_eq!(args, vec!["mcp", "serve"], "user-scope must omit --path");
+fn json_agents_entry_wraps_cmd_c_on_windows() {
+    // On Windows the `vibe.cmd` shim must launch via `cmd /c` — an MCP
+    // client's bare process-spawn cannot exec a `.cmd` directly.
+    for agent in [Agent::ClaudeCode, Agent::ClaudeCodeDesktop, Agent::Cursor] {
+        let v = json_payload(agent, true);
+        assert_eq!(v["command"], "cmd", "{}", agent.as_str());
+        let args: Vec<&str> = v["args"]
+            .as_array()
+            .unwrap()
+            .iter()
+            .map(|a| a.as_str().unwrap())
+            .collect();
+        assert_eq!(
+            args,
+            vec!["/c", "vibe", "mcp", "serve"],
+            "{}",
+            agent.as_str()
+        );
+    }
 }
 
 #[test]
-fn opencode_user_scope_entry_uses_command_array_without_path() {
-    let v = json_payload(Agent::OpenCode, Scope::User, None);
+fn no_agent_entry_carries_a_path_arg() {
+    // `--path` was dropped so a committed `.mcp.json` stays portable.
+    for &agent in Agent::ALL {
+        let flat: Vec<String> = match agent.build_mcp_entry_for(false) {
+            ConfigPayload::Json(v) => {
+                if let Some(arr) = v["command"].as_array() {
+                    // OpenCode: `command` is the whole argv array.
+                    arr.iter()
+                        .map(|a| a.as_str().unwrap().to_string())
+                        .collect()
+                } else {
+                    let mut f = vec![v["command"].as_str().unwrap().to_string()];
+                    for a in v["args"].as_array().unwrap() {
+                        f.push(a.as_str().unwrap().to_string());
+                    }
+                    f
+                }
+            }
+            ConfigPayload::Toml(t) => {
+                let tbl = t.as_table().unwrap();
+                let mut f = vec![tbl["command"].as_str().unwrap().to_string()];
+                for a in tbl["args"].as_array().unwrap() {
+                    f.push(a.as_str().unwrap().to_string());
+                }
+                f
+            }
+        };
+        assert!(
+            !flat.iter().any(|s| s == "--path"),
+            "{} carried --path: {flat:?}",
+            agent.as_str()
+        );
+    }
+}
+
+#[test]
+fn opencode_entry_uses_command_array() {
+    let v = json_payload(Agent::OpenCode, false);
     let cmd: Vec<&str> = v["command"]
         .as_array()
         .unwrap()
@@ -260,16 +321,29 @@ fn opencode_user_scope_entry_uses_command_array_without_path() {
     assert_eq!(cmd, vec!["vibe", "mcp", "serve"]);
     assert_eq!(v["type"], "local");
     assert_eq!(v["enabled"], true);
+    // Windows: the whole argv is cmd-wrapped inside the command array.
+    let vw = json_payload(Agent::OpenCode, true);
+    let cmdw: Vec<&str> = vw["command"]
+        .as_array()
+        .unwrap()
+        .iter()
+        .map(|a| a.as_str().unwrap())
+        .collect();
+    assert_eq!(cmdw, vec!["cmd", "/c", "vibe", "mcp", "serve"]);
 }
 
 #[test]
-fn codex_user_scope_entry_returns_toml_table_without_path() {
-    let v = toml_payload(Agent::Codex, Scope::User, None);
+fn codex_entry_returns_toml_table() {
+    let v = toml_payload(Agent::Codex, false);
     let tbl = v.as_table().unwrap();
     assert_eq!(tbl.get("command").and_then(|x| x.as_str()), Some("vibe"));
     let args = tbl.get("args").and_then(|x| x.as_array()).unwrap();
     let strs: Vec<&str> = args.iter().filter_map(|a| a.as_str()).collect();
     assert_eq!(strs, vec!["mcp", "serve"]);
+    // Windows wraps the program in cmd /c.
+    let vw = toml_payload(Agent::Codex, true);
+    let tblw = vw.as_table().unwrap();
+    assert_eq!(tblw.get("command").and_then(|x| x.as_str()), Some("cmd"));
 }
 
 // ---- skill_path ----

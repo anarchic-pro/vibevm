@@ -15,6 +15,26 @@ use common::{
 };
 use predicates::prelude::*;
 
+/// The vibevm MCP launcher argv this host writes: `cmd /c vibe mcp serve`
+/// on Windows (the `.cmd` shim), plain `vibe mcp serve` elsewhere.
+fn expected_vibevm_argv() -> Vec<String> {
+    let parts: &[&str] = if cfg!(windows) {
+        &["cmd", "/c", "vibe", "mcp", "serve"]
+    } else {
+        &["vibe", "mcp", "serve"]
+    };
+    parts.iter().map(|s| s.to_string()).collect()
+}
+
+/// Flatten a JSON `{ "command": ..., "args": [...] }` MCP entry to argv.
+fn json_entry_argv(entry: &serde_json::Value) -> Vec<String> {
+    let mut v = vec![entry["command"].as_str().unwrap().to_string()];
+    for a in entry["args"].as_array().unwrap() {
+        v.push(a.as_str().unwrap().to_string());
+    }
+    v
+}
+
 /// Build a per-package git registry where `flow-wal` carries TWO
 /// tagged versions: `v0.1.0` (from the in-tree fixture, content
 /// rewritten so the project file the test asserts on lives at a
@@ -1040,7 +1060,7 @@ fn install_no_default_features_drops_default_feature_from_lockfile() {
 // lockfile fixture in `vibe-mcp`'s own `tools.rs` tests.
 
 #[test]
-fn mcp_install_writes_claude_settings() {
+fn mcp_install_writes_claude_mcp_json() {
     let project = tempfile::tempdir().unwrap();
     init_project(project.path());
     fs::create_dir_all(project.path().join(".claude")).unwrap();
@@ -1059,23 +1079,13 @@ fn mcp_install_writes_claude_settings() {
         .assert()
         .success();
 
-    let settings = project.path().join(".claude/settings.json");
-    assert!(
-        settings.is_file(),
-        "expected `.claude/settings.json` written"
+    let config = project.path().join(".mcp.json");
+    assert!(config.is_file(), "expected `.mcp.json` written");
+    let v: serde_json::Value = serde_json::from_str(&fs::read_to_string(&config).unwrap()).unwrap();
+    assert_eq!(
+        json_entry_argv(&v["mcpServers"]["vibevm"]),
+        expected_vibevm_argv()
     );
-    let v: serde_json::Value =
-        serde_json::from_str(&fs::read_to_string(&settings).unwrap()).unwrap();
-    assert_eq!(v["mcpServers"]["vibevm"]["command"], "vibe");
-    let args: Vec<&str> = v["mcpServers"]["vibevm"]["args"]
-        .as_array()
-        .unwrap()
-        .iter()
-        .map(|a| a.as_str().unwrap())
-        .collect();
-    assert_eq!(args[0], "mcp");
-    assert_eq!(args[1], "serve");
-    assert_eq!(args[2], "--path");
 }
 
 #[test]
@@ -1174,8 +1184,8 @@ fn mcp_install_force_writes_even_without_marker() {
         .success();
 
     assert!(
-        project.path().join(".claude/settings.json").is_file(),
-        "expected force-written `.claude/settings.json`"
+        project.path().join(".mcp.json").is_file(),
+        "expected force-written `.mcp.json`"
     );
 }
 
@@ -1910,9 +1920,9 @@ fn mcp_upgrade_detects_drift_and_rewrites_to_current() {
     fs::create_dir_all(project.path().join(".claude")).unwrap();
 
     // Plant a stale vibevm block + stale SKILL.md by hand.
-    let settings_path = project.path().join(".claude/settings.json");
+    let config_path = project.path().join(".mcp.json");
     fs::write(
-        &settings_path,
+        &config_path,
         r#"{ "mcpServers": { "vibevm": { "command": "old-binary", "args": [] } } }"#,
     )
     .unwrap();
@@ -1955,9 +1965,12 @@ fn mcp_upgrade_detects_drift_and_rewrites_to_current() {
     assert_eq!(claude_skill["status"], "updated");
 
     // Verify on-disk state was actually refreshed.
-    let written = fs::read_to_string(&settings_path).unwrap();
+    let written = fs::read_to_string(&config_path).unwrap();
     let parsed: serde_json::Value = serde_json::from_str(&written).unwrap();
-    assert_eq!(parsed["mcpServers"]["vibevm"]["command"], "vibe");
+    assert_eq!(
+        json_entry_argv(&parsed["mcpServers"]["vibevm"]),
+        expected_vibevm_argv()
+    );
     let new_skill = fs::read_to_string(&skill_path).unwrap();
     assert!(new_skill.contains("name: vibevm"));
 }
@@ -1968,9 +1981,9 @@ fn mcp_upgrade_dry_run_does_not_write() {
     init_project(project.path());
     fs::create_dir_all(project.path().join(".claude")).unwrap();
 
-    let settings_path = project.path().join(".claude/settings.json");
+    let config_path = project.path().join(".mcp.json");
     let original = r#"{ "mcpServers": { "vibevm": { "command": "old", "args": [] } } }"#;
-    fs::write(&settings_path, original).unwrap();
+    fs::write(&config_path, original).unwrap();
 
     let out = vibe()
         .arg("mcp")
@@ -1987,7 +2000,7 @@ fn mcp_upgrade_dry_run_does_not_write() {
         .unwrap();
     assert!(out.status.success());
     // File untouched.
-    assert_eq!(fs::read_to_string(&settings_path).unwrap(), original);
+    assert_eq!(fs::read_to_string(&config_path).unwrap(), original);
 }
 
 #[test]
@@ -2059,9 +2072,9 @@ fn mcp_uninstall_removes_vibevm_block_from_claude() {
         .arg("both")
         .assert()
         .success();
-    let settings = project.path().join(".claude/settings.json");
+    let config = project.path().join(".mcp.json");
     let skill = project.path().join(".claude/skills/vibevm/SKILL.md");
-    assert!(settings.is_file());
+    assert!(config.is_file());
     assert!(skill.is_file());
 
     // Uninstall (default --what is "both" — no flag needed).
@@ -2100,13 +2113,13 @@ fn mcp_uninstall_removes_vibevm_block_from_claude() {
         .unwrap();
     assert_eq!(claude_skill["status"], "removed");
 
-    // Verify on-disk state: vibevm-block gone, settings.json still exists.
+    // Verify on-disk state: vibevm-block gone, .mcp.json still exists.
     assert!(
-        settings.is_file(),
-        "settings.json should remain (other keys preserved)"
+        config.is_file(),
+        ".mcp.json should remain (other keys preserved)"
     );
     let parsed: serde_json::Value =
-        serde_json::from_str(&fs::read_to_string(&settings).unwrap()).unwrap();
+        serde_json::from_str(&fs::read_to_string(&config).unwrap()).unwrap();
     assert!(
         parsed["mcpServers"].get("vibevm").is_none(),
         "expected vibevm key removed; got {parsed}"
@@ -2126,9 +2139,9 @@ fn mcp_uninstall_preserves_foreign_keys() {
     fs::create_dir_all(project.path().join(".claude")).unwrap();
 
     // Plant a config with both vibevm and another server.
-    let settings = project.path().join(".claude/settings.json");
+    let config = project.path().join(".mcp.json");
     fs::write(
-        &settings,
+        &config,
         r#"{
           "preexisting": "keep-me",
           "mcpServers": {
@@ -2153,7 +2166,7 @@ fn mcp_uninstall_preserves_foreign_keys() {
         .success();
 
     let parsed: serde_json::Value =
-        serde_json::from_str(&fs::read_to_string(&settings).unwrap()).unwrap();
+        serde_json::from_str(&fs::read_to_string(&config).unwrap()).unwrap();
     assert_eq!(parsed["preexisting"], "keep-me");
     assert!(parsed["mcpServers"].get("vibevm").is_none());
     assert_eq!(parsed["mcpServers"]["other"]["command"], "other-bin");
@@ -2177,9 +2190,9 @@ fn mcp_uninstall_dry_run_does_not_delete() {
         .arg("both")
         .assert()
         .success();
-    let settings = project.path().join(".claude/settings.json");
+    let config = project.path().join(".mcp.json");
     let skill = project.path().join(".claude/skills/vibevm/SKILL.md");
-    let pre_settings = fs::read_to_string(&settings).unwrap();
+    let pre_config = fs::read_to_string(&config).unwrap();
     let pre_skill = fs::read_to_string(&skill).unwrap();
 
     vibe()
@@ -2195,7 +2208,7 @@ fn mcp_uninstall_dry_run_does_not_delete() {
         .assert()
         .success();
 
-    assert_eq!(fs::read_to_string(&settings).unwrap(), pre_settings);
+    assert_eq!(fs::read_to_string(&config).unwrap(), pre_config);
     assert_eq!(fs::read_to_string(&skill).unwrap(), pre_skill);
     assert!(skill.exists());
 }
@@ -2261,11 +2274,14 @@ fn mcp_uninstall_skill_only_keeps_mcp_block() {
         .assert()
         .success();
 
-    let settings = project.path().join(".claude/settings.json");
+    let config = project.path().join(".mcp.json");
     let parsed: serde_json::Value =
-        serde_json::from_str(&fs::read_to_string(&settings).unwrap()).unwrap();
+        serde_json::from_str(&fs::read_to_string(&config).unwrap()).unwrap();
     // mcp block kept
-    assert_eq!(parsed["mcpServers"]["vibevm"]["command"], "vibe");
+    assert_eq!(
+        json_entry_argv(&parsed["mcpServers"]["vibevm"]),
+        expected_vibevm_argv()
+    );
     // skill file removed
     assert!(
         !project
