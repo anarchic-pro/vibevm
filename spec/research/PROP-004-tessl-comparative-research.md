@@ -560,7 +560,7 @@ In rough descending order of impact on vibevm's strategic position. Each item id
 - `list_capabilities(query?)` — discover capabilities and interfaces in the project's effective spec.
 - `materialise_subskill(package, subskill_path)` — write subskill content to project tree on demand (composes with PROP-003 §2.5.2 LLM-inferred activation).
 
-`vibe init` would write the appropriate MCP config block into Claude Code's `.claude/settings.json` (per [`https://docs.claude.com/en/docs/claude-code/mcp`](https://docs.claude.com/en/docs/claude-code/mcp)) and analogous configs for other agents (Cursor, Gemini, Codex). The hardest part is not the protocol — it is choosing what tools to expose and how subskill on-demand materialisation interacts with the lockfile.
+`vibe mcp install` writes the appropriate MCP config block into the file Claude Code actually reads — `.mcp.json` (project) or the top-level `mcpServers` of `~/.claude.json` (user), never `settings.json` (per [`https://docs.claude.com/en/docs/claude-code/mcp`](https://docs.claude.com/en/docs/claude-code/mcp)) — and analogous configs for the other agents (Cursor, OpenCode, Codex). The hardest part is not the protocol — it is choosing what tools to expose and how subskill on-demand materialisation interacts with the lockfile.
 
 **Estimated effort.** 2-3 weekends. Maps cleanly to a new crate; no breaking changes to existing crates.
 
@@ -781,7 +781,7 @@ Maps to §5.1.
 
 - New `vibe-mcp` crate exposing an MCP server over stdio.
 - Tools: `query_package`, `read_subskill`, `list_capabilities`, `materialise_subskill`.
-- `vibe init` writes the appropriate MCP config to `.claude/settings.json`, `.cursor/mcp.json`, etc., based on agent detection (composes with M1.11 below).
+- `vibe mcp install` writes the appropriate MCP config to the file each agent reads — `.mcp.json` / `~/.claude.json` for Claude Code, `.cursor/mcp.json`, etc. — based on agent detection (composes with M1.11 below).
 - New manual smoke `manual-tests/M1.7-mcp-claude-code-smoke.md` walking a full Claude Code → MCP → vibevm round-trip.
 
 ### M1.8 — `vibe review` static quality scoring
