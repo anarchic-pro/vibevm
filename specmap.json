@@ -13587,7 +13587,7 @@
     },
     {
       "anchor": "gaps",
-      "content_hash": "sha256:efe47103a3d56799f503f7d28a029469abf3cbd6c00f6406229058b0de003177",
+      "content_hash": "sha256:971005104a8817c35b167338430e7d135227bebe2daaa76988a4a4b03b5236b1",
       "doc_path": "research/PROP-004",
       "file": "spec/research/PROP-004-tessl-comparative-research.md",
       "heading": "5. The gap — what Tessl does that vibevm does not",
@@ -13596,7 +13596,7 @@
     },
     {
       "anchor": "roadmap-deltas",
-      "content_hash": "sha256:e99551bb9e87911ab0a6d29cc9a763a02ea78f2b504389ec65239d1e2a761985",
+      "content_hash": "sha256:1956e7eb5ad3535d4fb08a66de6fff218e45cb1826492984e017fa71a9577cfa",
       "doc_path": "research/PROP-004",
       "file": "spec/research/PROP-004-tessl-comparative-research.md",
       "heading": "6. Roadmap deltas",
