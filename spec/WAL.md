@@ -1,5 +1,50 @@
 # WAL — Project Continuation State
-_Updated: 2026-06-17 — **VVM v2 — VERSION MANAGER REBUILT; on both mirrors.** vibevm distributes itself via `vibe man` (the VibeVM Version Manager, PROP-019), which builds, installs, and switches vibevm's own versions on a machine. v2 reworks v1 after two design flaws surfaced — console-reload friction and self-replace locks. The install/switch unit is now a whole immutable **instance** (`versions/<kind>/<id>/<instance>/`); the active version is a live **`current`** pointer file, so `man install`/`man use` flip it and the next `vibe` in the same shell uses it with NO console reload, and nothing in use is ever overwritten (no locks, dll-safe). Distributions are placed by **diff-copy** (per-instance `.vvm-manifest.toml`: size/mtime + hash-for-small-files; hardlink unchanged, copy changed; byte-identical rebuild → no new instance). A managed `vibe` derives root/HOME from `current_exe` (env demoted to advisory; stale-`$VIBEVM_HOME` warning). Sources are referenced, never copied: managed = shared `src/.mirror` (git-fetch, no re-clone), external = the committer's checkout built in place + remembered path → **linked rebuild** from anywhere. New `vibe vars` reconciles actual-vs-environment; `tools/first-run.{sh,ps1}` + README bootstrap the first install. **Two real-machine shim fixes (`7550cde`) followed:** the shim dir is now *prepended* to PATH so the managed `vibe` beats a stale `~/.cargo/bin/vibe` (`b22edd9`), and `derive_self` strips the Windows `\\?\` verbatim prefix that `canonicalize()` adds and the cmd shim cannot exec (`7550cde`). Spec: [PROP-019](common/PROP-019-version-manager.md). Base tip `7550cde`; the **grammar-refactor RAID is COMPLETE** — P0–P6 landed this session on top of `47dbd2a` (Class-F error enums across both crates, the PROP-018 affinity dispatcher + unified transports, the vibe-mcp pub-doctest drain + gate flip), see the "Active campaign" section and [`terraform/discipline-sweep/REPORT-2026-06-17-grammar-refactor.md`](../terraform/discipline-sweep/REPORT-2026-06-17-grammar-refactor.md). Floor green at close — `self-check.sh`, conform 0/0/0, specmap clean (545 units / 561 edges / 0 orphans), test-gate xfail-strict (1204), fast-loop 20/20. Prior: PROP-018 agentic + standalone modes MVP. Git log is the authoritative per-item record._
+_Updated: 2026-06-22 — **MCP REGISTRATION FIXED + `vibe man` RENAMED TO `vibe self`; on both mirrors (@ `2311639`).** Two owner-driven fixes this session. (1) `vibe mcp install` for Claude Code was a silent no-op — it wrote the `mcpServers` block into `settings.json`, which Claude Code does not read for MCP discovery, instead of `.mcp.json` (project) / the top-level `mcpServers` of `~/.claude.json` (user); the launcher was a bare `command:"vibe"` that a `.cmd` shim can't spawn on Windows; and project scope hardcoded a non-portable `--path`. Fixed all three (Windows `cmd /c` wrap for every spawn-agent; `--path` dropped, CWD-resolved), plus `serde_json/preserve_order` so the merge appends rather than re-alphabetising the operator's file, plus a corrected host-presence marker. (2) Renamed the version-manager command `vibe man` → `vibe self` (the rustup idiom for a self-managing tool; `man` misread as the Unix manual page) — hard rename, no alias, module/types `man`→`vvm`, and a new `vibe self update` (= `self install latest`). The active managed binary was rebuilt to instance #7 (now speaks `self`). See "## This session (2026-06-22)" below. Prior checkpoint: **VVM v2 — VERSION MANAGER REBUILT.** vibevm distributes itself via `vibe man` (the VibeVM Version Manager, PROP-019), which builds, installs, and switches vibevm's own versions on a machine. v2 reworks v1 after two design flaws surfaced — console-reload friction and self-replace locks. The install/switch unit is now a whole immutable **instance** (`versions/<kind>/<id>/<instance>/`); the active version is a live **`current`** pointer file, so `man install`/`man use` flip it and the next `vibe` in the same shell uses it with NO console reload, and nothing in use is ever overwritten (no locks, dll-safe). Distributions are placed by **diff-copy** (per-instance `.vvm-manifest.toml`: size/mtime + hash-for-small-files; hardlink unchanged, copy changed; byte-identical rebuild → no new instance). A managed `vibe` derives root/HOME from `current_exe` (env demoted to advisory; stale-`$VIBEVM_HOME` warning). Sources are referenced, never copied: managed = shared `src/.mirror` (git-fetch, no re-clone), external = the committer's checkout built in place + remembered path → **linked rebuild** from anywhere. New `vibe vars` reconciles actual-vs-environment; `tools/first-run.{sh,ps1}` + README bootstrap the first install. **Two real-machine shim fixes (`7550cde`) followed:** the shim dir is now *prepended* to PATH so the managed `vibe` beats a stale `~/.cargo/bin/vibe` (`b22edd9`), and `derive_self` strips the Windows `\\?\` verbatim prefix that `canonicalize()` adds and the cmd shim cannot exec (`7550cde`). Spec: [PROP-019](common/PROP-019-version-manager.md). Base tip `7550cde`; the **grammar-refactor RAID is COMPLETE** — P0–P6 landed this session on top of `47dbd2a` (Class-F error enums across both crates, the PROP-018 affinity dispatcher + unified transports, the vibe-mcp pub-doctest drain + gate flip), see the "Active campaign" section and [`terraform/discipline-sweep/REPORT-2026-06-17-grammar-refactor.md`](../terraform/discipline-sweep/REPORT-2026-06-17-grammar-refactor.md). Floor green at close — `self-check.sh`, conform 0/0/0, specmap clean (545 units / 561 edges / 0 orphans), test-gate xfail-strict (1204), fast-loop 20/20. Prior: PROP-018 agentic + standalone modes MVP. Git log is the authoritative per-item record._
+
+## This session (2026-06-22) — MCP-registration fix + `vibe man` → `vibe self`
+
+Two owner-directed pieces of work, both COMPLETE and on both mirrors (@ `2311639`).
+The git log is the authoritative per-item record.
+
+**A. `vibe mcp install` registered Claude Code MCP where Claude Code never reads it
+(silent no-op).** The Claude Code path pointed at `settings.json`; Claude Code reads
+MCP servers from `.mcp.json` (project) and the top-level `mcpServers` of
+`~/.claude.json` (user) — `settings.json` only *gates* `.mcp.json` servers via
+`enabledMcpjsonServers`. The install reported success while the agent loaded nothing.
+Fixed across 5 commits (`072061b`→`c246d57`) plus a follow-up doc fix (`96d43e9`):
+
+- `fix(mcp)` `f60bfbb` — `config_path` for Claude Code → `.mcp.json` / `~/.claude.json`;
+  the entry now wraps `cmd /c vibe …` on Windows (the `.cmd` shim can't be spawned
+  directly) for **every** spawn-agent via an OS-pure `build_mcp_entry_for(windows)`;
+  `--path` dropped (CWD-resolved → a committed `.mcp.json` stays portable);
+  `host_present` re-keyed off a real marker dir (`~/.claude`) since the user config
+  moved to top-level `~/.claude.json` (whose parent `~` always exists).
+- `build(deps)` `072061b` — `serde_json/preserve_order`: the merge appends vibevm's
+  entry instead of re-alphabetising the operator's whole `~/.claude.json`. The gate
+  artefacts are immune (specmap = pre-sorted Vecs, vibe.lock = TOML).
+- `test(mcp)` `e62e3ce`, `docs(mcp)` `3f339d1`, specmap regens, and `docs(research)`
+  `96d43e9` correcting the stale `.claude/settings.json` claim in PROP-004.
+- The skill (`~/.claude/skills/vibevm/SKILL.md`) and the other four agents were
+  already correct — the bug was Claude Code only. Verified live: a freshly-built
+  binary now targets `.mcp.json` / `~/.claude.json`; the stray `mcpServers/vibevm`
+  litter was removed from `~/.claude/settings.json` on this machine.
+
+**B. `vibe man` renamed to `vibe self` (+ `self update`).** `man` read as the Unix
+`man(1)` page, not "version manager". Renamed to the rustup idiom (`rustup self
+update`); the whole namespace is self-management. Hard rename, **no alias** —
+`vibe man` is gone. Internals moved `man`→`vvm` (the surviving "VibeVM Version
+Manager / VVM" concept) via `git mv` (history preserved); the CLI token is
+`#[command(name = "self")]` over a `Vvm` variant (`self` is a Rust keyword). New verb
+`vibe self update` = a thin shorthand over `self install latest`. Commits `7cabb1a`
+(feat!) + `2311639` (specmap). PROP-019 §2.2 #surface bumped r1→r2 (normative surface
+change); the `man`→`self` token shifts elsewhere are `spec-editorial`. The first-run
+scripts + README moved with it. Active managed binary rebuilt to **instance #7**
+(speaks `self`; `vibe man` now errors "unrecognized subcommand").
+
+**Gate panel — all green at `2311639`:** `self-check.sh` exit 0 (fmt, all tests +
+doctests, clippy `-D warnings`, `vibe check`); conform 0/0/0 (16 gated / 4 exempt);
+specmap clean (545 units / 561 edges / 548 tagged items / 0 suspects / 0 orphans);
+test-gate green (1207 results, 0 failed, 3 skipped, xfail-strict); fast-loop 20/20.
 
 ## Active campaign — Discipline Sweep: grammar refactor of the new features (COMPLETE, 2026-06-17)
 
@@ -112,9 +157,9 @@ all tests, doctests, clippy `-D warnings`, `vibe check`); conform 0/0/0
 / 532 tagged items / 0 suspects / 0 warnings / 0 orphans); test-gate green
 (1201 results, 0 failed, 3 skipped, xfail-strict); fast-loop in-budget.
 
-**Far backlog (PROP-019 §6).** Binary-artifact install (`man install
+**Far backlog (PROP-019 §6).** Binary-artifact install (`self install
 --binary`) + auto-prune-on-install (binary-only); reflink/CoW placement;
-signature verification. The `man use` full path + shim-exec-via-`current`
+signature verification. The `self use` full path + shim-exec-via-`current`
 loop was exercised on a real Windows machine this session — it surfaced and
 fixed `b22edd9` + `7550cde`; what remains is an *automated* end-to-end test
 with an isolated registry (today it writes the real HKCU PATH, so CI still
