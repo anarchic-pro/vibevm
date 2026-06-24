@@ -3875,7 +3875,7 @@
       "crate_name": "vibe-workspace",
       "file": "crates/vibe-workspace/src/install.rs",
       "item_kind": "fn",
-      "line": 397,
+      "line": 411,
       "symbol": "vibe_workspace::install::validate_redirect_blocks"
     },
     {
@@ -3961,6 +3961,13 @@
       "item_kind": "mod",
       "line": 22,
       "symbol": "vibe_workspace::vibedeps"
+    },
+    {
+      "crate_name": "vibe-workspace",
+      "file": "crates/vibe-workspace/src/vibedeps.rs",
+      "item_kind": "fn",
+      "line": 442,
+      "symbol": "vibe_workspace::vibedeps::tests::materialise_hardlink_mode_places_the_full_tree"
     }
   ],
   "edges": [
@@ -8662,7 +8669,7 @@
     {
       "file": "crates/vibe-workspace/src/install.rs",
       "from_symbol": "vibe_workspace::install::validate_redirect_blocks",
-      "line": 402,
+      "line": 416,
       "provenance": "authored",
       "uri": "spec://vibevm/modules/vibe-workspace/PROP-012#plan-time",
       "verb": "implements",
@@ -8772,6 +8779,15 @@
       "provenance": "authored",
       "uri": "spec://vibevm/modules/vibe-workspace/PROP-009#two-trees",
       "verb": "implements"
+    },
+    {
+      "file": "crates/vibe-workspace/src/vibedeps.rs",
+      "from_symbol": "vibe_workspace::vibedeps::tests::materialise_hardlink_mode_places_the_full_tree",
+      "line": 443,
+      "provenance": "authored",
+      "uri": "spec://vibevm/modules/vibe-workspace/PROP-022#hardlink",
+      "verb": "verifies",
+      "pinned_r": 1
     }
   ],
   "schema": 2,
