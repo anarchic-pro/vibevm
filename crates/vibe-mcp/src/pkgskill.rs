@@ -109,6 +109,27 @@ pub fn install_package_skill(
     source: &Path,
     dry_run: bool,
 ) -> Result<PackageSkillReport, PackageSkillError> {
+    install_package_skill_selecting(agent, scope, project_root, skill_name, source, &[], dry_run)
+}
+
+/// Like [`install_package_skill`] but projects only the files matching one
+/// of the `include` glob patterns (relative to `source`); an empty `include`
+/// projects the whole `source` tree — the §2.6 default (PROP-015 §2.8). Lets
+/// a skill pick specific files out of a noisy subtree (e.g. a bridged
+/// upstream repo full of unrelated content, PROP-023).
+#[spec(
+    implements = "spec://vibevm/modules/vibe-mcp/PROP-015#skill-include",
+    r = 1
+)]
+pub fn install_package_skill_selecting(
+    agent: Agent,
+    scope: Scope,
+    project_root: Option<&Path>,
+    skill_name: &str,
+    source: &Path,
+    include: &[String],
+    dry_run: bool,
+) -> Result<PackageSkillReport, PackageSkillError> {
     let agent_str = agent.as_str().to_string();
     let scope_str = scope.as_str();
 
@@ -135,7 +156,7 @@ pub fn install_package_skill(
         });
     }
 
-    let desired = snapshot_source(source)?;
+    let desired = snapshot_source(source, include)?;
     let current = snapshot_dir(&target)?;
     let action = if current.is_none() {
         "created"
@@ -233,10 +254,19 @@ fn skipped(skill_name: &str, agent: Agent, scope_str: &'static str) -> PackageSk
 /// Snapshot a skill body source into a `relpath -> bytes` map. A directory
 /// is walked recursively (relpaths forward-slashed); a single file maps to
 /// its file name (so a bare `SKILL.md` source lands as `<name>/SKILL.md`).
-fn snapshot_source(source: &Path) -> Result<BTreeMap<String, Vec<u8>>, PackageSkillError> {
+fn snapshot_source(
+    source: &Path,
+    include: &[String],
+) -> Result<BTreeMap<String, Vec<u8>>, PackageSkillError> {
     let mut out = BTreeMap::new();
     if source.is_dir() {
         collect_dir(source, source, &mut out)?;
+        // PROP-015 §2.8: when `include` is set, keep only the files whose
+        // relpath matches one of the patterns. Empty `include` keeps the
+        // whole tree (the §2.6 default).
+        if !include.is_empty() {
+            out.retain(|rel, _| include.iter().any(|pat| glob_match(pat, rel)));
+        }
     } else {
         let name = source
             .file_name()
@@ -292,6 +322,55 @@ fn collect_dir(
         }
     }
     Ok(())
+}
+
+/// Match a forward-slash relpath against a restricted glob (PROP-015 §2.8):
+/// `*` matches a run of non-`/` chars, `**` matches across `/`, `?` one
+/// non-`/` char; everything else is literal, and a trailing `/` selects a
+/// whole subtree. Deterministic; filters a skill's projected files.
+fn glob_match(pattern: &str, path: &str) -> bool {
+    if let Some(prefix) = pattern.strip_suffix('/') {
+        return path == prefix || path.starts_with(&format!("{prefix}/"));
+    }
+    glob_rec(pattern.as_bytes(), path.as_bytes())
+}
+
+fn glob_rec(p: &[u8], t: &[u8]) -> bool {
+    if p.is_empty() {
+        return t.is_empty();
+    }
+    if let Some(rest) = p.strip_prefix(b"**") {
+        // `**` spans path separators; an optional following `/` is folded
+        // in so `**/x` also matches a top-level `x`.
+        let rest = rest.strip_prefix(b"/").unwrap_or(rest);
+        if glob_rec(rest, t) {
+            return true;
+        }
+        for i in 0..t.len() {
+            if glob_rec(rest, &t[i + 1..]) {
+                return true;
+            }
+        }
+        return false;
+    }
+    match p[0] {
+        b'*' => {
+            // A single `*` stays within one path segment.
+            if glob_rec(&p[1..], t) {
+                return true;
+            }
+            let mut i = 0;
+            while i < t.len() && t[i] != b'/' {
+                i += 1;
+                if glob_rec(&p[1..], &t[i..]) {
+                    return true;
+                }
+            }
+            false
+        }
+        b'?' => !t.is_empty() && t[0] != b'/' && glob_rec(&p[1..], &t[1..]),
+        c => !t.is_empty() && t[0] == c && glob_rec(&p[1..], &t[1..]),
+    }
 }
 
 fn write_snapshot(
@@ -494,5 +573,54 @@ mod tests {
         )
         .unwrap();
         assert_eq!(r2.status, "absent");
+    }
+
+    #[test]
+    #[verifies("spec://vibevm/modules/vibe-mcp/PROP-015#skill-include", r = 1)]
+    fn include_projects_only_matching_files() {
+        let pkg = tempfile::tempdir().unwrap();
+        let proj = tempfile::tempdir().unwrap();
+        // A noisy upstream subtree: the wanted SKILL.md + a wanted ref,
+        // plus unrelated build junk and a top-level noise file.
+        let dir = pkg.path().join("upstream");
+        fs::create_dir_all(dir.join("references")).unwrap();
+        fs::create_dir_all(dir.join("build")).unwrap();
+        fs::write(dir.join("SKILL.md"), "skill").unwrap();
+        fs::write(dir.join("references").join("a.md"), "ref").unwrap();
+        fs::write(dir.join("build").join("junk.o"), "junk").unwrap();
+        fs::write(dir.join("README.txt"), "noise").unwrap();
+
+        let r = install_package_skill_selecting(
+            Agent::ClaudeCode,
+            Scope::Project,
+            Some(proj.path()),
+            "demo",
+            &dir,
+            &["SKILL.md".to_string(), "references/**/*.md".to_string()],
+            false,
+        )
+        .unwrap();
+        assert_eq!(r.status, "created");
+        let base = proj.path().join(".claude").join("skills").join("demo");
+        assert!(base.join("SKILL.md").is_file());
+        assert!(base.join("references/a.md").is_file());
+        assert!(!base.join("build/junk.o").exists(), "junk must be excluded");
+        assert!(!base.join("README.txt").exists(), "noise must be excluded");
+    }
+
+    #[test]
+    fn glob_match_semantics() {
+        assert!(glob_match("SKILL.md", "SKILL.md"));
+        assert!(!glob_match("SKILL.md", "references/SKILL.md"));
+        assert!(glob_match("*.md", "a.md"));
+        assert!(!glob_match("*.md", "a/b.md")); // single * stays in-segment
+        assert!(glob_match("references/**/*.md", "references/a.md"));
+        assert!(glob_match("references/**/*.md", "references/x/y.md"));
+        assert!(!glob_match("references/**/*.md", "references/a.txt"));
+        assert!(glob_match("docs/", "docs/x/y.md")); // trailing / = subtree
+        assert!(glob_match("docs/", "docs"));
+        assert!(!glob_match("docs/", "docsx"));
+        assert!(glob_match("a?c.md", "abc.md"));
+        assert!(!glob_match("a?c.md", "a/c.md"));
     }
 }

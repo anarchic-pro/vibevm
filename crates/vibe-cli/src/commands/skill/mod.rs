@@ -18,7 +18,9 @@ use anyhow::{Context, Result, bail};
 use dialoguer::Confirm;
 use vibe_core::manifest::{Lockfile, Manifest, SkillDecl};
 use vibe_mcp::agents::{Agent, Scope};
-use vibe_mcp::pkgskill::{PackageSkillReport, install_package_skill, uninstall_package_skill};
+use vibe_mcp::pkgskill::{
+    PackageSkillReport, install_package_skill_selecting, uninstall_package_skill,
+};
 use vibe_workspace::Workspace;
 
 use crate::cli::{SkillArgs, SkillInstallArgs, SkillListArgs, SkillSubcommand, SkillUninstallArgs};
@@ -263,20 +265,28 @@ fn run_install(ctx: &output::Context, args: SkillInstallArgs) -> Result<()> {
     let selected = select(&all, &args.skills)?;
     let scopes = scope.expand();
 
-    // (agent, scope, skill name, body source) — each independent.
-    let mut tasks: Vec<(Agent, Scope, String, PathBuf)> = Vec::new();
+    // (agent, scope, skill name, body source, include globs) — each
+    // independent. `include` is the §2.8 selective-projection filter.
+    let mut tasks: Vec<(Agent, Scope, String, PathBuf, Vec<String>)> = Vec::new();
     for s in &selected {
         for a in skill_agents(&s.decl, &cli_targets) {
             for sc in &scopes {
-                tasks.push((a, *sc, s.decl.name.clone(), s.source.clone()));
+                tasks.push((
+                    a,
+                    *sc,
+                    s.decl.name.clone(),
+                    s.source.clone(),
+                    s.decl.include.clone(),
+                ));
             }
         }
     }
 
     ctx.heading("Skill install plan:");
     let mut previews = Vec::with_capacity(tasks.len());
-    for (a, sc, name, src) in &tasks {
-        let r = install_package_skill(*a, *sc, Some(&project_root), name, src, true)?;
+    for (a, sc, name, src, include) in &tasks {
+        let r =
+            install_package_skill_selecting(*a, *sc, Some(&project_root), name, src, include, true)?;
         render(ctx, &r);
         previews.push(r);
     }
@@ -290,13 +300,14 @@ fn run_install(ctx: &output::Context, args: SkillInstallArgs) -> Result<()> {
     }
 
     let mut results = Vec::with_capacity(tasks.len());
-    for (a, sc, name, src) in &tasks {
-        results.push(install_package_skill(
+    for (a, sc, name, src, include) in &tasks {
+        results.push(install_package_skill_selecting(
             *a,
             *sc,
             Some(&project_root),
             name,
             src,
+            include,
             false,
         )?);
     }
