@@ -14,7 +14,9 @@ managed, distributable artefact), [PROP-002 §2.1](../vibe-registry/PROP-002-dec
 [PROP-003 §2.5](../vibe-resolver/PROP-003-dep-evolution.md) (the subskill
 delivery modes the `read_subskill` / `materialise_subskill` tools read),
 [`VIBEVM-SPEC.md` §5](../../../VIBEVM-SPEC.md) (the product's AI-integration
-scope).
+scope), and [PROP-023](../vibe-registry/PROP-023-bridge-packages.md) (the
+bridge-packages design that added the [#skill-include](#skill-include) req on
+2026-06-24 — additive; §2.6 `#skill` is unchanged).
 
 ---
 
@@ -170,6 +172,32 @@ every mutating verb offering `--dry-run` and a confirmation:
 Per-(agent, scope) outcomes are reported as structured records
 (`AgentInstallReport` / `SkillInstallReport`) the CLI renders or emits as
 JSON.
+
+### 2.8 Selective skill projection {#skill-include}
+
+`req r1`
+
+**Decision.** `SkillDecl` gains an optional `include` — a list of glob
+patterns relative to the skill's `path`. When present, only matching files are
+projected into the agent's skill directory, preserving their relative
+structure; when absent or empty, the whole `path` tree is projected — the
+existing §2.6 behaviour, unchanged. Selection composes with the
+already-working nested `path`: a skill can point at a subdirectory **and** pick
+specific files out of it.
+
+This is available to any skill but is load-bearing for bridge packages
+([PROP-023](../vibe-registry/PROP-023-bridge-packages.md)): a bridged upstream
+tree is full of unrelated files, and the maintainer projects just the
+`SKILL.md` and whatever it references without vendoring the noise. Glob
+matching is deterministic; a pattern that matches nothing is a
+declared-but-empty selection (surfaced, not a silent no-op).
+
+```toml
+[[skill]]
+name = "vim"
+path = "upstream/skills/vim"
+include = ["SKILL.md", "references/**/*.md"]   # omit → whole tree (§2.6)
+```
 
 ## 3. Out of scope {#out-of-scope}
 
