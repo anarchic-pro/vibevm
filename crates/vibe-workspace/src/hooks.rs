@@ -192,7 +192,12 @@ impl InterpreterProbe for SystemProbe {
 pub trait HookRunner {
     /// Run `inv` in `cwd` with `env` set; return the process exit code, or
     /// an error reason if it could not be spawned/waited.
-    fn run(&self, inv: &HookInvocation, cwd: &Path, env: &[(String, String)]) -> Result<i32, String>;
+    fn run(
+        &self,
+        inv: &HookInvocation,
+        cwd: &Path,
+        env: &[(String, String)],
+    ) -> Result<i32, String>;
 }
 
 /// Production runner: spawn the interpreter on the script in the slot.
@@ -278,7 +283,10 @@ pub fn select_invocation(
 /// token is deliberately never placed here.
 fn build_env(ctx: &HookContext, phase: HookPhase) -> Vec<(String, String)> {
     vec![
-        ("VIBE_PACKAGE_GROUP".to_string(), ctx.group.as_str().to_string()),
+        (
+            "VIBE_PACKAGE_GROUP".to_string(),
+            ctx.group.as_str().to_string(),
+        ),
         ("VIBE_PACKAGE_NAME".to_string(), ctx.name.to_string()),
         ("VIBE_PACKAGE_VERSION".to_string(), ctx.version.to_string()),
         ("VIBE_PACKAGE_KIND".to_string(), ctx.kind.to_string()),

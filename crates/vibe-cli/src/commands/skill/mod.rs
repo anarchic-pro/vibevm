@@ -285,8 +285,15 @@ fn run_install(ctx: &output::Context, args: SkillInstallArgs) -> Result<()> {
     ctx.heading("Skill install plan:");
     let mut previews = Vec::with_capacity(tasks.len());
     for (a, sc, name, src, include) in &tasks {
-        let r =
-            install_package_skill_selecting(*a, *sc, Some(&project_root), name, src, include, true)?;
+        let r = install_package_skill_selecting(
+            *a,
+            *sc,
+            Some(&project_root),
+            name,
+            src,
+            include,
+            true,
+        )?;
         render(ctx, &r);
         previews.push(r);
     }

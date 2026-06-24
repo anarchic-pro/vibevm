@@ -86,7 +86,10 @@ fn trust_matrix() {
 }
 
 #[test]
-#[verifies("spec://vibevm/modules/vibe-workspace/PROP-020#script-selection", r = 1)]
+#[verifies(
+    "spec://vibevm/modules/vibe-workspace/PROP-020#script-selection",
+    r = 1
+)]
 fn unix_selects_sh_via_bash() {
     let slot = tempdir().unwrap();
     fs::create_dir_all(slot.path().join("hooks")).unwrap();
@@ -104,7 +107,10 @@ fn unix_selects_sh_via_bash() {
 }
 
 #[test]
-#[verifies("spec://vibevm/modules/vibe-workspace/PROP-020#script-selection", r = 1)]
+#[verifies(
+    "spec://vibevm/modules/vibe-workspace/PROP-020#script-selection",
+    r = 1
+)]
 fn windows_prefers_sh_then_falls_back_to_ps1() {
     let slot = tempdir().unwrap();
     fs::create_dir_all(slot.path().join("hooks")).unwrap();
@@ -287,7 +293,10 @@ fn needs_consent_skips_in_library() {
 }
 
 #[test]
-#[verifies("spec://vibevm/modules/vibe-workspace/PROP-020#script-selection", r = 1)]
+#[verifies(
+    "spec://vibevm/modules/vibe-workspace/PROP-020#script-selection",
+    r = 1
+)]
 fn declared_but_no_interpreter_errors() {
     let slot = tempdir().unwrap();
     fs::create_dir_all(slot.path().join("hooks")).unwrap();
