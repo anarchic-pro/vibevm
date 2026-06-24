@@ -36,18 +36,21 @@ use serde::{Deserialize, Serialize};
 ///     path = "skills/vim"
 ///     description = "Drive vim from an agent"
 ///     agents = ["claude", "opencode"]
+///     include = ["SKILL.md", "references/**/*.md"]
 /// "#).unwrap();
 /// assert_eq!(s.name, "vim");
 /// assert_eq!(s.path.to_str(), Some("skills/vim"));
 /// assert_eq!(s.agents.len(), 2);
+/// assert_eq!(s.include.len(), 2);
 ///
-/// // `description` and `agents` are optional; a bare skill targets every
-/// // skill-supporting agent.
+/// // `description`, `agents`, `include` are optional; a bare skill targets
+/// // every skill-supporting agent and projects its whole `path` tree.
 /// let bare: SkillDecl =
 ///     toml::from_str(r#"name = "q"
 /// path = "q/SKILL.md""#).unwrap();
 /// assert!(bare.description.is_none());
 /// assert!(bare.agents.is_empty());
+/// assert!(bare.include.is_empty()); // empty → whole path tree (§2.6)
 /// ```
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(deny_unknown_fields)]
@@ -66,4 +69,12 @@ pub struct SkillDecl {
     /// `vibe-mcp`, not here.
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
     pub agents: Vec<String>,
+    /// Glob patterns (relative to `path`) selecting which files to project
+    /// (PROP-015 §2.8 `#skill-include`). Empty → the whole `path` tree, the
+    /// §2.6 default. Lets a skill pick specific files out of a noisy subtree
+    /// (e.g. a bridged upstream repo full of unrelated content). Matching is
+    /// performed downstream in `vibe-mcp`; `vibe-core` keeps the patterns as
+    /// opaque strings.
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub include: Vec<String>,
 }

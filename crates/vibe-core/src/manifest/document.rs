@@ -38,8 +38,9 @@ use crate::package_ref::PackageRef;
 
 use super::i18n::I18nDecl;
 use super::package::{
-    BootSnippet, Compatibility, ConditionalTarget, ConflictsList, FeaturesTable, LinkType,
-    Obsoletes, PackageMeta, Provides, Recommends, Requires, RequiresAny, SkillDecl, Suggests,
+    BootSnippet, Compatibility, ConditionalTarget, ConflictsList, FeaturesTable, HooksDecl,
+    LinkType, Obsoletes, PackageMeta, Provides, Recommends, Requires, RequiresAny, SkillDecl,
+    Suggests,
 };
 use super::project::{
     ActiveSection, LlmSection, MirrorSection, OverrideSection, ProjectSection, RegistrySection,
@@ -116,6 +117,11 @@ pub struct Manifest {
     /// kind can carry skills (package-role).
     #[serde(default, rename = "skill", skip_serializing_if = "Vec::is_empty")]
     pub skills: Vec<SkillDecl>,
+
+    /// `[hooks]` — pre/post-install scripts this package runs in its slot
+    /// (PROP-020). Universal, not bridge-only (package-role).
+    #[serde(default, skip_serializing_if = "HooksDecl::is_empty")]
+    pub hooks: HooksDecl,
 
     /// `[compatibility]` — minimum vibe version, required kinds (package-role).
     #[serde(default, skip_serializing_if = "Compatibility::is_empty")]
@@ -356,6 +362,9 @@ impl Manifest {
             }
             if !self.skills.is_empty() {
                 offenders.push("[[skill]]");
+            }
+            if !self.hooks.is_empty() {
+                offenders.push("[hooks]");
             }
             if !self.compatibility.is_empty() {
                 offenders.push("[compatibility]");

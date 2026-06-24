@@ -68,6 +68,8 @@ fn package_meta_as_package_ref_pins_exact() {
         keywords: vec![],
         describes: None,
         publish: PublishPosture::default(),
+        materialization: Materialization::default(),
+        bridge: false,
     };
     let r = meta.as_package_ref().unwrap();
     assert_eq!(r.kind, Some(PackageKind::Flow));
@@ -169,4 +171,105 @@ when = "os:macos"
     assert!(rendered.contains("when = \"os:macos\""), "{rendered}");
     let back: BootSnippet = toml::from_str(&rendered).unwrap();
     assert_eq!(bs, back);
+}
+
+// --- bridge-packages design: PROP-020/022/023 + PROP-015 ------------
+
+#[derive(Serialize, Deserialize)]
+struct MatWrap {
+    v: Materialization,
+}
+
+#[test]
+fn materialization_default_is_snapshot() {
+    assert_eq!(Materialization::default(), Materialization::Snapshot);
+    assert!(Materialization::default().is_default());
+    assert!(!Materialization::Snapshot.is_in_place());
+    assert!(Materialization::InPlace.is_in_place());
+}
+
+#[test]
+fn materialization_roundtrips_kebab_case() {
+    for (text, mode) in [
+        ("snapshot", Materialization::Snapshot),
+        ("hardlink", Materialization::Hardlink),
+        ("in-place", Materialization::InPlace),
+    ] {
+        let parsed: Materialization = toml::from_str(&format!("v = \"{text}\""))
+            .map(|w: MatWrap| w.v)
+            .unwrap();
+        assert_eq!(parsed, mode);
+        // and back out in the same kebab form
+        let rendered = toml::to_string_pretty(&MatWrap { v: mode }).unwrap();
+        assert!(rendered.contains(text), "{rendered}");
+    }
+}
+
+#[test]
+fn package_meta_parses_materialization_and_bridge() {
+    let p: PackageMeta = toml::from_str(
+        r#"name = "chromium"
+group = "org.example"
+kind = "tool"
+version = "1.0.0"
+materialization = "in-place"
+bridge = true
+"#,
+    )
+    .unwrap();
+    assert_eq!(p.materialization, Materialization::InPlace);
+    assert!(p.bridge);
+}
+
+#[test]
+fn package_meta_defaults_skip_serialize() {
+    // A package that sets neither new field serialises without them.
+    let p: PackageMeta = toml::from_str(
+        r#"name = "wal"
+group = "org.vibevm"
+kind = "feat"
+version = "0.1.0"
+"#,
+    )
+    .unwrap();
+    assert!(p.materialization.is_default());
+    assert!(!p.bridge);
+    let rendered = toml::to_string_pretty(&p).unwrap();
+    assert!(!rendered.contains("materialization"), "{rendered}");
+    assert!(!rendered.contains("bridge"), "{rendered}");
+}
+
+#[test]
+fn hooks_parse_both_phases() {
+    let h: HooksDecl = toml::from_str(
+        r#"pre-install = "hooks/prepare"
+post-install = "hooks/finalise"
+"#,
+    )
+    .unwrap();
+    assert_eq!(
+        h.pre_install.as_deref().and_then(|p| p.to_str()),
+        Some("hooks/prepare")
+    );
+    assert_eq!(
+        h.post_install.as_deref().and_then(|p| p.to_str()),
+        Some("hooks/finalise")
+    );
+    assert!(!h.is_empty());
+    assert!(HooksDecl::default().is_empty());
+}
+
+#[test]
+fn skill_decl_parses_include() {
+    let s: SkillDecl = toml::from_str(
+        r#"name = "vim"
+path = "upstream/skills/vim"
+include = ["SKILL.md", "references/**/*.md"]
+"#,
+    )
+    .unwrap();
+    assert_eq!(
+        s.include,
+        vec!["SKILL.md".to_string(), "references/**/*.md".to_string()]
+    );
 }

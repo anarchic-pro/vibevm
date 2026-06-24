@@ -25,6 +25,7 @@ use std::collections::BTreeMap;
 use std::path::PathBuf;
 
 use serde::{Deserialize, Serialize};
+use specmark::spec;
 
 use crate::capability_ref::CapabilityRef;
 use crate::error::Result;
@@ -34,6 +35,7 @@ use super::purl::Purl;
 
 mod deps;
 mod features;
+mod hooks;
 mod skill;
 mod weak_deps;
 mod when;
@@ -41,6 +43,7 @@ mod wire;
 
 pub use deps::{GitPackageDep, GitRefKind, PathPackageDep, VarRegistryDep};
 pub use features::FeaturesTable;
+pub use hooks::HooksDecl;
 pub use skill::SkillDecl;
 pub use weak_deps::{Recommends, Suggests};
 pub use when::WhenCondition;
@@ -66,6 +69,8 @@ use wire::RequiresWire;
 /// assert_eq!(p.name, "wal");
 /// assert_eq!(p.kind, PackageKind::Feat);
 /// assert!(p.publish.is_default()); // `publish` defaults to true
+/// assert!(p.materialization.is_default()); // defaults to `snapshot`
+/// assert!(!p.bridge); // not a bridge by default
 /// ```
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(deny_unknown_fields)]
@@ -97,6 +102,24 @@ pub struct PackageMeta {
     /// into every configured registry).
     #[serde(default, skip_serializing_if = "PublishPosture::is_default")]
     pub publish: PublishPosture,
+    /// How this package is materialised on disk (PROP-022 §2.1). Default
+    /// `snapshot` (the vendored full copy); `hardlink` shares unchanged
+    /// files by link; `in-place` is a git-native, project-local clone for
+    /// giant repos. Skipped from the serialized form when default.
+    #[serde(default, skip_serializing_if = "Materialization::is_default")]
+    pub materialization: Materialization,
+    /// `[package].bridge` — `true` marks this package as a bridge: a wrapper
+    /// a maintainer publishes around someone else's repository (PROP-023
+    /// §2.1). It does **not** change `kind` or identity; it is metadata that
+    /// records the content as stewarded-not-authored and surfaces provenance.
+    /// Default `false`.
+    #[serde(default, skip_serializing_if = "is_false")]
+    pub bridge: bool,
+}
+
+/// `skip_serializing_if` helper for boolean fields that default to `false`.
+fn is_false(b: &bool) -> bool {
+    !*b
 }
 
 impl PackageMeta {
@@ -172,6 +195,66 @@ impl PublishPosture {
             PublishPosture::All(all) => *all,
             PublishPosture::Registries(names) => names.iter().any(|n| n == registry_name),
         }
+    }
+}
+
+/// `[package].materialization` — how a package's content is placed into its
+/// `vibedeps/` slot (PROP-022 §2.1). Three modes along two axes of "big":
+/// `hardlink` shares bytes for few-but-large files; `in-place` avoids any
+/// per-file tree walk for repos with millions of files.
+///
+/// ```
+/// use vibe_core::manifest::Materialization;
+///
+/// // Default is the vendored full copy.
+/// assert_eq!(Materialization::default(), Materialization::Snapshot);
+/// assert!(Materialization::default().is_default());
+///
+/// // The wire form is kebab-case (`in-place`).
+/// let m: Materialization = toml::from_str(r#"m = "in-place""#)
+///     .map(|t: toml::value::Table| t["m"].clone().try_into().unwrap())
+///     .unwrap();
+/// assert_eq!(m, Materialization::InPlace);
+/// assert!(!m.is_default());
+///
+/// // `in-place` identity is the git commit, not a content hash (PROP-022 §2.5).
+/// assert!(Materialization::InPlace.is_in_place());
+/// assert!(!Materialization::Snapshot.is_in_place());
+/// ```
+#[spec(
+    implements = "spec://vibevm/modules/vibe-workspace/PROP-022#modes",
+    r = 1
+)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, Default)]
+#[serde(rename_all = "kebab-case")]
+pub enum Materialization {
+    /// The default: live-git cache → `.git`-stripped snapshot → full copy
+    /// into the slot. Identified by `content_hash`, vendored into the
+    /// project's git (PROP-022 §2.2).
+    #[default]
+    Snapshot,
+    /// Per-file hardlink from the cached snapshot, copy on change, copy
+    /// fallback on cross-volume / unsupported filesystems (PROP-022 §2.3).
+    /// For packages big in bytes but modest in file count.
+    Hardlink,
+    /// Git-native, project-local clone landed directly in the slot, managed
+    /// in place by git; identity is `resolved_commit`, not `content_hash`
+    /// (PROP-022 §2.4/§2.5). For repos with millions of files.
+    InPlace,
+}
+
+impl Materialization {
+    /// `true` for the default mode (`snapshot`) — lets the serializer skip
+    /// the field on a manifest that does not set it.
+    pub fn is_default(&self) -> bool {
+        matches!(self, Materialization::Snapshot)
+    }
+
+    /// `true` iff this mode is `in-place` — the git-managed, commit-identified
+    /// mode whose slot is not vendored and whose destructive operations are
+    /// guarded (PROP-022 §2.4/§2.6/§2.7).
+    pub fn is_in_place(&self) -> bool {
+        matches!(self, Materialization::InPlace)
     }
 }
 
