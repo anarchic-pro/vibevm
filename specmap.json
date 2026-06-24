@@ -2580,14 +2580,28 @@
       "crate_name": "vibe-mcp",
       "file": "crates/vibe-mcp/src/pkgskill.rs",
       "item_kind": "fn",
-      "line": 332,
+      "line": 115,
+      "symbol": "vibe_mcp::pkgskill::install_package_skill_selecting"
+    },
+    {
+      "crate_name": "vibe-mcp",
+      "file": "crates/vibe-mcp/src/pkgskill.rs",
+      "item_kind": "fn",
+      "line": 578,
+      "symbol": "vibe_mcp::pkgskill::tests::include_projects_only_matching_files"
+    },
+    {
+      "crate_name": "vibe-mcp",
+      "file": "crates/vibe-mcp/src/pkgskill.rs",
+      "item_kind": "fn",
+      "line": 411,
       "symbol": "vibe_mcp::pkgskill::tests::projects_dir_skill_and_is_idempotent"
     },
     {
       "crate_name": "vibe-mcp",
       "file": "crates/vibe-mcp/src/pkgskill.rs",
       "item_kind": "fn",
-      "line": 173,
+      "line": 194,
       "symbol": "vibe_mcp::pkgskill::uninstall_package_skill"
     },
     {
@@ -6940,8 +6954,26 @@
     },
     {
       "file": "crates/vibe-mcp/src/pkgskill.rs",
+      "from_symbol": "vibe_mcp::pkgskill::install_package_skill_selecting",
+      "line": 120,
+      "provenance": "authored",
+      "uri": "spec://vibevm/modules/vibe-mcp/PROP-015#skill-include",
+      "verb": "implements",
+      "pinned_r": 1
+    },
+    {
+      "file": "crates/vibe-mcp/src/pkgskill.rs",
+      "from_symbol": "vibe_mcp::pkgskill::tests::include_projects_only_matching_files",
+      "line": 579,
+      "provenance": "authored",
+      "uri": "spec://vibevm/modules/vibe-mcp/PROP-015#skill-include",
+      "verb": "verifies",
+      "pinned_r": 1
+    },
+    {
+      "file": "crates/vibe-mcp/src/pkgskill.rs",
       "from_symbol": "vibe_mcp::pkgskill::tests::projects_dir_skill_and_is_idempotent",
-      "line": 333,
+      "line": 412,
       "provenance": "authored",
       "uri": "spec://vibevm/common/PROP-018#vibe-skill",
       "verb": "verifies",
@@ -6950,7 +6982,7 @@
     {
       "file": "crates/vibe-mcp/src/pkgskill.rs",
       "from_symbol": "vibe_mcp::pkgskill::uninstall_package_skill",
-      "line": 177,
+      "line": 198,
       "provenance": "authored",
       "uri": "spec://vibevm/common/PROP-018#vibe-skill",
       "verb": "implements"
