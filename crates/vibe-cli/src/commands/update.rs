@@ -21,11 +21,14 @@ use std::path::{Path, PathBuf};
 use anyhow::{Context, Result, anyhow, bail};
 use dialoguer::Confirm;
 use vibe_core::manifest::{LockedPackage, Lockfile, Manifest, SourceKind};
+use vibe_core::user_config::SlotIntegrity;
 use vibe_core::{Group, PackageRef, VersionSpec};
 use vibe_install::InstallSource;
 use vibe_registry::CachedPackage;
 use vibe_workspace::Workspace;
-use vibe_workspace::install::regenerate_boot;
+use vibe_workspace::install::{
+    ResolvedDep, materialise_subtree, regenerate_boot, run_post_install_hooks,
+};
 use vibe_workspace::vibedeps;
 
 use crate::cli::{InstallArgs, UpdateArgs};
@@ -142,50 +145,65 @@ pub fn run(ctx: &output::Context, args: UpdateArgs) -> Result<()> {
         return Err(InstallError::UserDeclined.into());
     }
 
-    // Materialise the subtree. A package whose version moved has its
-    // superseded slot removed first, so a bump leaves no stale slot. The
-    // `vibedeps/` slot directory is named `<kind>-<name>`; `kind` is read
-    // off the manifest (metadata), identity is `(group, name)`.
+    // Build the partial resolution for the subtree — the form the shared
+    // materialise + hook flow consumes (the same `ResolvedDep` shape
+    // `vibe install` hands to `apply_resolution`).
+    let resolution: Vec<ResolvedDep> = updated
+        .iter()
+        .map(|(cached, deps)| ResolvedDep {
+            kind: cached.package_meta().kind,
+            group: cached.resolved.group.clone(),
+            name: cached.resolved.name.clone(),
+            version: cached.resolved.version.clone(),
+            content_dir: cached.cache_dir.clone(),
+            manifest: cached.manifest.clone(),
+            requires: deps
+                .iter()
+                .filter_map(|p| p.group.clone().map(|g| (g, p.name.to_string())))
+                .collect(),
+        })
+        .collect();
+
+    // PROP-020 §2.1 — `vibe update` resets and re-runs install hooks. Resolve
+    // hook trust (allow-list / interactive consent / abort) before touching
+    // any slot, exactly as `vibe install` does.
+    let hook_policy =
+        crate::commands::install::resolve_hook_policy(ctx, &install_args_from(&args), &resolution)?;
+
+    // Remove any superseded *versioned* slot so a bump leaves no stale slot
+    // (an in-place slot is unversioned — nothing to prune), and record the
+    // bumps for the report.
     let mut bumps: Vec<String> = Vec::new();
     for (cached, _) in &updated {
-        let kind = cached.package_meta().kind;
         let name = &cached.resolved.name;
-        let old_version = lockfile
+        let Some(old_v) = lockfile
             .find(&cached.resolved.group, name)
             .map(|o| o.version.clone())
-            .filter(|v| *v != cached.resolved.version);
-        if let Some(old_v) = &old_version {
-            bumps.push(format!(
-                "{}/{} {} -> {}",
-                cached.resolved.group, name, old_v, cached.resolved.version
-            ));
-        }
-        // In-place (PROP-022 §2.4): move the fetched git clone into the
-        // unversioned slot and `.gitignore` it — the same git-native
-        // placement `vibe install` performs, with no versioned slot to prune.
-        if cached.package_meta().materialization.is_in_place() {
-            vibedeps::materialise_in_place(&workspace.root, kind, name, &cached.cache_dir)
-                .context("re-materialising the in-place package")?;
-            vibedeps::ensure_gitignored(
-                &workspace.root,
-                &vibedeps::in_place_slot_rel_path(kind, name),
-            )
-            .context("gitignoring the in-place slot")?;
+            .filter(|v| *v != cached.resolved.version)
+        else {
             continue;
-        }
-        if let Some(old_v) = &old_version {
-            vibedeps::remove_slot(&workspace.root, kind, name, old_v)
+        };
+        bumps.push(format!(
+            "{}/{} {} -> {}",
+            cached.resolved.group, name, old_v, cached.resolved.version
+        ));
+        if !cached.package_meta().materialization.is_in_place() {
+            vibedeps::remove_slot(&workspace.root, cached.package_meta().kind, name, &old_v)
                 .context("removing the superseded vibedeps/ slot")?;
         }
-        vibedeps::materialise(
-            &workspace.root,
-            kind,
-            name,
-            &cached.resolved.version,
-            &cached.cache_dir,
-        )
-        .context("materialising the updated package")?;
     }
+
+    // Materialise the subtree (snapshot copy / hardlink / in-place move) and
+    // run each freshly-placed slot's pre-install hook (PROP-020 §2.1) — no
+    // prune, no boot here; boot is regenerated below from the whole tree.
+    // `Verify` re-materialises every named slot from the fresh fetch.
+    let subtree = materialise_subtree(
+        &workspace.root,
+        &resolution,
+        SlotIntegrity::Verify,
+        Some(&hook_policy),
+    )
+    .context("re-materialising the updated subtree")?;
 
     // Regenerate every node's boot from the new `vibedeps/` state.
     regenerate_boot(&workspace).context("regenerating boot artifacts")?;
@@ -207,6 +225,16 @@ pub fn run(ctx: &output::Context, args: UpdateArgs) -> Result<()> {
     }
     lockfile.meta.generated_at = crate::commands::init::current_timestamp_utc();
     lockfile.write(workspace.lockfile_path())?;
+
+    // PROP-020 §2.1 — post-install hooks run once the updated packages are
+    // durable (lockfile written, boot regenerated).
+    run_post_install_hooks(
+        &workspace.root,
+        &resolution,
+        &subtree.materialised,
+        &hook_policy,
+    )
+    .context("running post-install hooks")?;
 
     emit_report(ctx, updated.len(), &bumps);
     Ok(())

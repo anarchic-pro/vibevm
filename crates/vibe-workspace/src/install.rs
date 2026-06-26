@@ -329,6 +329,49 @@ pub fn run_post_install_hooks(
     )
 }
 
+/// What [`materialise_subtree`] placed — the freshly-written and skipped slot
+/// labels plus the `pre-install` hook reports, for the scoped-update caller.
+#[derive(Debug)]
+pub struct SubtreeOutcome {
+    pub materialised: Vec<String>,
+    pub skipped: Vec<String>,
+    pub hook_reports: Vec<HookReport>,
+}
+
+/// Materialise a **partial** resolution — a scoped `vibe update <pkg>` subtree
+/// — into `vibedeps/` and run each freshly-materialised slot's `pre-install`
+/// hook (PROP-020 §2.1), the same placement + hook flow [`apply_resolution`]
+/// performs (snapshot copy / hardlink / in-place move + rollback), but
+/// **without** pruning unrelated slots or regenerating boot. A scoped update
+/// touches only the named subtree, so the caller removes any superseded slots
+/// itself and regenerates boot from the whole materialised tree afterwards;
+/// pruning here would delete every slot outside the subtree. Runs against the
+/// production seams.
+pub fn materialise_subtree(
+    workspace_root: &Path,
+    resolution: &[ResolvedDep],
+    slot_integrity: SlotIntegrity,
+    hooks: Option<&HookPolicy>,
+) -> Result<SubtreeOutcome, WorkspaceError> {
+    let Materialised {
+        materialised,
+        skipped,
+        hook_reports,
+    } = materialise_resolution(
+        workspace_root,
+        resolution,
+        slot_integrity,
+        hooks,
+        &SystemProbe,
+        &SystemHookRunner,
+    )?;
+    Ok(SubtreeOutcome {
+        materialised,
+        skipped,
+        hook_reports,
+    })
+}
+
 /// The seam-injectable body of [`run_post_install_hooks`]: run each
 /// materialised dep's `post-install` hook against the given probe + runner.
 /// A `post-install` non-zero exit is carried back as a flagged report by

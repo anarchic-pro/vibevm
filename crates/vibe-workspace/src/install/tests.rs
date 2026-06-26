@@ -781,3 +781,49 @@ fn pre_install_failure_rolls_back_an_in_place_slot() {
         "giant"
     ));
 }
+
+#[test]
+fn materialise_subtree_does_not_prune_unrelated_slots() {
+    // Scoped `vibe update` materialises only its subtree and must leave every
+    // other installed slot in place — unlike `apply_resolution`, which prunes.
+    let ws = TempDir::new().unwrap();
+    write(
+        ws.path(),
+        "vibe.toml",
+        "[project]\nname = \"demo\"\nversion = \"0.1.0\"\n",
+    );
+    // An unrelated pre-existing slot a full prune pass WOULD remove.
+    let stray = TempDir::new().unwrap();
+    write(stray.path(), "vibe.toml", "x");
+    vibedeps::materialise(
+        ws.path(),
+        PackageKind::Flow,
+        "stray",
+        &ver("0.1.0"),
+        stray.path(),
+    )
+    .unwrap();
+
+    let (dep, _pkg) = dep_with_boot(
+        "wal",
+        "0.3.0",
+        "[boot_snippet]\nsource = \"boot/wal.md\"\n",
+        "boot/wal.md",
+        "# wal",
+    );
+    let out = materialise_subtree(
+        ws.path(),
+        std::slice::from_ref(&dep),
+        SlotIntegrity::Verify,
+        None,
+    )
+    .unwrap();
+    assert_eq!(out.materialised, vec!["vibedeps/flow-wal/0.3.0"]);
+    // The unrelated slot survives — subtree materialisation never prunes.
+    assert!(vibedeps::is_materialised(
+        ws.path(),
+        PackageKind::Flow,
+        "stray",
+        &ver("0.1.0")
+    ));
+}

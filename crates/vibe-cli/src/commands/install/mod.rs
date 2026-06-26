@@ -207,7 +207,7 @@ pub fn run(ctx: &output::Context, args: InstallArgs) -> Result<()> {
 /// a non-interactive run carrying such a package aborts unless `--allow-hooks`
 /// is set — a hook never runs unseen. A declined group is simply left out of
 /// the policy, so the pipeline skips-and-reports its hooks rather than failing.
-fn resolve_hook_policy(
+pub(crate) fn resolve_hook_policy(
     ctx: &output::Context,
     args: &InstallArgs,
     resolution: &[vibe_workspace::install::ResolvedDep],
