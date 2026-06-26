@@ -41,6 +41,7 @@ pub mod boot_artifacts;
 pub mod freshness;
 pub mod hooks;
 pub mod install;
+pub mod materialization;
 pub mod publish;
 pub mod vibedeps;
 

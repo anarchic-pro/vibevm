@@ -18,6 +18,7 @@ use vibe_core::manifest::{Lockfile, Manifest};
 use vibe_core::{Group, PackageRef};
 use vibe_workspace::Workspace;
 use vibe_workspace::install::regenerate_boot;
+use vibe_workspace::materialization::{DestructiveGuard, guard_destructive};
 use vibe_workspace::vibedeps;
 
 use crate::cli::UninstallArgs;
@@ -49,6 +50,9 @@ pub fn run(ctx: &output::Context, args: UninstallArgs) -> Result<()> {
     })?;
     let version = locked.version.clone();
     let kind = locked.kind;
+    // The recorded materialization mode drives the PROP-022 §2.6 destructive
+    // guard below — an in-place slot is a non-vendored git clone.
+    let mode = locked.materialization;
 
     let slot = vibedeps::slot_rel_path(kind, &pkgref.name, &version);
     if !ctx.is_json() && !ctx.is_quiet() {
@@ -58,18 +62,46 @@ pub fn run(ctx: &output::Context, args: UninstallArgs) -> Result<()> {
         ));
     }
 
-    let approved = if args.assume_yes || ctx.is_unattended() || ctx.is_json() {
-        true
-    } else if !console::user_attended() {
-        bail!(
-            "no TTY available for confirmation; re-run with `--assume-yes` to uninstall non-interactively"
-        );
-    } else {
-        Confirm::new()
-            .with_prompt(format!("Uninstall {}/{}@{}?", group, pkgref.name, version))
+    // PROP-022 §2.6 — removing an `in-place` slot deletes a project-local git
+    // clone whose only restoration is a network re-clone; it must never happen
+    // silently. The guard refuses a non-interactive run with no explicit
+    // opt-in, and forces a mandatory `y/n` that `--json` cannot auto-answer.
+    let interactive = console::user_attended() && !ctx.is_json() && !ctx.is_unattended();
+    let opted_in = args.assume_yes || ctx.is_unattended();
+    let approved = match guard_destructive(mode, interactive, opted_in) {
+        DestructiveGuard::Abort => bail!(
+            "`{group}/{}` is materialised in-place (PROP-022 §2.6) — a project-local git \
+             clone restorable only by re-cloning over the network. Refusing to remove it \
+             non-interactively; re-run interactively or pass `--assume-yes` to confirm.",
+            pkgref.name,
+        ),
+        DestructiveGuard::ConfirmInteractively => Confirm::new()
+            .with_prompt(format!(
+                "Remove the in-place slot for {}/{}@{}? This deletes the local git clone; \
+                 restoring it needs a network re-clone.",
+                group, pkgref.name, version
+            ))
             .default(false)
             .interact()
-            .context("reading user confirmation")?
+            .context("reading user confirmation")?,
+        // Non-in-place, or in-place with an explicit opt-in: the established
+        // uninstall confirmation contract (`--assume-yes` / `--unattended` /
+        // `--json` imply yes; a non-TTY without them is a hard error).
+        DestructiveGuard::Proceed => {
+            if args.assume_yes || ctx.is_unattended() || ctx.is_json() {
+                true
+            } else if !console::user_attended() {
+                bail!(
+                    "no TTY available for confirmation; re-run with `--assume-yes` to uninstall non-interactively"
+                );
+            } else {
+                Confirm::new()
+                    .with_prompt(format!("Uninstall {}/{}@{}?", group, pkgref.name, version))
+                    .default(false)
+                    .interact()
+                    .context("reading user confirmation")?
+            }
+        }
     };
     if !approved {
         return Err(InstallError::UserDeclined.into());

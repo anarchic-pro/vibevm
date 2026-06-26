@@ -202,5 +202,8 @@ pub(crate) fn locked_package_from_fetched(f: &Fetched, language: Option<&str>) -
         subskills_active: Vec::new(),
         describes: c.package_meta().describes.as_ref().map(|p| p.to_string()),
         language: language.map(str::to_string),
+        // Record the package's declared materialization so destructive ops
+        // and the guard (PROP-022 §2.6) recognise an in-place slot.
+        materialization: c.package_meta().materialization,
     }
 }

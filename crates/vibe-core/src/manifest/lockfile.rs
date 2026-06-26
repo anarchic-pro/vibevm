@@ -35,7 +35,7 @@ use crate::error::Result;
 use crate::package_ref::{Group, PackageKind, PackageName, PackageRef, VersionSpec};
 use crate::provenance::{SourceUrl, TraceId};
 
-use super::{read_toml, write_toml};
+use super::{Materialization, read_toml, write_toml};
 
 /// The current — and only supported — lockfile schema version.
 ///
@@ -226,6 +226,9 @@ pub enum SourceKind {
 /// assert_eq!(p.kind, PackageKind::Flow);
 /// assert_eq!(p.name, "wal");
 /// assert_eq!(p.source_kind, Some(SourceKind::Registry));
+/// // Materialization defaults to `snapshot` when the field is absent, so
+/// // every lockfile written before the field landed parses unchanged.
+/// assert!(p.materialization.is_default());
 /// // Identity is (group, name, version, content_hash); `as_package_ref`
 /// // pins this exact installed version.
 /// assert_eq!(p.as_package_ref().unwrap().qualified_name(), "org.vibevm/wal");
@@ -327,6 +330,15 @@ pub struct LockedPackage {
     /// `None` ⇒ inherits `[meta].language_chain[0]`.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub language: Option<String>,
+
+    /// How this package's content was materialised on disk (PROP-022 §2.1).
+    /// Recorded so uninstall / `reinstall --force` and the destructive guard
+    /// (PROP-022 §2.6) know an `in-place` slot is a git-native, unversioned,
+    /// non-vendored working tree that must not be deleted unconfirmed.
+    /// Default `snapshot`; skipped from the serialized form when default, so
+    /// every lockfile written before this field parses unchanged.
+    #[serde(default, skip_serializing_if = "Materialization::is_default")]
+    pub materialization: Materialization,
 }
 
 /// One subskill entry under a package's `subskills_active` list.

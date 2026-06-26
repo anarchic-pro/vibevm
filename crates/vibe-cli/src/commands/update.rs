@@ -261,6 +261,9 @@ fn locked_package(
             .as_ref()
             .map(|p| p.to_string()),
         language: old.and_then(|o| o.language.clone()),
+        // A version bump does not change how the package is materialised —
+        // carry the freshly-fetched manifest's declared mode (PROP-022 §2.1).
+        materialization: cached.package_meta().materialization,
     }
 }
 

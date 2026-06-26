@@ -215,6 +215,48 @@ overridden = true
 }
 
 #[test]
+#[verifies(
+    "spec://vibevm/modules/vibe-workspace/PROP-022#destructive-guard",
+    r = 1
+)]
+fn materialization_round_trips() {
+    // An `in-place` package records its mode so uninstall / the destructive
+    // guard (PROP-022 §2.6) recognise the slot as a non-vendored git clone.
+    let raw = r#"
+[meta]
+generated_by = "vibe"
+generated_at = "2026-05-21T00:00:00Z"
+schema_version = 5
+
+[[package]]
+kind = "feat"
+name = "giant"
+group = "org.vibevm"
+version ="1.0.0"
+source_url = "https://example.test/giant.git"
+content_hash = "sha256:abc"
+source_kind = "git"
+materialization = "in-place"
+"#;
+    let lf: Lockfile = toml::from_str(raw).unwrap();
+    let p = lf.find(&org(), "giant").unwrap();
+    assert!(p.materialization.is_in_place());
+    assert!(!p.materialization.is_default());
+
+    let rendered = toml::to_string_pretty(&lf).unwrap();
+    assert!(rendered.contains("materialization = \"in-place\""));
+    let back: Lockfile = toml::from_str(&rendered).unwrap();
+    assert_eq!(lf, back);
+
+    // The default `snapshot` is skipped on serialize, so every lockfile
+    // written before this field landed round-trips unchanged.
+    let mut snap = lf.clone();
+    snap.packages[0].materialization = Default::default();
+    let rendered2 = toml::to_string_pretty(&snap).unwrap();
+    assert!(!rendered2.contains("materialization"));
+}
+
+#[test]
 fn rejects_unknown_package_field() {
     let raw = r#"
 [meta]
