@@ -3959,7 +3959,7 @@
       "crate_name": "vibe-workspace",
       "file": "crates/vibe-workspace/src/install.rs",
       "item_kind": "fn",
-      "line": 672,
+      "line": 715,
       "symbol": "vibe_workspace::install::validate_redirect_blocks"
     },
     {
@@ -8931,7 +8931,7 @@
     {
       "file": "crates/vibe-workspace/src/install.rs",
       "from_symbol": "vibe_workspace::install::validate_redirect_blocks",
-      "line": 677,
+      "line": 720,
       "provenance": "authored",
       "uri": "spec://vibevm/modules/vibe-workspace/PROP-012#plan-time",
       "verb": "implements",
