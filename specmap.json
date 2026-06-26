@@ -2783,7 +2783,7 @@
       "crate_name": "vibe-registry",
       "file": "crates/vibe-registry/src/lib.rs",
       "item_kind": "fn",
-      "line": 395,
+      "line": 408,
       "symbol": "vibe_registry::CachedPackage::package_meta"
     },
     {
@@ -2860,7 +2860,7 @@
       "crate_name": "vibe-registry",
       "file": "crates/vibe-registry/src/git_package_registry/fetch.rs",
       "item_kind": "fn",
-      "line": 182,
+      "line": 236,
       "symbol": "vibe_registry::git_package_registry::fetch::GitPackageRegistry::fetch_with_expected_hash"
     },
     {
@@ -2876,6 +2876,13 @@
       "item_kind": "fn",
       "line": 484,
       "symbol": "vibe_registry::git_package_registry::fetch::tests::fetch_in_place_skips_the_cache_copy_and_keeps_git"
+    },
+    {
+      "crate_name": "vibe-registry",
+      "file": "crates/vibe-registry/src/git_package_registry/fetch/tests.rs",
+      "item_kind": "fn",
+      "line": 537,
+      "symbol": "vibe_registry::git_package_registry::fetch::tests::materialise_in_place_clones_then_updates_the_slot"
     },
     {
       "crate_name": "vibe-registry",
@@ -3903,6 +3910,13 @@
       "crate_name": "vibe-workspace",
       "file": "crates/vibe-workspace/src/install/tests.rs",
       "item_kind": "fn",
+      "line": 831,
+      "symbol": "vibe_workspace::install::tests::already_placed_in_place_slot_runs_hook_without_moving"
+    },
+    {
+      "crate_name": "vibe-workspace",
+      "file": "crates/vibe-workspace/src/install/tests.rs",
+      "item_kind": "fn",
       "line": 609,
       "symbol": "vibe_workspace::install::tests::apply_resolution_places_an_in_place_package_in_an_unversioned_slot"
     },
@@ -3959,7 +3973,7 @@
       "crate_name": "vibe-workspace",
       "file": "crates/vibe-workspace/src/install.rs",
       "item_kind": "fn",
-      "line": 715,
+      "line": 724,
       "symbol": "vibe_workspace::install::validate_redirect_blocks"
     },
     {
@@ -7444,7 +7458,7 @@
     {
       "file": "crates/vibe-registry/src/lib.rs",
       "from_symbol": "vibe_registry::CachedPackage::package_meta",
-      "line": 402,
+      "line": 415,
       "provenance": "authored",
       "uri": "spec://vibevm/discipline/ENGINE-CONFORM-v0.1#rules",
       "verb": "deviates",
@@ -7535,7 +7549,7 @@
     {
       "file": "crates/vibe-registry/src/git_package_registry/fetch.rs",
       "from_symbol": "vibe_registry::git_package_registry::fetch::GitPackageRegistry::fetch_with_expected_hash",
-      "line": 212,
+      "line": 266,
       "provenance": "authored",
       "uri": "spec://vibevm/discipline/ENGINE-CONFORM-v0.1#rules",
       "verb": "deviates",
@@ -7553,6 +7567,15 @@
       "file": "crates/vibe-registry/src/git_package_registry/fetch/tests.rs",
       "from_symbol": "vibe_registry::git_package_registry::fetch::tests::fetch_in_place_skips_the_cache_copy_and_keeps_git",
       "line": 485,
+      "provenance": "authored",
+      "uri": "spec://vibevm/modules/vibe-workspace/PROP-022#in-place",
+      "verb": "verifies",
+      "pinned_r": 1
+    },
+    {
+      "file": "crates/vibe-registry/src/git_package_registry/fetch/tests.rs",
+      "from_symbol": "vibe_registry::git_package_registry::fetch::tests::materialise_in_place_clones_then_updates_the_slot",
+      "line": 538,
       "provenance": "authored",
       "uri": "spec://vibevm/modules/vibe-workspace/PROP-022#in-place",
       "verb": "verifies",
@@ -8858,6 +8881,15 @@
     },
     {
       "file": "crates/vibe-workspace/src/install/tests.rs",
+      "from_symbol": "vibe_workspace::install::tests::already_placed_in_place_slot_runs_hook_without_moving",
+      "line": 832,
+      "provenance": "authored",
+      "uri": "spec://vibevm/modules/vibe-workspace/PROP-022#in-place",
+      "verb": "verifies",
+      "pinned_r": 1
+    },
+    {
+      "file": "crates/vibe-workspace/src/install/tests.rs",
       "from_symbol": "vibe_workspace::install::tests::apply_resolution_places_an_in_place_package_in_an_unversioned_slot",
       "line": 610,
       "provenance": "authored",
@@ -8931,7 +8963,7 @@
     {
       "file": "crates/vibe-workspace/src/install.rs",
       "from_symbol": "vibe_workspace::install::validate_redirect_blocks",
-      "line": 720,
+      "line": 729,
       "provenance": "authored",
       "uri": "spec://vibevm/modules/vibe-workspace/PROP-012#plan-time",
       "verb": "implements",
