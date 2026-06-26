@@ -5,6 +5,7 @@
 specmark::scope!("spec://vibevm/modules/vibe-registry/PROP-002#registry-model");
 
 use super::*;
+use specmark::verifies;
 use tempfile::tempdir;
 
 use crate::git_package_registry::test_support::*;
@@ -478,4 +479,57 @@ fn fetch_reuses_existing_clone_via_update() {
     // First fetch: bootstrap; second: update (clone exists from first).
     assert_eq!(fake.bootstrap_count(), 1);
     assert_eq!(fake.update_count(), 1);
+}
+
+#[test]
+#[verifies("spec://vibevm/modules/vibe-workspace/PROP-022#in-place", r = 1)]
+fn fetch_in_place_skips_the_cache_copy_and_keeps_git() {
+    let cache = tempdir().unwrap();
+    let pkg_cache = tempdir().unwrap();
+    let upstream = tempdir().unwrap();
+    let pkg_root = upstream.path().join("pkg");
+    fs::create_dir_all(&pkg_root).unwrap();
+    // A package that declares in-place materialization (PROP-022 §2.4).
+    fs::write(
+        pkg_root.join("vibe.toml"),
+        "[package]\ngroup = \"org.vibevm\"\nname = \"giant\"\nkind = \"feat\"\nversion = \"1.0.0\"\nmaterialization = \"in-place\"\n",
+    )
+    .unwrap();
+    fs::write(pkg_root.join("big.bin"), "lots of files\n").unwrap();
+
+    let fake = Arc::new(FakeBackend::default());
+    let url = "git@host:org/org.vibevm.giant.git";
+    fake.seed_tags(url, vec!["v1.0.0".into()]);
+    fake.seed_bootstrap(url, pkg_root.clone());
+
+    let r = registry_with(
+        cache.path(),
+        "git@host:org",
+        NamingConvention::Fqdn,
+        fake.clone(),
+    );
+    let p = PackageRef::parse("org.vibevm/giant@1.0.0").unwrap();
+    let resolved = r.resolve(&p).unwrap();
+    let cached = r.fetch(&resolved, pkg_cache.path()).unwrap();
+
+    // In-place hands back the LIVE clone (keeps `.git`), not a stripped copy.
+    assert!(
+        cached.cache_dir.join(".git").exists(),
+        "in-place keeps the clone's .git"
+    );
+    assert!(cached.cache_dir.join("big.bin").exists());
+    // The `.git`-stripped per-project cache copy was NOT made — the tree
+    // walk the mode exists to avoid never ran.
+    let dest_cache = pkg_cache
+        .path()
+        .join("org.vibevm")
+        .join("giant")
+        .join("v1.0.0");
+    assert!(
+        !dest_cache.exists(),
+        "no .git-stripped cache copy for an in-place package"
+    );
+    // content_hash is a well-formed sha256 (commit-derived, not a tree walk).
+    assert!(cached.content_hash.starts_with("sha256:"));
+    assert!(cached.package_meta().materialization.is_in_place());
 }

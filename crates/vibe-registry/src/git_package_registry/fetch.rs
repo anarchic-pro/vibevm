@@ -256,35 +256,51 @@ impl GitPackageRegistry {
                 continue;
             }
 
-            // 2. Materialise the per-project cache, stripping `.git/`.
-            if dest_cache.exists() {
-                fs::remove_dir_all(&dest_cache).map_err(|source| RegistryError::Io {
-                    path: dest_cache.clone(),
-                    source,
-                })?;
-            }
-            copy_dir_excluding_git(&clone_dir, &dest_cache)?;
-
-            let manifest_path = dest_cache.join(Manifest::FILENAME);
-            let manifest = Manifest::read(&manifest_path)?;
-            if manifest.package.is_none() {
-                return Err(RegistryError::MalformedMeta {
-                    path: manifest_path.clone(),
+            // 2. Read the manifest from the clone to learn how the package
+            //    wants to be materialised (PROP-022 §2.1) before paying any
+            //    copy cost, and capture the commit the tag resolved to —
+            //    recorded so a re-clone reconstructs identical content incl.
+            //    submodule gitlinks (PROP-021 §2.4) and an in-place slot's
+            //    identity is its commit (PROP-022 §2.5). The clone retains
+            //    `.git`; the per-project cache copy is `.git`-stripped.
+            let clone_manifest_path = clone_dir.join(Manifest::FILENAME);
+            let manifest = Manifest::read(&clone_manifest_path)?;
+            let pkg = manifest
+                .package
+                .as_ref()
+                .ok_or_else(|| RegistryError::MalformedMeta {
+                    path: clone_manifest_path.clone(),
                     reason: "registry package manifest must carry a [package] table".to_string(),
-                });
-            }
-            let content_hash = compute_content_hash(&dest_cache)?;
-            // The commit the tag resolved to — recorded so a re-clone at this
-            // commit reconstructs identical content, including every
-            // submodule's gitlink (PROP-021 §2.4), and so an `in-place` slot's
-            // identity is its commit (PROP-022 §2.5). Read from the clone,
-            // which retains `.git`; the cache copy is `.git`-stripped.
+                })?;
             let resolved_commit = self.backend.head_commit(&clone_dir)?;
+
+            // An `in-place` package (PROP-022 §2.4) is placed as a git working
+            // tree, so vibevm never walks its tree: skip the `.git`-stripped
+            // cache copy and the content-hash tree walk — the very cost the
+            // mode exists to avoid for a giant repo. The live clone is handed
+            // back as the content dir for the move-into-slot step, and identity
+            // is the commit (§2.5), recorded as a cheap commit-derived hash
+            // rather than a tree hash.
+            let (cache_dir, content_hash) = if pkg.materialization.is_in_place() {
+                (
+                    clone_dir.clone(),
+                    commit_content_hash(resolved_commit.as_deref().unwrap_or_default()),
+                )
+            } else {
+                if dest_cache.exists() {
+                    fs::remove_dir_all(&dest_cache).map_err(|source| RegistryError::Io {
+                        path: dest_cache.clone(),
+                        source,
+                    })?;
+                }
+                copy_dir_excluding_git(&clone_dir, &dest_cache)?;
+                (dest_cache.clone(), compute_content_hash(&dest_cache)?)
+            };
 
             // 3. Cross-source content_hash gate.
             let cached = CachedPackage {
                 resolved: resolved.clone(),
-                cache_dir: dest_cache.clone(),
+                cache_dir,
                 manifest,
                 content_hash: content_hash.clone(),
                 source_uri: canonical_url.clone(),
@@ -401,6 +417,23 @@ pub(crate) fn copy_dir_excluding_git(src: &Path, dst: &Path) -> Result<(), Regis
         }
     }
     Ok(())
+}
+
+/// A cheap, stable `content_hash` for an `in-place` package — `sha256` of the
+/// resolved commit, not a tree walk (PROP-022 §2.4/§2.5). The lockfile's
+/// `content_hash` field is non-optional, so an in-place slot still records a
+/// well-formed `sha256:<hex>`; identity, though, is the `resolved_commit`.
+/// An empty commit (a backend that reported none) hashes the empty string —
+/// deterministic and harmless, since in-place requires a real git source.
+fn commit_content_hash(commit: &str) -> String {
+    use sha2::{Digest, Sha256};
+    let digest = Sha256::digest(commit.as_bytes());
+    let hex = digest.iter().fold(String::new(), |mut s, b| {
+        use std::fmt::Write as _;
+        let _ = write!(&mut s, "{b:02x}");
+        s
+    });
+    format!("sha256:{hex}")
 }
 
 #[cfg(test)]

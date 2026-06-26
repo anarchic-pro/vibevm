@@ -176,6 +176,29 @@ fn materialise_resolution(
     let mut skipped = Vec::new();
     let mut hook_reports = Vec::new();
     for dep in resolution {
+        // PROP-022 §2.4 — an in-place package is a project-local git working
+        // tree in an unversioned slot. Move the fetched clone (with its
+        // `.git`) into the slot instead of the per-file snapshot copy, and
+        // `.gitignore` it (not vendored, §2.7). Hooks over an in-place slot
+        // are not yet wired (the copy-mode reset/re-run path differs).
+        if is_in_place(dep) {
+            let rel = vibedeps::in_place_slot_rel_path(dep.kind, &dep.name);
+            if vibedeps::is_in_place_slot(workspace_root, dep.kind, &dep.name)
+                && slot_integrity == SlotIntegrity::TrustPresence
+            {
+                skipped.push(rel);
+            } else {
+                vibedeps::materialise_in_place(
+                    workspace_root,
+                    dep.kind,
+                    &dep.name,
+                    &dep.content_dir,
+                )?;
+                vibedeps::ensure_gitignored(workspace_root, &rel)?;
+                materialised.push(rel);
+            }
+            continue;
+        }
         let slot = vibedeps::slot_rel_path(dep.kind, &dep.name, &dep.version);
         let present = vibedeps::is_materialised(workspace_root, dep.kind, &dep.name, &dep.version);
         if present && slot_integrity == SlotIntegrity::TrustPresence {
@@ -312,17 +335,27 @@ fn run_post_install_with(
     Ok(reports)
 }
 
-/// The slot placement mode for a resolved package (PROP-022 §2.1).
-/// `hardlink` shares bytes with the cache by link; `snapshot` (the default)
-/// is a full copy. `in-place` would clone directly into the slot, but that
-/// pipeline (git + source URL in the install layer) is not yet wired — until
-/// it lands, an `in-place` package falls back to a snapshot copy, which is
-/// correct, just not yet optimised for giant repos.
+/// The copy placement mode for a resolved **snapshot / hardlink** package
+/// (PROP-022 §2.1). `hardlink` shares bytes with the cache by link; `snapshot`
+/// (the default) is a full copy. An `in-place` package never reaches here — it
+/// is handled by [`materialise_resolution`]'s move-into-slot branch before any
+/// copy mode is chosen (PROP-022 §2.4).
 fn copy_mode_for(manifest: &Manifest) -> vibedeps::CopyMode {
     match manifest.package.as_ref().map(|p| p.materialization) {
         Some(Materialization::Hardlink) => vibedeps::CopyMode::Hardlink,
         _ => vibedeps::CopyMode::Copy,
     }
+}
+
+/// `true` iff `dep` declares `in-place` materialization (PROP-022 §2.4) — the
+/// git-native, unversioned, non-vendored slot. Read off the package manifest;
+/// a node with no `[package]` table (never a resolved dependency) is not
+/// in-place.
+fn is_in_place(dep: &ResolvedDep) -> bool {
+    dep.manifest
+        .package
+        .as_ref()
+        .is_some_and(|p| p.materialization.is_in_place())
 }
 
 /// Remove every `vibedeps/` slot whose path is not in `kept`, returning
@@ -343,6 +376,13 @@ fn prune_stale_slots(
         let kind_name = kind_name.map_err(|e| io_err(&vibedeps_dir, e))?;
         let kind_name_dir = kind_name.path();
         if !kind_name_dir.is_dir() {
+            continue;
+        }
+        // An in-place slot is the `<kind>-<name>` dir itself — a git working
+        // tree (PROP-022 §2.4), not a container of versioned slots. Skip it:
+        // its lifecycle is the move-into-slot / destructive-guard path, never
+        // version pruning.
+        if kind_name_dir.join(".git").exists() {
             continue;
         }
         let kn = kind_name.file_name().to_string_lossy().into_owned();
@@ -561,7 +601,19 @@ fn node_dependency_boot(
     closure
         .iter()
         .map(|dep| {
-            let slot = vibedeps::slot_rel_path(dep.kind, &dep.name, &dep.version);
+            // An in-place dependency's boot snippet lives in its unversioned
+            // slot (PROP-022 §2.4); a snapshot/hardlink dep's in the versioned
+            // one. Field access auto-derefs the `&&ResolvedDep`.
+            let in_place = dep
+                .manifest
+                .package
+                .as_ref()
+                .is_some_and(|p| p.materialization.is_in_place());
+            let slot = if in_place {
+                vibedeps::in_place_slot_rel_path(dep.kind, &dep.name)
+            } else {
+                vibedeps::slot_rel_path(dep.kind, &dep.name, &dep.version)
+            };
             let snippet = dep.manifest.boot_snippet.as_ref();
             let boot_path = snippet
                 .map(|bs| format!("{slot}/{}", bs.source.to_string_lossy().replace('\\', "/")));

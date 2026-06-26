@@ -162,6 +162,149 @@ pub fn remove_slot(
     Ok(true)
 }
 
+// --- in-place materialization (PROP-022 §2.4) ---------------------------
+//
+// An `in-place` package is placed as a project-local git working tree in an
+// **unversioned** slot — `vibedeps/<kind>-<name>/` with no `/<version>/` —
+// keeping its `.git` so git manages it in place. The slot is moved into
+// position from a fetched clone (no per-file snapshot copy) and `.gitignore`d
+// (not vendored, §2.7).
+
+/// The unversioned slot path for an `in-place` package, relative to the
+/// workspace root and forward-slashed: `vibedeps/<kind>-<name>` (PROP-022
+/// §2.4 — one working clone whose version is the current git ref, so the
+/// path carries no `/<version>/`).
+pub fn in_place_slot_rel_path(kind: PackageKind, name: &str) -> String {
+    format!("{VIBEDEPS_DIR}/{kind}-{name}")
+}
+
+/// The absolute on-disk path of an `in-place` slot — `workspace_root` joined
+/// with [`in_place_slot_rel_path`]. In-memory only; never persisted.
+pub fn in_place_slot_abs_path(workspace_root: &Path, kind: PackageKind, name: &str) -> PathBuf {
+    workspace_root
+        .join(VIBEDEPS_DIR)
+        .join(format!("{kind}-{name}"))
+}
+
+/// `true` iff an `in-place` slot is materialised for this package — the
+/// unversioned slot directory exists and is a git working tree (carries
+/// `.git`). The `.git` presence is what distinguishes an in-place slot from
+/// a `<kind>-<name>/` directory that merely groups versioned snapshot slots,
+/// so [`prune_stale_slots`](crate::install) leaves it untouched.
+pub fn is_in_place_slot(workspace_root: &Path, kind: PackageKind, name: &str) -> bool {
+    in_place_slot_abs_path(workspace_root, kind, name)
+        .join(".git")
+        .exists()
+}
+
+/// Materialise an `in-place` package by **moving** a fetched git clone
+/// (`clone_src`, a working tree WITH its `.git`) into the unversioned slot
+/// (PROP-022 §2.4). A move — `rename` when source and slot share a volume, a
+/// recursive copy-then-remove across volumes — so a giant repo is placed
+/// without the per-file snapshot copy the mode exists to avoid. The `.git` is
+/// preserved (unlike [`materialise`], which strips it) so the slot stays a
+/// git working tree manageable in place.
+pub fn materialise_in_place(
+    workspace_root: &Path,
+    kind: PackageKind,
+    name: &str,
+    clone_src: &Path,
+) -> Result<(), WorkspaceError> {
+    let slot = in_place_slot_abs_path(workspace_root, kind, name);
+    if !clone_src.is_dir() {
+        return Err(WorkspaceError::Io {
+            path: clone_src.to_path_buf(),
+            reason: format!(
+                "in-place clone source for `{}` does not exist or is not a directory",
+                in_place_slot_rel_path(kind, name)
+            ),
+        });
+    }
+    // Replace any existing slot so the result is exactly the fetched clone.
+    if slot.exists() {
+        fs::remove_dir_all(&slot).map_err(|e| io_err(&slot, e))?;
+    }
+    if let Some(parent) = slot.parent() {
+        fs::create_dir_all(parent).map_err(|e| io_err(parent, e))?;
+    }
+    move_dir(clone_src, &slot)
+}
+
+/// Remove an `in-place` slot if present. Returns `true` when one was deleted.
+pub fn remove_in_place_slot(
+    workspace_root: &Path,
+    kind: PackageKind,
+    name: &str,
+) -> Result<bool, WorkspaceError> {
+    let slot = in_place_slot_abs_path(workspace_root, kind, name);
+    if !slot.exists() {
+        return Ok(false);
+    }
+    fs::remove_dir_all(&slot).map_err(|e| io_err(&slot, e))?;
+    Ok(true)
+}
+
+/// Ensure `entry` (a forward-slashed, workspace-root-relative path) is listed
+/// in the workspace's top-level `.gitignore`, appending it if absent
+/// (PROP-022 §2.7 — an in-place slot is not vendored). Idempotent; creates
+/// `.gitignore` when missing. The entry is written with a trailing slash so
+/// git treats it as a directory ignore.
+pub fn ensure_gitignored(workspace_root: &Path, entry: &str) -> Result<(), WorkspaceError> {
+    let path = workspace_root.join(".gitignore");
+    let existing = match fs::read_to_string(&path) {
+        Ok(s) => s,
+        Err(e) if e.kind() == std::io::ErrorKind::NotFound => String::new(),
+        Err(e) => return Err(io_err(&path, e)),
+    };
+    let want = entry.trim_end_matches('/');
+    if existing
+        .lines()
+        .any(|l| l.trim() == want || l.trim() == format!("{want}/"))
+    {
+        return Ok(());
+    }
+    let mut out = existing;
+    if !out.is_empty() && !out.ends_with('\n') {
+        out.push('\n');
+    }
+    out.push_str(&format!("{entry}/\n"));
+    fs::write(&path, out).map_err(|e| io_err(&path, e))
+}
+
+/// Move `src` to `dest`: a fast `rename` when they share a volume, else a
+/// recursive copy (including `.git`) followed by removing `src`. The
+/// same-volume `rename` is what makes an in-place placement O(1) rather than
+/// a per-file copy.
+fn move_dir(src: &Path, dest: &Path) -> Result<(), WorkspaceError> {
+    if fs::rename(src, dest).is_ok() {
+        return Ok(());
+    }
+    // Cross-volume (or rename otherwise refused): recursively copy every
+    // entry, `.git` included, then drop the source.
+    copy_all(src, dest)?;
+    fs::remove_dir_all(src).map_err(|e| io_err(src, e))?;
+    Ok(())
+}
+
+/// Recursively copy `src` into `dest`, **including** `.git` (unlike
+/// [`copy_tree`], which strips it) — the cross-volume fallback for
+/// [`move_dir`]. Symlinks are skipped (best-effort fallback path).
+fn copy_all(src: &Path, dest: &Path) -> Result<(), WorkspaceError> {
+    fs::create_dir_all(dest).map_err(|e| io_err(dest, e))?;
+    for entry in fs::read_dir(src).map_err(|e| io_err(src, e))? {
+        let entry = entry.map_err(|e| io_err(src, e))?;
+        let from = entry.path();
+        let to = dest.join(entry.file_name());
+        let ft = entry.file_type().map_err(|e| io_err(&from, e))?;
+        if ft.is_dir() {
+            copy_all(&from, &to)?;
+        } else if ft.is_file() {
+            fs::copy(&from, &to).map_err(|e| io_err(&to, e))?;
+        }
+    }
+    Ok(())
+}
+
 /// Recursively copy the contents of `dir` into the slot at `dest_root`.
 /// `src_root` is the materialisation source root; every copied file's path
 /// relative to it (forward-slashed) is pushed to `written`.
@@ -464,5 +607,81 @@ mod tests {
             written,
             vec![PathBuf::from("boot/s.md"), PathBuf::from("vibe.toml")]
         );
+    }
+
+    #[test]
+    #[verifies("spec://vibevm/modules/vibe-workspace/PROP-022#in-place", r = 1)]
+    fn in_place_slot_path_is_unversioned() {
+        let rel = in_place_slot_rel_path(PackageKind::Feat, "chromium");
+        assert_eq!(rel, "vibedeps/feat-chromium");
+        let abs = in_place_slot_abs_path(Path::new("ws"), PackageKind::Feat, "chromium");
+        assert!(abs.ends_with(Path::new("vibedeps/feat-chromium")));
+    }
+
+    #[test]
+    #[verifies("spec://vibevm/modules/vibe-workspace/PROP-022#in-place", r = 1)]
+    fn materialise_in_place_moves_the_clone_keeping_git() {
+        let ws = TempDir::new().unwrap();
+        // A fetched clone: content plus a `.git` (the live working tree).
+        let clone = TempDir::new().unwrap();
+        write(clone.path(), "vibe.toml", "[package]\n");
+        write(clone.path(), ".git/HEAD", "ref: refs/heads/main\n");
+        write(clone.path(), "src/main.rs", "fn main() {}");
+
+        materialise_in_place(ws.path(), PackageKind::Feat, "giant", clone.path()).unwrap();
+
+        let slot = ws.path().join("vibedeps/feat-giant");
+        assert!(slot.join("vibe.toml").is_file());
+        assert!(slot.join("src/main.rs").is_file());
+        // The `.git` is preserved — the slot stays a git working tree.
+        assert!(slot.join(".git/HEAD").is_file());
+        assert!(is_in_place_slot(ws.path(), PackageKind::Feat, "giant"));
+        // The source was moved, not copied.
+        assert!(!clone.path().join("vibe.toml").exists());
+    }
+
+    #[test]
+    #[verifies("spec://vibevm/modules/vibe-workspace/PROP-022#in-place", r = 1)]
+    fn is_in_place_slot_false_for_a_versioned_snapshot() {
+        let ws = TempDir::new().unwrap();
+        // A versioned snapshot slot has no `.git` at the <kind>-<name> level,
+        // so it is not mistaken for an in-place slot.
+        let src = TempDir::new().unwrap();
+        write(src.path(), "vibe.toml", "x");
+        materialise(
+            ws.path(),
+            PackageKind::Flow,
+            "wal",
+            &version("0.3.0"),
+            src.path(),
+        )
+        .unwrap();
+        assert!(!is_in_place_slot(ws.path(), PackageKind::Flow, "wal"));
+    }
+
+    #[test]
+    fn remove_in_place_slot_deletes_and_reports() {
+        let ws = TempDir::new().unwrap();
+        let clone = TempDir::new().unwrap();
+        write(clone.path(), ".git/HEAD", "ref: refs/heads/main\n");
+        write(clone.path(), "f", "x");
+        materialise_in_place(ws.path(), PackageKind::Tool, "big", clone.path()).unwrap();
+        assert!(remove_in_place_slot(ws.path(), PackageKind::Tool, "big").unwrap());
+        assert!(!is_in_place_slot(ws.path(), PackageKind::Tool, "big"));
+        // A second removal finds nothing to do.
+        assert!(!remove_in_place_slot(ws.path(), PackageKind::Tool, "big").unwrap());
+    }
+
+    #[test]
+    #[verifies("spec://vibevm/modules/vibe-workspace/PROP-022#vendoring", r = 1)]
+    fn ensure_gitignored_appends_once() {
+        let ws = TempDir::new().unwrap();
+        ensure_gitignored(ws.path(), "vibedeps/feat-giant").unwrap();
+        let gi = fs::read_to_string(ws.path().join(".gitignore")).unwrap();
+        assert!(gi.contains("vibedeps/feat-giant/"), "{gi}");
+        // Idempotent — a second call does not duplicate the entry.
+        ensure_gitignored(ws.path(), "vibedeps/feat-giant").unwrap();
+        let gi2 = fs::read_to_string(ws.path().join(".gitignore")).unwrap();
+        assert_eq!(gi2.matches("vibedeps/feat-giant").count(), 1, "{gi2}");
     }
 }

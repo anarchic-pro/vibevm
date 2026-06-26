@@ -603,3 +603,101 @@ fn post_install_runs_for_materialised_slots_and_flags_failure() {
     .unwrap();
     assert_eq!(flagged[0].status, "post-install-failed");
 }
+
+// --- PROP-022 §2.4 — in-place materialization --------------------------
+
+#[test]
+#[verifies("spec://vibevm/modules/vibe-workspace/PROP-022#in-place", r = 1)]
+fn apply_resolution_places_an_in_place_package_in_an_unversioned_slot() {
+    let ws_dir = TempDir::new().unwrap();
+    write(
+        ws_dir.path(),
+        "vibe.toml",
+        "[project]\nname = \"demo\"\nversion = \"0.1.0\"\n\n\
+         [requires.packages]\n\"org.vibevm/giant\" = \"^1.0\"\n",
+    );
+    write(ws_dir.path(), "spec/boot/00-core.md", "# core");
+
+    // A fetched in-place clone: the manifest declares in-place, plus a `.git`
+    // (the live working tree) and a boot snippet.
+    let clone = TempDir::new().unwrap();
+    write(
+        clone.path(),
+        "vibe.toml",
+        "[package]\ngroup = \"org.vibevm\"\nname = \"giant\"\nkind = \"feat\"\nversion = \"1.0.0\"\nmaterialization = \"in-place\"\n\n[boot_snippet]\nsource = \"boot/giant.md\"\n",
+    );
+    write(clone.path(), ".git/HEAD", "ref: refs/heads/main\n");
+    write(clone.path(), "boot/giant.md", "# giant boot");
+    let manifest = Manifest::read(clone.path().join("vibe.toml")).unwrap();
+    let dep = ResolvedDep {
+        kind: PackageKind::Feat,
+        group: Group::parse("org.vibevm").unwrap(),
+        name: "giant".to_string(),
+        version: ver("1.0.0"),
+        content_dir: clone.path().to_path_buf(),
+        manifest,
+        requires: vec![],
+    };
+
+    let ws = Workspace::load(ws_dir.path()).unwrap();
+    let outcome = apply_resolution(
+        &ws,
+        std::slice::from_ref(&dep),
+        SlotIntegrity::TrustPresence,
+        None,
+    )
+    .unwrap();
+
+    // Placed in the UNVERSIONED slot, with `.git` preserved; no versioned slot.
+    let slot = ws_dir.path().join("vibedeps/feat-giant");
+    assert!(slot.join(".git/HEAD").is_file());
+    assert!(slot.join("boot/giant.md").is_file());
+    assert!(!ws_dir.path().join("vibedeps/feat-giant/1.0.0").exists());
+    assert_eq!(outcome.materialised, vec!["vibedeps/feat-giant"]);
+
+    // The clone source was moved, not copied.
+    assert!(!clone.path().join("vibe.toml").exists());
+
+    // `.gitignore` lists the slot — in-place is not vendored (§2.7).
+    let gi = fs::read_to_string(ws_dir.path().join(".gitignore")).unwrap();
+    assert!(gi.contains("vibedeps/feat-giant/"), "{gi}");
+
+    // INDEX.md references the UNVERSIONED boot path.
+    let index = fs::read_to_string(ws_dir.path().join("spec/boot/INDEX.md")).unwrap();
+    assert!(
+        index.contains("vibedeps/feat-giant/boot/giant.md"),
+        "{index}"
+    );
+    assert!(!index.contains("feat-giant/1.0.0"), "{index}");
+}
+
+#[test]
+#[verifies("spec://vibevm/modules/vibe-workspace/PROP-022#in-place", r = 1)]
+fn prune_leaves_an_in_place_slot_untouched() {
+    // A standalone project whose resolution carries no packages must not
+    // prune a pre-existing in-place slot (it is a git working tree, not a
+    // stale versioned slot).
+    let ws_dir = TempDir::new().unwrap();
+    write(
+        ws_dir.path(),
+        "vibe.toml",
+        "[project]\nname = \"demo\"\nversion = \"0.1.0\"\n",
+    );
+    write(ws_dir.path(), "spec/boot/00-core.md", "# core");
+    // Pre-place an in-place slot by hand.
+    let clone = TempDir::new().unwrap();
+    write(clone.path(), ".git/HEAD", "ref: refs/heads/main\n");
+    write(clone.path(), "src/x", "y");
+    vibedeps::materialise_in_place(ws_dir.path(), PackageKind::Feat, "giant", clone.path())
+        .unwrap();
+
+    let ws = Workspace::load(ws_dir.path()).unwrap();
+    let outcome = apply_resolution(&ws, &[], SlotIntegrity::TrustPresence, None).unwrap();
+
+    // The empty resolution prunes nothing in-place; the slot survives.
+    assert!(outcome.pruned.is_empty(), "{:?}", outcome.pruned);
+    assert!(
+        vibedeps::is_in_place_slot(ws_dir.path(), PackageKind::Feat, "giant"),
+        "the in-place slot must survive a prune pass"
+    );
+}

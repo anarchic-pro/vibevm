@@ -54,7 +54,14 @@ pub fn run(ctx: &output::Context, args: UninstallArgs) -> Result<()> {
     // guard below — an in-place slot is a non-vendored git clone.
     let mode = locked.materialization;
 
-    let slot = vibedeps::slot_rel_path(kind, &pkgref.name, &version);
+    // The slot path depends on the mode: an in-place slot is the unversioned
+    // `vibedeps/<kind>-<name>/` git working tree (PROP-022 §2.4); every other
+    // mode is the versioned slot.
+    let slot = if mode.is_in_place() {
+        vibedeps::in_place_slot_rel_path(kind, &pkgref.name)
+    } else {
+        vibedeps::slot_rel_path(kind, &pkgref.name, &version)
+    };
     if !ctx.is_json() && !ctx.is_quiet() {
         ctx.heading(&format!(
             "\nUninstall {}/{}@{} — remove `{slot}` and regenerate boot.",
@@ -107,9 +114,15 @@ pub fn run(ctx: &output::Context, args: UninstallArgs) -> Result<()> {
         return Err(InstallError::UserDeclined.into());
     }
 
-    // Remove the package's materialised slot.
-    vibedeps::remove_slot(&workspace.root, kind, &pkgref.name, &version)
-        .context("removing the vibedeps/ slot")?;
+    // Remove the package's materialised slot — the unversioned in-place git
+    // working tree, or the versioned snapshot/hardlink slot.
+    if mode.is_in_place() {
+        vibedeps::remove_in_place_slot(&workspace.root, kind, &pkgref.name)
+            .context("removing the in-place vibedeps/ slot")?;
+    } else {
+        vibedeps::remove_slot(&workspace.root, kind, &pkgref.name, &version)
+            .context("removing the vibedeps/ slot")?;
+    }
 
     // Drop the lockfile entry and its root-dependency mirror. Identity is
     // `(group, name)` (PROP-008 §2.3).

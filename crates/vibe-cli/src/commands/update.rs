@@ -149,20 +149,38 @@ pub fn run(ctx: &output::Context, args: UpdateArgs) -> Result<()> {
     let mut bumps: Vec<String> = Vec::new();
     for (cached, _) in &updated {
         let kind = cached.package_meta().kind;
-        if let Some(old) = lockfile.find(&cached.resolved.group, &cached.resolved.name)
-            && old.version != cached.resolved.version
-        {
-            vibedeps::remove_slot(&workspace.root, kind, &cached.resolved.name, &old.version)
-                .context("removing the superseded vibedeps/ slot")?;
+        let name = &cached.resolved.name;
+        let old_version = lockfile
+            .find(&cached.resolved.group, name)
+            .map(|o| o.version.clone())
+            .filter(|v| *v != cached.resolved.version);
+        if let Some(old_v) = &old_version {
             bumps.push(format!(
                 "{}/{} {} -> {}",
-                cached.resolved.group, cached.resolved.name, old.version, cached.resolved.version
+                cached.resolved.group, name, old_v, cached.resolved.version
             ));
+        }
+        // In-place (PROP-022 §2.4): move the fetched git clone into the
+        // unversioned slot and `.gitignore` it — the same git-native
+        // placement `vibe install` performs, with no versioned slot to prune.
+        if cached.package_meta().materialization.is_in_place() {
+            vibedeps::materialise_in_place(&workspace.root, kind, name, &cached.cache_dir)
+                .context("re-materialising the in-place package")?;
+            vibedeps::ensure_gitignored(
+                &workspace.root,
+                &vibedeps::in_place_slot_rel_path(kind, name),
+            )
+            .context("gitignoring the in-place slot")?;
+            continue;
+        }
+        if let Some(old_v) = &old_version {
+            vibedeps::remove_slot(&workspace.root, kind, name, old_v)
+                .context("removing the superseded vibedeps/ slot")?;
         }
         vibedeps::materialise(
             &workspace.root,
             kind,
-            &cached.resolved.name,
+            name,
             &cached.resolved.version,
             &cached.cache_dir,
         )

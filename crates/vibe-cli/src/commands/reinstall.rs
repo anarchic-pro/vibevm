@@ -71,11 +71,28 @@ fn run_regenerate(
     // content source. Every locked package must have its slot on disk —
     // a missing slot is content this mode cannot conjure; only a fetch
     // (`--force`) can.
+    // An in-place package's slot is the unversioned git working tree
+    // (PROP-022 §2.4); every other mode is the versioned slot. Check, and
+    // name, the right one per mode.
+    let slot_present = |p: &vibe_core::manifest::LockedPackage| {
+        if p.materialization.is_in_place() {
+            vibedeps::is_in_place_slot(&workspace.root, p.kind, &p.name)
+        } else {
+            vibedeps::is_materialised(&workspace.root, p.kind, &p.name, &p.version)
+        }
+    };
+    let slot_label = |p: &vibe_core::manifest::LockedPackage| {
+        if p.materialization.is_in_place() {
+            vibedeps::in_place_slot_rel_path(p.kind, &p.name)
+        } else {
+            vibedeps::slot_rel_path(p.kind, &p.name, &p.version)
+        }
+    };
     let missing: Vec<String> = lockfile
         .packages
         .iter()
-        .filter(|p| !vibedeps::is_materialised(&workspace.root, p.kind, &p.name, &p.version))
-        .map(|p| vibedeps::slot_rel_path(p.kind, &p.name, &p.version))
+        .filter(|p| !slot_present(p))
+        .map(slot_label)
         .collect();
     if !missing.is_empty() {
         bail!(
