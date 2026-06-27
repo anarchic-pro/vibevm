@@ -170,6 +170,22 @@ pub enum HookError {
 
 /// Probe whether an interpreter program is usable on this host. Seam so
 /// tests assert selection without depending on the machine's `PATH`.
+///
+/// ```
+/// use vibe_workspace::hooks::InterpreterProbe;
+///
+/// // The canonical use is a test double standing in for the machine `PATH`:
+/// // here only `bash` is considered installed.
+/// struct OnlyBash;
+/// impl InterpreterProbe for OnlyBash {
+///     fn has(&self, program: &str) -> bool {
+///         program == "bash"
+///     }
+/// }
+///
+/// assert!(OnlyBash.has("bash"));
+/// assert!(!OnlyBash.has("powershell"));
+/// ```
 pub trait InterpreterProbe {
     fn has(&self, program: &str) -> bool;
 }
@@ -189,6 +205,28 @@ impl InterpreterProbe for SystemProbe {
 
 /// Execute a hook invocation. Seam so tests drive the failure/exit paths
 /// without spawning a real process.
+///
+/// ```
+/// use std::path::{Path, PathBuf};
+/// use vibe_workspace::hooks::{HookInvocation, HookRunner};
+///
+/// // The canonical use is a test double that returns a chosen exit code
+/// // instead of spawning the interpreter on the script.
+/// struct AlwaysExit(i32);
+/// impl HookRunner for AlwaysExit {
+///     fn run(&self, _inv: &HookInvocation, _cwd: &Path, _env: &[(String, String)])
+///         -> Result<i32, String>
+///     {
+///         Ok(self.0)
+///     }
+/// }
+///
+/// let inv = HookInvocation {
+///     interpreter: "bash".to_string(),
+///     script: PathBuf::from("hooks/prepare.sh"),
+/// };
+/// assert_eq!(AlwaysExit(0).run(&inv, Path::new("."), &[]).unwrap(), 0);
+/// ```
 pub trait HookRunner {
     /// Run `inv` in `cwd` with `env` set; return the process exit code, or
     /// an error reason if it could not be spawned/waited.

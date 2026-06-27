@@ -432,6 +432,27 @@ impl CachedPackage {
 /// produced: the in-place slot is already populated on disk (a fresh clone or
 /// an incremental `git fetch`), so these are the records the install layer
 /// needs to write the lockfile entry and compose boot (PROP-022 §2.4/§2.5).
+///
+/// ```
+/// use vibe_core::manifest::Manifest;
+/// use vibe_registry::InPlaceMaterialised;
+///
+/// // The install layer reads these back off a freshly-placed in-place slot.
+/// let manifest = Manifest::parse_str(
+///     "[package]\ngroup = \"org.vibevm\"\nname = \"giant\"\nkind = \"feat\"\nversion = \"1.0.0\"\nmaterialization = \"in-place\"\n",
+/// )
+/// .unwrap();
+/// let placed = InPlaceMaterialised {
+///     source_uri: "https://example.test/giant.git".to_string(),
+///     source_ref: "v1.0.0".to_string(),
+///     resolved_commit: Some("9e3c1f0a".to_string()),
+///     content_hash: "sha256:1d3a…".to_string(),
+///     manifest,
+/// };
+/// // Identity is the resolved commit (§2.5); the tag rode along for the lockfile.
+/// assert_eq!(placed.source_ref, "v1.0.0");
+/// assert!(placed.manifest.package.is_some());
+/// ```
 #[derive(Debug, Clone)]
 pub struct InPlaceMaterialised {
     /// Canonical per-package source URL — the lockfile's `source_url`.
