@@ -1,6 +1,10 @@
 //! Unit tests for the install-hook cell. The two seams ([`InterpreterProbe`]
 //! and [`HookRunner`]) are faked so selection, trust, and failure paths are
 //! asserted without spawning a real process.
+//!
+//! Out-of-line per `#[cfg(test)] #[path] mod tests;`. Non-`#[test]` helpers
+//! carry `#[cfg(test)]` so the file-grain conform frontend scopes their
+//! `unwrap`s as test code (matching `install/tests.rs`).
 
 use super::*;
 use std::fs;
@@ -46,10 +50,12 @@ impl HookRunner for FakeRunner {
     }
 }
 
+#[cfg(test)]
 fn org(s: &str) -> Group {
     Group::parse(s).unwrap()
 }
 
+#[cfg(test)]
 fn pre_hook() -> HooksDecl {
     HooksDecl {
         pre_install: Some(PathBuf::from("hooks/prepare")),
