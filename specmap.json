@@ -3826,21 +3826,21 @@
       "crate_name": "vibe-workspace",
       "file": "crates/vibe-workspace/src/hooks.rs",
       "item_kind": "fn",
-      "line": 223,
+      "line": 261,
       "symbol": "vibe_workspace::hooks::decide_trust"
     },
     {
       "crate_name": "vibe-workspace",
       "file": "crates/vibe-workspace/src/hooks.rs",
       "item_kind": "fn",
-      "line": 336,
+      "line": 374,
       "symbol": "vibe_workspace::hooks::run_package_hook"
     },
     {
       "crate_name": "vibe-workspace",
       "file": "crates/vibe-workspace/src/hooks.rs",
       "item_kind": "fn",
-      "line": 281,
+      "line": 319,
       "symbol": "vibe_workspace::hooks::select_invocation"
     },
     {
@@ -8782,7 +8782,7 @@
     {
       "file": "crates/vibe-workspace/src/hooks.rs",
       "from_symbol": "vibe_workspace::hooks::decide_trust",
-      "line": 227,
+      "line": 265,
       "provenance": "authored",
       "uri": "spec://vibevm/modules/vibe-workspace/PROP-020#trust-gate",
       "verb": "implements",
@@ -8791,7 +8791,7 @@
     {
       "file": "crates/vibe-workspace/src/hooks.rs",
       "from_symbol": "vibe_workspace::hooks::run_package_hook",
-      "line": 347,
+      "line": 385,
       "provenance": "authored",
       "uri": "spec://vibevm/modules/vibe-workspace/PROP-020#phases",
       "verb": "implements",
@@ -8800,7 +8800,7 @@
     {
       "file": "crates/vibe-workspace/src/hooks.rs",
       "from_symbol": "vibe_workspace::hooks::select_invocation",
-      "line": 285,
+      "line": 323,
       "provenance": "authored",
       "uri": "spec://vibevm/modules/vibe-workspace/PROP-020#script-selection",
       "verb": "implements",
