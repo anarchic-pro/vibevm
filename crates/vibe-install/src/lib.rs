@@ -113,9 +113,11 @@ pub trait InstallSource {
     /// absent, an incremental `git fetch` + checkout when it already carries
     /// `.git`. Bypasses the cache clone + the `.git`-stripped snapshot copy,
     /// so a version bump on a giant repo transfers only changed objects. Used
-    /// by scoped `vibe update <pkg>` for a package the lockfile records as
-    /// in-place. Returns the slot's manifest + provenance for the lockfile; a
-    /// source with no git backend (the local-directory registry) errors.
+    /// by scoped `vibe update <pkg>` and the general `vibe install` re-resolve
+    /// (via [`apply`](crate::apply), which defers the in-place fetch past the
+    /// plan) for a package the lockfile records as in-place. Returns the slot's
+    /// manifest + provenance for the lockfile; a source with no git backend
+    /// (the local-directory registry) errors.
     fn materialise_in_place(
         &self,
         pkgref: &PackageRef,
